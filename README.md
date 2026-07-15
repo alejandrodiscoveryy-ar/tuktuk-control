@@ -11,7 +11,7 @@ para validar la experiencia y los cálculos.
 - Persistencia local: Hive.
 - Inicio de sesión: Google.
 - Respaldo por usuario: Google Drive `appDataFolder`.
-- Vista web de referencia: HTML, CSS y JavaScript sin dependencias externas.
+- Versión web compilada desde la misma aplicación Flutter que genera el APK.
 - Registros asociados a propietario y vehículo desde el esquema local 3.
 - Onboarding vacío y configuración del primer vehículo para usuarios nuevos.
 - Cola local persistente para cambios pendientes de futura sincronización SaaS.
@@ -24,8 +24,7 @@ para validar la experiencia y los cálculos.
 - [Flutter](https://docs.flutter.dev/get-started/install) compatible con Dart
   3.4 o superior.
 - Android Studio o Android SDK para compilar la aplicación Android.
-- Un navegador moderno para ejecutar Flutter Web o la vista de referencia.
-- Node.js es opcional y solo se utiliza para servir `web_preview/` localmente.
+- Un navegador moderno para ejecutar Flutter Web.
 
 Comprueba la instalación de Flutter con:
 
@@ -57,11 +56,17 @@ flutter devices
 flutter run
 ```
 
-Para ejecutarla en un navegador:
+Para ejecutarla en el navegador en la dirección utilizada durante el
+desarrollo:
 
 ```bash
-flutter run -d chrome
+cd flutter_app
+flutter run -d web-server --web-hostname 127.0.0.1 --web-port 8090
 ```
+
+Después abre `http://127.0.0.1:8090/`. La versión web y el APK utilizan
+exactamente el mismo código de `flutter_app/lib/`; no existe una segunda
+interfaz activa para el navegador.
 
 Para generar un APK o un Android App Bundle de producción:
 
@@ -72,16 +77,6 @@ flutter build appbundle --release
 
 Los archivos generados quedan dentro de `flutter_app/build/` y no se guardan
 en Git.
-
-### Vista web de referencia
-
-Desde la raíz del repositorio:
-
-```bash
-node web_preview/serve-preview.cjs
-```
-
-Después abre `http://127.0.0.1:8090/`.
 
 ## Configuración y credenciales
 
@@ -110,7 +105,7 @@ tuktuk-control/
 |   |-- lib/            Código Dart modular de la aplicación
 |   |-- test/           Pruebas de dominio e integridad de datos
 |   `-- web/            Archivos base de Flutter Web
-|-- web_preview/        Referencia web funcional y servidor local
+|-- web_preview/        Respaldo histórico; no forma parte de la aplicación activa
 |-- docs/               Arquitectura y líneas base de migración
 |-- backups/            Respaldos locales ignorados por Git
 |-- .gitignore          Exclusiones de seguridad y archivos generados
