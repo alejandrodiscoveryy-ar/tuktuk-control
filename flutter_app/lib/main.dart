@@ -31,19 +31,19 @@ const _seedVersion = 'earnings-odometer-charge80v-maintenance-2026-07-03';
 const _defaultMaintenanceIntervalKm = 5000.0;
 const _databaseSchemaVersion = 3;
 
-const kBg = Color(0xFF0B0F14);
-const kSurface = Color(0xFF141A22);
-const kSurfaceHigh = Color(0xFF1E2630);
-const kOutline = Color(0xFF334155);
-const kPrimary = Color(0xFF22D3A6);
-const kSecondary = Color(0xFF60A5FA);
+const kBg = Color(0xFF080D14);
+const kSurface = Color(0xFF111923);
+const kSurfaceHigh = Color(0xFF182331);
+const kOutline = Color(0xFF29384A);
+const kPrimary = Color(0xFF2DD4A3);
+const kSecondary = Color(0xFF70A7FF);
 const kTertiary = Color(0xFFF59E0B);
-const kText = Color(0xFFE5EDF7);
-const kMuted = Color(0xFF9AA7B7);
+const kText = Color(0xFFF5F8FC);
+const kMuted = Color(0xFF93A2B5);
 const kDanger = Color(0xFFFB7185);
 const kAccentPink = Color(0xFFF472B6);
-const kCardGradientTop = Color(0xFF19212B);
-const kCardGradientBottom = Color(0xFF10161D);
+const kCardGradientTop = Color(0xFF151F2B);
+const kCardGradientBottom = Color(0xFF0D141D);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +77,17 @@ class ControlTukTukApp extends StatelessWidget {
           error: kDanger,
         ),
         fontFamily: 'Roboto',
+        visualDensity: VisualDensity.standard,
+        textTheme: const TextTheme(
+          headlineSmall: TextStyle(
+            color: kText,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -.4,
+          ),
+          titleMedium: TextStyle(color: kText, fontWeight: FontWeight.w800),
+          bodyMedium: TextStyle(color: kText, height: 1.35),
+          bodySmall: TextStyle(color: kMuted, height: 1.35),
+        ),
         appBarTheme: const AppBarTheme(
           centerTitle: false,
           elevation: 0,
@@ -132,7 +143,7 @@ class ControlTukTukApp extends StatelessWidget {
           behavior: SnackBarBehavior.floating,
         ),
         navigationBarTheme: NavigationBarThemeData(
-          height: 72,
+          height: 76,
           backgroundColor: kSurface,
           indicatorColor: kPrimary.withValues(alpha: .16),
           labelTextStyle: WidgetStateProperty.resolveWith(
@@ -150,7 +161,7 @@ class ControlTukTukApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: kSurface,
+          fillColor: kSurfaceHigh,
           labelStyle: const TextStyle(color: kMuted),
           prefixIconColor: kSecondary,
           border: OutlineInputBorder(
