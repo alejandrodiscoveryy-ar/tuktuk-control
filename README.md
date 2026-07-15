@@ -13,6 +13,7 @@ para validar la experiencia y los cálculos.
 - Respaldo por usuario: Google Drive `appDataFolder`.
 - Vista web de referencia: HTML, CSS y JavaScript sin dependencias externas.
 - Registros asociados a propietario y vehículo desde el esquema local 3.
+- Onboarding vacío y configuración del primer vehículo para usuarios nuevos.
 
 ## Requisitos
 
@@ -129,6 +130,8 @@ métricas. Consulta también [la arquitectura evolutiva](docs/architecture.md) y
 [la línea base de datos](docs/data-baseline.md) antes de modificar modelos o
 migraciones. La asignación inicial de propietario y vehículo está documentada
 en [la migración del esquema 3](docs/migrations/schema-v3.md).
+El comportamiento de nuevas instalaciones y la edición del vehículo activo se
+describe en [la Fase 3](docs/phases/phase-3-onboarding.md).
 
 ## Flujo de actualización
 

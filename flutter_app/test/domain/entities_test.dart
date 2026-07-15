@@ -82,6 +82,8 @@ void main() {
       id: 'vehicle-1',
       userId: 'user-1',
       name: 'Tuk Tuk principal',
+      registration: 'TT-001',
+      initialOdometer: 526,
       createdAt: now,
       updatedAt: now,
     );
@@ -91,6 +93,8 @@ void main() {
     expect(restored.id, vehicle.id);
     expect(restored.userId, vehicle.userId);
     expect(restored.name, vehicle.name);
+    expect(restored.registration, 'TT-001');
+    expect(restored.initialOdometer, 526);
   });
 
   test('withSyncInfo asigna propietario sin alterar datos históricos', () {

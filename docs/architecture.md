@@ -5,7 +5,8 @@
 La aplicación sigue siendo local y personal. La Fase 1 divide el código en
 módulos de una misma biblioteca Dart mediante `part`. La Fase 2 añade identidad
 de propietario, vehículo y estado de sincronización con lectura compatible de
-los esquemas anteriores.
+los esquemas anteriores. La Fase 3 incorpora onboarding para instalaciones
+nuevas y administración básica del vehículo activo.
 
 ```text
 lib/
@@ -35,7 +36,8 @@ lib/
 
 La separación con `part` es transitoria. Los módulos se convertirán en
 bibliotecas independientes con repositorios e interfaces desacopladas. La
-siguiente fase añadirá onboarding visible y administración del primer vehículo.
+siguiente fase separará repositorios e introducirá una cola explícita de
+operaciones pendientes antes de conectar una base remota.
 
 Google Drive continuará siendo un servicio de respaldo y restauración, no la
 base de datos principal.

@@ -63,6 +63,163 @@ class AppBackground extends StatelessWidget {
   }
 }
 
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({required this.store, super.key});
+
+  final RecordStore store;
+
+  @override
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final name = TextEditingController(text: 'Mi Tuk Tuk');
+  final registration = TextEditingController();
+  final odometer = TextEditingController();
+  bool saving = false;
+  String? error;
+
+  @override
+  void dispose() {
+    name.dispose();
+    registration.dispose();
+    odometer.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    final cleanName = name.text.trim();
+    final initialOdometer = double.tryParse(odometer.text.trim()) ?? 0;
+    if (cleanName.isEmpty) {
+      setState(() => error = 'Escribe un nombre para tu vehiculo.');
+      return;
+    }
+    if (initialOdometer < 0) {
+      setState(() => error = 'El odometro no puede ser negativo.');
+      return;
+    }
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      await widget.store.configureFirstVehicle(
+        name: cleanName,
+        registration: registration.text,
+        initialOdometer: initialOdometer,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'No se pudo guardar el vehiculo.');
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: AppBackground(
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const Center(child: AppLogoMark()),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Configura tu primer Tuk Tuk',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Tu espacio comienza vacio. Estos datos identifican el vehiculo al que perteneceran tus registros.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: kMuted, height: 1.4),
+                  ),
+                  const SizedBox(height: 24),
+                  GlassCard(
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: name,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: const InputDecoration(
+                            labelText: 'Nombre del vehiculo',
+                            prefixIcon: Icon(Icons.electric_rickshaw),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: registration,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Matricula o identificador (opcional)',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: odometer,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Odometro actual (opcional)',
+                            suffixText: 'km',
+                            prefixIcon: Icon(Icons.speed),
+                          ),
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: 12),
+                          Text(error!, style: const TextStyle(color: kDanger)),
+                        ],
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: saving ? null : submit,
+                            icon: saving
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.arrow_forward),
+                            label: const Text('Comenzar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (widget.store.user == null)
+                    TextButton.icon(
+                      onPressed: saving ? null : widget.store.signIn,
+                      icon: const Icon(Icons.login),
+                      label: const Text('Entrar con Google primero'),
+                    )
+                  else
+                    Text(
+                      'Cuenta: ${widget.store.user!.email}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: kMuted),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AppShellState extends State<AppShell> {
   final store = RecordStore();
   int index = 0;
@@ -72,6 +229,16 @@ class _AppShellState extends State<AppShell> {
     return AnimatedBuilder(
       animation: store,
       builder: (context, _) {
+        if (!store.initialized) {
+          return const Scaffold(
+            body: AppBackground(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        if (store.needsOnboarding) {
+          return OnboardingScreen(store: store);
+        }
         final screens = [
           DashboardScreen(store: store),
           RegisterScreen(store: store),
@@ -133,7 +300,7 @@ class _AppShellState extends State<AppShell> {
               NavigationDestination(
                 icon: Icon(Icons.account_circle_outlined),
                 selectedIcon: Icon(Icons.account_circle),
-                label: 'Google',
+                label: 'Usuario',
               ),
             ],
           ),
@@ -609,7 +776,110 @@ class LoginScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
+        VehicleSettingsPanel(store: store),
+        const SizedBox(height: 18),
         MaintenanceSettingsPanel(store: store),
+      ],
+    );
+  }
+}
+
+class VehicleSettingsPanel extends StatefulWidget {
+  const VehicleSettingsPanel({required this.store, super.key});
+
+  final RecordStore store;
+
+  @override
+  State<VehicleSettingsPanel> createState() => _VehicleSettingsPanelState();
+}
+
+class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
+  late final TextEditingController name;
+  late final TextEditingController registration;
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final vehicle = widget.store.activeVehicle;
+    name = TextEditingController(text: vehicle?.name ?? '');
+    registration = TextEditingController(text: vehicle?.registration ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant VehicleSettingsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final vehicle = widget.store.activeVehicle;
+    if (vehicle != null && name.text.isEmpty) name.text = vehicle.name;
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    registration.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    if (name.text.trim().isEmpty) return;
+    setState(() => saving = true);
+    await widget.store.updateActiveVehicle(
+      name: name.text,
+      registration: registration.text,
+    );
+    if (mounted) {
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vehiculo actualizado')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vehicle = widget.store.activeVehicle;
+    if (vehicle == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle(title: 'Vehiculo activo'),
+        GlassCard(
+          child: Column(
+            children: [
+              TextField(
+                controller: name,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre del vehiculo',
+                  prefixIcon: Icon(Icons.electric_rickshaw),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: registration,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'Matricula o identificador',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              InfoLine(
+                label: 'Identificador interno',
+                value: vehicle.id,
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: saving ? null : save,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Guardar vehiculo'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

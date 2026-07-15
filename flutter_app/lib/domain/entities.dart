@@ -248,6 +248,8 @@ class VehicleProfile {
     required this.name,
     required this.createdAt,
     required this.updatedAt,
+    this.registration = '',
+    this.initialOdometer = 0,
   });
 
   final String id;
@@ -255,6 +257,8 @@ class VehicleProfile {
   final String name;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String registration;
+  final double initialOdometer;
 
   factory VehicleProfile.fromMap(Map<dynamic, dynamic> map) => VehicleProfile(
         id: '${map['id']}',
@@ -262,6 +266,8 @@ class VehicleProfile {
         name: '${map['name'] ?? 'Mi Tuk Tuk'}',
         createdAt: DateTime.parse('${map['createdAt']}'),
         updatedAt: DateTime.parse('${map['updatedAt']}'),
+        registration: '${map['registration'] ?? ''}',
+        initialOdometer: (map['initialOdometer'] as num?)?.toDouble() ?? 0,
       );
 
   Map<String, dynamic> toMap() => {
@@ -270,5 +276,7 @@ class VehicleProfile {
         'name': name,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
+        'registration': registration,
+        'initialOdometer': initialOdometer,
       };
 }
