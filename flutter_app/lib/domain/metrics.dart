@@ -216,7 +216,7 @@ class CycleRange {
   }
 
   String get label {
-    final month = DateFormat('MMMM yyyy', 'es').format(start);
+    final month = DateFormat('MMMM yyyy', activeLanguage).format(start);
     return month[0].toUpperCase() + month.substring(1);
   }
 }

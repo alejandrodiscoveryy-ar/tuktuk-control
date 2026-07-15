@@ -97,6 +97,79 @@ class RecordStore extends ChangeNotifier {
     return raw == null ? null : DateTime.tryParse('$raw');
   }
 
+  String get profileDisplayName {
+    final custom = _meta.get('profileDisplayName:$activeUserId');
+    if (custom is String && custom.trim().isNotEmpty) return custom.trim();
+    final googleName = user?.displayName;
+    if (googleName != null && googleName.trim().isNotEmpty) return googleName;
+    final email = user?.email;
+    return email == null ? 'Usuario invitado' : email.split('@').first;
+  }
+
+  String get preferredCurrency => '${_meta.get('preferredCurrency') ?? 'CUP'}';
+  String get preferredLanguage => '${_meta.get('preferredLanguage') ?? 'es'}';
+  String get preferredTheme => '${_meta.get('preferredTheme') ?? 'system'}';
+
+  Future<void> setProfileDisplayName(String value) async {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    await _meta.put('profileDisplayName:$activeUserId', clean);
+    notifyListeners();
+  }
+
+  Future<void> savePreferences({
+    required String currency,
+    required String language,
+    required String theme,
+  }) async {
+    await _meta.putAll({
+      'preferredCurrency': currency,
+      'preferredLanguage': language,
+      'preferredTheme': theme,
+    });
+    notifyListeners();
+  }
+
+  String exportBackupJson() => const JsonEncoder.withIndent('  ').convert({
+        'schemaVersion': _databaseSchemaVersion,
+        'app': 'TukTuk Control',
+        'kind': 'database-backup',
+        'ownerUserId': activeUserId,
+        'vehicleId': activeVehicleId,
+        'vehicle': activeVehicle?.toMap(),
+        'updatedAt': DateTime.now().toIso8601String(),
+        'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
+        'records': _allDailyRecords
+            .where((record) => record.userId == activeUserId)
+            .map((record) => record.toMap())
+            .toList(),
+        'maintenanceRecords': _allMaintenanceRecords
+            .where((record) => record.userId == activeUserId)
+            .map((record) => record.toMap())
+            .toList(),
+      });
+
+  String exportBackupCsv() {
+    const header = 'fecha,ganancia,odometro,carga80v,nota';
+    String cell(Object? value) =>
+        '"${'$value'.replaceAll('"', '""').replaceAll('\n', ' ')}"';
+    final rows = records.map((record) => [
+          DateFormat('yyyy-MM-dd').format(record.date),
+          record.earnings,
+          record.odometer,
+          record.chargeTo80v ? 'si' : 'no',
+          record.note,
+        ].map(cell).join(','));
+    return [header, ...rows].join('\r\n');
+  }
+
+  Future<void> restoreBackupJson(String source) async {
+    final decoded = jsonDecode(source);
+    if (decoded is! Map) throw const FormatException('Respaldo no válido');
+    await _mergeRemote(Map<String, dynamic>.from(decoded));
+    _load();
+  }
+
   Future<void> _initialize() async {
     try {
       await _migrateLegacyMaintenance();
