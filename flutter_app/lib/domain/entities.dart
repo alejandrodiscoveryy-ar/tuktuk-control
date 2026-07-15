@@ -1,5 +1,32 @@
 part of '../main.dart';
 
+enum SyncStatus { localOnly, pending, synced, conflict, failed }
+
+abstract final class OwnershipPolicy {
+  static bool canClaimLocalData(String? claimedUserId, String candidateUserId) {
+    return claimedUserId == null ||
+        claimedUserId.isEmpty ||
+        claimedUserId == candidateUserId;
+  }
+
+  static bool acceptsBackup(String activeUserId, String? backupUserId) {
+    return backupUserId == null ||
+        backupUserId.isEmpty ||
+        backupUserId == activeUserId;
+  }
+
+  static bool shouldLoadHistoricalSeed(Object? seedVersion) {
+    return seedVersion != null;
+  }
+}
+
+SyncStatus _syncStatusFromMap(dynamic value) {
+  return SyncStatus.values.firstWhere(
+    (status) => status.name == '$value',
+    orElse: () => SyncStatus.localOnly,
+  );
+}
+
 class DailyRecord {
   DailyRecord({
     required this.id,
@@ -13,6 +40,9 @@ class DailyRecord {
     DateTime? updatedAt,
     this.deletedAt,
     this.deviceId = '',
+    this.userId = '',
+    this.vehicleId = '',
+    this.syncStatus = SyncStatus.localOnly,
     this.schemaVersion = _databaseSchemaVersion,
   })  : createdAt = createdAt ?? updatedAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
@@ -28,6 +58,9 @@ class DailyRecord {
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final String deviceId;
+  final String userId;
+  final String vehicleId;
+  final SyncStatus syncStatus;
   final int schemaVersion;
 
   bool get isDeleted => deletedAt != null;
@@ -49,6 +82,9 @@ class DailyRecord {
       updatedAt: parsedUpdatedAt,
       deletedAt: DateTime.tryParse('${map['deletedAt'] ?? ''}'),
       deviceId: '${map['deviceId'] ?? ''}',
+      userId: '${map['userId'] ?? ''}',
+      vehicleId: '${map['vehicleId'] ?? ''}',
+      syncStatus: _syncStatusFromMap(map['syncStatus']),
       schemaVersion: (map['schemaVersion'] as num?)?.toInt() ?? 1,
     );
   }
@@ -66,10 +102,16 @@ class DailyRecord {
         'updatedAt': updatedAt.toIso8601String(),
         'deletedAt': deletedAt?.toIso8601String(),
         'deviceId': deviceId,
+        'userId': userId,
+        'vehicleId': vehicleId,
+        'syncStatus': syncStatus.name,
       };
 
   DailyRecord withSyncInfo({
     required String deviceId,
+    String? userId,
+    String? vehicleId,
+    SyncStatus? syncStatus,
     DateTime? updatedAt,
     DateTime? deletedAt,
   }) {
@@ -85,6 +127,9 @@ class DailyRecord {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       deviceId: this.deviceId.isEmpty ? deviceId : this.deviceId,
+      userId: userId ?? this.userId,
+      vehicleId: vehicleId ?? this.vehicleId,
+      syncStatus: syncStatus ?? this.syncStatus,
       schemaVersion: _databaseSchemaVersion,
     );
   }
@@ -103,6 +148,9 @@ class MaintenanceRecord {
     DateTime? updatedAt,
     this.deletedAt,
     this.deviceId = '',
+    this.userId = '',
+    this.vehicleId = '',
+    this.syncStatus = SyncStatus.localOnly,
     this.schemaVersion = _databaseSchemaVersion,
   })  : createdAt = createdAt ?? updatedAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
@@ -118,6 +166,9 @@ class MaintenanceRecord {
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final String deviceId;
+  final String userId;
+  final String vehicleId;
+  final SyncStatus syncStatus;
   final int schemaVersion;
 
   bool get isDeleted => deletedAt != null;
@@ -137,6 +188,9 @@ class MaintenanceRecord {
       updatedAt: parsedUpdatedAt,
       deletedAt: DateTime.tryParse('${map['deletedAt'] ?? ''}'),
       deviceId: '${map['deviceId'] ?? ''}',
+      userId: '${map['userId'] ?? ''}',
+      vehicleId: '${map['vehicleId'] ?? ''}',
+      syncStatus: _syncStatusFromMap(map['syncStatus']),
       schemaVersion: (map['schemaVersion'] as num?)?.toInt() ?? 1,
     );
   }
@@ -154,10 +208,16 @@ class MaintenanceRecord {
         'updatedAt': updatedAt.toIso8601String(),
         'deletedAt': deletedAt?.toIso8601String(),
         'deviceId': deviceId,
+        'userId': userId,
+        'vehicleId': vehicleId,
+        'syncStatus': syncStatus.name,
       };
 
   MaintenanceRecord withSyncInfo({
     required String deviceId,
+    String? userId,
+    String? vehicleId,
+    SyncStatus? syncStatus,
     DateTime? updatedAt,
     DateTime? deletedAt,
   }) {
@@ -173,7 +233,42 @@ class MaintenanceRecord {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       deviceId: this.deviceId.isEmpty ? deviceId : this.deviceId,
+      userId: userId ?? this.userId,
+      vehicleId: vehicleId ?? this.vehicleId,
+      syncStatus: syncStatus ?? this.syncStatus,
       schemaVersion: _databaseSchemaVersion,
     );
   }
+}
+
+class VehicleProfile {
+  const VehicleProfile({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String name;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory VehicleProfile.fromMap(Map<dynamic, dynamic> map) => VehicleProfile(
+        id: '${map['id']}',
+        userId: '${map['userId']}',
+        name: '${map['name'] ?? 'Mi Tuk Tuk'}',
+        createdAt: DateTime.parse('${map['createdAt']}'),
+        updatedAt: DateTime.parse('${map['updatedAt']}'),
+      );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'userId': userId,
+        'name': name,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+      };
 }

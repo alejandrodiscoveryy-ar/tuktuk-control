@@ -12,6 +12,7 @@ para validar la experiencia y los cálculos.
 - Inicio de sesión: Google.
 - Respaldo por usuario: Google Drive `appDataFolder`.
 - Vista web de referencia: HTML, CSS y JavaScript sin dependencias externas.
+- Registros asociados a propietario y vehículo desde el esquema local 3.
 
 ## Requisitos
 
@@ -126,7 +127,8 @@ flutter test
 Las pruebas actuales verifican serialización, borrado lógico y cálculos de
 métricas. Consulta también [la arquitectura evolutiva](docs/architecture.md) y
 [la línea base de datos](docs/data-baseline.md) antes de modificar modelos o
-migraciones.
+migraciones. La asignación inicial de propietario y vehículo está documentada
+en [la migración del esquema 3](docs/migrations/schema-v3.md).
 
 ## Flujo de actualización
 
