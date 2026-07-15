@@ -1,139 +1,5 @@
 part of '../main.dart';
 
-class OdometerHero extends StatelessWidget {
-  const OdometerHero({required this.value, super.key});
-
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    final digits = value.round().clamp(0, 999999).toString().padLeft(6, '0');
-    return Semantics(
-      label: 'Cuentamillas, ${numFmt(value)} kilómetros',
-      child: GlassCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: const LinearGradient(
-                      colors: [kPrimary, kSecondary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: kPrimary.withValues(alpha: .2),
-                        blurRadius: 18,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.speed_rounded, color: kBg),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Label('Cuentamillas'),
-                      SizedBox(height: 2),
-                      Text(
-                        'Kilometraje total del vehículo',
-                        style: TextStyle(color: kMuted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: kSecondary.withValues(alpha: .1),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: kSecondary.withValues(alpha: .22),
-                    ),
-                  ),
-                  child: const Text(
-                    'KM',
-                    style: TextStyle(
-                      color: kSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            ExcludeSemantics(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    for (final digit in digits.split('')) ...[
-                      _OdometerDigit(digit),
-                      const SizedBox(width: 6),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _OdometerDigit extends StatelessWidget {
-  const _OdometerDigit(this.digit);
-
-  final String digit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 66,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: .1)),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF243140), Color(0xFF0A111A)],
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x4D000000),
-            blurRadius: 12,
-            offset: Offset(0, 7),
-          ),
-        ],
-      ),
-      child: Text(
-        digit,
-        style: const TextStyle(
-          color: kText,
-          fontSize: 39,
-          height: 1,
-          fontWeight: FontWeight.w900,
-          fontFeatures: [ui.FontFeature.tabularFigures()],
-        ),
-      ),
-    );
-  }
-}
-
 class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,
@@ -210,13 +76,13 @@ class MaintenanceDashboardCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: Label('Mantenimiento general')),
+              Expanded(child: Label(tr('Mantenimiento general'))),
               Icon(Icons.build_circle_outlined, color: snapshot.color),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            snapshot.status,
+            tr(snapshot.status),
             style: TextStyle(
               color: snapshot.color,
               fontSize: 20,
@@ -225,29 +91,153 @@ class MaintenanceDashboardCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           InfoLine(
-            label: 'Ultimo mantenimiento',
+            label: tr('Ultimo mantenimiento'),
             value: last == null
-                ? 'Sin registrar'
-                : DateFormat('d MMM yyyy, HH:mm', 'es').format(last.dateTime),
+                ? tr('Sin registrar')
+                : DateFormat('d MMM yyyy, HH:mm', activeLanguage)
+                    .format(last.dateTime),
           ),
           InfoLine(
-            label: 'Km del ultimo mantenimiento',
+            label: tr('Km del ultimo mantenimiento'),
             value: last == null ? '-' : '${numFmt(last.odometer)} km',
           ),
           InfoLine(
-            label: 'Proximo mantenimiento',
+            label: tr('Proximo mantenimiento'),
             value: '${numFmt(snapshot.nextMaintenanceKm)} km',
           ),
           InfoLine(
-            label: 'Km restantes',
+            label: tr('Km restantes'),
             value: snapshot.remainingKm < 0
-                ? 'Vencido por ${numFmt(snapshot.remainingKm.abs())} km'
+                ? '${tr('Vencido por')} ${numFmt(snapshot.remainingKm.abs())} km'
                 : '${numFmt(snapshot.remainingKm)} km',
           ),
         ],
       ),
     );
   }
+}
+
+class DriverSystemMessages extends StatelessWidget {
+  const DriverSystemMessages(
+      {required this.metrics,
+      required this.maintenance,
+      required this.comparison,
+      super.key});
+
+  final Metrics metrics;
+  final MaintenanceSnapshot maintenance;
+  final MonthlyComparison comparison;
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = <_DriverMessage>[_maintenanceMessage()];
+    if (metrics.records.isNotEmpty) messages.add(_progressMessage());
+    if (metrics.records.any((record) => record.earnings > 0)) {
+      messages.add(_bestDayMessage());
+    } else {
+      messages.add(_DriverMessage(
+          Icons.add_road_outlined,
+          kSecondary,
+          tr('Comienza tu recorrido'),
+          tr('Agrega registros para recibir recomendaciones personalizadas.')));
+    }
+    return GlassCard(
+      child: Column(children: [
+        for (var i = 0; i < messages.length; i++) ...[
+          _DriverMessageRow(message: messages[i]),
+          if (i != messages.length - 1)
+            const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Divider(height: 1, color: kOutline)),
+        ],
+      ]),
+    );
+  }
+
+  _DriverMessage _maintenanceMessage() {
+    final remaining = maintenance.remainingKm;
+    final overdue = remaining < 0;
+    return _DriverMessage(
+      overdue ? Icons.warning_amber_rounded : Icons.build_circle_outlined,
+      maintenance.color,
+      tr(maintenance.status),
+      overdue
+          ? '${tr('El mantenimiento esta vencido por')} ${numFmt(remaining.abs())} km. ${tr('Atiendelo cuanto antes.')}'
+          : '${tr('Proximo servicio en')} ${numFmt(remaining)} km (${numFmt(maintenance.nextMaintenanceKm)} km).',
+    );
+  }
+
+  _DriverMessage _progressMessage() {
+    final percentage = comparison.percentage;
+    return _DriverMessage(
+      percentage >= 100
+          ? Icons.emoji_events_outlined
+          : Icons.trending_up_rounded,
+      monthlyGaugeColor(percentage),
+      tr(percentage >= 100 ? 'Meta mensual superada' : 'Avance del mes'),
+      '${tr('Has alcanzado')} ${percentage.toStringAsFixed(1)}% ${tr('del resultado del mes anterior')}.',
+    );
+  }
+
+  _DriverMessage _bestDayMessage() {
+    final totals = <DateTime, double>{};
+    for (final record in metrics.records.where((r) => r.earnings > 0)) {
+      final day =
+          DateTime(record.date.year, record.date.month, record.date.day);
+      totals[day] = (totals[day] ?? 0) + record.earnings;
+    }
+    final best = totals.entries.reduce(
+        (current, entry) => entry.value > current.value ? entry : current);
+    return _DriverMessage(
+        Icons.workspace_premium_outlined,
+        kTertiary,
+        tr('Mejor jornada registrada'),
+        '${DateFormat('d MMM yyyy', activeLanguage).format(best.key)} · ${money(best.value)}');
+  }
+}
+
+class _DriverMessage {
+  const _DriverMessage(this.icon, this.color, this.title, this.body);
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String body;
+}
+
+class _DriverMessageRow extends StatelessWidget {
+  const _DriverMessageRow({required this.message});
+  final _DriverMessage message;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                  color: message.color.withValues(alpha: .13),
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: message.color.withValues(alpha: .28))),
+              child: Icon(message.icon, color: message.color, size: 23)),
+          const SizedBox(width: 13),
+          Expanded(
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message.title,
+                  style: TextStyle(
+                      color: message.color,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              Text(message.body,
+                  style: const TextStyle(color: kMuted, height: 1.35)),
+            ],
+          )),
+        ],
+      );
 }
 
 class DataHealthCard extends StatelessWidget {
@@ -266,28 +256,28 @@ class DataHealthCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: Label('Salud de datos')),
+              Expanded(child: Label(tr('Salud de datos'))),
               Icon(Icons.fact_check_outlined, color: statusColor),
             ],
           ),
           const SizedBox(height: 12),
           InfoLine(
-            label: 'Registros con ganancia',
+            label: tr('Registros con ganancia'),
             value: metrics.records
                 .where((record) => record.earnings > 0)
                 .length
                 .toString(),
           ),
           InfoLine(
-            label: 'Cargas a 80 V',
+            label: tr('Cargas a 80 V'),
             value: metrics.chargeEvents.toString(),
           ),
           InfoLine(
-            label: 'Ganancias sin odometro',
+            label: tr('Ganancias sin odometro'),
             value: missing.toString(),
           ),
           InfoLine(
-            label: 'Lecturas sospechosas',
+            label: tr('Lecturas sospechosas'),
             value: drops.length.toString(),
           ),
           if (missing > 0 || drops.isNotEmpty) ...[
@@ -305,13 +295,13 @@ class DataHealthCard extends StatelessWidget {
   String _healthMessage(int missing, List<OdometerIssue> drops) {
     final parts = <String>[];
     if (missing > 0) {
-      parts.add('$missing registros con ganancia no tienen odometro.');
+      parts.add('$missing ${tr('registros con ganancia no tienen odometro.')}');
     }
     if (drops.isNotEmpty) {
       final issue = drops.first;
       parts.add(
-        'Revisa ${DateFormat('d MMM', 'es').format(issue.current.date)}: '
-        '${numFmt(issue.current.odometer)} km es menor que '
+        '${tr('Revisa')} ${DateFormat('d MMM', activeLanguage).format(issue.current.date)}: '
+        '${numFmt(issue.current.odometer)} ${tr('km es menor que')} '
         '${numFmt(issue.previous.odometer)} km.',
       );
     }
@@ -364,6 +354,141 @@ class MetricCard extends StatelessWidget {
   }
 }
 
+class StatOverviewCard extends StatelessWidget {
+  const StatOverviewCard({
+    required this.width,
+    required this.label,
+    required this.value,
+    this.note,
+    this.color = kPrimary,
+    super.key,
+  });
+
+  final double width;
+  final String label;
+  final String value;
+  final String? note;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Label(label),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (note != null) ...[
+              const SizedBox(height: 5),
+              Text(
+                note!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: kMuted, fontSize: 11),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class MonthlyEarningsBars extends StatelessWidget {
+  const MonthlyEarningsBars({required this.cycles, super.key});
+
+  final List<CycleSummary> cycles;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cycles.isEmpty) {
+      return EmptyState(tr('Todavía no hay ganancias para graficar.'));
+    }
+    final visible = cycles.take(8).toList().reversed.toList();
+    final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
+    return GlassCard(
+      child: SizedBox(
+        height: 210,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (final cycle in visible)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        moneyCompact(cycle.earnings, includeCurrency: false),
+                        style: const TextStyle(color: kMuted, fontSize: 10),
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        height:
+                            maximum == 0 ? 2 : 130 * cycle.earnings / maximum,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          gradient: const LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [kPrimary, kSecondary],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        DateFormat('MMM', activeLanguage).format(cycle.start),
+                        style: const TextStyle(color: kMuted, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class EarningsTrendCard extends StatelessWidget {
+  const EarningsTrendCard({required this.records, super.key});
+
+  final Iterable<DailyRecord> records;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = records.toList();
+    if (values.isEmpty) {
+      return EmptyState(tr('Todavía no hay ganancias para mostrar.'));
+    }
+    return GlassCard(
+      child: Column(
+        children: [
+          for (final record in values)
+            InfoLine(
+              label: DateFormat('d MMM', activeLanguage).format(record.date),
+              value: money(record.earnings),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class InfoLine extends StatelessWidget {
   const InfoLine({required this.label, required this.value, super.key});
 
@@ -394,7 +519,7 @@ class RecordTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = [
       if (record.odometer > 0) '${numFmt(record.odometer)} km',
-      if (record.chargeTo80v) 'Carga hasta 80 V',
+      if (record.chargeTo80v) tr('Carga hasta 80 V'),
       if (record.note.isNotEmpty) record.note,
     ];
     return GlassCard(
@@ -402,8 +527,41 @@ class RecordTile extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         contentPadding: EdgeInsets.zero,
-        title: Text(DateFormat('d MMMM yyyy', 'es').format(record.date)),
-        subtitle: Text(details.isEmpty ? 'Sin detalles' : details.join(' - ')),
+        leading: SizedBox(
+          width: 50,
+          child: Wrap(
+            spacing: 3,
+            runSpacing: 3,
+            children: [
+              if (record.earnings > 0)
+                const _HistoryTypeIcon(
+                  icon: Icons.payments_outlined,
+                  color: kPrimary,
+                ),
+              if (record.odometer > 0)
+                const _HistoryTypeIcon(
+                  icon: Icons.speed_rounded,
+                  color: kSecondary,
+                ),
+              if (record.chargeTo80v)
+                const _HistoryTypeIcon(
+                  icon: Icons.ev_station_outlined,
+                  color: kTertiary,
+                ),
+              if (record.earnings <= 0 &&
+                  record.odometer <= 0 &&
+                  !record.chargeTo80v)
+                const _HistoryTypeIcon(
+                  icon: Icons.notes_outlined,
+                  color: kMuted,
+                ),
+            ],
+          ),
+        ),
+        title:
+            Text(DateFormat('d MMMM yyyy', activeLanguage).format(record.date)),
+        subtitle:
+            Text(details.isEmpty ? tr('Sin detalles') : details.join(' - ')),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -413,18 +571,39 @@ class RecordTile extends StatelessWidget {
                   ? '+${money(record.earnings)}'
                   : record.chargeTo80v
                       ? '80 V'
-                      : '0 CUP',
+                      : '0 $activeCurrency',
               style: TextStyle(
                 color: record.earnings > 0 ? kPrimary : kSecondary,
                 fontWeight: FontWeight.w800,
               ),
             ),
             if (record.batteryPercent != null)
-              Text('${record.batteryPercent}% bateria',
+              Text('${record.batteryPercent}% ${tr('bateria')}',
                   style: const TextStyle(fontSize: 11)),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HistoryTypeIcon extends StatelessWidget {
+  const _HistoryTypeIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 23,
+      height: 23,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .13),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: color.withValues(alpha: .25)),
+      ),
+      child: Icon(icon, color: color, size: 14),
     );
   }
 }
@@ -489,14 +668,15 @@ class MonthlyComparisonGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = monthlyGaugeColor(comparison.percentage);
-    final monthLabel =
-        DateFormat('MMMM yyyy', 'es').format(comparison.month).toUpperCase();
+    final monthLabel = DateFormat('MMMM yyyy', activeLanguage)
+        .format(comparison.month)
+        .toUpperCase();
     return Column(
       children: [
         Row(
           children: [
             IconButton(
-              tooltip: 'Mes anterior',
+              tooltip: tr('Mes anterior'),
               onPressed: onPreviousMonth,
               color: color,
               icon: const Icon(Icons.chevron_left_rounded),
@@ -513,7 +693,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Mes siguiente',
+              tooltip: tr('Mes siguiente'),
               onPressed: canGoNext ? onNextMonth : null,
               color: color,
               icon: const Icon(Icons.chevron_right_rounded),
@@ -586,9 +766,10 @@ class MonthlyComparisonGauge extends StatelessWidget {
                           bottom: dimension * .035,
                           child: Column(
                             children: [
-                              const Text(
-                                'Meta',
-                                style: TextStyle(color: kMuted, fontSize: 13),
+                              Text(
+                                tr('Meta'),
+                                style: const TextStyle(
+                                    color: kMuted, fontSize: 13),
                               ),
                               Text(
                                 moneyCompact(comparison.previousEarnings,
@@ -729,7 +910,12 @@ String formatGaugePercentage(double value) {
 }
 
 String moneyCompact(double value, {bool includeCurrency = true}) {
-  final prefix = includeCurrency ? r'$' : '';
+  final symbol = switch (activeCurrency) {
+    'EUR' => '€',
+    'USD' || 'MXN' => r'$',
+    _ => r'$',
+  };
+  final prefix = includeCurrency ? symbol : '';
   if (value.abs() >= 1000) return '$prefix${(value / 1000).round()}k';
   return '$prefix${value.round()}';
 }
@@ -746,20 +932,25 @@ class GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: margin,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [kCardGradientTop, kCardGradientBottom],
+          colors: dark
+              ? const [kCardGradientTop, kCardGradientBottom]
+              : const [Color(0xF8FFFFFF), Color(0xF0E8F0F8)],
         ),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFF304055)),
+        border: Border.all(
+          color: dark ? const Color(0xFF304055) : const Color(0xFFCBD9E8),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: .22),
+            color: Colors.black.withValues(alpha: dark ? .22 : .08),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
@@ -777,18 +968,25 @@ class GradientMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF153329),
-            Color(0xFF132239),
-            Color(0xFF191A2A),
-          ],
+          colors: dark
+              ? const [
+                  Color(0xFF153329),
+                  Color(0xFF132239),
+                  Color(0xFF191A2A),
+                ]
+              : const [
+                  Color(0xFFDDF8EF),
+                  Color(0xFFE7F0FF),
+                  Color(0xFFF4EFFF),
+                ],
         ),
         border: Border.all(color: const Color(0xFF315044)),
         boxShadow: [
@@ -868,8 +1066,9 @@ class EmptyState extends StatelessWidget {
 }
 
 String money(double value) =>
-    '${NumberFormat('#,##0.##', 'es').format(value)} CUP';
-String numFmt(double value) => NumberFormat('#,##0.##', 'es').format(value);
+    '${NumberFormat('#,##0.##', activeLanguage).format(value)} $activeCurrency';
+String numFmt(double value) =>
+    NumberFormat('#,##0.##', activeLanguage).format(value);
 String trimNum(double value) =>
     value % 1 == 0 ? value.toInt().toString() : value.toString();
 
