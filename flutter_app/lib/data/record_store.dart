@@ -25,7 +25,8 @@ class RecordStore extends ChangeNotifier {
   List<MaintenanceRecord> get maintenanceRecords => [..._maintenanceRecords]
     ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
-  int get pendingSyncCount => _syncQueue.pendingForUser(activeUserId).length;
+  int get pendingSyncCount =>
+      _syncQueue.pendingForUser(activeUserId, limit: 100000).length;
 
   double get maintenanceIntervalKm {
     final value = _meta.get('maintenanceIntervalKm');

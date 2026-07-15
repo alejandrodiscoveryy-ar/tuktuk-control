@@ -15,6 +15,7 @@ para validar la experiencia y los cálculos.
 - Registros asociados a propietario y vehículo desde el esquema local 3.
 - Onboarding vacío y configuración del primer vehículo para usuarios nuevos.
 - Cola local persistente para cambios pendientes de futura sincronización SaaS.
+- Contrato remoto desacoplado con lotes, reintentos y conflictos deterministas.
 
 ## Requisitos
 
@@ -135,6 +136,8 @@ El comportamiento de nuevas instalaciones y la edición del vehículo activo se
 describe en [la Fase 3](docs/phases/phase-3-onboarding.md).
 La separación entre respaldo y sincronización futura se documenta en
 [la Fase 4](docs/phases/phase-4-offline-queue.md).
+El contrato neutral para integrar una futura base remota se define en
+[la Fase 5](docs/phases/phase-5-remote-contract.md).
 
 ## Flujo de actualización
 

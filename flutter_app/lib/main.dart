@@ -16,6 +16,7 @@ part 'domain/sync.dart';
 part 'data/record_store.dart';
 part 'data/seed_data.dart';
 part 'data/sync_queue.dart';
+part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
 
