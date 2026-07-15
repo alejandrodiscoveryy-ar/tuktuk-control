@@ -1,5 +1,139 @@
 part of '../main.dart';
 
+class OdometerHero extends StatelessWidget {
+  const OdometerHero({required this.value, super.key});
+
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final digits = value.round().clamp(0, 999999).toString().padLeft(6, '0');
+    return Semantics(
+      label: 'Cuentamillas, ${numFmt(value)} kilómetros',
+      child: GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: const LinearGradient(
+                      colors: [kPrimary, kSecondary],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kPrimary.withValues(alpha: .2),
+                        blurRadius: 18,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.speed_rounded, color: kBg),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Label('Cuentamillas'),
+                      SizedBox(height: 2),
+                      Text(
+                        'Kilometraje total del vehículo',
+                        style: TextStyle(color: kMuted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kSecondary.withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: kSecondary.withValues(alpha: .22),
+                    ),
+                  ),
+                  child: const Text(
+                    'KM',
+                    style: TextStyle(
+                      color: kSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            ExcludeSemantics(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    for (final digit in digits.split('')) ...[
+                      _OdometerDigit(digit),
+                      const SizedBox(width: 6),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OdometerDigit extends StatelessWidget {
+  const _OdometerDigit(this.digit);
+
+  final String digit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 66,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: .1)),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF243140), Color(0xFF0A111A)],
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x4D000000),
+            blurRadius: 12,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Text(
+        digit,
+        style: const TextStyle(
+          color: kText,
+          fontSize: 39,
+          height: 1,
+          fontWeight: FontWeight.w900,
+          fontFeatures: [ui.FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
 class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,

@@ -419,6 +419,8 @@ class DashboardScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        OdometerHero(value: metrics.latestOdometer),
+        const SizedBox(height: 12),
         MetricHero(
           label: 'Ganancia de hoy',
           value: money(metrics.todayEarnings),
@@ -430,19 +432,19 @@ class DashboardScreen extends StatelessWidget {
           children: [
             Expanded(
               child: MetricCard(
-                label: 'Odometro',
-                value: '${numFmt(metrics.latestOdometer)} km',
-                icon: Icons.speed,
-                color: kSecondary,
+                label: 'Mes',
+                value: metrics.currentCycle.label,
+                icon: Icons.route_outlined,
+                color: kTertiary,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: MetricCard(
-                label: 'Mes',
-                value: metrics.currentCycle.label,
+                label: 'Distancia del mes',
+                value: '${numFmt(metrics.currentCycleDistance)} km',
                 icon: Icons.route_outlined,
-                color: kTertiary,
+                color: kSecondary,
               ),
             ),
           ],
