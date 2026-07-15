@@ -518,27 +518,26 @@
     .statNote { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
     .mileageGauge {
       display: grid;
-      gap: 4px;
+      gap: 8px;
       justify-items: center;
       width: 100%;
       max-width: 520px;
       margin: 0 auto;
-      padding: clamp(8px, 2.5vw, 18px);
-      border-radius: 22px;
-      background: #05070a;
-      overflow: hidden;
+      padding: 0;
+      background: transparent;
     }
     .gaugeMonthSelector { width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
     .gaugeMonthSelector button { width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #080f18; font-size: 28px; line-height: 1; transition: color .3s ease, border-color .3s ease, transform .2s ease; }
     .gaugeMonthSelector button:active { transform: scale(.94); }
     .gaugeMonthSelector button:disabled { cursor: not-allowed; opacity: .3; transform: none; }
     .gaugeMonthTitle { min-width: 0; color: #f3f8ff; font-size: clamp(14px, 4vw, 18px); font-weight: 950; letter-spacing: clamp(.4px, .3vw, 1px); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .gaugeSvg { display: block; width: 100%; aspect-ratio: 1; justify-self: center; }
+    .gaugeSvg { display: block; width: 100%; aspect-ratio: 1; justify-self: center; overflow: visible; }
     .gaugeArc { stroke: url(#gaugeGradient); stroke-width: 28; fill: none; stroke-linecap: round; }
     .gaugeNeedle { stroke-width: 7; stroke-linecap: round; transform-origin: 160px 205px; transition: transform .85s cubic-bezier(.22,.8,.24,1), stroke .35s ease; }
     .gaugeCenter { transition: fill .35s ease; }
-    .gaugePercent { font-size: 44px; font-weight: 950; transition: fill .35s ease; }
-    .gaugeCurrent { font-size: 24px; font-weight: 900; transition: fill .35s ease; }
+    .gaugePercent, .gaugeCurrent { paint-order: stroke fill; stroke: rgba(16, 22, 29, .92); stroke-linejoin: round; transition: fill .35s ease; }
+    .gaugePercent { font-size: 40px; font-weight: 950; stroke-width: 7px; }
+    .gaugeCurrent { font-size: 23px; font-weight: 900; stroke-width: 5px; }
     .gaugeTickText { font-size: 11px; fill: #d9e1ea; font-weight: 800; }
     .gaugeMetaLabel { font-size: 11px; fill: var(--muted); }
     .gaugeMetaValue { font-size: 22px; fill: var(--text); font-weight: 950; }
@@ -2379,9 +2378,9 @@
       const activeColor = percentage > 120 ? "#b832ff" : percentage >= 100 ? "#168bff" : percentage >= 75 ? "#63d916" : percentage >= 50 ? "#ffd600" : percentage >= 25 ? "#ff7a00" : "#ff2340";
       const ticks = [0, 25, 50, 75, 100].map((value) => {
         const angle = (180 + value / scaleMaximum * 180) * Math.PI / 180;
-        const labelRadius = 98;
+        const labelRadius = 145;
         const x = 160 + Math.cos(angle) * labelRadius;
-        const y = 205 + Math.sin(angle) * labelRadius + 4;
+        const y = 214 + Math.sin(angle) * labelRadius + 4;
         return `<text class="gaugeTickText" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${value}</text>`;
       }).join("");
       const stop = value => Math.min(100, value / scaleMaximum * 100).toFixed(2);
@@ -2407,13 +2406,13 @@
               ${scaleMaximum > 100 ? `<stop offset="100%" stop-color="${percentage > 120 ? "#b832ff" : "#168bff"}"></stop>` : ""}
             </linearGradient>
           </defs>
-          <path class="gaugeArc" d="M35 205 A125 125 0 0 1 285 205"></path>
+          <path class="gaugeArc" d="M38 214 A122 122 0 0 1 282 214"></path>
           ${ticks}
-          <text class="gaugePercent" x="160" y="120" text-anchor="middle" fill="${activeColor}">${percentText}</text>
-          <text class="gaugeCurrent" x="160" y="151" text-anchor="middle" fill="${activeColor}">$${shortAmount(current)}</text>
-          <line class="gaugeNeedle" x1="160" y1="205" x2="160" y2="118" stroke="${activeColor}" style="transform:rotate(${needle}deg)"></line>
-          <circle class="gaugeCenter" cx="160" cy="205" r="12" fill="${activeColor}"></circle>
-          <circle cx="160" cy="205" r="5" fill="#080b10"></circle>
+          <line class="gaugeNeedle" x1="160" y1="214" x2="160" y2="128" stroke="${activeColor}" style="transform-origin:160px 214px;transform:rotate(${needle}deg)"></line>
+          <circle class="gaugeCenter" cx="160" cy="214" r="12" fill="${activeColor}"></circle>
+          <circle cx="160" cy="214" r="5" fill="#10161d"></circle>
+          <text class="gaugePercent" x="160" y="151" text-anchor="middle" fill="${activeColor}">${percentText}</text>
+          <text class="gaugeCurrent" x="160" y="181" text-anchor="middle" fill="${activeColor}">$${shortAmount(current)}</text>
           <text class="gaugeMetaLabel" x="160" y="274" text-anchor="middle">Meta</text>
           <text class="gaugeMetaValue" x="160" y="301" text-anchor="middle">${shortAmount(previous)}</text>
         </svg>`;
