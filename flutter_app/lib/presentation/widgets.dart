@@ -412,7 +412,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
                           ),
                         ),
                         Positioned(
-                          top: dimension * .29,
+                          top: dimension * .34,
                           left: 0,
                           right: 0,
                           child: Column(
@@ -517,7 +517,7 @@ class MonthlyGaugePainter extends CustomPainter {
     for (final value in const [0, 25, 50, 75, 100]) {
       final angle = pi + pi * (value / scaleMaximum);
       final labelCenter = center +
-          Offset(cos(angle), sin(angle)) * (radius - strokeWidth * 1.05);
+          Offset(cos(angle), sin(angle)) * (radius + strokeWidth * .72);
       labelPainter.text = TextSpan(
         text: '$value',
         style: const TextStyle(
