@@ -102,9 +102,11 @@ Nunca confirmes en Git archivos `.env`, claves privadas, certificados,
 tuktuk-control/
 |-- flutter_app/        Aplicación principal Flutter
 |   |-- android/        Configuración de Android
-|   |-- lib/            Código Dart de la aplicación
+|   |-- lib/            Código Dart modular de la aplicación
+|   |-- test/           Pruebas de dominio e integridad de datos
 |   `-- web/            Archivos base de Flutter Web
 |-- web_preview/        Referencia web funcional y servidor local
+|-- docs/               Arquitectura y líneas base de migración
 |-- backups/            Respaldos locales ignorados por Git
 |-- .gitignore          Exclusiones de seguridad y archivos generados
 `-- README.md           Documentación del proyecto
@@ -121,8 +123,10 @@ flutter analyze
 flutter test
 ```
 
-Actualmente el proyecto no incluye pruebas automatizadas; `flutter test`
-quedará disponible cuando se agregue la carpeta `test/`.
+Las pruebas actuales verifican serialización, borrado lógico y cálculos de
+métricas. Consulta también [la arquitectura evolutiva](docs/architecture.md) y
+[la línea base de datos](docs/data-baseline.md) antes de modificar modelos o
+migraciones.
 
 ## Flujo de actualización
 
