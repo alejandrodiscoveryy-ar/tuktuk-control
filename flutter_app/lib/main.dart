@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 part 'domain/entities.dart';
+part 'domain/access.dart';
 part 'domain/metrics.dart';
 part 'domain/sync.dart';
 part 'data/record_store.dart';

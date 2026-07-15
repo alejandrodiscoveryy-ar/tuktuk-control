@@ -139,4 +139,83 @@ void main() {
       isTrue,
     );
   });
+
+  test('un conductor solo accede a vehículos asignados de su organización', () {
+    const driver = AccountMembership(
+      userId: 'driver-1',
+      role: AccountRole.driver,
+      organizationId: 'organization-1',
+      vehicleIds: {'vehicle-1'},
+    );
+
+    expect(
+      AccessPolicy.canReadVehicle(
+        membership: driver,
+        ownerUserId: 'owner-1',
+        vehicleId: 'vehicle-1',
+        organizationId: 'organization-1',
+      ),
+      isTrue,
+    );
+    expect(
+      AccessPolicy.canReadVehicle(
+        membership: driver,
+        ownerUserId: 'owner-1',
+        vehicleId: 'vehicle-2',
+        organizationId: 'organization-1',
+      ),
+      isFalse,
+    );
+    expect(
+      AccessPolicy.canReadVehicle(
+        membership: driver,
+        ownerUserId: 'owner-2',
+        vehicleId: 'vehicle-1',
+        organizationId: 'organization-2',
+      ),
+      isFalse,
+    );
+  });
+
+  test('una membresía suspendida no accede aunque sea propietaria', () {
+    const suspendedOwner = AccountMembership(
+      userId: 'owner-1',
+      role: AccountRole.owner,
+      status: MembershipStatus.suspended,
+    );
+
+    expect(
+      AccessPolicy.canWriteVehicle(
+        membership: suspendedOwner,
+        ownerUserId: 'owner-1',
+        vehicleId: 'vehicle-1',
+      ),
+      isFalse,
+    );
+  });
+
+  test('solo administradores autorizados gestionan su organización', () {
+    const admin = AccountMembership(
+      userId: 'admin-1',
+      role: AccountRole.organizationAdmin,
+      organizationId: 'organization-1',
+    );
+
+    expect(AccessPolicy.canManageOrganization(admin, 'organization-1'), isTrue);
+    expect(
+        AccessPolicy.canManageOrganization(admin, 'organization-2'), isFalse);
+  });
+
+  test('el plan gratuito limita vehículos y funciones', () {
+    expect(SubscriptionAccess.free.allowsVehicleCount(1), isTrue);
+    expect(SubscriptionAccess.free.allowsVehicleCount(2), isFalse);
+    expect(
+      SubscriptionAccess.free.isEnabled(ProductCapability.offlineOperation),
+      isTrue,
+    );
+    expect(
+      SubscriptionAccess.free.isEnabled(ProductCapability.cloudSync),
+      isFalse,
+    );
+  });
 }
