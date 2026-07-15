@@ -518,23 +518,21 @@
     .statNote { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
     .mileageGauge {
       display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-      align-items: center;
       justify-items: center;
+      width: 100%;
     }
-    .gaugeSvg { width: 100%; max-width: 340px; justify-self: center; }
-    .gaugeTrack { stroke: #253346; stroke-width: 18; fill: none; stroke-linecap: round; }
-    .gaugeFill { stroke: url(#gaugeGradient); stroke-width: 18; fill: none; stroke-linecap: round; }
-    .gaugeNeedle { stroke: var(--text); stroke-width: 4; stroke-linecap: round; transform-origin: 110px 108px; }
-    .gaugeCenter { fill: var(--green); }
-    .gaugeNumber { font-size: 20px; font-weight: 950; fill: var(--text); }
-    .gaugeLabel { font-size: 10px; fill: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-    .gaugeCurrent { font-size: 11px; font-weight: 900; fill: var(--green); }
-    .gaugeMark { stroke: var(--amber); stroke-width: 4; stroke-linecap: round; }
-    .gaugeMarkText { font-size: 9px; fill: var(--amber); font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
-    .gaugeTick { stroke: rgba(243,248,255,.55); stroke-width: 2; stroke-linecap: round; }
-    .gaugeTickText { font-size: 8px; fill: var(--muted); font-weight: 800; }
+    .gaugeSvg { width: min(100%, 520px); aspect-ratio: 1; justify-self: center; overflow: visible; }
+    .gaugeArc { stroke: url(#gaugeGradient); stroke-width: 28; fill: none; stroke-linecap: round; }
+    .gaugeNeedle { stroke-width: 7; stroke-linecap: round; transform-origin: 160px 205px; transition: transform .85s cubic-bezier(.22,.8,.24,1), stroke .35s ease; }
+    .gaugeCenter { transition: fill .35s ease; }
+    .gaugePercent { font-size: 44px; font-weight: 950; transition: fill .35s ease; }
+    .gaugeCurrent { font-size: 24px; font-weight: 900; transition: fill .35s ease; }
+    .gaugeTickText { font-size: 11px; fill: #d9e1ea; font-weight: 800; }
+    .gaugeMetaLabel { font-size: 11px; fill: var(--muted); }
+    .gaugeMetaValue { font-size: 22px; fill: var(--text); font-weight: 950; }
+    .gaugeMonth { font-size: 17px; fill: var(--text); font-weight: 950; letter-spacing: 1px; }
+    .gaugeMonthButton { cursor: pointer; fill: rgba(8,15,24,.72); stroke-width: 1.5; transition: stroke .3s ease; }
+    .gaugeMonthArrow { font-size: 28px; font-weight: 900; pointer-events: none; }
     .toast {
       position: fixed; left: 50%; bottom: 86px; z-index: 20; transform: translateX(-50%);
       width: min(460px, calc(100% - 28px)); padding: 12px 14px; border-radius: 14px;
@@ -804,7 +802,6 @@
         </div>
       </div>
       <div class="card">
-        <div class="label" data-i18n="home.gauge">Cuentamilla de ganancias</div>
         <div id="monthMileageGauge" class="mileageGauge"></div>
       </div>
       <div class="card">
@@ -1297,6 +1294,7 @@
     ];
     let db = load();
     ensureSettings();
+    let selectedGaugeMonth = null;
     let historyFilter = "all";
     let newRecordType = "profit";
     const icons = {
@@ -2346,46 +2344,57 @@
       return { text, cls, last, next, remaining };
     }
     function renderMonthGauge(records) {
-      const currentMonthFull = dashboardMonthKey(records);
-      const reference = monthReferenceForGauge(records, currentMonthFull);
+      const currentMonthFull = selectedGaugeMonth || dashboardMonthKey(records);
+      const referenceMonthKey = previousMonthKey(currentMonthFull);
       const current = monthTotal(records, currentMonthFull);
-      const previous = Number(reference.amount || 0);
-      const ratio = previous > 0 ? current / previous : current > 0 ? 1 : 0;
-      const clamped = Math.max(0, Math.min(1, ratio));
-      const dash = Math.round(clamped * 283);
-      const needle = -90 + Math.min(1, clamped) * 180;
+      const previous = monthTotal(records, referenceMonthKey);
+      const percentage = previous > 0 ? current / previous * 100 : 0;
+      const scaleMaximum = Math.max(100, percentage);
+      const needle = -90 + Math.max(0, Math.min(1, percentage / scaleMaximum)) * 180;
+      const activeColor = percentage > 120 ? "#b832ff" : percentage >= 100 ? "#168bff" : percentage >= 75 ? "#63d916" : percentage >= 50 ? "#ffd600" : percentage >= 25 ? "#ff7a00" : "#ff2340";
       const ticks = [0, 25, 50, 75, 100].map((value) => {
-        const angle = (-180 + value * 1.8) * Math.PI / 180;
-        const outer = 94;
-        const inner = value % 50 === 0 ? 76 : 82;
-        const label = 62;
-        const x1 = 110 + Math.cos(angle) * outer;
-        const y1 = 110 + Math.sin(angle) * outer;
-        const x2 = 110 + Math.cos(angle) * inner;
-        const y2 = 110 + Math.sin(angle) * inner;
-        const lx = 110 + Math.cos(angle) * label;
-        const ly = 110 + Math.sin(angle) * label;
-        return `<line class="gaugeTick" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"></line><text class="gaugeTickText" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle">${value}%</text>`;
+        const angle = (180 + value / scaleMaximum * 180) * Math.PI / 180;
+        const labelRadius = 98;
+        const x = 160 + Math.cos(angle) * labelRadius;
+        const y = 205 + Math.sin(angle) * labelRadius + 4;
+        return `<text class="gaugeTickText" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${value}</text>`;
       }).join("");
+      const stop = value => Math.min(100, value / scaleMaximum * 100).toFixed(2);
+      const percentText = Number.isInteger(percentage) ? `${percentage}%` : `${percentage.toFixed(1)}%`;
+      const shortAmount = value => `${Math.round(Number(value || 0) / 1000)}k`;
       document.getElementById("monthMileageGauge").innerHTML = `
-        <svg class="gaugeSvg" viewBox="0 0 220 150" role="img" aria-label="${t("home.gauge")}">
+        <svg class="gaugeSvg" viewBox="0 0 320 320" role="img" aria-label="${t("home.gauge")}">
           <defs>
             <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#ffbd4a"></stop>
-              <stop offset="55%" stop-color="#19e6a1"></stop>
-              <stop offset="100%" stop-color="#6aa7ff"></stop>
+              <stop offset="0%" stop-color="#ff2340"></stop>
+              <stop offset="${stop(25)}%" stop-color="#ff7a00"></stop>
+              <stop offset="${stop(50)}%" stop-color="#ffd600"></stop>
+              <stop offset="${stop(75)}%" stop-color="#63d916"></stop>
+              <stop offset="${stop(100)}%" stop-color="#168bff"></stop>
+              ${scaleMaximum > 100 ? `<stop offset="100%" stop-color="#b832ff"></stop>` : ""}
             </linearGradient>
           </defs>
-          <path class="gaugeTrack" d="M20 110 A90 90 0 0 1 200 110"></path>
-          <path class="gaugeFill" d="M20 110 A90 90 0 0 1 200 110" stroke-dasharray="${dash} 283"></path>
+          <rect class="gaugeMonthButton" x="12" y="10" width="44" height="44" rx="14" stroke="${activeColor}" onclick="shiftGaugeMonth(-1)"></rect>
+          <text class="gaugeMonthArrow" x="34" y="40" text-anchor="middle" fill="${activeColor}">‹</text>
+          <text class="gaugeMonth" x="160" y="39" text-anchor="middle">${monthLabel(currentMonthFull).toUpperCase()}</text>
+          <rect class="gaugeMonthButton" x="264" y="10" width="44" height="44" rx="14" stroke="${activeColor}" onclick="shiftGaugeMonth(1)"></rect>
+          <text class="gaugeMonthArrow" x="286" y="40" text-anchor="middle" fill="${activeColor}">›</text>
+          <path class="gaugeArc" d="M35 205 A125 125 0 0 1 285 205"></path>
           ${ticks}
-          <line class="gaugeNeedle" x1="110" y1="108" x2="110" y2="38" style="transform:rotate(${needle}deg)"></line>
-          <circle class="gaugeCenter" cx="110" cy="108" r="8"></circle>
-          <text class="gaugeNumber" x="110" y="132" text-anchor="middle">${moneyShort(current)}</text>
-          <text class="gaugeLabel" x="110" y="146" text-anchor="middle">${t("home.currentMonthGauge")}</text>
-          <text class="gaugeLabel" x="20" y="128" text-anchor="middle">0</text>
-          <text class="gaugeLabel" x="200" y="128" text-anchor="middle">${moneyShort(previous)}</text>
+          <text class="gaugePercent" x="160" y="120" text-anchor="middle" fill="${activeColor}">${percentText}</text>
+          <text class="gaugeCurrent" x="160" y="151" text-anchor="middle" fill="${activeColor}">$${shortAmount(current)}</text>
+          <line class="gaugeNeedle" x1="160" y1="205" x2="160" y2="118" stroke="${activeColor}" style="transform:rotate(${needle}deg)"></line>
+          <circle class="gaugeCenter" cx="160" cy="205" r="12" fill="${activeColor}"></circle>
+          <circle cx="160" cy="205" r="5" fill="#080b10"></circle>
+          <text class="gaugeMetaLabel" x="160" y="274" text-anchor="middle">Meta</text>
+          <text class="gaugeMetaValue" x="160" y="301" text-anchor="middle">${shortAmount(previous)}</text>
         </svg>`;
+    }
+    function shiftGaugeMonth(delta) {
+      const base = selectedGaugeMonth || dashboardMonthKey(activeRecords());
+      const [year, month] = base.split("-").map(Number);
+      selectedGaugeMonth = monthKeyFromDate(new Date(year, month - 1 + delta, 1));
+      render();
     }
     function achievementCopy() {
       const copy = {
