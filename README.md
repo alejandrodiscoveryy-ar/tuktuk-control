@@ -16,6 +16,7 @@ para validar la experiencia y los cálculos.
 - Onboarding vacío y configuración del primer vehículo para usuarios nuevos.
 - Cola local persistente para cambios pendientes de futura sincronización SaaS.
 - Contrato remoto desacoplado con lotes, reintentos y conflictos deterministas.
+- Modelo neutral de roles, membresías, planes y aislamiento organizacional.
 
 ## Requisitos
 
@@ -138,6 +139,8 @@ La separación entre respaldo y sincronización futura se documenta en
 [la Fase 4](docs/phases/phase-4-offline-queue.md).
 El contrato neutral para integrar una futura base remota se define en
 [la Fase 5](docs/phases/phase-5-remote-contract.md).
+Las reglas preparatorias de autorización y capacidades SaaS se explican en
+[la Fase 6](docs/phases/phase-6-access-contract.md).
 
 ## Flujo de actualización
 
