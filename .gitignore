@@ -1,0 +1,76 @@
+# Flutter and Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Android build outputs and local configuration
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/key.properties
+*.apk
+*.aab
+*.aar
+*.ap_
+
+# Signing keys, certificates and private credentials
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+secrets/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.fleet/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs, temporary files and caches
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*.lock.tmp
+.cache/
+tmp/
+temp/
+
+# Local backups and generated archives
+backups/
+*.zip
+*.7z
+*.rar
+
+# Local web-server state
+*.pid

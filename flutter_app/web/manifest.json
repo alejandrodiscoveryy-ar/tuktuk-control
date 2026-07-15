@@ -1,0 +1,18 @@
+{
+  "name": "TukTuk Control",
+  "short_name": "TukTuk",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0B0F14",
+  "theme_color": "#22D3A6",
+  "description": "Control de ganancias, odometro, cargas y mantenimiento",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
