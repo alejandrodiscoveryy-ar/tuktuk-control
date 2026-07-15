@@ -14,6 +14,7 @@ para validar la experiencia y los cálculos.
 - Vista web de referencia: HTML, CSS y JavaScript sin dependencias externas.
 - Registros asociados a propietario y vehículo desde el esquema local 3.
 - Onboarding vacío y configuración del primer vehículo para usuarios nuevos.
+- Cola local persistente para cambios pendientes de futura sincronización SaaS.
 
 ## Requisitos
 
@@ -132,6 +133,8 @@ migraciones. La asignación inicial de propietario y vehículo está documentada
 en [la migración del esquema 3](docs/migrations/schema-v3.md).
 El comportamiento de nuevas instalaciones y la edición del vehículo activo se
 describe en [la Fase 3](docs/phases/phase-3-onboarding.md).
+La separación entre respaldo y sincronización futura se documenta en
+[la Fase 4](docs/phases/phase-4-offline-queue.md).
 
 ## Flujo de actualización
 

@@ -24,7 +24,7 @@ class AppLogoMark extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: kPrimary.withOpacity(.22),
+            color: kPrimary.withValues(alpha: .22),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -584,7 +584,7 @@ class HistoryScreen extends StatelessWidget {
                 background: Container(
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
-                  color: kDanger.withOpacity(.25),
+                  color: kDanger.withValues(alpha: .25),
                   child: const Icon(Icons.delete_outline, color: kDanger),
                 ),
                 confirmDismiss: (_) => confirmDelete(context),
@@ -735,6 +735,11 @@ class LoginScreen extends StatelessWidget {
                     ? 'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.'
                     : store.syncMessage,
                 style: const TextStyle(color: kMuted),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${store.pendingSyncCount} cambios locales preparados para futura sincronizacion',
+                style: const TextStyle(color: kMuted, fontSize: 12),
               ),
               if (store.lastSyncAt != null) ...[
                 const SizedBox(height: 8),
@@ -970,7 +975,7 @@ class _MaintenanceSettingsPanelState extends State<MaintenanceSettingsPanel> {
                   background: Container(
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
-                    color: kDanger.withOpacity(.25),
+                    color: kDanger.withValues(alpha: .25),
                     child: const Icon(Icons.delete_outline, color: kDanger),
                   ),
                   confirmDismiss: (_) => confirmDeleteMaintenance(context),

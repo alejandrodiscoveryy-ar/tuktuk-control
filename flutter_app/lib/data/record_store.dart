@@ -12,6 +12,7 @@ class RecordStore extends ChangeNotifier {
   final Box _box = Hive.box(_recordsBox);
   final Box _maintenanceBox = Hive.box(_maintenanceRecordsBox);
   final Box _meta = Hive.box(_metaBox);
+  final SyncQueueStore _syncQueue = SyncQueueStore();
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   GoogleSignInAccount? user;
@@ -23,6 +24,8 @@ class RecordStore extends ChangeNotifier {
 
   List<MaintenanceRecord> get maintenanceRecords => [..._maintenanceRecords]
     ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+  int get pendingSyncCount => _syncQueue.pendingForUser(activeUserId).length;
 
   double get maintenanceIntervalKm {
     final value = _meta.get('maintenanceIntervalKm');
@@ -99,6 +102,7 @@ class RecordStore extends ChangeNotifier {
       await _migrateSyncMetadata();
       await _seedInitialEarningsIfEmpty();
       await _seedInitialMaintenanceIfEmpty();
+      await _seedSyncQueueIfNeeded();
       _load();
       await restoreGoogleSession();
     } finally {
@@ -129,6 +133,13 @@ class RecordStore extends ChangeNotifier {
     );
     await _meta.put('activeVehicleId:$activeUserId', vehicleId);
     await _meta.put('vehicle:$vehicleId', vehicle.toMap());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.vehicle,
+      entityId: vehicleId,
+      action: SyncAction.upsert,
+      userId: activeUserId,
+      vehicleId: vehicleId,
+    );
     if (initialOdometer > 0 && records.isEmpty) {
       await save(
         DailyRecord(
@@ -161,6 +172,13 @@ class RecordStore extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     await _meta.put('vehicle:${current.id}', updated.toMap());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.vehicle,
+      entityId: current.id,
+      action: SyncAction.upsert,
+      userId: activeUserId,
+      vehicleId: current.id,
+    );
     notifyListeners();
     unawaitedSync();
   }
@@ -196,6 +214,39 @@ class RecordStore extends ChangeNotifier {
   List<MaintenanceRecord> get _allMaintenanceRecords => _maintenanceBox.values
       .map((raw) => MaintenanceRecord.fromMap(raw as Map))
       .toList();
+
+  Future<void> _seedSyncQueueIfNeeded() async {
+    if (_meta.get('syncQueueV1Seeded') == true) return;
+    for (final record in _allDailyRecords) {
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.dailyRecord,
+        entityId: record.id,
+        action: record.isDeleted ? SyncAction.delete : SyncAction.upsert,
+        userId: record.userId,
+        vehicleId: record.vehicleId,
+      );
+    }
+    for (final record in _allMaintenanceRecords) {
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.maintenance,
+        entityId: record.id,
+        action: record.isDeleted ? SyncAction.delete : SyncAction.upsert,
+        userId: record.userId,
+        vehicleId: record.vehicleId,
+      );
+    }
+    final vehicle = activeVehicle;
+    if (vehicle != null) {
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.vehicle,
+        entityId: vehicle.id,
+        action: SyncAction.upsert,
+        userId: vehicle.userId,
+        vehicleId: vehicle.id,
+      );
+    }
+    await _meta.put('syncQueueV1Seeded', true);
+  }
 
   Future<void> _migrateLegacyMaintenance() async {
     if (_maintenanceBox.isNotEmpty) return;
@@ -304,6 +355,13 @@ class RecordStore extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     await _box.put(normalized.id, normalized.toMap());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.dailyRecord,
+      entityId: normalized.id,
+      action: SyncAction.upsert,
+      userId: normalized.userId,
+      vehicleId: normalized.vehicleId,
+    );
     _load();
     unawaitedSync();
   }
@@ -320,6 +378,13 @@ class RecordStore extends ChangeNotifier {
         deletedAt: DateTime.now(),
       );
       await _box.put(record.id, record.toMap());
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.dailyRecord,
+        entityId: record.id,
+        action: SyncAction.delete,
+        userId: record.userId,
+        vehicleId: record.vehicleId,
+      );
     }
     _load();
     unawaitedSync();
@@ -334,6 +399,13 @@ class RecordStore extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
     await _maintenanceBox.put(normalized.id, normalized.toMap());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.maintenance,
+      entityId: normalized.id,
+      action: SyncAction.upsert,
+      userId: normalized.userId,
+      vehicleId: normalized.vehicleId,
+    );
     _load();
     unawaitedSync();
   }
@@ -350,6 +422,13 @@ class RecordStore extends ChangeNotifier {
         deletedAt: DateTime.now(),
       );
       await _maintenanceBox.put(record.id, record.toMap());
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.maintenance,
+        entityId: record.id,
+        action: SyncAction.delete,
+        userId: record.userId,
+        vehicleId: record.vehicleId,
+      );
     }
     _load();
     unawaitedSync();
@@ -357,6 +436,13 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> setMaintenanceInterval(double intervalKm) async {
     await _meta.put('maintenanceIntervalKm', intervalKm);
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.settings,
+      entityId: 'maintenance-settings',
+      action: SyncAction.upsert,
+      userId: activeUserId,
+      vehicleId: activeVehicleId,
+    );
     _load();
     unawaitedSync();
   }
@@ -419,7 +505,6 @@ class RecordStore extends ChangeNotifier {
         return;
       }
       await _upload(api);
-      await _markActiveRecordsSynced();
       syncMessage = 'Base respaldada en Google Drive';
     });
   }
@@ -433,7 +518,6 @@ class RecordStore extends ChangeNotifier {
         return;
       }
       await _upload(api);
-      await _markActiveRecordsSynced();
       syncMessage = 'Base respaldada en Google Drive';
     });
   }
@@ -551,6 +635,13 @@ class RecordStore extends ChangeNotifier {
           'vehicle:${remoteVehicle.id}',
           remoteVehicle.toMap(),
         );
+        await _syncQueue.enqueue(
+          entityType: SyncEntityType.vehicle,
+          entityId: remoteVehicle.id,
+          action: SyncAction.upsert,
+          userId: remoteVehicle.userId,
+          vehicleId: remoteVehicle.id,
+        );
         changed = true;
       }
     }
@@ -569,6 +660,17 @@ class RecordStore extends ChangeNotifier {
       if (localRecord == null ||
           remoteRecord.updatedAt.isAfter(localRecord.updatedAt)) {
         await _box.put(remoteRecord.id, remoteRecord.toMap());
+        await _syncQueue.enqueue(
+          entityType: SyncEntityType.dailyRecord,
+          entityId: remoteRecord.id,
+          action:
+              remoteRecord.isDeleted ? SyncAction.delete : SyncAction.upsert,
+          userId:
+              remoteRecord.userId.isEmpty ? localOwnerId : remoteRecord.userId,
+          vehicleId: remoteRecord.vehicleId.isEmpty
+              ? activeVehicleId
+              : remoteRecord.vehicleId,
+        );
         changed = true;
       }
     }
@@ -599,6 +701,18 @@ class RecordStore extends ChangeNotifier {
         if (localRecord == null ||
             remoteRecord.updatedAt.isAfter(localRecord.updatedAt)) {
           await _maintenanceBox.put(remoteRecord.id, remoteRecord.toMap());
+          await _syncQueue.enqueue(
+            entityType: SyncEntityType.maintenance,
+            entityId: remoteRecord.id,
+            action:
+                remoteRecord.isDeleted ? SyncAction.delete : SyncAction.upsert,
+            userId: remoteRecord.userId.isEmpty
+                ? localOwnerId
+                : remoteRecord.userId,
+            vehicleId: remoteRecord.vehicleId.isEmpty
+                ? activeVehicleId
+                : remoteRecord.vehicleId,
+          );
           changed = true;
         }
       }
@@ -645,6 +759,11 @@ class RecordStore extends ChangeNotifier {
       }
     }
     final now = DateTime.now();
+    await _syncQueue.reassignOwnership(
+      fromUserId: localOwnerId,
+      toUserId: targetUserId,
+      vehicleId: targetVehicleId,
+    );
     await _meta.put('claimedUserId', targetUserId);
     final hasOwnedData = _allDailyRecords.any(
           (record) => record.userId == targetUserId,
@@ -668,38 +787,5 @@ class RecordStore extends ChangeNotifier {
       );
     }
     _load();
-  }
-
-  Future<void> _markActiveRecordsSynced() async {
-    for (final record in _allDailyRecords) {
-      if (record.userId == activeUserId &&
-          record.syncStatus != SyncStatus.synced) {
-        final synced = record.withSyncInfo(
-          deviceId: deviceId,
-          syncStatus: SyncStatus.synced,
-        );
-        await _box.put(synced.id, synced.toMap());
-      }
-    }
-    for (final record in _allMaintenanceRecords) {
-      if (record.userId == activeUserId &&
-          record.syncStatus != SyncStatus.synced) {
-        final synced = record.withSyncInfo(
-          deviceId: deviceId,
-          syncStatus: SyncStatus.synced,
-        );
-        await _maintenanceBox.put(synced.id, synced.toMap());
-      }
-    }
-    _load();
-  }
-
-  DateTime _latestLocalUpdate() {
-    final dates = [
-      ..._allDailyRecords.map((record) => record.updatedAt),
-      ..._allMaintenanceRecords.map((record) => record.updatedAt),
-    ];
-    if (dates.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
-    return dates.reduce((a, b) => a.isAfter(b) ? a : b);
   }
 }
