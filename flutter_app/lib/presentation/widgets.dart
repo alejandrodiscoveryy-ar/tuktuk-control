@@ -424,6 +424,11 @@ class MonthlyComparisonGauge extends StatelessWidget {
                                   fontSize: (dimension * .14).clamp(38, 64),
                                   height: 1,
                                   fontWeight: FontWeight.w900,
+                                  shadows: const [
+                                    Shadow(
+                                        color: kCardGradientBottom,
+                                        blurRadius: 10),
+                                  ],
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -433,6 +438,11 @@ class MonthlyComparisonGauge extends StatelessWidget {
                                   color: animatedColor,
                                   fontSize: (dimension * .075).clamp(22, 34),
                                   fontWeight: FontWeight.w800,
+                                  shadows: const [
+                                    Shadow(
+                                        color: kCardGradientBottom,
+                                        blurRadius: 8),
+                                  ],
                                 ),
                               ),
                             ],
@@ -511,6 +521,17 @@ class MonthlyGaugePainter extends CustomPainter {
         colors: gradientColors,
         stops: gradientValues.map((value) => value / scaleMaximum).toList(),
       ).createShader(arcRect);
+    canvas.drawArc(
+      arcRect,
+      pi,
+      pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth + 6
+        ..strokeCap = StrokeCap.round
+        ..color = kMuted.withValues(alpha: .10),
+    );
     canvas.drawArc(arcRect, pi, pi, false, arcPaint);
 
     final labelPainter = TextPainter(textDirection: ui.TextDirection.ltr);
@@ -593,20 +614,20 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: margin,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [kCardGradientTop, kCardGradientBottom],
         ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF2A3645)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFF304055)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: .22),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -623,19 +644,19 @@ class GradientMetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(26),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF18362F),
-            Color(0xFF142237),
-            Color(0xFF21192B),
+            Color(0xFF153329),
+            Color(0xFF132239),
+            Color(0xFF191A2A),
           ],
         ),
-        border: Border.all(color: const Color(0xFF2C4B46)),
+        border: Border.all(color: const Color(0xFF315044)),
         boxShadow: [
           BoxShadow(
             color: kPrimary.withValues(alpha: .12),
@@ -664,7 +685,11 @@ class SectionTitle extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -.3,
+              ),
             ),
           ),
           if (trailing != null)
@@ -687,9 +712,9 @@ class Label extends StatelessWidget {
       text.toUpperCase(),
       style: const TextStyle(
         color: kMuted,
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: FontWeight.w800,
-        letterSpacing: .7,
+        letterSpacing: 1.1,
       ),
     );
   }

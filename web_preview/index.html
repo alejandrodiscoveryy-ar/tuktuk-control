@@ -7,14 +7,14 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #07111f;
-      --panel: #101a28;
-      --panel2: #172337;
-      --line: #26384f;
-      --text: #f3f8ff;
-      --muted: #a7b6c9;
-      --green: #19e6a1;
-      --blue: #6aa7ff;
+      --bg: #080d14;
+      --panel: #111923;
+      --panel2: #182331;
+      --line: #29384a;
+      --text: #f5f8fc;
+      --muted: #93a2b5;
+      --green: #2dd4a3;
+      --blue: #70a7ff;
       --amber: #ffbd4a;
       --red: #ff6e83;
       --violet: #c084fc;
@@ -34,15 +34,18 @@
       --violet: #7c3aed;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       min-height: 100vh;
       color: var(--text);
       background:
-        linear-gradient(135deg, rgba(25, 230, 161, .14), transparent 28rem),
-        radial-gradient(circle at 90% 0%, rgba(106, 167, 255, .17), transparent 25rem),
-        linear-gradient(180deg, #07111f, #0c1524 45%, #101827);
+        radial-gradient(circle at 12% -8%, rgba(45, 212, 163, .13), transparent 29rem),
+        radial-gradient(circle at 92% 0%, rgba(112, 167, 255, .14), transparent 27rem),
+        linear-gradient(180deg, #080d14, #0c131d 52%, #0b1119);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
     header {
       position: sticky;
@@ -52,8 +55,9 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 12px 18px;
-      background: rgba(7, 17, 31, .86);
+      min-height: 68px;
+      padding: 12px max(18px, calc((100vw - 1120px) / 2 + 18px));
+      background: rgba(8, 13, 20, .78);
       border-bottom: 1px solid rgba(38, 56, 79, .74);
       backdrop-filter: blur(16px);
     }
@@ -64,16 +68,16 @@
       color: #061b17; background: linear-gradient(135deg, var(--green), var(--blue));
       font-weight: 950; box-shadow: 0 14px 30px rgba(25, 230, 161, .18);
     }
-    main { width: min(1120px, 100%); margin: 0 auto; padding: 18px 16px 104px; }
-    section { display: none; gap: 14px; }
+    main { width: min(1120px, 100%); margin: 0 auto; padding: 24px 18px 124px; }
+    section { display: none; gap: 18px; }
     section.active { display: grid; }
-    .grid { display: grid; gap: 14px; }
+    .grid { display: grid; gap: 16px; }
     .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .hero, .card, .profilePanel {
-      border: 1px solid rgba(45, 64, 90, .95);
-      background: linear-gradient(145deg, rgba(19, 31, 48, .98), rgba(10, 18, 29, .98));
-      box-shadow: 0 20px 42px rgba(0, 0, 0, .26);
+      border: 1px solid rgba(55, 72, 94, .68);
+      background: linear-gradient(145deg, rgba(20, 30, 42, .96), rgba(13, 20, 29, .98));
+      box-shadow: 0 16px 38px rgba(0, 0, 0, .20);
       overflow: hidden;
     }
     .hero {
@@ -111,7 +115,7 @@
       background: rgba(7, 17, 31, .52);
       border: 1px solid rgba(243, 248, 255, .24);
     }
-    .card { padding: 16px; border-radius: 18px; }
+    .card { padding: clamp(16px, 2.4vw, 22px); border-radius: 24px; }
     .profilePanel {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
@@ -422,14 +426,14 @@
     .achievementMeta { color: var(--muted); font-size: 11px; font-weight: 850; white-space: nowrap; }
     .achievementNote { color: var(--muted); font-size: 12px; line-height: 1.35; }
     input, textarea, select {
-      width: 100%; min-height: 46px; padding: 12px 13px; border-radius: 12px;
-      border: 1px solid #2d4058; background: #0b1421; color: var(--text);
+      width: 100%; min-height: 50px; padding: 13px 14px; border-radius: 14px;
+      border: 1px solid rgba(64, 84, 109, .78); background: rgba(9, 16, 25, .72); color: var(--text);
       font: inherit; outline: none;
     }
     textarea { min-height: 82px; resize: vertical; }
-    input:focus, textarea:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(85, 167, 255, .12); }
+    input:focus, textarea:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(112, 167, 255, .13); }
     button {
-      border: 0; border-radius: 12px; min-height: 42px; padding: 0 13px;
+      border: 0; border-radius: 14px; min-height: 46px; padding: 0 15px;
       color: var(--text); background: #223247; font-weight: 950; cursor: pointer;
     }
     button.primary { background: var(--green); color: #061b17; }
@@ -532,15 +536,16 @@
     .gaugeMonthSelector button:disabled { cursor: not-allowed; opacity: .3; transform: none; }
     .gaugeMonthTitle { min-width: 0; color: #f3f8ff; font-size: clamp(14px, 4vw, 18px); font-weight: 950; letter-spacing: clamp(.4px, .3vw, 1px); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .gaugeSvg { display: block; width: 100%; aspect-ratio: 1; justify-self: center; overflow: visible; }
-    .gaugeArc { stroke: url(#gaugeGradient); stroke-width: 28; fill: none; stroke-linecap: round; }
-    .gaugeNeedle { stroke-width: 7; stroke-linecap: round; transform-origin: 160px 205px; transition: transform .85s cubic-bezier(.22,.8,.24,1), stroke .35s ease; }
+    .gaugeArcTrack { stroke: rgba(115, 136, 162, .12); stroke-width: 34; fill: none; stroke-linecap: round; }
+    .gaugeArc { stroke: url(#gaugeGradient); stroke-width: 28; fill: none; stroke-linecap: round; filter: drop-shadow(0 8px 14px rgba(24, 139, 255, .12)); }
+    .gaugeNeedle { stroke-width: 7; stroke-linecap: round; transition: transform .85s cubic-bezier(.22,.8,.24,1), stroke .35s ease; filter: drop-shadow(0 5px 7px rgba(0,0,0,.24)); }
     .gaugeCenter { transition: fill .35s ease; }
     .gaugePercent, .gaugeCurrent { paint-order: stroke fill; stroke: rgba(16, 22, 29, .92); stroke-linejoin: round; transition: fill .35s ease; }
-    .gaugePercent { font-size: 40px; font-weight: 950; stroke-width: 7px; }
-    .gaugeCurrent { font-size: 23px; font-weight: 900; stroke-width: 5px; }
-    .gaugeTickText { font-size: 11px; fill: #d9e1ea; font-weight: 800; }
-    .gaugeMetaLabel { font-size: 11px; fill: var(--muted); }
-    .gaugeMetaValue { font-size: 22px; fill: var(--text); font-weight: 950; }
+    .gaugePercent { font-size: 44px; font-weight: 950; stroke-width: 8px; letter-spacing: -1px; }
+    .gaugeCurrent { font-size: 25px; font-weight: 900; stroke-width: 6px; }
+    .gaugeTickText { font-size: 12px; fill: #d9e1ea; font-weight: 800; }
+    .gaugeMetaLabel { font-size: 12px; fill: var(--muted); }
+    .gaugeMetaValue { font-size: 24px; fill: var(--text); font-weight: 950; }
     .toast {
       position: fixed; left: 50%; bottom: 86px; z-index: 20; transform: translateX(-50%);
       width: min(460px, calc(100% - 28px)); padding: 12px 14px; border-radius: 14px;
@@ -652,6 +657,41 @@
       background: var(--green);
       border-color: var(--green);
       box-shadow: 0 12px 22px rgba(25, 230, 161, .18);
+    }
+    /* Professional UI pass: quieter surfaces, stronger hierarchy and touch targets. */
+    h1 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -.035em; }
+    h2 { font-size: clamp(20px, 3vw, 25px); letter-spacing: -.02em; }
+    .label { color: #91a1b5; font-size: 10px; letter-spacing: .12em; }
+    .value { letter-spacing: -.025em; }
+    .overviewPanel { padding: clamp(18px, 3vw, 26px); border-radius: 28px; }
+    .overviewGrid { gap: 14px; }
+    .overviewPrimary, .overviewTile { border-radius: 20px; border-color: rgba(61, 80, 104, .62); }
+    .overviewPrimary { min-height: 146px; }
+    .achievementItem { border-radius: 18px; }
+    .item { min-height: 50px; }
+    button { transition: transform .18s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease; }
+    button:not(:disabled):active { transform: scale(.975); }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid rgba(112, 167, 255, .62); outline-offset: 2px; }
+    button.primary { box-shadow: 0 10px 22px rgba(45, 212, 163, .15); }
+    .filterBtn { border-radius: 15px; }
+    .modalPanel { padding: clamp(18px, 3vw, 26px); border-radius: 26px; }
+    nav {
+      left: 50%;
+      right: auto;
+      bottom: 14px;
+      width: min(620px, calc(100% - 24px));
+      transform: translateX(-50%);
+      padding: 7px;
+      border: 1px solid rgba(58, 76, 98, .72);
+      border-radius: 24px;
+      background: rgba(15, 23, 33, .90);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .34);
+    }
+    nav button { min-height: 58px; border-radius: 18px; }
+    nav button.active { background: rgba(45, 212, 163, .09); }
+    .homeFab { bottom: 104px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
     html[data-theme="light"] body {
       background:
@@ -767,6 +807,20 @@
       .mileageGauge { grid-template-columns: 1fr; }
       th:nth-child(4), td:nth-child(4) { display: none; }
       header { align-items: flex-start; }
+    }
+    @media (max-width: 520px) {
+      header { min-height: 60px; padding: 10px 12px; align-items: center; }
+      header .pill { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+      main { padding: 14px 12px 116px; }
+      section { gap: 14px; }
+      .card { padding: 16px; border-radius: 20px; }
+      .overviewPanel { padding: 16px; border-radius: 22px; }
+      .overviewPrimary, .overviewTile { min-height: 112px; padding: 14px; }
+      .gaugeMonthSelector { grid-template-columns: 42px minmax(0, 1fr) 42px; }
+      .gaugeMonthSelector button { width: 42px; height: 42px; }
+      nav { width: calc(100% - 16px); bottom: 8px; border-radius: 20px; }
+      nav button { min-height: 54px; }
+      .homeFab { right: 16px; bottom: 92px; width: 56px; height: 56px; }
     }
   </style>
 </head>
@@ -2378,9 +2432,9 @@
       const activeColor = percentage > 120 ? "#b832ff" : percentage >= 100 ? "#168bff" : percentage >= 75 ? "#63d916" : percentage >= 50 ? "#ffd600" : percentage >= 25 ? "#ff7a00" : "#ff2340";
       const ticks = [0, 25, 50, 75, 100].map((value) => {
         const angle = (180 + value / scaleMaximum * 180) * Math.PI / 180;
-        const labelRadius = 145;
-        const x = 160 + Math.cos(angle) * labelRadius;
-        const y = 214 + Math.sin(angle) * labelRadius + 4;
+        const labelRadius = 158;
+        const x = 180 + Math.cos(angle) * labelRadius;
+        const y = 235 + Math.sin(angle) * labelRadius + 4;
         return `<text class="gaugeTickText" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${value}</text>`;
       }).join("");
       const stop = value => Math.min(100, value / scaleMaximum * 100).toFixed(2);
@@ -2395,7 +2449,7 @@
           <div class="gaugeMonthTitle">${monthLabel(currentMonthFull).toUpperCase()}</div>
           <button type="button" style="color:${activeColor};border-color:${activeColor}" onclick="shiftGaugeMonth(1)" aria-label="Mes siguiente" ${currentMonthFull >= latestMonth ? "disabled" : ""}>›</button>
         </div>
-        <svg class="gaugeSvg" viewBox="0 0 320 320" role="img" aria-label="${t("home.gauge")}">
+        <svg class="gaugeSvg" viewBox="0 0 360 360" role="img" aria-label="${t("home.gauge")}">
           <defs>
             <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stop-color="#ff2340"></stop>
@@ -2406,15 +2460,16 @@
               ${scaleMaximum > 100 ? `<stop offset="100%" stop-color="${percentage > 120 ? "#b832ff" : "#168bff"}"></stop>` : ""}
             </linearGradient>
           </defs>
-          <path class="gaugeArc" d="M38 214 A122 122 0 0 1 282 214"></path>
+          <path class="gaugeArcTrack" d="M45 235 A135 135 0 0 1 315 235"></path>
+          <path class="gaugeArc" d="M45 235 A135 135 0 0 1 315 235"></path>
           ${ticks}
-          <line class="gaugeNeedle" x1="160" y1="214" x2="160" y2="128" stroke="${activeColor}" style="transform-origin:160px 214px;transform:rotate(${needle}deg)"></line>
-          <circle class="gaugeCenter" cx="160" cy="214" r="12" fill="${activeColor}"></circle>
-          <circle cx="160" cy="214" r="5" fill="#10161d"></circle>
-          <text class="gaugePercent" x="160" y="151" text-anchor="middle" fill="${activeColor}">${percentText}</text>
-          <text class="gaugeCurrent" x="160" y="181" text-anchor="middle" fill="${activeColor}">$${shortAmount(current)}</text>
-          <text class="gaugeMetaLabel" x="160" y="274" text-anchor="middle">Meta</text>
-          <text class="gaugeMetaValue" x="160" y="301" text-anchor="middle">${shortAmount(previous)}</text>
+          <line class="gaugeNeedle" x1="180" y1="235" x2="180" y2="143" stroke="${activeColor}" style="transform-origin:180px 235px;transform:rotate(${needle}deg)"></line>
+          <circle class="gaugeCenter" cx="180" cy="235" r="13" fill="${activeColor}"></circle>
+          <circle cx="180" cy="235" r="5" fill="#10161d"></circle>
+          <text class="gaugePercent" x="180" y="169" text-anchor="middle" fill="${activeColor}">${percentText}</text>
+          <text class="gaugeCurrent" x="180" y="202" text-anchor="middle" fill="${activeColor}">$${shortAmount(current)}</text>
+          <text class="gaugeMetaLabel" x="180" y="310" text-anchor="middle">Meta</text>
+          <text class="gaugeMetaValue" x="180" y="340" text-anchor="middle">${shortAmount(previous)}</text>
         </svg>`;
       const gauge = document.getElementById("monthMileageGauge");
       gauge.dataset.month = currentMonthFull;

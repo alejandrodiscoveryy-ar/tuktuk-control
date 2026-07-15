@@ -49,12 +49,12 @@ class AppBackground extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            Color(0xFF0B0F14),
-            Color(0xFF101820),
-            Color(0xFF0B0F14),
+            Color(0xFF0B1718),
+            Color(0xFF080D14),
+            Color(0xFF101827),
           ],
         ),
       ),
@@ -271,7 +271,14 @@ class _AppShellState extends State<AppShell> {
             ],
           ),
           body: AppBackground(
-            child: SafeArea(child: screens[index]),
+            child: SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: screens[index],
+                ),
+              ),
+            ),
           ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: index,
