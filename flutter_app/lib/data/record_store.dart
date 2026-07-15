@@ -15,6 +15,7 @@ class RecordStore extends ChangeNotifier {
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   GoogleSignInAccount? user;
+  bool initialized = false;
   bool syncing = false;
   String syncMessage = 'Base local pendiente de respaldo';
 
@@ -74,18 +75,94 @@ class RecordStore extends ChangeNotifier {
     return generated;
   }
 
+  VehicleProfile? _vehicleForUser(String userId) {
+    final key = 'activeVehicleId:$userId';
+    final vehicleId = _meta.get(key);
+    if (vehicleId is! String || vehicleId.isEmpty) return null;
+    final raw = _meta.get('vehicle:$vehicleId');
+    if (raw is! Map) return null;
+    return VehicleProfile.fromMap(raw);
+  }
+
+  VehicleProfile? get activeVehicle => _vehicleForUser(activeUserId);
+
+  bool get needsOnboarding => initialized && activeVehicle == null;
+
   DateTime? get lastSyncAt {
     final raw = _meta.get('lastSyncAt');
     return raw == null ? null : DateTime.tryParse('$raw');
   }
 
   Future<void> _initialize() async {
-    await _migrateLegacyMaintenance();
-    await _migrateSyncMetadata();
-    await _seedInitialEarningsIfEmpty();
-    await _seedInitialMaintenanceIfEmpty();
-    _load();
-    await restoreGoogleSession();
+    try {
+      await _migrateLegacyMaintenance();
+      await _migrateSyncMetadata();
+      await _seedInitialEarningsIfEmpty();
+      await _seedInitialMaintenanceIfEmpty();
+      _load();
+      await restoreGoogleSession();
+    } finally {
+      initialized = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> configureFirstVehicle({
+    required String name,
+    String registration = '',
+    double initialOdometer = 0,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
+    }
+    final now = DateTime.now();
+    final vehicleId = 'vehicle-$activeUserId-primary';
+    final vehicle = VehicleProfile(
+      id: vehicleId,
+      userId: activeUserId,
+      name: cleanName,
+      registration: registration.trim(),
+      initialOdometer: initialOdometer,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _meta.put('activeVehicleId:$activeUserId', vehicleId);
+    await _meta.put('vehicle:$vehicleId', vehicle.toMap());
+    if (initialOdometer > 0 && records.isEmpty) {
+      await save(
+        DailyRecord(
+          id: 'vehicle-setup-${now.microsecondsSinceEpoch}',
+          date: DateTime(now.year, now.month, now.day),
+          earnings: 0,
+          odometer: initialOdometer,
+          note: 'Odometro inicial del vehiculo',
+        ),
+      );
+    }
+    notifyListeners();
+    unawaitedSync();
+  }
+
+  Future<void> updateActiveVehicle({
+    required String name,
+    String registration = '',
+  }) async {
+    final current = activeVehicle;
+    final cleanName = name.trim();
+    if (current == null || cleanName.isEmpty) return;
+    final updated = VehicleProfile(
+      id: current.id,
+      userId: current.userId,
+      name: cleanName,
+      registration: registration.trim(),
+      initialOdometer: current.initialOdometer,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now(),
+    );
+    await _meta.put('vehicle:${current.id}', updated.toMap());
+    notifyListeners();
+    unawaitedSync();
   }
 
   void _load() {
@@ -337,6 +414,10 @@ class RecordStore extends ChangeNotifier {
         if (changed) syncMessage = 'Base recuperada desde Google Drive';
       }
       await _claimLocalDataForSignedInUser();
+      if (activeVehicle == null) {
+        syncMessage = 'Configura tu primer vehiculo para comenzar';
+        return;
+      }
       await _upload(api);
       await _markActiveRecordsSynced();
       syncMessage = 'Base respaldada en Google Drive';
@@ -347,6 +428,10 @@ class RecordStore extends ChangeNotifier {
     await _withSync(() async {
       final api = await _driveApi();
       if (api == null) return;
+      if (activeVehicle == null) {
+        syncMessage = 'Configura tu primer vehiculo para comenzar';
+        return;
+      }
       await _upload(api);
       await _markActiveRecordsSynced();
       syncMessage = 'Base respaldada en Google Drive';
@@ -406,6 +491,7 @@ class RecordStore extends ChangeNotifier {
       'kind': 'database-backup',
       'ownerUserId': activeUserId,
       'vehicleId': activeVehicleId,
+      'vehicle': activeVehicle?.toMap(),
       'deviceId': deviceId,
       'updatedAt': DateTime.now().toIso8601String(),
       'settings': {
@@ -449,6 +535,25 @@ class RecordStore extends ChangeNotifier {
       throw StateError('El respaldo pertenece a otro usuario.');
     }
     var changed = false;
+    if (remote['vehicle'] is Map) {
+      final remoteVehicle = VehicleProfile.fromMap(remote['vehicle'] as Map);
+      if (remoteVehicle.userId != activeUserId) {
+        throw StateError('El vehiculo del respaldo pertenece a otro usuario.');
+      }
+      final localVehicle = activeVehicle;
+      if (localVehicle == null ||
+          remoteVehicle.updatedAt.isAfter(localVehicle.updatedAt)) {
+        await _meta.put(
+          'activeVehicleId:$activeUserId',
+          remoteVehicle.id,
+        );
+        await _meta.put(
+          'vehicle:${remoteVehicle.id}',
+          remoteVehicle.toMap(),
+        );
+        changed = true;
+      }
+    }
     final remoteRecords = (remote['records'] as List? ?? [])
         .map((raw) => DailyRecord.fromMap(raw as Map))
         .toList();
@@ -516,6 +621,7 @@ class RecordStore extends ChangeNotifier {
 
     final targetUserId = googleUser.id;
     final targetVehicleId = 'vehicle-$targetUserId-primary';
+    final sourceVehicle = _vehicleForUser(localOwnerId);
     for (final record in _allDailyRecords) {
       if (record.userId.isEmpty || record.userId == localOwnerId) {
         final migrated = record.withSyncInfo(
@@ -540,17 +646,27 @@ class RecordStore extends ChangeNotifier {
     }
     final now = DateTime.now();
     await _meta.put('claimedUserId', targetUserId);
-    await _meta.put('activeVehicleId:$targetUserId', targetVehicleId);
-    await _meta.put(
-      'vehicle:$targetVehicleId',
-      VehicleProfile(
-        id: targetVehicleId,
-        userId: targetUserId,
-        name: 'Mi Tuk Tuk',
-        createdAt: now,
-        updatedAt: now,
-      ).toMap(),
-    );
+    final hasOwnedData = _allDailyRecords.any(
+          (record) => record.userId == targetUserId,
+        ) ||
+        _allMaintenanceRecords.any(
+          (record) => record.userId == targetUserId,
+        );
+    if (hasOwnedData && activeVehicle == null) {
+      await _meta.put('activeVehicleId:$targetUserId', targetVehicleId);
+      await _meta.put(
+        'vehicle:$targetVehicleId',
+        VehicleProfile(
+          id: targetVehicleId,
+          userId: targetUserId,
+          name: sourceVehicle?.name ?? 'Mi Tuk Tuk',
+          registration: sourceVehicle?.registration ?? '',
+          initialOdometer: sourceVehicle?.initialOdometer ?? 0,
+          createdAt: sourceVehicle?.createdAt ?? now,
+          updatedAt: now,
+        ).toMap(),
+      );
+    }
     _load();
   }
 
