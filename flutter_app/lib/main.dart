@@ -144,8 +144,9 @@ class ControlTukTukApp extends StatelessWidget {
         ),
         navigationBarTheme: NavigationBarThemeData(
           height: 76,
-          backgroundColor: kSurface,
-          indicatorColor: kPrimary.withValues(alpha: .16),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          indicatorColor: kPrimary.withValues(alpha: .18),
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
               color: states.contains(WidgetState.selected) ? kPrimary : kMuted,
