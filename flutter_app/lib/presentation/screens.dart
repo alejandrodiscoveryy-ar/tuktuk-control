@@ -628,17 +628,21 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
-class StatsScreen extends StatelessWidget {
+class StatsScreen extends StatefulWidget {
   const StatsScreen({required this.store, super.key});
 
   final RecordStore store;
 
   @override
+  State<StatsScreen> createState() => _StatsScreenState();
+}
+
+class _StatsScreenState extends State<StatsScreen> {
+  DateTime selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+
+  @override
   Widget build(BuildContext context) {
-    final metrics = Metrics(store.records);
-    final months = metrics.monthlyEarnings.entries.toList();
-    final maxMonth =
-        months.isEmpty ? 1 : months.map((e) => e.value).reduce(max);
+    final metrics = Metrics(widget.store.records);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -666,15 +670,17 @@ class StatsScreen extends StatelessWidget {
         const SizedBox(height: 18),
         DataHealthCard(metrics: metrics),
         const SizedBox(height: 18),
-        const SectionTitle(title: 'Por mes'),
-        if (months.isEmpty)
-          const EmptyState('Sin datos suficientes para graficar.')
-        else
-          ...months.map((entry) => BarRow(
-                label: entry.key,
-                value: money(entry.value),
-                percent: entry.value / maxMonth,
-              )),
+        MonthlyComparisonGauge(
+          comparison: metrics.comparisonFor(selectedMonth),
+          onPreviousMonth: () => setState(
+            () => selectedMonth =
+                DateTime(selectedMonth.year, selectedMonth.month - 1),
+          ),
+          onNextMonth: () => setState(
+            () => selectedMonth =
+                DateTime(selectedMonth.year, selectedMonth.month + 1),
+          ),
+        ),
         const SizedBox(height: 18),
         const SectionTitle(title: 'Por mes'),
         if (metrics.cycleSummaries.isEmpty)

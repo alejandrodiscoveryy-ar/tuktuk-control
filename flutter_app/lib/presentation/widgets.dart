@@ -338,6 +338,243 @@ class BarRow extends StatelessWidget {
   }
 }
 
+class MonthlyComparisonGauge extends StatelessWidget {
+  const MonthlyComparisonGauge({
+    required this.comparison,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
+    super.key,
+  });
+
+  final MonthlyComparison comparison;
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = monthlyGaugeColor(comparison.percentage);
+    final monthLabel =
+        DateFormat('MMMM yyyy', 'es').format(comparison.month).toUpperCase();
+    return Column(
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Mes anterior',
+              onPressed: onPreviousMonth,
+              color: color,
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            Expanded(
+              child: Text(
+                monthLabel,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Mes siguiente',
+              onPressed: onNextMonth,
+              color: color,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        ),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: comparison.percentage),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (context, animatedPercentage, _) {
+                  final animatedColor = monthlyGaugeColor(animatedPercentage);
+                  return LayoutBuilder(builder: (context, constraints) {
+                    final dimension = constraints.maxWidth;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: MonthlyGaugePainter(
+                              percentage: animatedPercentage,
+                              scaleMaximum: comparison.scaleMaximum,
+                              activeColor: animatedColor,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: dimension * .29,
+                          left: 0,
+                          right: 0,
+                          child: Column(
+                            children: [
+                              Text(
+                                formatGaugePercentage(animatedPercentage),
+                                style: TextStyle(
+                                  color: animatedColor,
+                                  fontSize: (dimension * .14).clamp(38, 64),
+                                  height: 1,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                moneyCompact(comparison.currentEarnings),
+                                style: TextStyle(
+                                  color: animatedColor,
+                                  fontSize: (dimension * .075).clamp(22, 34),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          bottom: dimension * .035,
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Meta',
+                                style: TextStyle(color: kMuted, fontSize: 13),
+                              ),
+                              Text(
+                                moneyCompact(comparison.previousEarnings,
+                                    includeCurrency: false),
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  });
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class MonthlyGaugePainter extends CustomPainter {
+  MonthlyGaugePainter({
+    required this.percentage,
+    required this.scaleMaximum,
+    required this.activeColor,
+  });
+
+  final double percentage;
+  final double scaleMaximum;
+  final Color activeColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * .64);
+    final radius = size.width * .39;
+    final arcRect = Rect.fromCircle(center: center, radius: radius);
+    final strokeWidth = size.width * .075;
+    final gradientValues = <double>[0, 25, 50, 75, 100];
+    final gradientColors = <Color>[
+      const Color(0xFFFF2340),
+      const Color(0xFFFF7A00),
+      const Color(0xFFFFD600),
+      const Color(0xFF63D916),
+      const Color(0xFF168BFF),
+    ];
+    if (scaleMaximum > 100) {
+      gradientValues.add(scaleMaximum);
+      gradientColors.add(const Color(0xFFB832FF));
+    }
+    final arcPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        startAngle: pi,
+        endAngle: pi * 2,
+        colors: gradientColors,
+        stops: gradientValues.map((value) => value / scaleMaximum).toList(),
+      ).createShader(arcRect);
+    canvas.drawArc(arcRect, pi, pi, false, arcPaint);
+
+    final labelPainter = TextPainter(textDirection: ui.TextDirection.ltr);
+    for (final value in const [0, 25, 50, 75, 100]) {
+      final angle = pi + pi * (value / scaleMaximum);
+      final labelCenter = center +
+          Offset(cos(angle), sin(angle)) * (radius - strokeWidth * 1.05);
+      labelPainter.text = TextSpan(
+        text: '$value',
+        style: const TextStyle(
+          color: Color(0xFFD9E1EA),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+      labelPainter.layout();
+      labelPainter.paint(
+        canvas,
+        labelCenter - Offset(labelPainter.width / 2, labelPainter.height / 2),
+      );
+    }
+
+    final normalized = (percentage / scaleMaximum).clamp(0.0, 1.0);
+    final needleAngle = pi + pi * normalized;
+    final needleEnd =
+        center + Offset(cos(needleAngle), sin(needleAngle)) * radius * .70;
+    final needlePaint = Paint()
+      ..color = activeColor
+      ..strokeWidth = max(4, size.width * .014)
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(center, needleEnd, needlePaint);
+    canvas.drawCircle(center, size.width * .035, needlePaint);
+    canvas.drawCircle(
+      center,
+      size.width * .015,
+      Paint()..color = const Color(0xFF080B10),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant MonthlyGaugePainter oldDelegate) =>
+      oldDelegate.percentage != percentage ||
+      oldDelegate.scaleMaximum != scaleMaximum ||
+      oldDelegate.activeColor != activeColor;
+}
+
+Color monthlyGaugeColor(double percentage) {
+  if (percentage > 120) return const Color(0xFFB832FF);
+  if (percentage >= 100) return const Color(0xFF168BFF);
+  if (percentage >= 75) return const Color(0xFF63D916);
+  if (percentage >= 50) return const Color(0xFFFFD600);
+  if (percentage >= 25) return const Color(0xFFFF7A00);
+  return const Color(0xFFFF2340);
+}
+
+String formatGaugePercentage(double value) {
+  final rounded = value.roundToDouble();
+  return value == rounded
+      ? '${rounded.toInt()}%'
+      : '${value.toStringAsFixed(1)}%';
+}
+
+String moneyCompact(double value, {bool includeCurrency = true}) {
+  final prefix = includeCurrency ? r'$' : '';
+  if (value.abs() >= 1000) return '$prefix${(value / 1000).round()}k';
+  return '$prefix${value.round()}';
+}
+
 class GlassCard extends StatelessWidget {
   const GlassCard({
     required this.child,

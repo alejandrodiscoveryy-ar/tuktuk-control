@@ -83,6 +83,23 @@ class Metrics {
     return map;
   }
 
+  MonthlyComparison comparisonFor(DateTime month) {
+    final selectedMonth = DateTime(month.year, month.month);
+    final previousMonth = DateTime(month.year, month.month - 1);
+    double totalFor(DateTime target) => records
+        .where(
+          (record) =>
+              record.date.year == target.year &&
+              record.date.month == target.month,
+        )
+        .fold(0, (sum, record) => sum + record.earnings);
+    return MonthlyComparison(
+      month: selectedMonth,
+      currentEarnings: totalFor(selectedMonth),
+      previousEarnings: totalFor(previousMonth),
+    );
+  }
+
   List<CycleSummary> get cycleSummaries {
     final map = <DateTime, List<DailyRecord>>{};
     for (final record in records) {
@@ -107,6 +124,23 @@ class Metrics {
     summaries.sort((a, b) => a.start.compareTo(b.start));
     return summaries;
   }
+}
+
+class MonthlyComparison {
+  const MonthlyComparison({
+    required this.month,
+    required this.currentEarnings,
+    required this.previousEarnings,
+  });
+
+  final DateTime month;
+  final double currentEarnings;
+  final double previousEarnings;
+
+  double get percentage =>
+      previousEarnings <= 0 ? 0 : currentEarnings / previousEarnings * 100;
+
+  double get scaleMaximum => percentage > 100 ? percentage : 100;
 }
 
 class MaintenanceSnapshot {
