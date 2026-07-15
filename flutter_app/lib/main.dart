@@ -12,14 +12,17 @@ import 'package:intl/date_symbol_data_local.dart';
 
 part 'domain/entities.dart';
 part 'domain/metrics.dart';
+part 'domain/sync.dart';
 part 'data/record_store.dart';
 part 'data/seed_data.dart';
+part 'data/sync_queue.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
 
 const _recordsBox = 'daily_records';
 const _maintenanceRecordsBox = 'maintenance_records';
 const _metaBox = 'meta';
+const _syncQueueBox = 'sync_queue';
 const _syncFileName = 'control_tuk_tuk_backup.json';
 const _seedVersion = 'earnings-odometer-charge80v-maintenance-2026-07-03';
 const _defaultMaintenanceIntervalKm = 5000.0;
@@ -47,6 +50,7 @@ void main() async {
   await Hive.openBox(_recordsBox);
   await Hive.openBox(_maintenanceRecordsBox);
   await Hive.openBox(_metaBox);
+  await Hive.openBox(_syncQueueBox);
   runApp(const ControlTukTukApp());
 }
 
@@ -127,7 +131,7 @@ class ControlTukTukApp extends StatelessWidget {
         navigationBarTheme: NavigationBarThemeData(
           height: 72,
           backgroundColor: kSurface,
-          indicatorColor: kPrimary.withOpacity(.16),
+          indicatorColor: kPrimary.withValues(alpha: .16),
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
               color: states.contains(WidgetState.selected) ? kPrimary : kMuted,

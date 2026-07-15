@@ -22,7 +22,7 @@ class MetricHero extends StatelessWidget {
           Positioned(
             right: 2,
             top: 2,
-            child: Icon(icon, size: 86, color: kText.withOpacity(.08)),
+            child: Icon(icon, size: 86, color: kText.withValues(alpha: .08)),
           ),
           Positioned(
             right: 0,
@@ -212,7 +212,7 @@ class MetricCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(.14),
+                  color: color.withValues(alpha: .14),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 19),
@@ -363,7 +363,7 @@ class GlassCard extends StatelessWidget {
         border: Border.all(color: const Color(0xFF2A3645)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.22),
+            color: Colors.black.withValues(alpha: .22),
             blurRadius: 22,
             offset: const Offset(0, 12),
           ),
@@ -394,10 +394,10 @@ class GradientMetricCard extends StatelessWidget {
             Color(0xFF21192B),
           ],
         ),
-        border: Border.all(color: Color(0xFF2C4B46)),
+        border: Border.all(color: const Color(0xFF2C4B46)),
         boxShadow: [
           BoxShadow(
-            color: kPrimary.withOpacity(.12),
+            color: kPrimary.withValues(alpha: .12),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
