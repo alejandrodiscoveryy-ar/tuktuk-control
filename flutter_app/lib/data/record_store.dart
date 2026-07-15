@@ -39,6 +39,41 @@ class RecordStore extends ChangeNotifier {
     return generated;
   }
 
+  String get localOwnerId {
+    final existing = _meta.get('localOwnerId');
+    if (existing is String && existing.isNotEmpty) return existing;
+    final generated = 'local-owner-$deviceId';
+    _meta.put('localOwnerId', generated);
+    return generated;
+  }
+
+  String get activeUserId {
+    final googleUser = user;
+    if (googleUser != null) return googleUser.id;
+    final claimed = _meta.get('claimedUserId');
+    return claimed is String && claimed.isNotEmpty ? claimed : localOwnerId;
+  }
+
+  String get activeVehicleId {
+    final key = 'activeVehicleId:$activeUserId';
+    final existing = _meta.get(key);
+    if (existing is String && existing.isNotEmpty) return existing;
+    final generated = 'vehicle-$activeUserId-primary';
+    final now = DateTime.now();
+    _meta.put(key, generated);
+    _meta.put(
+      'vehicle:$generated',
+      VehicleProfile(
+        id: generated,
+        userId: activeUserId,
+        name: 'Mi Tuk Tuk',
+        createdAt: now,
+        updatedAt: now,
+      ).toMap(),
+    );
+    return generated;
+  }
+
   DateTime? get lastSyncAt {
     final raw = _meta.get('lastSyncAt');
     return raw == null ? null : DateTime.tryParse('$raw');
@@ -54,12 +89,15 @@ class RecordStore extends ChangeNotifier {
   }
 
   void _load() {
+    final ownerId = activeUserId;
     _records
       ..clear()
       ..addAll(
         _box.values
             .map((raw) => DailyRecord.fromMap(raw as Map))
-            .where((record) => !record.isDeleted)
+            .where(
+              (record) => !record.isDeleted && record.userId == ownerId,
+            )
             .toList(),
       );
     _maintenanceRecords
@@ -67,7 +105,9 @@ class RecordStore extends ChangeNotifier {
       ..addAll(
         _maintenanceBox.values
             .map((raw) => MaintenanceRecord.fromMap(raw as Map))
-            .where((record) => !record.isDeleted)
+            .where(
+              (record) => !record.isDeleted && record.userId == ownerId,
+            )
             .toList(),
       );
     notifyListeners();
@@ -95,15 +135,27 @@ class RecordStore extends ChangeNotifier {
   Future<void> _migrateSyncMetadata() async {
     for (final record in _allDailyRecords) {
       if (record.schemaVersion < _databaseSchemaVersion ||
-          record.deviceId.isEmpty) {
-        final migrated = record.withSyncInfo(deviceId: deviceId);
+          record.deviceId.isEmpty ||
+          record.userId.isEmpty ||
+          record.vehicleId.isEmpty) {
+        final migrated = record.withSyncInfo(
+          deviceId: deviceId,
+          userId: record.userId.isEmpty ? localOwnerId : null,
+          vehicleId: record.vehicleId.isEmpty ? activeVehicleId : null,
+        );
         await _box.put(migrated.id, migrated.toMap());
       }
     }
     for (final record in _allMaintenanceRecords) {
       if (record.schemaVersion < _databaseSchemaVersion ||
-          record.deviceId.isEmpty) {
-        final migrated = record.withSyncInfo(deviceId: deviceId);
+          record.deviceId.isEmpty ||
+          record.userId.isEmpty ||
+          record.vehicleId.isEmpty) {
+        final migrated = record.withSyncInfo(
+          deviceId: deviceId,
+          userId: record.userId.isEmpty ? localOwnerId : null,
+          vehicleId: record.vehicleId.isEmpty ? activeVehicleId : null,
+        );
         await _maintenanceBox.put(migrated.id, migrated.toMap());
       }
     }
@@ -112,6 +164,7 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> _seedInitialEarningsIfEmpty() async {
     final currentSeedVersion = _meta.get('seedVersion');
+    if (!OwnershipPolicy.shouldLoadHistoricalSeed(currentSeedVersion)) return;
     final canReplaceSeed = _box.isEmpty ||
         (_box.values.isNotEmpty &&
             _box.values.every((raw) {
@@ -132,7 +185,11 @@ class RecordStore extends ChangeNotifier {
         note: item.earnings > 0
             ? 'Carga inicial de ganancias'
             : 'Carga hasta 80 V',
-      ).withSyncInfo(deviceId: deviceId);
+      ).withSyncInfo(
+        deviceId: deviceId,
+        userId: localOwnerId,
+        vehicleId: activeVehicleId,
+      );
       await _box.put(record.id, record.toMap());
     }
     await _meta.put('seedVersion', _seedVersion);
@@ -142,6 +199,9 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> _seedInitialMaintenanceIfEmpty() async {
     if (_maintenanceBox.isNotEmpty) return;
+    if (!OwnershipPolicy.shouldLoadHistoricalSeed(_meta.get('seedVersion'))) {
+      return;
+    }
     await _meta.put('maintenanceIntervalKm', _defaultMaintenanceIntervalKm);
     final record = MaintenanceRecord(
       id: 'maintenance-seed-2026-03-14',
@@ -150,13 +210,20 @@ class RecordStore extends ChangeNotifier {
       type: 'General',
       description: 'Mantenimiento general registrado',
       notes: 'Base para calcular el proximo mantenimiento cada 5,000 km.',
-    ).withSyncInfo(deviceId: deviceId);
+    ).withSyncInfo(
+      deviceId: deviceId,
+      userId: localOwnerId,
+      vehicleId: activeVehicleId,
+    );
     await _maintenanceBox.put(record.id, record.toMap());
   }
 
   Future<void> save(DailyRecord record) async {
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
+      userId: activeUserId,
+      vehicleId: activeVehicleId,
+      syncStatus: SyncStatus.pending,
       updatedAt: DateTime.now(),
     );
     await _box.put(normalized.id, normalized.toMap());
@@ -169,6 +236,9 @@ class RecordStore extends ChangeNotifier {
     if (raw != null) {
       final record = DailyRecord.fromMap(raw as Map).withSyncInfo(
         deviceId: deviceId,
+        userId: activeUserId,
+        vehicleId: activeVehicleId,
+        syncStatus: SyncStatus.pending,
         updatedAt: DateTime.now(),
         deletedAt: DateTime.now(),
       );
@@ -181,6 +251,9 @@ class RecordStore extends ChangeNotifier {
   Future<void> saveMaintenance(MaintenanceRecord record) async {
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
+      userId: activeUserId,
+      vehicleId: activeVehicleId,
+      syncStatus: SyncStatus.pending,
       updatedAt: DateTime.now(),
     );
     await _maintenanceBox.put(normalized.id, normalized.toMap());
@@ -193,6 +266,9 @@ class RecordStore extends ChangeNotifier {
     if (raw != null) {
       final record = MaintenanceRecord.fromMap(raw as Map).withSyncInfo(
         deviceId: deviceId,
+        userId: activeUserId,
+        vehicleId: activeVehicleId,
+        syncStatus: SyncStatus.pending,
         updatedAt: DateTime.now(),
         deletedAt: DateTime.now(),
       );
@@ -212,7 +288,15 @@ class RecordStore extends ChangeNotifier {
     user = await _googleSignIn.signInSilently() ?? await _googleSignIn.signIn();
     notifyListeners();
     if (user != null) {
-      await restoreThenSync();
+      try {
+        await _claimLocalDataForSignedInUser();
+        await restoreThenSync();
+      } on StateError {
+        await _googleSignIn.signOut();
+        user = null;
+        syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
+        notifyListeners();
+      }
     }
   }
 
@@ -224,7 +308,15 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     notifyListeners();
-    await restoreThenSync();
+    try {
+      await _claimLocalDataForSignedInUser();
+      await restoreThenSync();
+    } on StateError {
+      await _googleSignIn.signOut();
+      user = null;
+      syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
+      notifyListeners();
+    }
   }
 
   Future<void> signOut() async {
@@ -244,7 +336,9 @@ class RecordStore extends ChangeNotifier {
         final changed = await _mergeRemote(remote);
         if (changed) syncMessage = 'Base recuperada desde Google Drive';
       }
+      await _claimLocalDataForSignedInUser();
       await _upload(api);
+      await _markActiveRecordsSynced();
       syncMessage = 'Base respaldada en Google Drive';
     });
   }
@@ -254,6 +348,7 @@ class RecordStore extends ChangeNotifier {
       final api = await _driveApi();
       if (api == null) return;
       await _upload(api);
+      await _markActiveRecordsSynced();
       syncMessage = 'Base respaldada en Google Drive';
     });
   }
@@ -309,15 +404,22 @@ class RecordStore extends ChangeNotifier {
       'schemaVersion': _databaseSchemaVersion,
       'app': 'TukTuk Control',
       'kind': 'database-backup',
+      'ownerUserId': activeUserId,
+      'vehicleId': activeVehicleId,
       'deviceId': deviceId,
       'updatedAt': DateTime.now().toIso8601String(),
       'settings': {
         'maintenanceIntervalKm': maintenanceIntervalKm,
         'seedVersion': _meta.get('seedVersion'),
       },
-      'records': _allDailyRecords.map((record) => record.toMap()).toList(),
-      'maintenanceRecords':
-          _allMaintenanceRecords.map((record) => record.toMap()).toList(),
+      'records': _allDailyRecords
+          .where((record) => record.userId == activeUserId)
+          .map((record) => record.toMap())
+          .toList(),
+      'maintenanceRecords': _allMaintenanceRecords
+          .where((record) => record.userId == activeUserId)
+          .map((record) => record.toMap())
+          .toList(),
     }));
     final media = drive.Media(Stream.value(payload), payload.length);
     final existing = await api.files.list(
@@ -342,6 +444,10 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<bool> _mergeRemote(Map<String, dynamic> remote) async {
+    final remoteOwner = '${remote['ownerUserId'] ?? ''}';
+    if (!OwnershipPolicy.acceptsBackup(activeUserId, remoteOwner)) {
+      throw StateError('El respaldo pertenece a otro usuario.');
+    }
     var changed = false;
     final remoteRecords = (remote['records'] as List? ?? [])
         .map((raw) => DailyRecord.fromMap(raw as Map))
@@ -350,6 +456,10 @@ class RecordStore extends ChangeNotifier {
       for (final record in _allDailyRecords) record.id: record
     };
     for (final remoteRecord in remoteRecords) {
+      if (remoteRecord.userId.isNotEmpty &&
+          remoteRecord.userId != activeUserId) {
+        throw StateError('El respaldo contiene datos de otro usuario.');
+      }
       final localRecord = localById[remoteRecord.id];
       if (localRecord == null ||
           remoteRecord.updatedAt.isAfter(localRecord.updatedAt)) {
@@ -376,6 +486,10 @@ class RecordStore extends ChangeNotifier {
         for (final record in _allMaintenanceRecords) record.id: record
       };
       for (final remoteRecord in remoteMaintenance) {
+        if (remoteRecord.userId.isNotEmpty &&
+            remoteRecord.userId != activeUserId) {
+          throw StateError('El respaldo contiene datos de otro usuario.');
+        }
         final localRecord = localById[remoteRecord.id];
         if (localRecord == null ||
             remoteRecord.updatedAt.isAfter(localRecord.updatedAt)) {
@@ -386,6 +500,82 @@ class RecordStore extends ChangeNotifier {
     }
     if (changed) _load();
     return changed;
+  }
+
+  Future<void> _claimLocalDataForSignedInUser() async {
+    final googleUser = user;
+    if (googleUser == null) return;
+    final claimed = _meta.get('claimedUserId');
+    if (!OwnershipPolicy.canClaimLocalData(
+      claimed is String ? claimed : null,
+      googleUser.id,
+    )) {
+      _load();
+      throw StateError('Este dispositivo ya contiene datos de otro usuario.');
+    }
+
+    final targetUserId = googleUser.id;
+    final targetVehicleId = 'vehicle-$targetUserId-primary';
+    for (final record in _allDailyRecords) {
+      if (record.userId.isEmpty || record.userId == localOwnerId) {
+        final migrated = record.withSyncInfo(
+          deviceId: deviceId,
+          userId: targetUserId,
+          vehicleId: targetVehicleId,
+          syncStatus: SyncStatus.pending,
+        );
+        await _box.put(migrated.id, migrated.toMap());
+      }
+    }
+    for (final record in _allMaintenanceRecords) {
+      if (record.userId.isEmpty || record.userId == localOwnerId) {
+        final migrated = record.withSyncInfo(
+          deviceId: deviceId,
+          userId: targetUserId,
+          vehicleId: targetVehicleId,
+          syncStatus: SyncStatus.pending,
+        );
+        await _maintenanceBox.put(migrated.id, migrated.toMap());
+      }
+    }
+    final now = DateTime.now();
+    await _meta.put('claimedUserId', targetUserId);
+    await _meta.put('activeVehicleId:$targetUserId', targetVehicleId);
+    await _meta.put(
+      'vehicle:$targetVehicleId',
+      VehicleProfile(
+        id: targetVehicleId,
+        userId: targetUserId,
+        name: 'Mi Tuk Tuk',
+        createdAt: now,
+        updatedAt: now,
+      ).toMap(),
+    );
+    _load();
+  }
+
+  Future<void> _markActiveRecordsSynced() async {
+    for (final record in _allDailyRecords) {
+      if (record.userId == activeUserId &&
+          record.syncStatus != SyncStatus.synced) {
+        final synced = record.withSyncInfo(
+          deviceId: deviceId,
+          syncStatus: SyncStatus.synced,
+        );
+        await _box.put(synced.id, synced.toMap());
+      }
+    }
+    for (final record in _allMaintenanceRecords) {
+      if (record.userId == activeUserId &&
+          record.syncStatus != SyncStatus.synced) {
+        final synced = record.withSyncInfo(
+          deviceId: deviceId,
+          syncStatus: SyncStatus.synced,
+        );
+        await _maintenanceBox.put(synced.id, synced.toMap());
+      }
+    }
+    _load();
   }
 
   DateTime _latestLocalUpdate() {

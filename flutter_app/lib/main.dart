@@ -23,7 +23,7 @@ const _metaBox = 'meta';
 const _syncFileName = 'control_tuk_tuk_backup.json';
 const _seedVersion = 'earnings-odometer-charge80v-maintenance-2026-07-03';
 const _defaultMaintenanceIntervalKm = 5000.0;
-const _databaseSchemaVersion = 2;
+const _databaseSchemaVersion = 3;
 
 const kBg = Color(0xFF0B0F14);
 const kSurface = Color(0xFF141A22);

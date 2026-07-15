@@ -1,11 +1,11 @@
 # Arquitectura evolutiva
 
-## Fase actual
+## Fases implementadas
 
 La aplicación sigue siendo local y personal. La Fase 1 divide el código en
-módulos de una misma biblioteca Dart mediante `part`. Esta técnica conserva el
-comportamiento y el acceso a símbolos privados mientras reduce el riesgo del
-primer cambio estructural.
+módulos de una misma biblioteca Dart mediante `part`. La Fase 2 añade identidad
+de propietario, vehículo y estado de sincronización con lectura compatible de
+los esquemas anteriores.
 
 ```text
 lib/
@@ -33,9 +33,9 @@ lib/
 
 ## Próximas fases
 
-La separación con `part` es transitoria. Después de añadir `userId` y
-`vehicleId` mediante una migración verificada, los módulos se convertirán en
-bibliotecas independientes con repositorios e interfaces desacopladas.
+La separación con `part` es transitoria. Los módulos se convertirán en
+bibliotecas independientes con repositorios e interfaces desacopladas. La
+siguiente fase añadirá onboarding visible y administración del primer vehículo.
 
 Google Drive continuará siendo un servicio de respaldo y restauración, no la
 base de datos principal.
