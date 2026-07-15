@@ -680,6 +680,9 @@ class _StatsScreenState extends State<StatsScreen> {
             () => selectedMonth =
                 DateTime(selectedMonth.year, selectedMonth.month + 1),
           ),
+          canGoNext: selectedMonth.isBefore(
+            DateTime(DateTime.now().year, DateTime.now().month),
+          ),
         ),
         const SizedBox(height: 18),
         const SectionTitle(title: 'Por mes'),

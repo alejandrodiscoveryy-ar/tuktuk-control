@@ -518,10 +518,22 @@
     .statNote { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
     .mileageGauge {
       display: grid;
+      gap: 4px;
       justify-items: center;
       width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      padding: clamp(8px, 2.5vw, 18px);
+      border-radius: 22px;
+      background: #05070a;
+      overflow: hidden;
     }
-    .gaugeSvg { width: min(100%, 520px); aspect-ratio: 1; justify-self: center; overflow: visible; }
+    .gaugeMonthSelector { width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
+    .gaugeMonthSelector button { width: 44px; height: 44px; padding: 0; border-radius: 14px; background: #080f18; font-size: 28px; line-height: 1; transition: color .3s ease, border-color .3s ease, transform .2s ease; }
+    .gaugeMonthSelector button:active { transform: scale(.94); }
+    .gaugeMonthSelector button:disabled { cursor: not-allowed; opacity: .3; transform: none; }
+    .gaugeMonthTitle { min-width: 0; color: #f3f8ff; font-size: clamp(14px, 4vw, 18px); font-weight: 950; letter-spacing: clamp(.4px, .3vw, 1px); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gaugeSvg { display: block; width: 100%; aspect-ratio: 1; justify-self: center; }
     .gaugeArc { stroke: url(#gaugeGradient); stroke-width: 28; fill: none; stroke-linecap: round; }
     .gaugeNeedle { stroke-width: 7; stroke-linecap: round; transform-origin: 160px 205px; transition: transform .85s cubic-bezier(.22,.8,.24,1), stroke .35s ease; }
     .gaugeCenter { transition: fill .35s ease; }
@@ -530,9 +542,6 @@
     .gaugeTickText { font-size: 11px; fill: #d9e1ea; font-weight: 800; }
     .gaugeMetaLabel { font-size: 11px; fill: var(--muted); }
     .gaugeMetaValue { font-size: 22px; fill: var(--text); font-weight: 950; }
-    .gaugeMonth { font-size: 17px; fill: var(--text); font-weight: 950; letter-spacing: 1px; }
-    .gaugeMonthButton { cursor: pointer; fill: rgba(8,15,24,.72); stroke-width: 1.5; transition: stroke .3s ease; }
-    .gaugeMonthArrow { font-size: 28px; font-weight: 900; pointer-events: none; }
     .toast {
       position: fixed; left: 50%; bottom: 86px; z-index: 20; transform: translateX(-50%);
       width: min(460px, calc(100% - 28px)); padding: 12px 14px; border-radius: 14px;
@@ -1074,7 +1083,7 @@
     const KEY = "control_tuk_tuk_web_v1";
     const DRIVE_KEY = "control_tuk_tuk_drive_backups_v1";
     const LOCAL_USER_ID = "local:principal";
-    const YEAR = 2024;
+    const YEAR = 2026;
     const earnings = [
       ["03/03",4450],["04/03",1600],["05/03",4450],["06/03",3000],["10/03",3400],["11/03",3400],["12/03",2510],["13/03",4480],["14/03",2900],["15/03",1700],["17/03",3000],["18/03",4300],["20/03",4250],["23/03",5130],["24/03",5060],["25/03",3350],["26/03",4130],["27/03",2870],["28/03",3150],["29/03",400],["30/03",4400],
       ["01/04",3700],["02/04",3850],["03/04",2350],["04/04",2800],["05/04",5290],["06/04",1000],["08/04",2950],["09/04",2400],["10/04",2170],["11/04",1100],["12/04",5800],["13/04",4390],["14/04",3300],["15/04",4600],["16/04",4310],["19/04",2950],["20/04",4050],["21/04",2050],["22/04",5480],["23/04",4750],["25/04",3750],["25/04",5250],["27/04",4000],["28/04",4580],["29/04",4200],["30/04",4370],
@@ -1293,6 +1302,7 @@
       "AED","AFN","ALL","AMD","ANG","AOA","ARS","AUD","AWG","AZN","BAM","BBD","BDT","BGN","BHD","BIF","BMD","BND","BOB","BRL","BSD","BTN","BWP","BYN","BZD","CAD","CDF","CHF","CLP","CNY","COP","CRC","CUC","CUP","CVE","CZK","DJF","DKK","DOP","DZD","EGP","ERN","ETB","EUR","FJD","FKP","GBP","GEL","GHS","GIP","GMD","GNF","GTQ","GYD","HKD","HNL","HTG","HUF","IDR","ILS","INR","IQD","IRR","ISK","JMD","JOD","JPY","KES","KGS","KHR","KMF","KPW","KRW","KWD","KYD","KZT","LAK","LBP","LKR","LRD","LSL","LYD","MAD","MDL","MGA","MKD","MMK","MNT","MOP","MRU","MUR","MVR","MWK","MXN","MYR","MZN","NAD","NGN","NIO","NOK","NPR","NZD","OMR","PAB","PEN","PGK","PHP","PKR","PLN","PYG","QAR","RON","RSD","RUB","RWF","SAR","SBD","SCR","SDG","SEK","SGD","SHP","SLE","SOS","SRD","SSP","STN","SVC","SYP","SZL","THB","TJS","TMT","TND","TOP","TRY","TTD","TWD","TZS","UAH","UGX","USD","UYU","UZS","VED","VES","VND","VUV","WST","XAF","XCD","XOF","XPF","YER","ZAR","ZMW","ZWL"
     ];
     let db = load();
+    migratePreviewSeedDates();
     ensureSettings();
     let selectedGaugeMonth = null;
     let historyFilter = "all";
@@ -2028,6 +2038,20 @@
       localStorage.setItem(KEY, JSON.stringify(fresh));
       return fresh;
     }
+    function migratePreviewSeedDates() {
+      let changed = false;
+      const migrate = item => {
+        if (!String(item.id || "").startsWith("seed-") || !/^2024-/.test(item.date || "")) return;
+        item.date = `2026-${item.date.slice(5)}`;
+        item.updatedAt = now();
+        changed = true;
+      };
+      (db.records || []).forEach(migrate);
+      (db.maintenances || []).forEach(migrate);
+      if (!changed) return;
+      if (db.settings) delete db.settings.monthGaugeReferences;
+      localStorage.setItem(KEY, JSON.stringify(db));
+    }
     function save(message, options = {}) {
       localStorage.setItem(KEY, JSON.stringify(db));
       if (!options.skipDriveSync && currentUser().driveSyncEnabled && currentUser().email) {
@@ -2345,6 +2369,7 @@
     }
     function renderMonthGauge(records) {
       const currentMonthFull = selectedGaugeMonth || dashboardMonthKey(records);
+      const latestMonth = dashboardMonthKey(records);
       const referenceMonthKey = previousMonthKey(currentMonthFull);
       const current = monthTotal(records, currentMonthFull);
       const previous = monthTotal(records, referenceMonthKey);
@@ -2361,8 +2386,16 @@
       }).join("");
       const stop = value => Math.min(100, value / scaleMaximum * 100).toFixed(2);
       const percentText = Number.isInteger(percentage) ? `${percentage}%` : `${percentage.toFixed(1)}%`;
-      const shortAmount = value => `${Math.round(Number(value || 0) / 1000)}k`;
+      const shortAmount = value => {
+        const amount = Number(value || 0);
+        return Math.abs(amount) >= 1000 ? `${Math.round(amount / 1000)}k` : `${Math.round(amount)}`;
+      };
       document.getElementById("monthMileageGauge").innerHTML = `
+        <div class="gaugeMonthSelector">
+          <button type="button" style="color:${activeColor};border-color:${activeColor}" onclick="shiftGaugeMonth(-1)" aria-label="Mes anterior">‹</button>
+          <div class="gaugeMonthTitle">${monthLabel(currentMonthFull).toUpperCase()}</div>
+          <button type="button" style="color:${activeColor};border-color:${activeColor}" onclick="shiftGaugeMonth(1)" aria-label="Mes siguiente" ${currentMonthFull >= latestMonth ? "disabled" : ""}>›</button>
+        </div>
         <svg class="gaugeSvg" viewBox="0 0 320 320" role="img" aria-label="${t("home.gauge")}">
           <defs>
             <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -2371,14 +2404,9 @@
               <stop offset="${stop(50)}%" stop-color="#ffd600"></stop>
               <stop offset="${stop(75)}%" stop-color="#63d916"></stop>
               <stop offset="${stop(100)}%" stop-color="#168bff"></stop>
-              ${scaleMaximum > 100 ? `<stop offset="100%" stop-color="#b832ff"></stop>` : ""}
+              ${scaleMaximum > 100 ? `<stop offset="100%" stop-color="${percentage > 120 ? "#b832ff" : "#168bff"}"></stop>` : ""}
             </linearGradient>
           </defs>
-          <rect class="gaugeMonthButton" x="12" y="10" width="44" height="44" rx="14" stroke="${activeColor}" onclick="shiftGaugeMonth(-1)"></rect>
-          <text class="gaugeMonthArrow" x="34" y="40" text-anchor="middle" fill="${activeColor}">‹</text>
-          <text class="gaugeMonth" x="160" y="39" text-anchor="middle">${monthLabel(currentMonthFull).toUpperCase()}</text>
-          <rect class="gaugeMonthButton" x="264" y="10" width="44" height="44" rx="14" stroke="${activeColor}" onclick="shiftGaugeMonth(1)"></rect>
-          <text class="gaugeMonthArrow" x="286" y="40" text-anchor="middle" fill="${activeColor}">›</text>
           <path class="gaugeArc" d="M35 205 A125 125 0 0 1 285 205"></path>
           ${ticks}
           <text class="gaugePercent" x="160" y="120" text-anchor="middle" fill="${activeColor}">${percentText}</text>
@@ -2389,11 +2417,18 @@
           <text class="gaugeMetaLabel" x="160" y="274" text-anchor="middle">Meta</text>
           <text class="gaugeMetaValue" x="160" y="301" text-anchor="middle">${shortAmount(previous)}</text>
         </svg>`;
+      const gauge = document.getElementById("monthMileageGauge");
+      gauge.dataset.month = currentMonthFull;
+      gauge.dataset.current = String(current);
+      gauge.dataset.previous = String(previous);
+      gauge.dataset.percentage = String(percentage);
     }
     function shiftGaugeMonth(delta) {
       const base = selectedGaugeMonth || dashboardMonthKey(activeRecords());
       const [year, month] = base.split("-").map(Number);
-      selectedGaugeMonth = monthKeyFromDate(new Date(year, month - 1 + delta, 1));
+      const candidate = monthKeyFromDate(new Date(year, month - 1 + delta, 1));
+      const latestMonth = dashboardMonthKey(activeRecords());
+      selectedGaugeMonth = candidate > latestMonth ? latestMonth : candidate;
       render();
     }
     function achievementCopy() {

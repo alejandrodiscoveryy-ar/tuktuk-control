@@ -343,12 +343,14 @@ class MonthlyComparisonGauge extends StatelessWidget {
     required this.comparison,
     required this.onPreviousMonth,
     required this.onNextMonth,
+    required this.canGoNext,
     super.key,
   });
 
   final MonthlyComparison comparison;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
+  final bool canGoNext;
 
   @override
   Widget build(BuildContext context) {
@@ -378,7 +380,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
             ),
             IconButton(
               tooltip: 'Mes siguiente',
-              onPressed: onNextMonth,
+              onPressed: canGoNext ? onNextMonth : null,
               color: color,
               icon: const Icon(Icons.chevron_right_rounded),
             ),
@@ -495,7 +497,9 @@ class MonthlyGaugePainter extends CustomPainter {
     ];
     if (scaleMaximum > 100) {
       gradientValues.add(scaleMaximum);
-      gradientColors.add(const Color(0xFFB832FF));
+      gradientColors.add(
+        percentage > 120 ? const Color(0xFFB832FF) : const Color(0xFF168BFF),
+      );
     }
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
