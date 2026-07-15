@@ -1,17 +1,18 @@
 part of '../main.dart';
 
-class SyncQueueStore {
+class SyncQueueStore implements SyncQueueRepository {
   SyncQueueStore() : _box = Hive.box(_syncQueueBox);
 
   final Box _box;
 
-  List<SyncOperation> pendingForUser(String userId) {
+  @override
+  List<SyncOperation> pendingForUser(String userId, {int limit = 50}) {
     final operations = _box.values
         .map((raw) => SyncOperation.fromMap(raw as Map))
         .where((operation) => operation.userId == userId)
         .toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    return operations;
+    return operations.take(limit).toList();
   }
 
   Future<void> enqueue({
@@ -52,6 +53,36 @@ class SyncQueueStore {
         vehicleId: vehicleId,
       );
       await _box.put(reassigned.id, reassigned.toMap());
+    }
+  }
+
+  @override
+  Future<void> complete(Iterable<String> operationIds) async {
+    await _box.deleteAll(operationIds);
+  }
+
+  @override
+  Future<void> markFailed(
+    Iterable<String> operationIds,
+    String error,
+  ) async {
+    for (final id in operationIds) {
+      final raw = _box.get(id);
+      if (raw is! Map) continue;
+      final operation = SyncOperation.fromMap(raw);
+      final failed = SyncOperation(
+        id: operation.id,
+        entityType: operation.entityType,
+        entityId: operation.entityId,
+        action: operation.action,
+        userId: operation.userId,
+        vehicleId: operation.vehicleId,
+        createdAt: operation.createdAt,
+        updatedAt: DateTime.now(),
+        attempts: operation.attempts + 1,
+        lastError: error,
+      );
+      await _box.put(id, failed.toMap());
     }
   }
 }

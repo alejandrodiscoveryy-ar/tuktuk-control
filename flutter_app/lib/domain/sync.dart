@@ -96,3 +96,116 @@ abstract final class SyncQueuePolicy {
     );
   }
 }
+
+abstract interface class SyncQueueRepository {
+  List<SyncOperation> pendingForUser(String userId, {int limit = 50});
+
+  Future<void> complete(Iterable<String> operationIds);
+
+  Future<void> markFailed(
+    Iterable<String> operationIds,
+    String error,
+  );
+}
+
+class RemotePushResult {
+  const RemotePushResult({
+    required this.acceptedOperationIds,
+    this.rejectedOperations = const {},
+  });
+
+  final Set<String> acceptedOperationIds;
+  final Map<String, String> rejectedOperations;
+}
+
+class RemotePullResult {
+  const RemotePullResult({
+    required this.changes,
+    required this.nextCursor,
+  });
+
+  final List<RemoteChange> changes;
+  final String? nextCursor;
+}
+
+class RemoteChange {
+  const RemoteChange({
+    required this.entityType,
+    required this.entityId,
+    required this.userId,
+    required this.vehicleId,
+    required this.updatedAt,
+    required this.deviceId,
+    required this.payload,
+    this.deletedAt,
+  });
+
+  final SyncEntityType entityType;
+  final String entityId;
+  final String userId;
+  final String vehicleId;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final String deviceId;
+  final Map<String, dynamic> payload;
+}
+
+abstract interface class RemoteSyncGateway {
+  bool get isConfigured;
+
+  Future<RemotePushResult> push(List<SyncOperation> operations);
+
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+  });
+}
+
+enum ConflictWinner { local, remote }
+
+class ConflictCandidate {
+  const ConflictCandidate({
+    required this.updatedAt,
+    required this.deviceId,
+    this.deletedAt,
+  });
+
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final String deviceId;
+}
+
+abstract final class ConflictResolver {
+  static ConflictWinner resolve({
+    required ConflictCandidate local,
+    required ConflictCandidate remote,
+  }) {
+    if (local.updatedAt.isAfter(remote.updatedAt)) return ConflictWinner.local;
+    if (remote.updatedAt.isAfter(local.updatedAt)) {
+      return ConflictWinner.remote;
+    }
+    if (local.deletedAt != null && remote.deletedAt == null) {
+      return ConflictWinner.local;
+    }
+    if (remote.deletedAt != null && local.deletedAt == null) {
+      return ConflictWinner.remote;
+    }
+    return local.deviceId.compareTo(remote.deviceId) >= 0
+        ? ConflictWinner.local
+        : ConflictWinner.remote;
+  }
+}
+
+class SyncRunReport {
+  const SyncRunReport({
+    required this.attempted,
+    required this.completed,
+    required this.failed,
+    this.skippedBecauseUnconfigured = false,
+  });
+
+  final int attempted;
+  final int completed;
+  final int failed;
+  final bool skippedBecauseUnconfigured;
+}

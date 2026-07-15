@@ -73,4 +73,143 @@ void main() {
     expect(claimed.userId, 'google-user');
     expect(claimed.vehicleId, 'google-vehicle');
   });
+
+  test('ConflictResolver prioriza el cambio más reciente', () {
+    final local = ConflictCandidate(
+      updatedAt: DateTime.utc(2026, 7, 15, 10),
+      deviceId: 'device-a',
+    );
+    final remote = ConflictCandidate(
+      updatedAt: DateTime.utc(2026, 7, 15, 11),
+      deviceId: 'device-b',
+    );
+
+    expect(
+      ConflictResolver.resolve(local: local, remote: remote),
+      ConflictWinner.remote,
+    );
+  });
+
+  test('ConflictResolver conserva una eliminación con fecha empatada', () {
+    final timestamp = DateTime.utc(2026, 7, 15, 10);
+    final local = ConflictCandidate(
+      updatedAt: timestamp,
+      deletedAt: timestamp,
+      deviceId: 'device-a',
+    );
+    final remote = ConflictCandidate(
+      updatedAt: timestamp,
+      deviceId: 'device-b',
+    );
+
+    expect(
+      ConflictResolver.resolve(local: local, remote: remote),
+      ConflictWinner.local,
+    );
+  });
+
+  test('SyncCoordinator procesa aceptados y conserva rechazados', () async {
+    final queue = _MemoryQueue([operation(), operationFor('record-2')]);
+    final gateway = _FakeGateway(
+      result: const RemotePushResult(
+        acceptedOperationIds: {'dailyRecord:record-1'},
+        rejectedOperations: {'dailyRecord:record-2': 'conflict'},
+      ),
+    );
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+
+    final report = await coordinator.pushPending(userId: 'user-1');
+
+    expect(report.attempted, 2);
+    expect(report.completed, 1);
+    expect(report.failed, 1);
+    expect(queue.completed, {'dailyRecord:record-1'});
+    expect(queue.failed['dailyRecord:record-2'], 'conflict');
+  });
+
+  test('SyncCoordinator no procesa cuando el gateway no está configurado',
+      () async {
+    final queue = _MemoryQueue([operation()]);
+    final gateway = _FakeGateway(configured: false);
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+
+    final report = await coordinator.pushPending(userId: 'user-1');
+
+    expect(report.skippedBecauseUnconfigured, isTrue);
+    expect(gateway.pushCalls, 0);
+    expect(queue.completed, isEmpty);
+  });
+}
+
+SyncOperation operationFor(String entityId) {
+  final now = DateTime.utc(2026, 7, 15, 10);
+  return SyncOperation(
+    id: 'dailyRecord:$entityId',
+    entityType: SyncEntityType.dailyRecord,
+    entityId: entityId,
+    action: SyncAction.upsert,
+    userId: 'user-1',
+    vehicleId: 'vehicle-1',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+class _MemoryQueue implements SyncQueueRepository {
+  _MemoryQueue(this.operations);
+
+  final List<SyncOperation> operations;
+  final Set<String> completed = {};
+  final Map<String, String> failed = {};
+
+  @override
+  List<SyncOperation> pendingForUser(String userId, {int limit = 50}) {
+    return operations
+        .where((operation) => operation.userId == userId)
+        .take(limit)
+        .toList();
+  }
+
+  @override
+  Future<void> complete(Iterable<String> operationIds) async {
+    completed.addAll(operationIds);
+  }
+
+  @override
+  Future<void> markFailed(
+    Iterable<String> operationIds,
+    String error,
+  ) async {
+    for (final id in operationIds) {
+      failed[id] = error;
+    }
+  }
+}
+
+class _FakeGateway implements RemoteSyncGateway {
+  _FakeGateway({
+    this.configured = true,
+    this.result = const RemotePushResult(acceptedOperationIds: {}),
+  });
+
+  final bool configured;
+  final RemotePushResult result;
+  int pushCalls = 0;
+
+  @override
+  bool get isConfigured => configured;
+
+  @override
+  Future<RemotePushResult> push(List<SyncOperation> operations) async {
+    pushCalls++;
+    return result;
+  }
+
+  @override
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+  }) async {
+    return const RemotePullResult(changes: [], nextCursor: null);
+  }
 }
