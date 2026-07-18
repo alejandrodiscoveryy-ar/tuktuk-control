@@ -1,23 +1,29 @@
-name: Build Android APK
+name: Build signed Android release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      expected_version_code:
+        description: "versionCode que ya debe estar definido en pubspec.yaml"
+        required: true
+        default: "2"
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-apk-${{ github.ref }}
-  cancel-in-progress: true
+  group: signed-android-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-apk:
-    name: Build release APK
+  build-android:
+    name: Validate, test and build signed APK + AAB
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: flutter_app
 
     steps:
       - name: Checkout repository
@@ -33,22 +39,98 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
           flutter-version: 3.44.4
+          channel: stable
           cache: true
 
       - name: Install dependencies
-        working-directory: flutter_app
         run: flutter pub get
 
-      - name: Build release APK
-        working-directory: flutter_app
+      - name: Validate release metadata
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
+          VERSION_NAME="${VERSION%%+*}"
+          VERSION_CODE="${VERSION##*+}"
+          FLUTTER_ROOT="$(cd "$(dirname "$(command -v flutter)")/.." && pwd)"
+          FLUTTER_ANDROID_DEFAULTS="$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
+
+          test "$VERSION_CODE" = "${{ inputs.expected_version_code }}"
+          grep -Fq 'android:label="TukTuk"' android/app/src/main/AndroidManifest.xml
+          grep -Fq 'applicationId = "com.alejandrocruz.tuktukcontrol"' android/app/build.gradle.kts
+          grep -Eq 'compileSdkVersion: Int = 36' "$FLUTTER_ANDROID_DEFAULTS"
+          grep -Eq 'targetSdkVersion: Int = 36' "$FLUTTER_ANDROID_DEFAULTS"
+          grep -Eq 'minSdkVersion: Int = 24' "$FLUTTER_ANDROID_DEFAULTS"
+
+          echo "Release metadata validated:"
+          echo "  versionName: $VERSION_NAME"
+          echo "  versionCode: $VERSION_CODE"
+          echo "  applicationId: com.alejandrocruz.tuktukcontrol"
+          echo "  visible name: TukTuk"
+          echo "  compileSdk: 36"
+          echo "  targetSdk: 36"
+          echo "  minSdk: 24"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Analyze source
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Validate signing secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+
+      - name: Restore temporary release signing files
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          {
+            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'storeFile=../upload-keystore.jks\n'
+          } > android/key.properties
+          chmod 600 android/upload-keystore.jks android/key.properties
+
+      - name: Build signed release APK
         run: flutter build apk --release
 
-      - name: Upload release APK
+      - name: Build signed release AAB
+        run: flutter build appbundle --release
+
+      - name: Upload signed Android packages
         uses: actions/upload-artifact@v4
         with:
-          name: tuktuk-control-apk
-          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          name: tuktuk-android-${{ steps.metadata.outputs.version_name }}-build-${{ steps.metadata.outputs.version_code }}
+          path: |
+            flutter_app/build/app/outputs/flutter-apk/app-release.apk
+            flutter_app/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
+
+      - name: Remove temporary signing files
+        if: always()
+        shell: bash
+        run: |
+          rm -f android/upload-keystore.jks android/key.properties

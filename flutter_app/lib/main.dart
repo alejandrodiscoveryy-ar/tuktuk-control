@@ -5,15 +5,18 @@ import 'dart:ui' as ui;
 
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 part 'domain/entities.dart';
 part 'domain/access.dart';
+part 'domain/saas_foundation.dart';
 part 'domain/metrics.dart';
 part 'domain/sync.dart';
 part 'data/record_store.dart';
@@ -30,19 +33,20 @@ const _syncQueueBox = 'sync_queue';
 const _syncFileName = 'control_tuk_tuk_backup.json';
 const _seedVersion = 'earnings-odometer-charge80v-maintenance-2026-07-03';
 const _defaultMaintenanceIntervalKm = 5000.0;
-const _databaseSchemaVersion = 3;
+const _databaseSchemaVersion = 4;
+const _googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
 const kBg = Color(0xFF080D14);
 const kSurface = Color(0xFF111923);
 const kSurfaceHigh = Color(0xFF182331);
 const kOutline = Color(0xFF29384A);
 const kPrimary = Color(0xFF2DD4A3);
-const kSecondary = Color(0xFF70A7FF);
-const kTertiary = Color(0xFFF59E0B);
+const kSecondary = Color(0xFF00CFA0);
+const kTertiary = Color(0xFFFFC400);
 const kText = Color(0xFFF5F8FC);
 const kMuted = Color(0xFF93A2B5);
 const kDanger = Color(0xFFFB7185);
-const kAccentPink = Color(0xFFF472B6);
+const kAccentPink = Color(0xFFFFA800);
 const kCardGradientTop = Color(0xFF151F2B);
 const kCardGradientBottom = Color(0xFF0D141D);
 
@@ -226,6 +230,11 @@ String tr(String key) {
       'Historial': 'History',
       'Estads.': 'Stats',
       'Usuario': 'User',
+      'Atención al cliente': 'Customer support',
+      '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
+          'Need help with TukTuk Control? Message us on WhatsApp.',
+      'Contactar por WhatsApp': 'Contact via WhatsApp',
+      'No se pudo abrir WhatsApp': 'WhatsApp could not be opened',
       'Ajustes': 'Settings',
       'Guardar ajustes': 'Save settings',
       'Moneda de trabajo': 'Currency',
@@ -414,6 +423,63 @@ String tr(String key) {
       'Programe el mantenimiento': 'Schedule maintenance',
       'Se aproxima el mantenimiento': 'Maintenance approaching',
       'Estado normal': 'Normal status',
+      'Tienda': 'Store',
+      'Encuentra piezas, accesorios y servicios para tu vehículo.':
+          'Find parts, accessories, and services for your vehicle.',
+      'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.':
+          'Searches open externally in Revolico. TukTuk Control does not copy or store listings.',
+      'Buscar en Revolico': 'Search Revolico',
+      '¿Qué necesitas para tu vehículo?': 'What do you need for your vehicle?',
+      'Categorías': 'Categories',
+      'Búsquedas rápidas': 'Quick searches',
+      'Abrir búsqueda': 'Open search',
+      'Escribe lo que deseas buscar': 'Enter what you want to search for',
+      'No se pudo abrir el navegador': 'Could not open the browser',
+      'Baterías': 'Batteries',
+      'Cargadores': 'Chargers',
+      'Neumáticos': 'Tires',
+      'Motores': 'Motors',
+      'Controladores': 'Controllers',
+      'Piezas eléctricas': 'Electrical parts',
+      'Repuestos mecánicos': 'Mechanical parts',
+      'Luces y accesorios': 'Lights and accessories',
+      'Herramientas': 'Tools',
+      'Triciclos eléctricos': 'Electric tricycles',
+      'Talleres y reparación': 'Workshops and repair',
+      'Comparación de ingresos': 'Income comparison',
+      'Mes anterior = 100%': 'Previous month = 100%',
+      'Ingreso actual': 'Current income',
+      'Ingreso': 'Income',
+      'Ingreso de hoy': "Today's income",
+      'Ingreso del día': 'Daily income',
+      'Guardar ingreso': 'Save income',
+      'Ingresos históricos': 'Historical income',
+      'Ingresos totales': 'Total income',
+      'Ingresos por mes': 'Monthly income',
+      'Ingreso promedio por día trabajado': 'Average income per working day',
+      'Ganancia neta': 'Net profit',
+      'Ganancia neta del mes': 'Monthly net profit',
+      'Registros con ingreso': 'Records with income',
+      'Ingresos sin odometro': 'Income without odometer',
+      'registros con ingreso no tienen odometro.':
+          'income records have no odometer.',
+      'Todavía no hay ingresos para graficar.':
+          'There is no income to chart yet.',
+      'Todavía no hay ingresos para mostrar.':
+          'There is no income to show yet.',
+      'Ingreso, gasto y odometro no pueden ser negativos':
+          'Income, expense, and odometer cannot be negative',
+      'Agrega ingreso, gasto, odometro, carga o una nota':
+          'Add income, expense, odometer, charge, or a note',
+      'Google no está configurado para la web':
+          'Google is not configured for the web',
+      'Gasto': 'Expense',
+      'Importe del gasto': 'Expense amount',
+      'Categoría del gasto': 'Expense category',
+      'Guardar gasto': 'Save expense',
+      'Gastos del mes': 'Monthly expenses',
+      'Gastos totales': 'Total expenses',
+      'Balance neto': 'Net balance',
       'Hitos y mensajes del sistema': 'Milestones and system messages',
       'Comienza tu recorrido': 'Start your route',
       'Agrega registros para recibir recomendaciones personalizadas.':
@@ -433,6 +499,11 @@ String tr(String key) {
       'Historial': 'Histórico',
       'Estads.': 'Estat.',
       'Usuario': 'Usuário',
+      'Atención al cliente': 'Atendimento ao cliente',
+      '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
+          'Precisa de ajuda com o TukTuk Control? Fale conosco pelo WhatsApp.',
+      'Contactar por WhatsApp': 'Contatar pelo WhatsApp',
+      'No se pudo abrir WhatsApp': 'Não foi possível abrir o WhatsApp',
       'Ajustes': 'Ajustes',
       'Guardar ajustes': 'Salvar ajustes',
       'Moneda de trabajo': 'Moeda',
@@ -621,6 +692,64 @@ String tr(String key) {
       'Programe el mantenimiento': 'Agende a manutenção',
       'Se aproxima el mantenimiento': 'A manutenção se aproxima',
       'Estado normal': 'Estado normal',
+      'Tienda': 'Loja',
+      'Encuentra piezas, accesorios y servicios para tu vehículo.':
+          'Encontre peças, acessórios e serviços para seu veículo.',
+      'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.':
+          'As buscas abrem externamente no Revolico. TukTuk Control não copia nem armazena anúncios.',
+      'Buscar en Revolico': 'Buscar no Revolico',
+      '¿Qué necesitas para tu vehículo?':
+          'O que você precisa para seu veículo?',
+      'Categorías': 'Categorias',
+      'Búsquedas rápidas': 'Buscas rápidas',
+      'Abrir búsqueda': 'Abrir busca',
+      'Escribe lo que deseas buscar': 'Digite o que deseja buscar',
+      'No se pudo abrir el navegador': 'Não foi possível abrir o navegador',
+      'Baterías': 'Baterias',
+      'Cargadores': 'Carregadores',
+      'Neumáticos': 'Pneus',
+      'Motores': 'Motores',
+      'Controladores': 'Controladores',
+      'Piezas eléctricas': 'Peças elétricas',
+      'Repuestos mecánicos': 'Peças mecânicas',
+      'Luces y accesorios': 'Luzes e acessórios',
+      'Herramientas': 'Ferramentas',
+      'Triciclos eléctricos': 'Triciclos elétricos',
+      'Talleres y reparación': 'Oficinas e reparação',
+      'Comparación de ingresos': 'Comparação de receitas',
+      'Mes anterior = 100%': 'Mês anterior = 100%',
+      'Ingreso actual': 'Receita atual',
+      'Ingreso': 'Receita',
+      'Ingreso de hoy': 'Receita de hoje',
+      'Ingreso del día': 'Receita do dia',
+      'Guardar ingreso': 'Salvar receita',
+      'Ingresos históricos': 'Receitas históricas',
+      'Ingresos totales': 'Receitas totais',
+      'Ingresos por mes': 'Receitas por mês',
+      'Ingreso promedio por día trabajado': 'Receita média por dia trabalhado',
+      'Ganancia neta': 'Lucro líquido',
+      'Ganancia neta del mes': 'Lucro líquido do mês',
+      'Registros con ingreso': 'Registros com receita',
+      'Ingresos sin odometro': 'Receitas sem odômetro',
+      'registros con ingreso no tienen odometro.':
+          'registros com receita não têm odômetro.',
+      'Todavía no hay ingresos para graficar.':
+          'Ainda não há receitas para o gráfico.',
+      'Todavía no hay ingresos para mostrar.':
+          'Ainda não há receitas para mostrar.',
+      'Ingreso, gasto y odometro no pueden ser negativos':
+          'Receita, despesa e odômetro não podem ser negativos',
+      'Agrega ingreso, gasto, odometro, carga o una nota':
+          'Adicione receita, despesa, odômetro, carga ou uma nota',
+      'Google no está configurado para la web':
+          'Google não está configurado para a web',
+      'Gasto': 'Despesa',
+      'Importe del gasto': 'Valor da despesa',
+      'Categoría del gasto': 'Categoria da despesa',
+      'Guardar gasto': 'Salvar despesa',
+      'Gastos del mes': 'Despesas do mês',
+      'Gastos totales': 'Despesas totais',
+      'Balance neto': 'Saldo líquido',
       'Hitos y mensajes del sistema': 'Marcos e mensagens do sistema',
       'Comienza tu recorrido': 'Comece sua rota',
       'Agrega registros para recibir recomendaciones personalizadas.':
@@ -640,6 +769,11 @@ String tr(String key) {
       'Historial': 'Historique',
       'Estads.': 'Stats',
       'Usuario': 'Utilisateur',
+      'Atención al cliente': 'Service client',
+      '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
+          'Besoin d’aide avec TukTuk Control ? Écrivez-nous sur WhatsApp.',
+      'Contactar por WhatsApp': 'Contacter sur WhatsApp',
+      'No se pudo abrir WhatsApp': 'Impossible d’ouvrir WhatsApp',
       'Ajustes': 'Paramètres',
       'Guardar ajustes': 'Enregistrer',
       'Moneda de trabajo': 'Devise',
@@ -832,6 +966,64 @@ String tr(String key) {
       'Programe el mantenimiento': 'Planifiez la maintenance',
       'Se aproxima el mantenimiento': 'Maintenance prochaine',
       'Estado normal': 'État normal',
+      'Tienda': 'Boutique',
+      'Encuentra piezas, accesorios y servicios para tu vehículo.':
+          'Trouvez des pièces, accessoires et services pour votre véhicule.',
+      'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.':
+          'Les recherches s’ouvrent dans Revolico. TukTuk Control ne copie ni ne stocke les annonces.',
+      'Buscar en Revolico': 'Rechercher sur Revolico',
+      '¿Qué necesitas para tu vehículo?':
+          'De quoi avez-vous besoin pour votre véhicule ?',
+      'Categorías': 'Catégories',
+      'Búsquedas rápidas': 'Recherches rapides',
+      'Abrir búsqueda': 'Ouvrir la recherche',
+      'Escribe lo que deseas buscar': 'Saisissez ce que vous recherchez',
+      'No se pudo abrir el navegador': 'Impossible d’ouvrir le navigateur',
+      'Baterías': 'Batteries',
+      'Cargadores': 'Chargeurs',
+      'Neumáticos': 'Pneus',
+      'Motores': 'Moteurs',
+      'Controladores': 'Contrôleurs',
+      'Piezas eléctricas': 'Pièces électriques',
+      'Repuestos mecánicos': 'Pièces mécaniques',
+      'Luces y accesorios': 'Éclairage et accessoires',
+      'Herramientas': 'Outils',
+      'Triciclos eléctricos': 'Tricycles électriques',
+      'Talleres y reparación': 'Ateliers et réparation',
+      'Comparación de ingresos': 'Comparaison des revenus',
+      'Mes anterior = 100%': 'Mois précédent = 100 %',
+      'Ingreso actual': 'Revenu actuel',
+      'Ingreso': 'Revenu',
+      'Ingreso de hoy': 'Revenu du jour',
+      'Ingreso del día': 'Revenu quotidien',
+      'Guardar ingreso': 'Enregistrer le revenu',
+      'Ingresos históricos': 'Revenus historiques',
+      'Ingresos totales': 'Revenus totaux',
+      'Ingresos por mes': 'Revenus mensuels',
+      'Ingreso promedio por día trabajado': 'Revenu moyen par jour travaillé',
+      'Ganancia neta': 'Bénéfice net',
+      'Ganancia neta del mes': 'Bénéfice net du mois',
+      'Registros con ingreso': 'Enregistrements avec revenu',
+      'Ingresos sin odometro': 'Revenus sans odomètre',
+      'registros con ingreso no tienen odometro.':
+          'enregistrements avec revenu n’ont pas d’odomètre.',
+      'Todavía no hay ingresos para graficar.':
+          'Il n’y a pas encore de revenus à représenter.',
+      'Todavía no hay ingresos para mostrar.':
+          'Il n’y a pas encore de revenus à afficher.',
+      'Ingreso, gasto y odometro no pueden ser negativos':
+          'Le revenu, la dépense et l’odomètre ne peuvent pas être négatifs',
+      'Agrega ingreso, gasto, odometro, carga o una nota':
+          'Ajoutez un revenu, une dépense, un odomètre, une charge ou une note',
+      'Google no está configurado para la web':
+          'Google n’est pas configuré pour le web',
+      'Gasto': 'Dépense',
+      'Importe del gasto': 'Montant de la dépense',
+      'Categoría del gasto': 'Catégorie de dépense',
+      'Guardar gasto': 'Enregistrer la dépense',
+      'Gastos del mes': 'Dépenses du mois',
+      'Gastos totales': 'Dépenses totales',
+      'Balance neto': 'Solde net',
       'Hitos y mensajes del sistema': 'Étapes et messages du système',
       'Comienza tu recorrido': 'Commencez votre trajet',
       'Agrega registros para recibir recomendaciones personalizadas.':

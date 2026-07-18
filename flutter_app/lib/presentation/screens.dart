@@ -10,32 +10,32 @@ class AppShell extends StatefulWidget {
 }
 
 class AppLogoMark extends StatelessWidget {
-  const AppLogoMark({super.key});
+  const AppLogoMark({this.size = 34, super.key});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 34,
-      height: 34,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: const LinearGradient(
-          colors: [kPrimary, kSecondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        borderRadius: BorderRadius.circular(size * .24),
         boxShadow: [
           BoxShadow(
-            color: kPrimary.withValues(alpha: .22),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            color: kPrimary.withValues(alpha: .28),
+            blurRadius: size * .35,
+            offset: Offset(0, size * .12),
           ),
         ],
       ),
-      child: const Icon(
-        Icons.electric_rickshaw,
-        color: Color(0xFF06251C),
-        size: 21,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size * .24),
+        child: Image.asset(
+          'assets/branding/tuktuk_logo.png',
+          fit: BoxFit.cover,
+          semanticLabel: 'TukTuk Control',
+        ),
       ),
     );
   }
@@ -138,7 +138,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.all(24),
                 children: [
-                  const Center(child: AppLogoMark()),
+                  const Center(child: AppLogoMark(size: 92)),
                   const SizedBox(height: 18),
                   Text(
                     tr('Configura tu primer Tuk Tuk'),
@@ -256,6 +256,7 @@ class _AppShellState extends State<AppShell> {
           RegisterScreen(store: store),
           HistoryScreen(store: store),
           StatsScreen(store: store),
+          const StoreScreen(),
           LoginScreen(store: store),
         ];
         return Scaffold(
@@ -438,6 +439,11 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         label: tr('Estads.'),
                       ),
                       NavigationDestination(
+                        icon: const Icon(Icons.storefront_outlined),
+                        selectedIcon: const Icon(Icons.storefront),
+                        label: tr('Tienda'),
+                      ),
+                      NavigationDestination(
                         icon: const Icon(Icons.account_circle_outlined),
                         selectedIcon: const Icon(Icons.account_circle),
                         label: tr('Usuario'),
@@ -479,7 +485,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         MetricHero(
-          label: tr('Ganancia de hoy'),
+          label: tr('Ingreso de hoy'),
           value: money(metrics.todayEarnings),
           sublabel:
               '${tr('Mes actual')}: ${money(metrics.currentCycleEarnings)}',
@@ -512,7 +518,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Expanded(
               child: MetricCard(
-                label: tr('Total historico'),
+                label: tr('Ingresos históricos'),
                 value: money(metrics.totalEarnings),
                 icon: Icons.account_balance_wallet_outlined,
               ),
@@ -527,7 +533,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: MetricCard(
+                label: tr('Gastos del mes'),
+                value: money(metrics.currentCycleExpenses),
+                icon: Icons.receipt_long_outlined,
+                color: kDanger,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: MetricCard(
+                label: tr('Ganancia neta del mes'),
+                value: money(metrics.currentCycleNet),
+                icon: Icons.account_balance_outlined,
+                color: metrics.currentCycleNet >= 0 ? kPrimary : kDanger,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
         MonthlyComparisonGauge(
           comparison: comparison,
           onPreviousMonth: () => setState(
@@ -542,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             DateTime(DateTime.now().year, DateTime.now().month),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 14),
         MaintenanceDashboardCard(snapshot: maintenance),
         const SizedBox(height: 20),
         SectionTitle(title: tr('Hitos y mensajes del sistema')),
@@ -566,11 +594,13 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-enum _NewRecordType { earnings, charge, maintenance }
+enum _NewRecordType { earnings, expense, charge, maintenance }
 
 class _RegisterScreenState extends State<RegisterScreen> {
   late DateTime date;
   late final TextEditingController earnings;
+  late final TextEditingController expense;
+  late final TextEditingController expenseCategory;
   late final TextEditingController odometer;
   late final TextEditingController battery;
   late final TextEditingController note;
@@ -584,17 +614,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     date = record?.date ?? DateTime.now();
     earnings = TextEditingController(
         text: record == null ? '' : trimNum(record.earnings));
+    expense = TextEditingController(
+        text: record == null ? '' : trimNum(record.expense));
+    expenseCategory =
+        TextEditingController(text: record?.expenseCategory ?? '');
     odometer = TextEditingController(
         text: record == null ? '' : trimNum(record.odometer));
     battery =
         TextEditingController(text: record?.batteryPercent?.toString() ?? '');
     note = TextEditingController(text: record?.note ?? '');
     chargeTo80v = record?.chargeTo80v ?? false;
+    if ((record?.expense ?? 0) > 0) recordType = _NewRecordType.expense;
   }
 
   @override
   void dispose() {
     earnings.dispose();
+    expense.dispose();
+    expenseCategory.dispose();
     odometer.dispose();
     battery.dispose();
     note.dispose();
@@ -604,6 +641,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final editing = widget.record != null;
+    final editingExpense = editing && widget.record!.expense > 0;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -622,7 +660,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ButtonSegment(
                 value: _NewRecordType.earnings,
                 icon: const Icon(Icons.payments_outlined),
-                label: Text(tr('Ganancia')),
+                label: Text(tr('Ingreso')),
+              ),
+              ButtonSegment(
+                value: _NewRecordType.expense,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: Text(tr('Gasto')),
               ),
               ButtonSegment(
                 value: _NewRecordType.charge,
@@ -685,12 +728,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date)),
           ),
           const SizedBox(height: 14),
-          if (editing || recordType == _NewRecordType.earnings) ...[
+          if ((editing && !editingExpense) ||
+              recordType == _NewRecordType.earnings) ...[
             TextField(
               controller: earnings,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: tr('Ganancia del día'),
+                labelText: tr('Ingreso del día'),
                 suffixText: activeCurrency,
                 prefixIcon: const Icon(Icons.payments_outlined),
               ),
@@ -705,7 +749,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ],
-          if (editing || recordType == _NewRecordType.charge) ...[
+          if (editingExpense ||
+              (!editing && recordType == _NewRecordType.expense)) ...[
+            TextField(
+              controller: expense,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: tr('Importe del gasto'),
+                suffixText: activeCurrency,
+                prefixIcon: const Icon(Icons.receipt_long_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: expenseCategory,
+              decoration: InputDecoration(
+                labelText: tr('Categoría del gasto'),
+                prefixIcon: const Icon(Icons.sell_outlined),
+              ),
+            ),
+          ],
+          if ((editing && !editingExpense) ||
+              recordType == _NewRecordType.charge) ...[
             if (editing) const SizedBox(height: 12),
             TextField(
               controller: battery,
@@ -743,7 +808,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ? tr('Guardar cambios')
                   : recordType == _NewRecordType.charge
                       ? tr('Guardar carga')
-                      : tr('Guardar ganancia'),
+                      : recordType == _NewRecordType.expense
+                          ? tr('Guardar gasto')
+                          : tr('Guardar ingreso'),
             ),
           ),
         ],
@@ -764,15 +831,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> save() async {
     final isCharge = !editingRecord && recordType == _NewRecordType.charge;
-    final earned = isCharge ? 0.0 : _parseOptionalNumber(earnings.text) ?? 0.0;
-    final odo = isCharge ? 0.0 : _parseOptionalNumber(odometer.text) ?? 0.0;
+    final isExpense = (editingRecord && widget.record!.expense > 0) ||
+        (!editingRecord && recordType == _NewRecordType.expense);
+    final earned = (isCharge || isExpense)
+        ? 0.0
+        : _parseOptionalNumber(earnings.text) ?? 0.0;
+    final spent = isExpense ? _parseOptionalNumber(expense.text) ?? 0.0 : 0.0;
+    final odo = (isCharge || isExpense)
+        ? 0.0
+        : _parseOptionalNumber(odometer.text) ?? 0.0;
     final pct = _parseOptionalNumber(battery.text)?.round();
-    if (earned < 0 || odo < 0) {
-      toast(context, tr('Ganancia y odometro no pueden ser negativos'));
+    if (earned < 0 || spent < 0 || odo < 0) {
+      toast(context, tr('Ingreso, gasto y odometro no pueden ser negativos'));
       return;
     }
-    if (earned == 0 && odo == 0 && !chargeTo80v && note.text.trim().isEmpty) {
-      toast(context, tr('Agrega ganancia, odometro, carga o una nota'));
+    if (earned == 0 &&
+        spent == 0 &&
+        odo == 0 &&
+        !chargeTo80v &&
+        note.text.trim().isEmpty) {
+      toast(context, tr('Agrega ingreso, gasto, odometro, carga o una nota'));
       return;
     }
     if (pct != null && (pct < 0 || pct > 100)) {
@@ -787,6 +865,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               date: date,
               earnings: earned,
               odometer: odo,
+              expense: spent,
+              expenseCategory: expenseCategory.text.trim(),
               batteryPercent: pct,
               chargeTo80v: chargeTo80v,
               note: note.text.trim(),
@@ -796,6 +876,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               date: date,
               earnings: earned,
               odometer: odo,
+              expense: spent,
+              expenseCategory: expenseCategory.text.trim(),
               batteryPercent: pct,
               chargeTo80v: chargeTo80v,
               note: note.text.trim(),
@@ -812,7 +894,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool get editingRecord => widget.record != null;
 }
 
-enum _HistoryFilter { all, earnings, odometer, charge, maintenance }
+enum _HistoryFilter { all, earnings, expense, odometer, charge, maintenance }
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({required this.store, super.key});
@@ -839,6 +921,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final records = widget.store.records.where((record) {
       final matchesType = filter == _HistoryFilter.all ||
           (filter == _HistoryFilter.earnings && record.earnings > 0) ||
+          (filter == _HistoryFilter.expense && record.expense > 0) ||
           (filter == _HistoryFilter.odometer && record.odometer > 0) ||
           (filter == _HistoryFilter.charge && record.chargeTo80v);
       final haystack = '${record.note} ${numFmt(record.odometer)} '
@@ -877,7 +960,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ButtonSegment(
                 value: _HistoryFilter.earnings,
                 icon: const Icon(Icons.payments_outlined),
-                label: Text(tr('Ganancia')),
+                label: Text(tr('Ingreso')),
+              ),
+              ButtonSegment(
+                value: _HistoryFilter.expense,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: Text(tr('Gasto')),
               ),
               ButtonSegment(
                 value: _HistoryFilter.odometer,
@@ -1026,11 +1114,21 @@ class StatsScreen extends StatelessWidget {
               children: [
                 StatOverviewCard(
                     width: width,
-                    label: tr('Ganancia total'),
+                    label: tr('Ingresos totales'),
                     value: money(metrics.totalEarnings)),
                 StatOverviewCard(
                     width: width,
-                    label: tr('Promedio por día trabajado'),
+                    label: tr('Gastos totales'),
+                    value: money(metrics.totalExpenses),
+                    color: kDanger),
+                StatOverviewCard(
+                    width: width,
+                    label: tr('Ganancia neta'),
+                    value: money(metrics.netEarnings),
+                    color: metrics.netEarnings >= 0 ? kPrimary : kDanger),
+                StatOverviewCard(
+                    width: width,
+                    label: tr('Ingreso promedio por día trabajado'),
                     value: money(metrics.averageDailyEarnings)),
                 StatOverviewCard(
                     width: width,
@@ -1067,7 +1165,7 @@ class StatsScreen extends StatelessWidget {
           },
         ),
         const SizedBox(height: 18),
-        SectionTitle(title: tr('Ganancia por mes')),
+        SectionTitle(title: tr('Ingresos por mes')),
         MonthlyEarningsBars(cycles: cycles),
         const SizedBox(height: 18),
         SectionTitle(title: tr('Tendencia de días trabajados')),
@@ -1076,6 +1174,245 @@ class StatsScreen extends StatelessWidget {
         SectionTitle(title: tr('Información relevante')),
         DataHealthCard(metrics: metrics),
       ],
+    );
+  }
+}
+
+Uri buildRevolicoSearchUri(String term) => Uri.https(
+      'www.revolico.com',
+      '/search',
+      {'q': term.trim(), 'order': 'relevance'},
+    );
+
+Uri buildWhatsAppSupportUri() => Uri.https(
+      'wa.me',
+      '/5355592873',
+      {'text': 'Hola, necesito ayuda con TukTuk Control.'},
+    );
+
+class StoreScreen extends StatefulWidget {
+  const StoreScreen({super.key});
+
+  @override
+  State<StoreScreen> createState() => _StoreScreenState();
+}
+
+class _StoreScreenState extends State<StoreScreen> {
+  final search = TextEditingController();
+
+  static const categories = <_StoreCategory>[
+    _StoreCategory('Baterías', 'batería 72V', Icons.battery_charging_full),
+    _StoreCategory('Cargadores', 'cargador 72V', Icons.electrical_services),
+    _StoreCategory('Neumáticos', 'neumático triciclo', Icons.tire_repair),
+    _StoreCategory('Motores', 'motor eléctrico', Icons.electric_bolt),
+    _StoreCategory(
+      'Controladores',
+      'controlador moto eléctrica',
+      Icons.memory,
+    ),
+    _StoreCategory(
+      'Piezas eléctricas',
+      'piezas eléctricas triciclo',
+      Icons.cable,
+    ),
+    _StoreCategory(
+      'Repuestos mecánicos',
+      'repuestos triciclo',
+      Icons.settings,
+    ),
+    _StoreCategory(
+      'Luces y accesorios',
+      'luces accesorios triciclo',
+      Icons.lightbulb_outline,
+    ),
+    _StoreCategory('Herramientas', 'herramientas taller moto', Icons.handyman),
+    _StoreCategory(
+      'Triciclos eléctricos',
+      'triciclo eléctrico',
+      Icons.electric_rickshaw,
+    ),
+    _StoreCategory(
+      'Talleres y reparación',
+      'taller moto eléctrica',
+      Icons.home_repair_service,
+    ),
+  ];
+
+  static const quickSearches = <String>[
+    'batería 72V',
+    'batería litio triciclo',
+    'batería gel',
+    'cargador 72V',
+    'neumático triciclo',
+    'motor eléctrico',
+    'controlador moto eléctrica',
+    'repuestos triciclo',
+    'taller moto eléctrica',
+  ];
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        SectionTitle(title: tr('Tienda')),
+        Text(
+          tr('Encuentra piezas, accesorios y servicios para tu vehículo.'),
+          style: const TextStyle(color: kMuted, height: 1.4),
+        ),
+        const SizedBox(height: 14),
+        GlassCard(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.open_in_new_rounded, color: kTertiary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  tr('Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.'),
+                  style: const TextStyle(color: kMuted, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        SectionTitle(title: tr('Buscar en Revolico')),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: search,
+                textInputAction: TextInputAction.search,
+                onSubmitted: openSearch,
+                decoration: InputDecoration(
+                  hintText: tr('¿Qué necesitas para tu vehículo?'),
+                  prefixIcon: const Icon(Icons.search),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            FilledButton(
+              onPressed: () => openSearch(search.text),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(54, 54),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: const Icon(Icons.open_in_new_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        SectionTitle(title: tr('Categorías')),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 720 ? 3 : 2;
+            final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final category in categories)
+                  SizedBox(
+                    width: width,
+                    child: _StoreCategoryCard(
+                      category: category,
+                      onTap: () => openSearch(category.query),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+        SectionTitle(title: tr('Búsquedas rápidas')),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final term in quickSearches)
+              ActionChip(
+                avatar: const Icon(Icons.north_east_rounded, size: 16),
+                label: Text(term),
+                onPressed: () => openSearch(term),
+              ),
+          ],
+        ),
+        const SizedBox(height: 110),
+      ],
+    );
+  }
+
+  Future<void> openSearch(String value) async {
+    final term = value.trim();
+    if (term.isEmpty) {
+      toast(context, tr('Escribe lo que deseas buscar'));
+      return;
+    }
+    final opened = await launchUrl(
+      buildRevolicoSearchUri(term),
+      mode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
+    if (!opened && mounted) {
+      toast(context, tr('No se pudo abrir el navegador'));
+    }
+  }
+}
+
+class _StoreCategory {
+  const _StoreCategory(this.label, this.query, this.icon);
+
+  final String label;
+  final String query;
+  final IconData icon;
+}
+
+class _StoreCategoryCard extends StatelessWidget {
+  const _StoreCategoryCard({required this.category, required this.onTap});
+
+  final _StoreCategory category;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(category.icon, color: kPrimary, size: 25),
+              const SizedBox(height: 12),
+              Text(
+                tr(category.label),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                tr('Abrir búsqueda'),
+                style: const TextStyle(color: kMuted, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1139,6 +1476,38 @@ class LoginScreen extends StatelessWidget {
                 tooltip: tr('Personalizar perfil'),
                 onPressed: () => _editProfileName(context),
                 icon: const Icon(Icons.edit_outlined),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        SectionTitle(title: tr('Atención al cliente')),
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.support_agent_rounded,
+                color: Color(0xFF25D366),
+                size: 38,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                tr('¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.'),
+                style: const TextStyle(color: kMuted, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _openWhatsApp(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF25D366),
+                    foregroundColor: const Color(0xFF06170D),
+                  ),
+                  icon: const Icon(Icons.chat_rounded),
+                  label: Text(tr('Contactar por WhatsApp')),
+                ),
               ),
             ],
           ),
@@ -1249,6 +1618,18 @@ class LoginScreen extends StatelessWidget {
         MaintenanceSettingsPanel(store: store),
       ],
     );
+  }
+
+  Future<void> _openWhatsApp(BuildContext context) async {
+    final opened = await launchUrl(
+      buildWhatsAppSupportUri(),
+      mode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
+    if (!opened && context.mounted) {
+      toast(context, tr('No se pudo abrir WhatsApp'));
+    }
   }
 
   Future<void> _editProfileName(BuildContext context) async {

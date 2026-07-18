@@ -6,9 +6,12 @@ class RecordStore extends ChangeNotifier {
     unawaited(_initialize());
   }
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [drive.DriveApi.driveAppdataScope],
-  );
+  late final GoogleSignIn? _googleSignIn = kIsWeb && _googleWebClientId.isEmpty
+      ? null
+      : GoogleSignIn(
+          scopes: [drive.DriveApi.driveAppdataScope],
+          clientId: _googleWebClientId.isEmpty ? null : _googleWebClientId,
+        );
   final Box _box = Hive.box(_recordsBox);
   final Box _maintenanceBox = Hive.box(_maintenanceRecordsBox);
   final Box _meta = Hive.box(_metaBox);
@@ -74,6 +77,8 @@ class RecordStore extends ChangeNotifier {
         name: 'Mi Tuk Tuk',
         createdAt: now,
         updatedAt: now,
+        deviceId: deviceId,
+        syncStatus: SyncStatus.pending,
       ).toMap(),
     );
     return generated;
@@ -85,10 +90,25 @@ class RecordStore extends ChangeNotifier {
     if (vehicleId is! String || vehicleId.isEmpty) return null;
     final raw = _meta.get('vehicle:$vehicleId');
     if (raw is! Map) return null;
-    return VehicleProfile.fromMap(raw);
+    final vehicle = VehicleProfile.fromMap(raw);
+    return vehicle.userId == userId ? vehicle : null;
   }
 
   VehicleProfile? get activeVehicle => _vehicleForUser(activeUserId);
+
+  List<VehicleProfile> get vehicles {
+    final ownerId = activeUserId;
+    final values = <VehicleProfile>[];
+    for (final key in _meta.keys) {
+      if (key is! String || !key.startsWith('vehicle:')) continue;
+      final raw = _meta.get(key);
+      if (raw is! Map) continue;
+      final vehicle = VehicleProfile.fromMap(raw);
+      if (vehicle.userId == ownerId && !vehicle.isDeleted) values.add(vehicle);
+    }
+    values.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return values;
+  }
 
   bool get needsOnboarding => initialized && activeVehicle == null;
 
@@ -134,9 +154,14 @@ class RecordStore extends ChangeNotifier {
         'schemaVersion': _databaseSchemaVersion,
         'app': 'TukTuk Control',
         'kind': 'database-backup',
+        'backupId':
+            'backup-$activeUserId-${DateTime.now().microsecondsSinceEpoch}',
+        'userId': activeUserId,
         'ownerUserId': activeUserId,
         'vehicleId': activeVehicleId,
         'vehicle': activeVehicle?.toMap(),
+        'vehicles': vehicles.map((vehicle) => vehicle.toMap()).toList(),
+        'createdAt': DateTime.now().toIso8601String(),
         'updatedAt': DateTime.now().toIso8601String(),
         'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
         'records': _allDailyRecords
@@ -150,12 +175,14 @@ class RecordStore extends ChangeNotifier {
       });
 
   String exportBackupCsv() {
-    const header = 'fecha,ganancia,odometro,carga80v,nota';
+    const header = 'fecha,ingreso,gasto,categoria_gasto,odometro,carga80v,nota';
     String cell(Object? value) =>
         '"${'$value'.replaceAll('"', '""').replaceAll('\n', ' ')}"';
     final rows = records.map((record) => [
           DateFormat('yyyy-MM-dd').format(record.date),
           record.earnings,
+          record.expense,
+          record.expenseCategory,
           record.odometer,
           record.chargeTo80v ? 'si' : 'no',
           record.note,
@@ -204,6 +231,8 @@ class RecordStore extends ChangeNotifier {
       initialOdometer: initialOdometer,
       createdAt: now,
       updatedAt: now,
+      deviceId: deviceId,
+      syncStatus: SyncStatus.pending,
     );
     await _meta.put('activeVehicleId:$activeUserId', vehicleId);
     await _meta.put('vehicle:$vehicleId', vehicle.toMap());
@@ -229,6 +258,58 @@ class RecordStore extends ChangeNotifier {
     unawaitedSync();
   }
 
+  /// Prepara soporte multivehículo sin exponer todavía una pantalla de flota.
+  Future<VehicleProfile> createVehicle({
+    required String name,
+    String registration = '',
+    double initialOdometer = 0,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
+    }
+    final now = DateTime.now();
+    final vehicleId =
+        'vehicle-$activeUserId-${now.microsecondsSinceEpoch}-${Random().nextInt(999999)}';
+    final vehicle = VehicleProfile(
+      id: vehicleId,
+      userId: activeUserId,
+      name: cleanName,
+      registration: registration.trim(),
+      initialOdometer: initialOdometer,
+      createdAt: now,
+      updatedAt: now,
+      deviceId: deviceId,
+      syncStatus: SyncStatus.pending,
+    );
+    await _meta.put('vehicle:$vehicleId', vehicle.toMap());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.vehicle,
+      entityId: vehicleId,
+      action: SyncAction.upsert,
+      userId: activeUserId,
+      vehicleId: vehicleId,
+    );
+    notifyListeners();
+    unawaitedSync();
+    return vehicle;
+  }
+
+  Future<void> selectVehicle(String vehicleId) async {
+    VehicleProfile? vehicle;
+    for (final item in vehicles) {
+      if (item.id == vehicleId) {
+        vehicle = item;
+        break;
+      }
+    }
+    if (vehicle == null) {
+      throw StateError('El vehículo no pertenece al usuario activo.');
+    }
+    await _meta.put('activeVehicleId:$activeUserId', vehicle.id);
+    _load();
+  }
+
   Future<void> updateActiveVehicle({
     required String name,
     String registration = '',
@@ -244,6 +325,8 @@ class RecordStore extends ChangeNotifier {
       initialOdometer: current.initialOdometer,
       createdAt: current.createdAt,
       updatedAt: DateTime.now(),
+      deviceId: current.deviceId.isEmpty ? deviceId : current.deviceId,
+      syncStatus: SyncStatus.pending,
     );
     await _meta.put('vehicle:${current.id}', updated.toMap());
     await _syncQueue.enqueue(
@@ -259,13 +342,18 @@ class RecordStore extends ChangeNotifier {
 
   void _load() {
     final ownerId = activeUserId;
+    final vehicleId = activeVehicle?.id;
     _records
       ..clear()
       ..addAll(
         _box.values
             .map((raw) => DailyRecord.fromMap(raw as Map))
             .where(
-              (record) => !record.isDeleted && record.userId == ownerId,
+              (record) =>
+                  !record.isDeleted &&
+                  record.userId == ownerId &&
+                  vehicleId != null &&
+                  record.vehicleId == vehicleId,
             )
             .toList(),
       );
@@ -275,7 +363,11 @@ class RecordStore extends ChangeNotifier {
         _maintenanceBox.values
             .map((raw) => MaintenanceRecord.fromMap(raw as Map))
             .where(
-              (record) => !record.isDeleted && record.userId == ownerId,
+              (record) =>
+                  !record.isDeleted &&
+                  record.userId == ownerId &&
+                  vehicleId != null &&
+                  record.vehicleId == vehicleId,
             )
             .toList(),
       );
@@ -309,8 +401,7 @@ class RecordStore extends ChangeNotifier {
         vehicleId: record.vehicleId,
       );
     }
-    final vehicle = activeVehicle;
-    if (vehicle != null) {
+    for (final vehicle in vehicles) {
       await _syncQueue.enqueue(
         entityType: SyncEntityType.vehicle,
         entityId: vehicle.id,
@@ -335,6 +426,19 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _migrateSyncMetadata() async {
+    for (final key in _meta.keys.toList()) {
+      if (key is! String || !key.startsWith('vehicle:')) continue;
+      final raw = _meta.get(key);
+      if (raw is! Map) continue;
+      final vehicle = VehicleProfile.fromMap(raw);
+      if (vehicle.schemaVersion < _databaseSchemaVersion ||
+          vehicle.deviceId.isEmpty) {
+        await _meta.put(
+          key,
+          vehicle.withSyncInfo(deviceId: deviceId).toMap(),
+        );
+      }
+    }
     for (final record in _allDailyRecords) {
       if (record.schemaVersion < _databaseSchemaVersion ||
           record.deviceId.isEmpty ||
@@ -522,14 +626,20 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> signIn() async {
-    user = await _googleSignIn.signInSilently() ?? await _googleSignIn.signIn();
+    final google = _googleSignIn;
+    if (google == null) {
+      syncMessage = 'Google no está configurado para la web';
+      notifyListeners();
+      return;
+    }
+    user = await google.signInSilently() ?? await google.signIn();
     notifyListeners();
     if (user != null) {
       try {
         await _claimLocalDataForSignedInUser();
         await restoreThenSync();
       } on StateError {
-        await _googleSignIn.signOut();
+        await google.signOut();
         user = null;
         syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
         notifyListeners();
@@ -538,7 +648,13 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> restoreGoogleSession() async {
-    user = await _googleSignIn.signInSilently();
+    final google = _googleSignIn;
+    if (google == null) {
+      syncMessage = 'Entra con Google para respaldar en Drive';
+      notifyListeners();
+      return;
+    }
+    user = await google.signInSilently();
     if (user == null) {
       syncMessage = 'Entra con Google para respaldar en Drive';
       notifyListeners();
@@ -549,7 +665,7 @@ class RecordStore extends ChangeNotifier {
       await _claimLocalDataForSignedInUser();
       await restoreThenSync();
     } on StateError {
-      await _googleSignIn.signOut();
+      await google.signOut();
       user = null;
       syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
       notifyListeners();
@@ -557,7 +673,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    await _googleSignIn.signOut();
+    await _googleSignIn?.signOut();
     user = null;
     syncMessage = 'Sesion cerrada. La base local sigue en este dispositivo';
     notifyListeners();
@@ -618,7 +734,9 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<drive.DriveApi?> _driveApi() async {
-    final client = await _googleSignIn.authenticatedClient();
+    final google = _googleSignIn;
+    if (google == null) return null;
+    final client = await google.authenticatedClient();
     return client == null ? null : drive.DriveApi(client);
   }
 
@@ -647,10 +765,15 @@ class RecordStore extends ChangeNotifier {
       'schemaVersion': _databaseSchemaVersion,
       'app': 'TukTuk Control',
       'kind': 'database-backup',
+      'backupId':
+          'backup-$activeUserId-${DateTime.now().microsecondsSinceEpoch}',
+      'userId': activeUserId,
       'ownerUserId': activeUserId,
       'vehicleId': activeVehicleId,
       'vehicle': activeVehicle?.toMap(),
+      'vehicles': vehicles.map((vehicle) => vehicle.toMap()).toList(),
       'deviceId': deviceId,
+      'createdAt': DateTime.now().toIso8601String(),
       'updatedAt': DateTime.now().toIso8601String(),
       'settings': {
         'maintenanceIntervalKm': maintenanceIntervalKm,
@@ -688,27 +811,28 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<bool> _mergeRemote(Map<String, dynamic> remote) async {
-    final remoteOwner = '${remote['ownerUserId'] ?? ''}';
+    final remoteOwner = '${remote['userId'] ?? remote['ownerUserId'] ?? ''}';
     if (!OwnershipPolicy.acceptsBackup(activeUserId, remoteOwner)) {
       throw StateError('El respaldo pertenece a otro usuario.');
     }
     var changed = false;
-    if (remote['vehicle'] is Map) {
-      final remoteVehicle = VehicleProfile.fromMap(remote['vehicle'] as Map);
+    final remoteVehicles = <VehicleProfile>[
+      if (remote['vehicles'] is List)
+        ...(remote['vehicles'] as List)
+            .map((raw) => VehicleProfile.fromMap(raw as Map)),
+      if (remote['vehicles'] is! List && remote['vehicle'] is Map)
+        VehicleProfile.fromMap(remote['vehicle'] as Map),
+    ];
+    for (final remoteVehicle in remoteVehicles) {
       if (remoteVehicle.userId != activeUserId) {
-        throw StateError('El vehiculo del respaldo pertenece a otro usuario.');
+        throw StateError('El vehículo del respaldo pertenece a otro usuario.');
       }
-      final localVehicle = activeVehicle;
+      final rawLocal = _meta.get('vehicle:${remoteVehicle.id}');
+      final localVehicle =
+          rawLocal is Map ? VehicleProfile.fromMap(rawLocal) : null;
       if (localVehicle == null ||
           remoteVehicle.updatedAt.isAfter(localVehicle.updatedAt)) {
-        await _meta.put(
-          'activeVehicleId:$activeUserId',
-          remoteVehicle.id,
-        );
-        await _meta.put(
-          'vehicle:${remoteVehicle.id}',
-          remoteVehicle.toMap(),
-        );
+        await _meta.put('vehicle:${remoteVehicle.id}', remoteVehicle.toMap());
         await _syncQueue.enqueue(
           entityType: SyncEntityType.vehicle,
           entityId: remoteVehicle.id,
@@ -718,6 +842,13 @@ class RecordStore extends ChangeNotifier {
         );
         changed = true;
       }
+    }
+    if (activeVehicle == null && remoteVehicles.isNotEmpty) {
+      await _meta.put(
+        'activeVehicleId:$activeUserId',
+        remoteVehicles.first.id,
+      );
+      changed = true;
     }
     final remoteRecords = (remote['records'] as List? ?? [])
         .map((raw) => DailyRecord.fromMap(raw as Map))
@@ -857,6 +988,8 @@ class RecordStore extends ChangeNotifier {
           initialOdometer: sourceVehicle?.initialOdometer ?? 0,
           createdAt: sourceVehicle?.createdAt ?? now,
           updatedAt: now,
+          deviceId: deviceId,
+          syncStatus: SyncStatus.pending,
         ).toMap(),
       );
     }

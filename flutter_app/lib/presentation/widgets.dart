@@ -262,7 +262,7 @@ class DataHealthCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           InfoLine(
-            label: tr('Registros con ganancia'),
+            label: tr('Registros con ingreso'),
             value: metrics.records
                 .where((record) => record.earnings > 0)
                 .length
@@ -273,7 +273,7 @@ class DataHealthCard extends StatelessWidget {
             value: metrics.chargeEvents.toString(),
           ),
           InfoLine(
-            label: tr('Ganancias sin odometro'),
+            label: tr('Ingresos sin odometro'),
             value: missing.toString(),
           ),
           InfoLine(
@@ -295,7 +295,7 @@ class DataHealthCard extends StatelessWidget {
   String _healthMessage(int missing, List<OdometerIssue> drops) {
     final parts = <String>[];
     if (missing > 0) {
-      parts.add('$missing ${tr('registros con ganancia no tienen odometro.')}');
+      parts.add('$missing ${tr('registros con ingreso no tienen odometro.')}');
     }
     if (drops.isNotEmpty) {
       final issue = drops.first;
@@ -414,7 +414,7 @@ class MonthlyEarningsBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (cycles.isEmpty) {
-      return EmptyState(tr('Todavía no hay ganancias para graficar.'));
+      return EmptyState(tr('Todavía no hay ingresos para graficar.'));
     }
     final visible = cycles.take(8).toList().reversed.toList();
     final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
@@ -473,7 +473,7 @@ class EarningsTrendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final values = records.toList();
     if (values.isEmpty) {
-      return EmptyState(tr('Todavía no hay ganancias para mostrar.'));
+      return EmptyState(tr('Todavía no hay ingresos para mostrar.'));
     }
     return GlassCard(
       child: Column(
@@ -519,6 +519,7 @@ class RecordTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final details = [
       if (record.odometer > 0) '${numFmt(record.odometer)} km',
+      if (record.expenseCategory.isNotEmpty) record.expenseCategory,
       if (record.chargeTo80v) tr('Carga hasta 80 V'),
       if (record.note.isNotEmpty) record.note,
     ];
@@ -538,6 +539,11 @@ class RecordTile extends StatelessWidget {
                   icon: Icons.payments_outlined,
                   color: kPrimary,
                 ),
+              if (record.expense > 0)
+                const _HistoryTypeIcon(
+                  icon: Icons.receipt_long_outlined,
+                  color: kDanger,
+                ),
               if (record.odometer > 0)
                 const _HistoryTypeIcon(
                   icon: Icons.speed_rounded,
@@ -549,6 +555,7 @@ class RecordTile extends StatelessWidget {
                   color: kTertiary,
                 ),
               if (record.earnings <= 0 &&
+                  record.expense <= 0 &&
                   record.odometer <= 0 &&
                   !record.chargeTo80v)
                 const _HistoryTypeIcon(
@@ -569,11 +576,17 @@ class RecordTile extends StatelessWidget {
             Text(
               record.earnings > 0
                   ? '+${money(record.earnings)}'
-                  : record.chargeTo80v
-                      ? '80 V'
-                      : '0 $activeCurrency',
+                  : record.expense > 0
+                      ? '-${money(record.expense)}'
+                      : record.chargeTo80v
+                          ? '80 V'
+                          : '0 $activeCurrency',
               style: TextStyle(
-                color: record.earnings > 0 ? kPrimary : kSecondary,
+                color: record.earnings > 0
+                    ? kPrimary
+                    : record.expense > 0
+                        ? kDanger
+                        : kSecondary,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -671,123 +684,155 @@ class MonthlyComparisonGauge extends StatelessWidget {
     final monthLabel = DateFormat('MMMM yyyy', activeLanguage)
         .format(comparison.month)
         .toUpperCase();
-    return Column(
-      children: [
-        Row(
-          children: [
-            IconButton(
-              tooltip: tr('Mes anterior'),
-              onPressed: onPreviousMonth,
-              color: color,
-              icon: const Icon(Icons.chevron_left_rounded),
-            ),
-            Expanded(
-              child: Text(
-                monthLabel,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
+    return GlassCard(
+      child: Column(
+        children: [
+          Label(tr('Comparación de ingresos')),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              IconButton(
+                tooltip: tr('Mes anterior'),
+                onPressed: onPreviousMonth,
+                color: color,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              Expanded(
+                child: Text(
+                  monthLabel,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: tr('Mes siguiente'),
+                onPressed: canGoNext ? onNextMonth : null,
+                color: color,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ),
+          Text(
+            tr('Mes anterior = 100%'),
+            style: const TextStyle(color: kMuted, fontSize: 12),
+          ),
+          const SizedBox(height: 2),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: AspectRatio(
+                aspectRatio: 1.65,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: comparison.percentage),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animatedPercentage, _) {
+                    final animatedColor = monthlyGaugeColor(animatedPercentage);
+                    return LayoutBuilder(builder: (context, constraints) {
+                      final dimension = constraints.maxWidth;
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: MonthlyGaugePainter(
+                                percentage: animatedPercentage,
+                                scaleMaximum: comparison.scaleMaximum,
+                                activeColor: animatedColor,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: dimension * .23,
+                            left: 0,
+                            right: 0,
+                            child: Column(
+                              children: [
+                                Text(
+                                  formatGaugePercentage(animatedPercentage),
+                                  style: TextStyle(
+                                    color: animatedColor,
+                                    fontSize: (dimension * .12).clamp(36, 58),
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  moneyCompact(comparison.currentEarnings),
+                                  style: TextStyle(
+                                    color: animatedColor,
+                                    fontSize: (dimension * .055).clamp(19, 28),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    });
+                  },
                 ),
               ),
             ),
-            IconButton(
-              tooltip: tr('Mes siguiente'),
-              onPressed: canGoNext ? onNextMonth : null,
-              color: color,
-              icon: const Icon(Icons.chevron_right_rounded),
+          ),
+          Transform.translate(
+            offset: const Offset(0, -4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _GaugeSummaryValue(
+                    label: tr('Ingreso actual'),
+                    value: moneyCompact(comparison.currentEarnings),
+                    color: color,
+                  ),
+                ),
+                Container(width: 1, height: 42, color: kOutline),
+                Expanded(
+                  child: _GaugeSummaryValue(
+                    label: tr('Mes anterior'),
+                    value: moneyCompact(comparison.previousEarnings),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(end: comparison.percentage),
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.easeOutCubic,
-                builder: (context, animatedPercentage, _) {
-                  final animatedColor = monthlyGaugeColor(animatedPercentage);
-                  return LayoutBuilder(builder: (context, constraints) {
-                    final dimension = constraints.maxWidth;
-                    return Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: MonthlyGaugePainter(
-                              percentage: animatedPercentage,
-                              scaleMaximum: comparison.scaleMaximum,
-                              activeColor: animatedColor,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: dimension * .34,
-                          left: 0,
-                          right: 0,
-                          child: Column(
-                            children: [
-                              Text(
-                                formatGaugePercentage(animatedPercentage),
-                                style: TextStyle(
-                                  color: animatedColor,
-                                  fontSize: (dimension * .14).clamp(38, 64),
-                                  height: 1,
-                                  fontWeight: FontWeight.w900,
-                                  shadows: const [
-                                    Shadow(
-                                        color: kCardGradientBottom,
-                                        blurRadius: 10),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                moneyCompact(comparison.currentEarnings),
-                                style: TextStyle(
-                                  color: animatedColor,
-                                  fontSize: (dimension * .075).clamp(22, 34),
-                                  fontWeight: FontWeight.w800,
-                                  shadows: const [
-                                    Shadow(
-                                        color: kCardGradientBottom,
-                                        blurRadius: 8),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          bottom: dimension * .035,
-                          child: Column(
-                            children: [
-                              Text(
-                                tr('Meta'),
-                                style: const TextStyle(
-                                    color: kMuted, fontSize: 13),
-                              ),
-                              Text(
-                                moneyCompact(comparison.previousEarnings,
-                                    includeCurrency: false),
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  });
-                },
-              ),
-            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GaugeSummaryValue extends StatelessWidget {
+  const _GaugeSummaryValue({
+    required this.label,
+    required this.value,
+    this.color = kText,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(color: kMuted, fontSize: 11)),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
           ),
         ),
       ],
@@ -808,10 +853,10 @@ class MonthlyGaugePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * .64);
-    final radius = size.width * .39;
+    final center = Offset(size.width / 2, size.height * .82);
+    final radius = min(size.width * .39, size.height * .67);
     final arcRect = Rect.fromCircle(center: center, radius: radius);
-    final strokeWidth = size.width * .075;
+    final strokeWidth = size.width * .065;
     final gradientValues = <double>[0, 25, 50, 75, 100];
     final gradientColors = <Color>[
       const Color(0xFFFF2340),
@@ -822,9 +867,7 @@ class MonthlyGaugePainter extends CustomPainter {
     ];
     if (scaleMaximum > 100) {
       gradientValues.add(scaleMaximum);
-      gradientColors.add(
-        percentage > 120 ? const Color(0xFFB832FF) : const Color(0xFF168BFF),
-      );
+      gradientColors.add(const Color(0xFFB832FF));
     }
     final arcPaint = Paint()
       ..style = PaintingStyle.stroke
@@ -848,6 +891,23 @@ class MonthlyGaugePainter extends CustomPainter {
         ..color = kMuted.withValues(alpha: .10),
     );
     canvas.drawArc(arcRect, pi, pi, false, arcPaint);
+
+    // SweepGradient vuelve al primer color justo después de su ángulo final.
+    // Pintamos los remates encima para conservar el color correcto en cada lado.
+    final capRadius = strokeWidth / 2;
+    canvas.drawCircle(
+      center + Offset(-radius, 0),
+      capRadius,
+      Paint()..color = const Color(0xFFFF2340),
+    );
+    canvas.drawCircle(
+      center + Offset(radius, 0),
+      capRadius,
+      Paint()
+        ..color = scaleMaximum > 100
+            ? const Color(0xFFB832FF)
+            : const Color(0xFF168BFF),
+    );
 
     final labelPainter = TextPainter(textDirection: ui.TextDirection.ltr);
     for (final value in const [0, 25, 50, 75, 100]) {
@@ -894,7 +954,7 @@ class MonthlyGaugePainter extends CustomPainter {
 }
 
 Color monthlyGaugeColor(double percentage) {
-  if (percentage > 120) return const Color(0xFFB832FF);
+  if (percentage > 100) return const Color(0xFFB832FF);
   if (percentage >= 100) return const Color(0xFF168BFF);
   if (percentage >= 75) return const Color(0xFF63D916);
   if (percentage >= 50) return const Color(0xFFFFD600);
@@ -924,18 +984,20 @@ class GlassCard extends StatelessWidget {
   const GlassCard({
     required this.child,
     this.margin,
+    this.padding = const EdgeInsets.all(18),
     super.key,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? margin;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: margin,
-      padding: const EdgeInsets.all(18),
+      padding: padding,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,

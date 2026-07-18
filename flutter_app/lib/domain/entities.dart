@@ -33,6 +33,8 @@ class DailyRecord {
     required this.date,
     required this.earnings,
     required this.odometer,
+    this.expense = 0,
+    this.expenseCategory = '',
     this.batteryPercent,
     this.chargeTo80v = false,
     this.note = '',
@@ -51,6 +53,8 @@ class DailyRecord {
   final DateTime date;
   final double earnings;
   final double odometer;
+  final double expense;
+  final String expenseCategory;
   final int? batteryPercent;
   final bool chargeTo80v;
   final String note;
@@ -73,6 +77,8 @@ class DailyRecord {
       date: DateTime.parse('${map['date']}'),
       earnings: _numFromMap(map, 'earnings'),
       odometer: _numFromMap(map, 'odometer'),
+      expense: _numFromMap(map, 'expense'),
+      expenseCategory: '${map['expenseCategory'] ?? ''}',
       batteryPercent: map['batteryPercent'] == null
           ? null
           : (map['batteryPercent'] as num).round(),
@@ -95,6 +101,8 @@ class DailyRecord {
         'date': DateFormat('yyyy-MM-dd').format(date),
         'earnings': earnings,
         'odometer': odometer,
+        'expense': expense,
+        'expenseCategory': expenseCategory,
         'batteryPercent': batteryPercent,
         'chargeTo80v': chargeTo80v,
         'note': note,
@@ -120,6 +128,8 @@ class DailyRecord {
       date: date,
       earnings: earnings,
       odometer: odometer,
+      expense: expense,
+      expenseCategory: expenseCategory,
       batteryPercent: batteryPercent,
       chargeTo80v: chargeTo80v,
       note: note,
@@ -242,7 +252,7 @@ class MaintenanceRecord {
 }
 
 class VehicleProfile {
-  const VehicleProfile({
+  VehicleProfile({
     required this.id,
     required this.userId,
     required this.name,
@@ -250,6 +260,10 @@ class VehicleProfile {
     required this.updatedAt,
     this.registration = '',
     this.initialOdometer = 0,
+    this.deviceId = '',
+    this.syncStatus = SyncStatus.localOnly,
+    this.deletedAt,
+    this.schemaVersion = _databaseSchemaVersion,
   });
 
   final String id;
@@ -259,6 +273,12 @@ class VehicleProfile {
   final DateTime updatedAt;
   final String registration;
   final double initialOdometer;
+  final String deviceId;
+  final SyncStatus syncStatus;
+  final DateTime? deletedAt;
+  final int schemaVersion;
+
+  bool get isDeleted => deletedAt != null;
 
   factory VehicleProfile.fromMap(Map<dynamic, dynamic> map) => VehicleProfile(
         id: '${map['id']}',
@@ -268,9 +288,14 @@ class VehicleProfile {
         updatedAt: DateTime.parse('${map['updatedAt']}'),
         registration: '${map['registration'] ?? ''}',
         initialOdometer: (map['initialOdometer'] as num?)?.toDouble() ?? 0,
+        deviceId: '${map['deviceId'] ?? ''}',
+        syncStatus: _syncStatusFromMap(map['syncStatus']),
+        deletedAt: DateTime.tryParse('${map['deletedAt'] ?? ''}'),
+        schemaVersion: (map['schemaVersion'] as num?)?.toInt() ?? 1,
       );
 
   Map<String, dynamic> toMap() => {
+        'schemaVersion': schemaVersion,
         'id': id,
         'userId': userId,
         'name': name,
@@ -278,5 +303,30 @@ class VehicleProfile {
         'updatedAt': updatedAt.toIso8601String(),
         'registration': registration,
         'initialOdometer': initialOdometer,
+        'deviceId': deviceId,
+        'syncStatus': syncStatus.name,
+        'deletedAt': deletedAt?.toIso8601String(),
       };
+
+  VehicleProfile withSyncInfo({
+    required String deviceId,
+    String? userId,
+    SyncStatus? syncStatus,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+  }) {
+    return VehicleProfile(
+      id: id,
+      userId: userId ?? this.userId,
+      name: name,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      registration: registration,
+      initialOdometer: initialOdometer,
+      deviceId: this.deviceId.isEmpty ? deviceId : this.deviceId,
+      syncStatus: syncStatus ?? this.syncStatus,
+      deletedAt: deletedAt ?? this.deletedAt,
+      schemaVersion: _databaseSchemaVersion,
+    );
+  }
 }

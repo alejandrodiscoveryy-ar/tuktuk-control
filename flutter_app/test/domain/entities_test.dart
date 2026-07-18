@@ -86,6 +86,8 @@ void main() {
       initialOdometer: 526,
       createdAt: now,
       updatedAt: now,
+      deviceId: 'device-1',
+      syncStatus: SyncStatus.pending,
     );
 
     final restored = VehicleProfile.fromMap(vehicle.toMap());
@@ -95,6 +97,46 @@ void main() {
     expect(restored.name, vehicle.name);
     expect(restored.registration, 'TT-001');
     expect(restored.initialOdometer, 526);
+    expect(restored.deviceId, 'device-1');
+    expect(restored.syncStatus, SyncStatus.pending);
+    expect(restored.isDeleted, isFalse);
+  });
+
+  test('VehicleProfile anterior conserva compatibilidad al migrar', () {
+    final restored = VehicleProfile.fromMap({
+      'id': 'vehicle-legacy',
+      'userId': 'local-owner',
+      'name': 'Mi Tuk Tuk',
+      'createdAt': '2026-07-15T00:00:00.000Z',
+      'updatedAt': '2026-07-15T00:00:00.000Z',
+    });
+
+    expect(restored.id, 'vehicle-legacy');
+    expect(restored.deviceId, isEmpty);
+    expect(restored.syncStatus, SyncStatus.localOnly);
+    expect(restored.schemaVersion, 1);
+  });
+
+  test('usuario y licencia local no exigen autenticación ni restringen',
+      () async {
+    final now = DateTime.utc(2026, 7, 15);
+    final auth = LocalAuthService(
+      AppUserProfile(
+        id: 'local-owner-device-1',
+        displayName: 'Propietario local',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    const licenses = LocalLicenseService();
+
+    expect(auth.currentUser.isLocal, isTrue);
+    expect(auth.requiresAuthentication, isFalse);
+    expect(licenses.restrictionsEnabled, isFalse);
+    expect(
+      (await licenses.currentLicense(auth.currentUser.id)).licenseStatus,
+      LicenseStatus.local,
+    );
   });
 
   test('withSyncInfo asigna propietario sin alterar datos históricos', () {
@@ -210,12 +252,24 @@ void main() {
     expect(SubscriptionAccess.free.allowsVehicleCount(1), isTrue);
     expect(SubscriptionAccess.free.allowsVehicleCount(2), isFalse);
     expect(
+      LicensePolicy.allowsVehicleCount(SubscriptionAccess.free, 2),
+      isTrue,
+      reason: 'Las restricciones comerciales todavía no están activas.',
+    );
+    expect(
       SubscriptionAccess.free.isEnabled(ProductCapability.offlineOperation),
       isTrue,
     );
     expect(
       SubscriptionAccess.free.isEnabled(ProductCapability.cloudSync),
       isFalse,
+    );
+    expect(
+      LicensePolicy.allowsCapability(
+        SubscriptionAccess.free,
+        ProductCapability.cloudSync,
+      ),
+      isTrue,
     );
   });
 }
