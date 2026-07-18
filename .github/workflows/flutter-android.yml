@@ -2,6 +2,12 @@ name: Build signed Android release
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_version_code:
+        description: "versionCode que ya debe estar definido en pubspec.yaml"
+        required: true
+        default: "2"
+        type: string
 
 permissions:
   contents: read
@@ -41,6 +47,7 @@ jobs:
         run: flutter pub get
 
       - name: Validate release metadata
+        id: metadata
         shell: bash
         run: |
           set -euo pipefail
@@ -50,8 +57,7 @@ jobs:
           FLUTTER_ROOT="$(cd "$(dirname "$(command -v flutter)")/.." && pwd)"
           FLUTTER_ANDROID_DEFAULTS="$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
 
-          test "$VERSION_NAME" = "1.0.1"
-          test "$VERSION_CODE" = "2"
+          test "$VERSION_CODE" = "${{ inputs.expected_version_code }}"
           grep -Fq 'android:label="TukTuk"' android/app/src/main/AndroidManifest.xml
           grep -Fq 'applicationId = "com.alejandrocruz.tuktukcontrol"' android/app/build.gradle.kts
           grep -Eq 'compileSdkVersion: Int = 36' "$FLUTTER_ANDROID_DEFAULTS"
@@ -66,6 +72,8 @@ jobs:
           echo "  compileSdk: 36"
           echo "  targetSdk: 36"
           echo "  minSdk: 24"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Analyze source
         run: flutter analyze
@@ -114,7 +122,7 @@ jobs:
       - name: Upload signed Android packages
         uses: actions/upload-artifact@v4
         with:
-          name: tuktuk-android-1.0.1-build-2
+          name: tuktuk-android-${{ steps.metadata.outputs.version_name }}-build-${{ steps.metadata.outputs.version_code }}
           path: |
             flutter_app/build/app/outputs/flutter-apk/app-release.apk
             flutter_app/build/app/outputs/bundle/release/app-release.aab
