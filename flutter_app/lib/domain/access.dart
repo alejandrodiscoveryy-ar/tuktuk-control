@@ -61,6 +61,25 @@ class SubscriptionAccess {
   );
 }
 
+/// Punto único para activar licencias en el futuro.
+///
+/// Mientras [restrictionsEnabled] sea falso ninguna función ni vehículo queda
+/// bloqueado por el plan. Las pantallas no conocen reglas comerciales.
+abstract final class LicensePolicy {
+  static const bool restrictionsEnabled = false;
+
+  static bool allowsCapability(
+    SubscriptionAccess access,
+    ProductCapability capability,
+  ) {
+    return !restrictionsEnabled || access.isEnabled(capability);
+  }
+
+  static bool allowsVehicleCount(SubscriptionAccess access, int count) {
+    return !restrictionsEnabled || access.allowsVehicleCount(count);
+  }
+}
+
 abstract final class AccessPolicy {
   static bool canReadVehicle({
     required AccountMembership membership,

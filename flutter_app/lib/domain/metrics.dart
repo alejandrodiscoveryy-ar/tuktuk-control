@@ -12,6 +12,8 @@ class Metrics {
       sorted.where((record) => record.odometer > 0).toList();
 
   double get totalEarnings => records.fold(0, (sum, r) => sum + r.earnings);
+  double get totalExpenses => records.fold(0, (sum, r) => sum + r.expense);
+  double get netEarnings => totalEarnings - totalExpenses;
   int get chargeEvents => records.where((record) => record.chargeTo80v).length;
   List<DailyRecord> get earningsWithoutOdometer => records
       .where((record) => record.earnings > 0 && record.odometer <= 0)
@@ -54,6 +56,11 @@ class Metrics {
 
   double get currentCycleEarnings =>
       currentCycleRecords.fold(0, (sum, r) => sum + r.earnings);
+
+  double get currentCycleExpenses =>
+      currentCycleRecords.fold(0, (sum, r) => sum + r.expense);
+
+  double get currentCycleNet => currentCycleEarnings - currentCycleExpenses;
 
   double get currentCycleDistance {
     final days = [...currentCycleRecords.where((record) => record.odometer > 0)]

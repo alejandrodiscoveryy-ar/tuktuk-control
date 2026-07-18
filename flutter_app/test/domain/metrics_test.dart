@@ -2,6 +2,28 @@ import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('La búsqueda de Revolico codifica términos personalizados', () {
+    final uri = buildRevolicoSearchUri(' batería 72V & litio ');
+
+    expect(uri.scheme, 'https');
+    expect(uri.host, 'www.revolico.com');
+    expect(uri.path, '/search');
+    expect(uri.queryParameters['q'], 'batería 72V & litio');
+    expect(uri.queryParameters['order'], 'relevance');
+    expect(uri.toString(), isNot(contains(' ')));
+  });
+
+  test('El soporte abre el número correcto de WhatsApp', () {
+    final uri = buildWhatsAppSupportUri();
+
+    expect(uri.scheme, 'https');
+    expect(uri.host, 'wa.me');
+    expect(uri.path, '/5355592873');
+    expect(uri.queryParameters['text'],
+        'Hola, necesito ayuda con TukTuk Control.');
+    expect(uri.toString(), isNot(contains(' ')));
+  });
+
   test('Metrics calcula ingresos, distancia, eficiencia y cargas', () {
     final records = [
       DailyRecord(
@@ -88,6 +110,7 @@ void main() {
     expect(monthlyGaugeColor(60).toARGB32(), 0xFFFFD600);
     expect(monthlyGaugeColor(90).toARGB32(), 0xFF63D916);
     expect(monthlyGaugeColor(100).toARGB32(), 0xFF168BFF);
+    expect(monthlyGaugeColor(101).toARGB32(), 0xFFB832FF);
     expect(monthlyGaugeColor(133).toARGB32(), 0xFFB832FF);
   });
 }
