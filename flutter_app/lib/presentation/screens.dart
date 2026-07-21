@@ -84,9 +84,11 @@ class AppBackground extends StatelessWidget {
 }
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({required this.store, super.key});
+  const OnboardingScreen(
+      {required this.store, this.previewOnly = false, super.key});
 
   final RecordStore store;
+  final bool previewOnly;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -97,6 +99,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? error;
 
   Future<void> continueDirectly() async {
+    if (widget.previewOnly) return;
     setState(() {
       saving = true;
       error = null;
@@ -113,6 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> continueWithGoogle() async {
+    if (widget.previewOnly) return;
     setState(() {
       saving = true;
       error = null;
@@ -143,27 +147,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 shrinkWrap: true,
                 padding: const EdgeInsets.all(24),
                 children: [
-                  const Center(child: AppLogoMark(size: 92)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: AspectRatio(
+                      aspectRatio: 2,
+                      child: Image.asset(
+                        'assets/branding/tuktuk_welcome.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 18),
-                  Text(
-                    tr('Bienvenido a TukTuk'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 28, fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    tr('Controla tus ingresos, gastos y mantenimiento de forma sencilla.'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: kMuted, height: 1.4),
-                  ),
-                  const SizedBox(height: 24),
                   GlassCard(
                     child: Column(
                       children: [
-                        const Icon(Icons.waving_hand_rounded,
-                            color: kTertiary, size: 34),
-                        const SizedBox(height: 12),
                         Text(
                           tr('Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.'),
                           textAlign: TextAlign.center,
@@ -202,6 +200,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  Center(
+                    child: Semantics(
+                      label: 'Vrixora Solutions',
+                      image: true,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: 190,
+                          height: 56,
+                          color: Colors.black,
+                          child: Image.asset(
+                            'assets/branding/vrixora_solutions.jpg',
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  const Text(
+                    'Soluciones inteligentes para negocios inteligentes',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: kMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: .25,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -229,8 +258,12 @@ class _AppShellState extends State<AppShell> {
             ),
           );
         }
-        if (store.needsOnboarding) {
-          return OnboardingScreen(store: store);
+        final previewWelcome = Uri.base.queryParameters['preview'] == 'welcome';
+        if (store.needsOnboarding || previewWelcome) {
+          return OnboardingScreen(
+            store: store,
+            previewOnly: previewWelcome && !store.needsOnboarding,
+          );
         }
         final isSynchronized = store.user != null &&
             store.pendingSyncCount == 0 &&
