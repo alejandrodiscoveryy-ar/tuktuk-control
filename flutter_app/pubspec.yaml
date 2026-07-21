@@ -1,7 +1,7 @@
 name: control_tuk_tuk
 description: App Flutter para controlar ganancias, odometro, ciclos y estadisticas de un Tuk Tuk.
 publish_to: "none"
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -28,3 +28,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/tuktuk_logo.png
+    - assets/branding/tuktuk_logo_transparent.png
+    - assets/branding/tuktuk_welcome.png
+    - assets/branding/vrixora_solutions.jpg

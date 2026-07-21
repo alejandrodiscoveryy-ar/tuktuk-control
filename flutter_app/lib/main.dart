@@ -276,6 +276,16 @@ String tr(String key) {
       'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.':
           'Connect Google to save the database to Google Drive and recover it after reinstalling.',
       'Configura tu primer Tuk Tuk': 'Set up your first Tuk Tuk',
+      'Bienvenido a TukTuk': 'Welcome to TukTuk',
+      'Controla tus ingresos, gastos y mantenimiento de forma sencilla.':
+          'Manage your income, expenses, and maintenance with ease.',
+      'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.':
+          'You can sign in with Google to back up your data or enter directly and use the app offline.',
+      'Continuar con Google': 'Continue with Google',
+      'Entrar directamente': 'Enter directly',
+      'No se pudo iniciar la aplicacion.': 'The app could not be started.',
+      'No se pudo iniciar con Google.': 'Could not sign in with Google.',
+      'Mi Tuk Tuk': 'My Tuk Tuk',
       'Costo opcional': 'Optional cost',
       'Cuando guardes registros, apareceran aqui.':
           'Saved records will appear here.',
@@ -414,6 +424,8 @@ String tr(String key) {
       'Mes anterior': 'Previous month',
       'Mes siguiente': 'Next month',
       'Sincronizar': 'Sync',
+      'Tu suscripción de ejemplo vence en 7 días':
+          'Your example subscription expires in 7 days',
       'Peso cubano': 'Cuban peso',
       'Dólar estadounidense': 'US dollar',
       'Euro': 'Euro',
@@ -545,6 +557,17 @@ String tr(String key) {
       'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.':
           'Conecte o Google para salvar o banco de dados no Google Drive e recuperá-lo após reinstalar.',
       'Configura tu primer Tuk Tuk': 'Configure seu primeiro Tuk Tuk',
+      'Bienvenido a TukTuk': 'Bem-vindo ao TukTuk',
+      'Controla tus ingresos, gastos y mantenimiento de forma sencilla.':
+          'Controle suas receitas, despesas e manutenção com facilidade.',
+      'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.':
+          'Você pode entrar com o Google para proteger seus dados ou entrar diretamente e usar o aplicativo offline.',
+      'Continuar con Google': 'Continuar com o Google',
+      'Entrar directamente': 'Entrar diretamente',
+      'No se pudo iniciar la aplicacion.':
+          'Não foi possível iniciar o aplicativo.',
+      'No se pudo iniciar con Google.': 'Não foi possível entrar com o Google.',
+      'Mi Tuk Tuk': 'Meu Tuk Tuk',
       'Costo opcional': 'Custo opcional',
       'Cuando guardes registros, apareceran aqui.':
           'Os registros salvos aparecerão aqui.',
@@ -683,6 +706,8 @@ String tr(String key) {
       'Mes anterior': 'Mês anterior',
       'Mes siguiente': 'Próximo mês',
       'Sincronizar': 'Sincronizar',
+      'Tu suscripción de ejemplo vence en 7 días':
+          'Sua assinatura de exemplo vence em 7 dias',
       'Peso cubano': 'Peso cubano',
       'Dólar estadounidense': 'Dólar americano',
       'Euro': 'Euro',
@@ -815,6 +840,17 @@ String tr(String key) {
       'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.':
           'Connectez Google pour enregistrer la base dans Google Drive et la récupérer après réinstallation.',
       'Configura tu primer Tuk Tuk': 'Configurez votre premier Tuk Tuk',
+      'Bienvenido a TukTuk': 'Bienvenue sur TukTuk',
+      'Controla tus ingresos, gastos y mantenimiento de forma sencilla.':
+          'Gérez facilement vos revenus, dépenses et entretiens.',
+      'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.':
+          'Vous pouvez vous connecter avec Google pour sauvegarder vos données ou entrer directement et utiliser l’application hors ligne.',
+      'Continuar con Google': 'Continuer avec Google',
+      'Entrar directamente': 'Entrer directement',
+      'No se pudo iniciar la aplicacion.':
+          'Impossible de démarrer l’application.',
+      'No se pudo iniciar con Google.': 'Connexion avec Google impossible.',
+      'Mi Tuk Tuk': 'Mon Tuk Tuk',
       'Costo opcional': 'Coût facultatif',
       'Cuando guardes registros, apareceran aqui.':
           'Les enregistrements apparaîtront ici.',
@@ -957,6 +993,8 @@ String tr(String key) {
       'Mes anterior': 'Mois précédent',
       'Mes siguiente': 'Mois suivant',
       'Sincronizar': 'Synchroniser',
+      'Tu suscripción de ejemplo vence en 7 días':
+          'Votre abonnement d’exemple expire dans 7 jours',
       'Peso cubano': 'Peso cubain',
       'Dólar estadounidense': 'Dollar américain',
       'Euro': 'Euro',

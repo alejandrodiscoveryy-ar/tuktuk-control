@@ -6,7 +6,7 @@ on:
       expected_version_code:
         description: "versionCode que ya debe estar definido en pubspec.yaml"
         required: true
-        default: "2"
+        default: "3"
         type: string
 
 permissions:
