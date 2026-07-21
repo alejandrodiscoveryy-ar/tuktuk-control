@@ -31,6 +31,7 @@ void main() {
         date: DateTime(2026, 7, 14),
         earnings: 3000,
         odometer: 100,
+        expense: 200,
       ),
       DailyRecord(
         id: 'second',
@@ -41,9 +42,22 @@ void main() {
       ),
     ];
 
-    final metrics = Metrics(records);
+    final maintenances = [
+      MaintenanceRecord(
+        id: 'maintenance',
+        dateTime: DateTime(2026, 7, 15),
+        odometer: 150,
+        type: 'General',
+        description: 'Mantenimiento de prueba',
+        cost: 1000,
+      ),
+    ];
+    final metrics = Metrics(records, maintenances);
 
     expect(metrics.totalEarnings, 8000);
+    expect(metrics.totalExpenses, 1200);
+    expect(metrics.netEarnings, 6800);
+    expect(metrics.currentCycleExpenses, 1200);
     expect(metrics.totalDistance, 50);
     expect(metrics.efficiency, 160);
     expect(metrics.latestOdometer, 150);

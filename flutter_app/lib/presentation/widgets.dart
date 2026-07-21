@@ -6,6 +6,7 @@ class MetricHero extends StatelessWidget {
     required this.value,
     required this.sublabel,
     required this.icon,
+    this.trailing,
     super.key,
   });
 
@@ -13,6 +14,7 @@ class MetricHero extends StatelessWidget {
   final String value;
   final String sublabel;
   final IconData icon;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +24,8 @@ class MetricHero extends StatelessWidget {
           Positioned(
             right: 2,
             top: 2,
-            child: Icon(icon, size: 86, color: kText.withValues(alpha: .08)),
+            child: trailing ??
+                Icon(icon, size: 86, color: kText.withValues(alpha: .08)),
           ),
           Positioned(
             right: 0,
@@ -374,6 +377,7 @@ class StatOverviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
+      height: 126,
       child: GlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

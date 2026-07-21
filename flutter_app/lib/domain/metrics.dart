@@ -1,9 +1,10 @@
 part of '../main.dart';
 
 class Metrics {
-  Metrics(this.records);
+  Metrics(this.records, [this.maintenanceRecords = const []]);
 
   final List<DailyRecord> records;
+  final List<MaintenanceRecord> maintenanceRecords;
   DateTime get today => DateTime.now();
 
   List<DailyRecord> get sorted => [...records]..sort(_compareRecordsAsc);
@@ -12,7 +13,9 @@ class Metrics {
       sorted.where((record) => record.odometer > 0).toList();
 
   double get totalEarnings => records.fold(0, (sum, r) => sum + r.earnings);
-  double get totalExpenses => records.fold(0, (sum, r) => sum + r.expense);
+  double get totalExpenses =>
+      records.fold(0.0, (sum, r) => sum + r.expense) +
+      maintenanceRecords.fold(0.0, (sum, r) => sum + (r.cost ?? 0));
   double get netEarnings => totalEarnings - totalExpenses;
   int get chargeEvents => records.where((record) => record.chargeTo80v).length;
   List<DailyRecord> get earningsWithoutOdometer => records
@@ -58,7 +61,10 @@ class Metrics {
       currentCycleRecords.fold(0, (sum, r) => sum + r.earnings);
 
   double get currentCycleExpenses =>
-      currentCycleRecords.fold(0, (sum, r) => sum + r.expense);
+      currentCycleRecords.fold(0.0, (sum, r) => sum + r.expense) +
+      maintenanceRecords
+          .where((record) => currentCycle.contains(record.dateTime))
+          .fold(0.0, (sum, record) => sum + (record.cost ?? 0));
 
   double get currentCycleNet => currentCycleEarnings - currentCycleExpenses;
 
