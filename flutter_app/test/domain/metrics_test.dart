@@ -38,7 +38,7 @@ void main() {
         date: DateTime(2026, 7, 15),
         earnings: 5000,
         odometer: 150,
-        chargeTo80v: true,
+        batteryVoltage: 80,
       ),
     ];
 

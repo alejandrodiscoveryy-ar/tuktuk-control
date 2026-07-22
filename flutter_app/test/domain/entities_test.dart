@@ -10,8 +10,7 @@ void main() {
       date: DateTime(2026, 7, 15),
       earnings: 4250,
       odometer: 4300,
-      batteryPercent: 82,
-      chargeTo80v: true,
+      batteryVoltage: 77.5,
       note: 'Prueba de integridad',
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -27,8 +26,7 @@ void main() {
     expect(restored.date, record.date);
     expect(restored.earnings, record.earnings);
     expect(restored.odometer, record.odometer);
-    expect(restored.batteryPercent, record.batteryPercent);
-    expect(restored.chargeTo80v, isTrue);
+    expect(restored.batteryVoltage, 77.5);
     expect(restored.note, record.note);
     expect(restored.createdAt, createdAt);
     expect(restored.updatedAt, updatedAt);
@@ -74,6 +72,38 @@ void main() {
     expect(restored.vehicleId, isEmpty);
     expect(restored.syncStatus, SyncStatus.localOnly);
     expect(restored.schemaVersion, 1);
+  });
+
+  test('migra batteryPercent antiguo a batteryVoltage', () {
+    final restored = DailyRecord.fromMap({
+      'id': 'legacy-percent',
+      'date': '2026-03-14',
+      'earnings': 2900,
+      'odometer': 526,
+      'batteryPercent': 76,
+      'note': 'Nota real del chofer',
+      'updatedAt': '2026-03-14T10:00:00.000Z',
+    });
+
+    expect(restored.batteryVoltage, 76);
+    expect(restored.note, 'Nota real del chofer');
+    expect(restored.toMap(), containsPair('batteryVoltage', 76));
+    expect(restored.toMap(), isNot(contains('batteryPercent')));
+    expect(restored.toMap(), isNot(contains('chargeTo80v')));
+  });
+
+  test('extrae voltaje de una nota antigua y conserva la nota real', () {
+    final restored = DailyRecord.fromMap({
+      'id': 'legacy-note-voltage',
+      'date': '2026-03-14',
+      'earnings': 2900,
+      'odometer': 526,
+      'note': 'Trabajo normal\nVoltaje: 77.5V',
+      'updatedAt': '2026-03-14T10:00:00.000Z',
+    });
+
+    expect(restored.batteryVoltage, 77.5);
+    expect(restored.note, 'Trabajo normal');
   });
 
   test('VehicleProfile conserva propietario e identidad', () {
@@ -165,13 +195,13 @@ void main() {
     expect(migrated.syncStatus, SyncStatus.pending);
   });
 
-  test('OwnershipPolicy bloquea otra cuenta y respaldos ajenos', () {
+  test('OwnershipPolicy protege cuentas y permite respaldos portables', () {
     expect(OwnershipPolicy.canClaimLocalData(null, 'owner-1'), isTrue);
     expect(OwnershipPolicy.canClaimLocalData('owner-1', 'owner-1'), isTrue);
     expect(OwnershipPolicy.canClaimLocalData('owner-1', 'owner-2'), isFalse);
     expect(OwnershipPolicy.acceptsBackup('owner-1', null), isTrue);
     expect(OwnershipPolicy.acceptsBackup('owner-1', 'owner-1'), isTrue);
-    expect(OwnershipPolicy.acceptsBackup('owner-1', 'owner-2'), isFalse);
+    expect(OwnershipPolicy.acceptsBackup('owner-1', 'owner-2'), isTrue);
   });
 
   test('los datos históricos no se cargan en una instalación nueva', () {

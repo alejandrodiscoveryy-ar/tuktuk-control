@@ -145,7 +145,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               constraints: const BoxConstraints(maxWidth: 520),
               child: ListView(
                 shrinkWrap: true,
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 18,
+                ),
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(24),
@@ -158,7 +161,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 26),
                   GlassCard(
                     child: Column(
                       children: [
@@ -200,35 +203,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 30),
                   Center(
                     child: Semantics(
                       label: 'Vrixora Solutions',
                       image: true,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          width: 190,
-                          height: 56,
-                          color: Colors.black,
-                          child: Image.asset(
-                            'assets/branding/vrixora_solutions.jpg',
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                          ),
+                      child: SizedBox(
+                        width: 230,
+                        height: 58,
+                        child: Image.asset(
+                          'assets/branding/vrixora_solutions.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 2),
                   const Text(
                     'Soluciones inteligentes para negocios inteligentes',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: kMuted,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: .25,
+                      color: Colors.white70,
+                      fontSize: 12,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: .35,
                     ),
                   ),
                 ],
@@ -715,7 +715,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late final TextEditingController odometer;
   late final TextEditingController battery;
   late final TextEditingController note;
-  late bool chargeTo80v;
   _NewRecordType recordType = _NewRecordType.earnings;
 
   @override
@@ -731,10 +730,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         TextEditingController(text: record?.expenseCategory ?? '');
     odometer = TextEditingController(
         text: record == null ? '' : trimNum(record.odometer));
-    battery =
-        TextEditingController(text: record?.batteryPercent?.toString() ?? '');
+    battery = TextEditingController(
+      text: record?.batteryVoltage == null
+          ? ''
+          : trimNum(record!.batteryVoltage!),
+    );
     note = TextEditingController(text: record?.note ?? '');
-    chargeTo80v = record?.chargeTo80v ?? false;
     if ((record?.expense ?? 0) > 0) recordType = _NewRecordType.expense;
   }
 
@@ -878,17 +879,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               controller: battery,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: tr('Batería o carga (%)'),
+                labelText: tr('Voltaje de batería'),
+                suffixText: 'V',
                 prefixIcon: const Icon(Icons.battery_charging_full_outlined),
               ),
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: chargeTo80v,
-              onChanged: (value) => setState(() => chargeTo80v = value),
-              title: Text(tr('Carga completada hasta 80 V')),
-              secondary: const Icon(Icons.ev_station_outlined),
             ),
           ],
           const SizedBox(height: 12),
@@ -935,7 +929,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final earned = isExpense ? 0.0 : _parseOptionalNumber(earnings.text) ?? 0.0;
     final spent = isExpense ? _parseOptionalNumber(expense.text) ?? 0.0 : 0.0;
     final odo = isExpense ? 0.0 : _parseOptionalNumber(odometer.text) ?? 0.0;
-    final pct = _parseOptionalNumber(battery.text)?.round();
+    final batteryVoltage = _parseOptionalNumber(battery.text);
     if (earned < 0 || spent < 0 || odo < 0) {
       toast(context, tr('Ingreso, gasto y odometro no pueden ser negativos'));
       return;
@@ -943,13 +937,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (earned == 0 &&
         spent == 0 &&
         odo == 0 &&
-        !chargeTo80v &&
+        batteryVoltage == null &&
         note.text.trim().isEmpty) {
       toast(context, tr('Agrega ingreso, gasto, odometro, carga o una nota'));
       return;
     }
-    if (pct != null && (pct < 0 || pct > 100)) {
-      toast(context, tr('La bateria debe estar entre 0 y 100'));
+    if (batteryVoltage != null && batteryVoltage < 0) {
+      toast(context, tr('El voltaje no puede ser negativo'));
       return;
     }
     final base = widget.record;
@@ -962,8 +956,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               odometer: odo,
               expense: spent,
               expenseCategory: expenseCategory.text.trim(),
-              batteryPercent: pct,
-              chargeTo80v: chargeTo80v,
+              batteryVoltage: batteryVoltage,
               note: note.text.trim(),
             )
           : DailyRecord(
@@ -973,8 +966,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               odometer: odo,
               expense: spent,
               expenseCategory: expenseCategory.text.trim(),
-              batteryPercent: pct,
-              chargeTo80v: chargeTo80v,
+              batteryVoltage: batteryVoltage,
               note: note.text.trim(),
               createdAt: base.createdAt,
               deviceId: base.deviceId,
@@ -1499,6 +1491,7 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = store.user;
+    final photoUrl = user?.userMetadata?['avatar_url']?.toString();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1508,10 +1501,9 @@ class LoginScreen extends StatelessWidget {
               CircleAvatar(
                 radius: 34,
                 backgroundColor: kPrimary.withValues(alpha: .16),
-                backgroundImage: user?.photoUrl == null
-                    ? null
-                    : NetworkImage(user!.photoUrl!),
-                child: user?.photoUrl == null
+                backgroundImage:
+                    photoUrl == null ? null : NetworkImage(photoUrl),
+                child: photoUrl == null
                     ? Icon(
                         user == null ? Icons.person_outline : Icons.person,
                         color: kPrimary,
@@ -1537,7 +1529,7 @@ class LoginScreen extends StatelessWidget {
                     Text(
                       user == null
                           ? tr('Sin cuenta Google vinculada · Guardado local')
-                          : user.email,
+                          : user.email ?? '',
                       style: TextStyle(
                         color: user == null ? kMuted : kPrimary,
                         fontWeight: FontWeight.w700,
@@ -1601,7 +1593,7 @@ class LoginScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                user == null ? tr('No conectado') : user.email,
+                user == null ? tr('No conectado') : user.email ?? '',
                 style:
                     const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
@@ -1609,13 +1601,13 @@ class LoginScreen extends StatelessWidget {
               Text(
                 user == null
                     ? tr(
-                        'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.')
+                        'Conecta Google para sincronizar tus datos de forma segura y recuperarlos al reinstalar.')
                     : tr(store.syncMessage),
                 style: const TextStyle(color: kMuted),
               ),
               const SizedBox(height: 8),
               Text(
-                '${store.pendingSyncCount} ${tr('cambios locales preparados para futura sincronizacion')}',
+                '${store.pendingSyncCount} ${tr('cambios locales pendientes de sincronizacion')}',
                 style: const TextStyle(color: kMuted, fontSize: 12),
               ),
               if (store.lastSyncAt != null) ...[

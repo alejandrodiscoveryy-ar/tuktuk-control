@@ -2,23 +2,34 @@ part of '../main.dart';
 
 class RecordStore extends ChangeNotifier {
   RecordStore() {
+    _supabaseGateway = SupabaseSyncGateway(
+      client: _supabase,
+      payloadFor: _payloadForOperation,
+    );
+    _syncCoordinator = SyncCoordinator(
+      queue: _syncQueue,
+      gateway: _supabaseGateway,
+    );
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
+      if (initialized) unawaited(_handleAuthState(state.session?.user));
+    });
     _load();
     unawaited(_initialize());
   }
 
-  late final GoogleSignIn? _googleSignIn = kIsWeb && _googleWebClientId.isEmpty
-      ? null
-      : GoogleSignIn(
-          scopes: [drive.DriveApi.driveAppdataScope],
-          clientId: _googleWebClientId.isEmpty ? null : _googleWebClientId,
-        );
   final Box _box = Hive.box(_recordsBox);
   final Box _maintenanceBox = Hive.box(_maintenanceRecordsBox);
   final Box _meta = Hive.box(_metaBox);
   final SyncQueueStore _syncQueue = SyncQueueStore();
+  final SupabaseClient _supabase = Supabase.instance.client;
+  late final SupabaseSyncGateway _supabaseGateway;
+  late final SyncCoordinator _syncCoordinator;
+  StreamSubscription<AuthState>? _authSubscription;
+  RealtimeChannel? _realtimeChannel;
+  Timer? _automaticSyncTimer;
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
-  GoogleSignInAccount? user;
+  User? user;
   bool initialized = false;
   bool syncing = false;
   String syncMessage = 'Base local pendiente de respaldo';
@@ -120,7 +131,8 @@ class RecordStore extends ChangeNotifier {
   String get profileDisplayName {
     final custom = _meta.get('profileDisplayName:$activeUserId');
     if (custom is String && custom.trim().isNotEmpty) return custom.trim();
-    final googleName = user?.displayName;
+    final googleName =
+        user?.userMetadata?['full_name'] ?? user?.userMetadata?['name'];
     if (googleName != null && googleName.trim().isNotEmpty) return googleName;
     final email = user?.email;
     return email == null ? 'Usuario invitado' : email.split('@').first;
@@ -134,7 +146,9 @@ class RecordStore extends ChangeNotifier {
     final clean = value.trim();
     if (clean.isEmpty) return;
     await _meta.put('profileDisplayName:$activeUserId', clean);
+    await _enqueueSettingsSync();
     notifyListeners();
+    unawaitedSync();
   }
 
   Future<void> savePreferences({
@@ -147,7 +161,20 @@ class RecordStore extends ChangeNotifier {
       'preferredLanguage': language,
       'preferredTheme': theme,
     });
+    await _enqueueSettingsSync();
     notifyListeners();
+    unawaitedSync();
+  }
+
+  Future<void> _enqueueSettingsSync() async {
+    await _meta.put('settingsUpdatedAt', DateTime.now().toIso8601String());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.settings,
+      entityId: 'app-settings-$activeVehicleId',
+      action: SyncAction.upsert,
+      userId: activeUserId,
+      vehicleId: activeVehicleId,
+    );
   }
 
   String exportBackupJson() => const JsonEncoder.withIndent('  ').convert({
@@ -175,7 +202,8 @@ class RecordStore extends ChangeNotifier {
       });
 
   String exportBackupCsv() {
-    const header = 'fecha,ingreso,gasto,categoria_gasto,odometro,carga80v,nota';
+    const header =
+        'fecha,ingreso,gasto,categoria_gasto,odometro,batteryVoltage,nota';
     String cell(Object? value) =>
         '"${'$value'.replaceAll('"', '""').replaceAll('\n', ' ')}"';
     final rows = records.map((record) => [
@@ -184,7 +212,7 @@ class RecordStore extends ChangeNotifier {
           record.expense,
           record.expenseCategory,
           record.odometer,
-          record.chargeTo80v ? 'si' : 'no',
+          record.batteryVoltage ?? '',
           record.note,
         ].map(cell).join(','));
     return [header, ...rows].join('\r\n');
@@ -193,7 +221,7 @@ class RecordStore extends ChangeNotifier {
   Future<void> restoreBackupJson(String source) async {
     final decoded = jsonDecode(source);
     if (decoded is! Map) throw const FormatException('Respaldo no válido');
-    await _mergeRemote(Map<String, dynamic>.from(decoded));
+    await _replaceWithPortableBackup(Map<String, dynamic>.from(decoded));
     _load();
   }
 
@@ -440,7 +468,15 @@ class RecordStore extends ChangeNotifier {
       }
     }
     for (final record in _allDailyRecords) {
+      final raw = _box.get(record.id);
+      final hasLegacyVoltage = raw is Map &&
+          (raw.containsKey('batteryPercent') ||
+              raw.containsKey('chargeTo80v') ||
+              (!raw.containsKey('batteryVoltage') &&
+                  RegExp(r'\bVoltaje\s*:', caseSensitive: false)
+                      .hasMatch('${raw['note'] ?? ''}')));
       if (record.schemaVersion < _databaseSchemaVersion ||
+          hasLegacyVoltage ||
           record.deviceId.isEmpty ||
           record.userId.isEmpty ||
           record.vehicleId.isEmpty) {
@@ -487,10 +523,8 @@ class RecordStore extends ChangeNotifier {
         date: item.date,
         earnings: item.earnings,
         odometer: item.odometer,
-        chargeTo80v: item.chargeTo80v,
-        note: item.earnings > 0
-            ? 'Carga inicial de ganancias'
-            : 'Carga hasta 80 V',
+        batteryVoltage: item.batteryVoltage,
+        note: item.earnings > 0 ? 'Carga inicial de ganancias' : '',
       ).withSyncInfo(
         deviceId: deviceId,
         userId: localOwnerId,
@@ -614,106 +648,54 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> setMaintenanceInterval(double intervalKm) async {
     await _meta.put('maintenanceIntervalKm', intervalKm);
-    await _syncQueue.enqueue(
-      entityType: SyncEntityType.settings,
-      entityId: 'maintenance-settings',
-      action: SyncAction.upsert,
-      userId: activeUserId,
-      vehicleId: activeVehicleId,
-    );
+    await _enqueueSettingsSync();
     _load();
     unawaitedSync();
   }
 
   Future<void> signIn() async {
-    final google = _googleSignIn;
-    if (google == null) {
-      syncMessage = 'Google no está configurado para la web';
-      notifyListeners();
-      return;
-    }
-    user = await google.signInSilently() ?? await google.signIn();
+    syncMessage = 'Abriendo acceso seguro con Google...';
     notifyListeners();
-    if (user != null) {
-      try {
-        await _claimLocalDataForSignedInUser();
-        await restoreThenSync();
-      } on StateError {
-        await google.signOut();
-        user = null;
-        syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
-        notifyListeners();
-      }
-    }
+    await _supabase.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kIsWeb ? Uri.base.origin : _supabaseMobileRedirect,
+      authScreenLaunchMode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    );
   }
 
   Future<void> restoreGoogleSession() async {
-    final google = _googleSignIn;
-    if (google == null) {
-      syncMessage = 'Entra con Google para respaldar en Drive';
-      notifyListeners();
-      return;
-    }
-    user = await google.signInSilently();
-    if (user == null) {
-      syncMessage = 'Entra con Google para respaldar en Drive';
-      notifyListeners();
-      return;
-    }
-    notifyListeners();
-    try {
-      await _claimLocalDataForSignedInUser();
-      await restoreThenSync();
-    } on StateError {
-      await google.signOut();
-      user = null;
-      syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
-      notifyListeners();
-    }
+    await _handleAuthState(_supabase.auth.currentUser);
   }
 
   Future<void> signOut() async {
-    await _googleSignIn?.signOut();
+    _stopAutomaticSync();
+    await _supabase.auth.signOut();
     user = null;
     syncMessage = 'Sesion cerrada. La base local sigue en este dispositivo';
     notifyListeners();
   }
 
   Future<void> restoreThenSync() async {
-    await _withSync(() async {
-      final api = await _driveApi();
-      if (api == null) return;
-
-      final remote = await _readRemote(api);
-      if (remote != null) {
-        final changed = await _mergeRemote(remote);
-        if (changed) syncMessage = 'Base recuperada desde Google Drive';
-      }
-      await _claimLocalDataForSignedInUser();
-      if (activeVehicle == null) {
-        syncMessage = 'Configura tu primer vehiculo para comenzar';
-        return;
-      }
-      await _upload(api);
-      syncMessage = 'Base respaldada en Google Drive';
-    });
+    await syncNow();
   }
 
   Future<void> syncNow() async {
     await _withSync(() async {
-      final api = await _driveApi();
-      if (api == null) return;
+      if (user == null) return;
       if (activeVehicle == null) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
         return;
       }
-      await _upload(api);
-      syncMessage = 'Base respaldada en Google Drive';
+      await _synchronizeWithSupabase();
+      syncMessage = pendingSyncCount == 0
+          ? 'Datos sincronizados de forma segura'
+          : 'Cambios guardados localmente, pendientes de conexion';
     });
   }
 
   void unawaitedSync() {
-    if (user != null) {
+    if (user != null && !syncing) {
       syncNow();
     }
   }
@@ -726,210 +708,528 @@ class RecordStore extends ChangeNotifier {
       await action();
       await _meta.put('lastSyncAt', DateTime.now().toIso8601String());
     } catch (_) {
-      syncMessage = 'No se pudo sincronizar';
+      syncMessage = 'Sin conexion. Los cambios permanecen guardados';
     } finally {
       syncing = false;
       notifyListeners();
     }
   }
 
-  Future<drive.DriveApi?> _driveApi() async {
-    final google = _googleSignIn;
-    if (google == null) return null;
-    final client = await google.authenticatedClient();
-    return client == null ? null : drive.DriveApi(client);
+  Future<void> _handleAuthState(User? authenticatedUser) async {
+    if (authenticatedUser == null) {
+      user = null;
+      _stopAutomaticSync();
+      if (initialized) {
+        syncMessage = 'Entra con Google para activar la sincronizacion';
+        notifyListeners();
+      }
+      return;
+    }
+    user = authenticatedUser;
+    notifyListeners();
+    try {
+      await _claimLocalDataForSignedInUser();
+      _startAutomaticSync();
+      await syncNow();
+    } on StateError {
+      _stopAutomaticSync();
+      await _supabase.auth.signOut();
+      user = null;
+      syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
+      notifyListeners();
+    }
   }
 
-  Future<Map<String, dynamic>?> _readRemote(drive.DriveApi api) async {
-    final files = await api.files.list(
-      spaces: 'appDataFolder',
-      q: "name='$_syncFileName' and trashed=false",
-      $fields: 'files(id, name, modifiedTime)',
+  void _startAutomaticSync() {
+    _stopAutomaticSync();
+    final currentUser = user;
+    if (currentUser == null) return;
+    _realtimeChannel = _supabase
+        .channel('sync:${currentUser.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: SupabaseSyncGateway.tableName,
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: currentUser.id,
+          ),
+          callback: (_) => unawaitedSync(),
+        )
+        .subscribe();
+    _automaticSyncTimer = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => unawaitedSync(),
     );
-    if (files.files == null || files.files!.isEmpty) return null;
-    final id = files.files!.first.id;
-    if (id == null) return null;
-    final media = await api.files.get(
-      id,
-      downloadOptions: drive.DownloadOptions.fullMedia,
-    ) as drive.Media;
-    final bytes = <int>[];
-    await for (final chunk in media.stream) {
-      bytes.addAll(chunk);
-    }
-    return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 
-  Future<void> _upload(drive.DriveApi api) async {
-    final payload = utf8.encode(jsonEncode({
-      'schemaVersion': _databaseSchemaVersion,
-      'app': 'TukTuk Control',
-      'kind': 'database-backup',
-      'backupId':
-          'backup-$activeUserId-${DateTime.now().microsecondsSinceEpoch}',
-      'userId': activeUserId,
-      'ownerUserId': activeUserId,
-      'vehicleId': activeVehicleId,
-      'vehicle': activeVehicle?.toMap(),
-      'vehicles': vehicles.map((vehicle) => vehicle.toMap()).toList(),
-      'deviceId': deviceId,
-      'createdAt': DateTime.now().toIso8601String(),
-      'updatedAt': DateTime.now().toIso8601String(),
-      'settings': {
-        'maintenanceIntervalKm': maintenanceIntervalKm,
-        'seedVersion': _meta.get('seedVersion'),
-      },
-      'records': _allDailyRecords
-          .where((record) => record.userId == activeUserId)
-          .map((record) => record.toMap())
-          .toList(),
-      'maintenanceRecords': _allMaintenanceRecords
-          .where((record) => record.userId == activeUserId)
-          .map((record) => record.toMap())
-          .toList(),
-    }));
-    final media = drive.Media(Stream.value(payload), payload.length);
-    final existing = await api.files.list(
-      spaces: 'appDataFolder',
-      q: "name='$_syncFileName' and trashed=false",
-      $fields: 'files(id)',
+  void _stopAutomaticSync() {
+    _automaticSyncTimer?.cancel();
+    _automaticSyncTimer = null;
+    final channel = _realtimeChannel;
+    _realtimeChannel = null;
+    if (channel != null) unawaited(_supabase.removeChannel(channel));
+  }
+
+  Map<String, dynamic>? _payloadForOperation(SyncOperation operation) {
+    switch (operation.entityType) {
+      case SyncEntityType.dailyRecord:
+        final raw = _box.get(operation.entityId);
+        return raw is Map ? Map<String, dynamic>.from(raw) : null;
+      case SyncEntityType.maintenance:
+        final raw = _maintenanceBox.get(operation.entityId);
+        return raw is Map ? Map<String, dynamic>.from(raw) : null;
+      case SyncEntityType.vehicle:
+        final raw = _meta.get('vehicle:${operation.entityId}');
+        return raw is Map ? Map<String, dynamic>.from(raw) : null;
+      case SyncEntityType.settings:
+        final settingsUpdatedAt =
+            DateTime.tryParse('${_meta.get('settingsUpdatedAt')}') ??
+                operation.updatedAt;
+        return {
+          'id': operation.entityId,
+          'userId': operation.userId,
+          'vehicleId': operation.vehicleId,
+          'deviceId': deviceId,
+          'maintenanceIntervalKm': maintenanceIntervalKm,
+          'preferredCurrency': preferredCurrency,
+          'preferredLanguage': preferredLanguage,
+          'preferredTheme': preferredTheme,
+          'profileDisplayName': profileDisplayName,
+          'createdAt': operation.createdAt.toIso8601String(),
+          'updatedAt': settingsUpdatedAt.toIso8601String(),
+          'deletedAt': null,
+        };
+    }
+  }
+
+  Future<void> _synchronizeWithSupabase() async {
+    final currentUser = user;
+    if (currentUser == null) return;
+    await _ensureRemoteProfile();
+    final cursorKey = 'supabaseCursor:${currentUser.id}';
+    final cursor = _meta.get(cursorKey)?.toString();
+    final remote = await _supabaseGateway.pull(
+      userId: currentUser.id,
+      cursor: cursor,
     );
-    if (existing.files != null && existing.files!.isNotEmpty) {
-      await api.files.update(
-        drive.File()..name = _syncFileName,
-        existing.files!.first.id!,
-        uploadMedia: media,
-      );
-    } else {
-      await api.files.create(
-        drive.File()
-          ..name = _syncFileName
-          ..parents = ['appDataFolder'],
-        uploadMedia: media,
-      );
+    await _applyRemoteChanges(remote.changes);
+    if (remote.nextCursor != null) {
+      await _meta.put(cursorKey, remote.nextCursor);
+    }
+
+    final pendingBefore = _syncQueue.pendingForUser(
+      currentUser.id,
+      limit: 100000,
+    );
+    await _syncCoordinator.pushPending(userId: currentUser.id, batchSize: 500);
+    final pendingAfter = _syncQueue
+        .pendingForUser(currentUser.id, limit: 100000)
+        .map((operation) => operation.id)
+        .toSet();
+    for (final operation in pendingBefore) {
+      if (!pendingAfter.contains(operation.id)) {
+        await _markEntitySynced(operation);
+      }
+    }
+    _load();
+  }
+
+  Future<void> _ensureRemoteProfile() async {
+    final currentUser = user;
+    if (currentUser == null) return;
+    final metadata = currentUser.userMetadata ?? const <String, dynamic>{};
+    await _supabase.from('profiles').upsert({
+      'id': currentUser.id,
+      'email': currentUser.email,
+      'display_name': metadata['full_name'] ??
+          metadata['name'] ??
+          currentUser.email?.split('@').first,
+      'avatar_url': metadata['avatar_url'] ?? metadata['picture'],
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'id');
+  }
+
+  Future<void> _applyRemoteChanges(List<RemoteChange> changes) async {
+    final currentUser = user;
+    if (currentUser == null) return;
+    for (final change in changes) {
+      if (change.userId != currentUser.id) continue;
+      final operationId = '${change.entityType.name}:${change.entityId}';
+      switch (change.entityType) {
+        case SyncEntityType.dailyRecord:
+          final remote = DailyRecord.fromMap(change.payload);
+          final raw = _box.get(change.entityId);
+          final local = raw is Map ? DailyRecord.fromMap(raw) : null;
+          if (_remoteWins(
+              local?.updatedAt, local?.deviceId, local?.deletedAt, change)) {
+            await _box.put(
+              remote.id,
+              remote
+                  .withSyncInfo(
+                    deviceId: change.deviceId,
+                    userId: change.userId,
+                    vehicleId: change.vehicleId,
+                    syncStatus: SyncStatus.synced,
+                    updatedAt: change.updatedAt,
+                    deletedAt: change.deletedAt,
+                  )
+                  .toMap(),
+            );
+            await _syncQueue.complete([operationId]);
+          }
+          break;
+        case SyncEntityType.maintenance:
+          final remote = MaintenanceRecord.fromMap(change.payload);
+          final raw = _maintenanceBox.get(change.entityId);
+          final local = raw is Map ? MaintenanceRecord.fromMap(raw) : null;
+          if (_remoteWins(
+              local?.updatedAt, local?.deviceId, local?.deletedAt, change)) {
+            await _maintenanceBox.put(
+              remote.id,
+              remote
+                  .withSyncInfo(
+                    deviceId: change.deviceId,
+                    userId: change.userId,
+                    vehicleId: change.vehicleId,
+                    syncStatus: SyncStatus.synced,
+                    updatedAt: change.updatedAt,
+                    deletedAt: change.deletedAt,
+                  )
+                  .toMap(),
+            );
+            await _syncQueue.complete([operationId]);
+          }
+          break;
+        case SyncEntityType.vehicle:
+          final remote = VehicleProfile.fromMap(change.payload);
+          final raw = _meta.get('vehicle:${change.entityId}');
+          final local = raw is Map ? VehicleProfile.fromMap(raw) : null;
+          if (_remoteWins(
+              local?.updatedAt, local?.deviceId, local?.deletedAt, change)) {
+            await _meta.put(
+              'vehicle:${remote.id}',
+              remote
+                  .withSyncInfo(
+                    deviceId: change.deviceId,
+                    userId: change.userId,
+                    syncStatus: SyncStatus.synced,
+                    updatedAt: change.updatedAt,
+                    deletedAt: change.deletedAt,
+                  )
+                  .toMap(),
+            );
+            await _meta.put(
+              'activeVehicleId:${change.userId}',
+              change.vehicleId,
+            );
+            await _syncQueue.complete([operationId]);
+          }
+          break;
+        case SyncEntityType.settings:
+          final payload = change.payload;
+          final localUpdatedAt =
+              DateTime.tryParse('${_meta.get('settingsUpdatedAt')}');
+          if (!_remoteWins(localUpdatedAt, deviceId, null, change)) break;
+          await _meta.putAll({
+            'maintenanceIntervalKm':
+                (payload['maintenanceIntervalKm'] as num?)?.toDouble() ??
+                    maintenanceIntervalKm,
+            'preferredCurrency':
+                '${payload['preferredCurrency'] ?? preferredCurrency}',
+            'preferredLanguage':
+                '${payload['preferredLanguage'] ?? preferredLanguage}',
+            'preferredTheme': '${payload['preferredTheme'] ?? preferredTheme}',
+            'profileDisplayName:${change.userId}':
+                '${payload['profileDisplayName'] ?? profileDisplayName}',
+            'settingsUpdatedAt': change.updatedAt.toIso8601String(),
+          });
+          await _syncQueue.complete([operationId]);
+          break;
+      }
+    }
+    _load();
+  }
+
+  bool _remoteWins(
+    DateTime? localUpdatedAt,
+    String? localDeviceId,
+    DateTime? localDeletedAt,
+    RemoteChange remote,
+  ) {
+    if (localUpdatedAt == null) return true;
+    return ConflictResolver.resolve(
+          local: ConflictCandidate(
+            updatedAt: localUpdatedAt,
+            deviceId: localDeviceId ?? '',
+            deletedAt: localDeletedAt,
+          ),
+          remote: ConflictCandidate(
+            updatedAt: remote.updatedAt,
+            deviceId: remote.deviceId,
+            deletedAt: remote.deletedAt,
+          ),
+        ) ==
+        ConflictWinner.remote;
+  }
+
+  Future<void> _markEntitySynced(SyncOperation operation) async {
+    switch (operation.entityType) {
+      case SyncEntityType.dailyRecord:
+        final raw = _box.get(operation.entityId);
+        if (raw is Map) {
+          final record = DailyRecord.fromMap(raw);
+          await _box.put(
+            record.id,
+            record
+                .withSyncInfo(
+                  deviceId: deviceId,
+                  syncStatus: SyncStatus.synced,
+                )
+                .toMap(),
+          );
+        }
+        break;
+      case SyncEntityType.maintenance:
+        final raw = _maintenanceBox.get(operation.entityId);
+        if (raw is Map) {
+          final record = MaintenanceRecord.fromMap(raw);
+          await _maintenanceBox.put(
+            record.id,
+            record
+                .withSyncInfo(
+                  deviceId: deviceId,
+                  syncStatus: SyncStatus.synced,
+                )
+                .toMap(),
+          );
+        }
+        break;
+      case SyncEntityType.vehicle:
+        final raw = _meta.get('vehicle:${operation.entityId}');
+        if (raw is Map) {
+          final vehicle = VehicleProfile.fromMap(raw);
+          await _meta.put(
+            'vehicle:${vehicle.id}',
+            vehicle
+                .withSyncInfo(
+                  deviceId: deviceId,
+                  syncStatus: SyncStatus.synced,
+                )
+                .toMap(),
+          );
+        }
+        break;
+      case SyncEntityType.settings:
+        break;
     }
   }
 
-  Future<bool> _mergeRemote(Map<String, dynamic> remote) async {
-    final remoteOwner = '${remote['userId'] ?? remote['ownerUserId'] ?? ''}';
-    if (!OwnershipPolicy.acceptsBackup(activeUserId, remoteOwner)) {
-      throw StateError('El respaldo pertenece a otro usuario.');
+  _PortableBackup _preparePortableBackup(Map<String, dynamic> remote) {
+    final rawRecords = remote['records'];
+    if (rawRecords is! List) {
+      throw const FormatException('El respaldo no contiene registros válidos.');
     }
-    var changed = false;
-    final remoteVehicles = <VehicleProfile>[
+    final ownerId = activeUserId;
+    final currentDeviceId = deviceId;
+    final targetVehicleId = activeVehicle?.id ?? 'vehicle-$ownerId-primary';
+    final now = DateTime.now();
+    final rawVehicles = <Map>[
       if (remote['vehicles'] is List)
-        ...(remote['vehicles'] as List)
-            .map((raw) => VehicleProfile.fromMap(raw as Map)),
+        ...(remote['vehicles'] as List).map((raw) {
+          if (raw is! Map) throw const FormatException('Vehículo no válido.');
+          return raw;
+        }),
       if (remote['vehicles'] is! List && remote['vehicle'] is Map)
-        VehicleProfile.fromMap(remote['vehicle'] as Map),
+        remote['vehicle'] as Map,
     ];
-    for (final remoteVehicle in remoteVehicles) {
-      if (remoteVehicle.userId != activeUserId) {
-        throw StateError('El vehículo del respaldo pertenece a otro usuario.');
+    final sourceVehicle =
+        rawVehicles.isEmpty ? null : VehicleProfile.fromMap(rawVehicles.first);
+    final vehicle = VehicleProfile(
+      id: targetVehicleId,
+      userId: ownerId,
+      name: sourceVehicle?.name ?? activeVehicle?.name ?? 'Mi Tuk Tuk',
+      registration:
+          sourceVehicle?.registration ?? activeVehicle?.registration ?? '',
+      initialOdometer:
+          sourceVehicle?.initialOdometer ?? activeVehicle?.initialOdometer ?? 0,
+      createdAt: sourceVehicle?.createdAt ?? activeVehicle?.createdAt ?? now,
+      updatedAt: sourceVehicle?.updatedAt ?? now,
+      deviceId: currentDeviceId,
+      syncStatus: SyncStatus.pending,
+      deletedAt: sourceVehicle?.deletedAt,
+    );
+    final records = rawRecords.map((raw) {
+      if (raw is! Map) throw const FormatException('Registro no válido.');
+      final record = DailyRecord.fromMap(raw);
+      if (record.id.isEmpty || record.id == 'null') {
+        throw const FormatException('Registro sin identificador.');
       }
-      final rawLocal = _meta.get('vehicle:${remoteVehicle.id}');
-      final localVehicle =
-          rawLocal is Map ? VehicleProfile.fromMap(rawLocal) : null;
-      if (localVehicle == null ||
-          remoteVehicle.updatedAt.isAfter(localVehicle.updatedAt)) {
-        await _meta.put('vehicle:${remoteVehicle.id}', remoteVehicle.toMap());
-        await _syncQueue.enqueue(
-          entityType: SyncEntityType.vehicle,
-          entityId: remoteVehicle.id,
-          action: SyncAction.upsert,
-          userId: remoteVehicle.userId,
-          vehicleId: remoteVehicle.id,
-        );
-        changed = true;
-      }
-    }
-    if (activeVehicle == null && remoteVehicles.isNotEmpty) {
-      await _meta.put(
-        'activeVehicleId:$activeUserId',
-        remoteVehicles.first.id,
+      return _adaptDailyRecord(
+        record,
+        userId: ownerId,
+        vehicleId: targetVehicleId,
+        deviceId: currentDeviceId,
       );
-      changed = true;
+    }).toList();
+    final rawMaintenance = remote['maintenanceRecords'];
+    if (rawMaintenance != null && rawMaintenance is! List) {
+      throw const FormatException('Mantenimientos no válidos.');
     }
-    final remoteRecords = (remote['records'] as List? ?? [])
-        .map((raw) => DailyRecord.fromMap(raw as Map))
-        .toList();
-    final localById = {
-      for (final record in _allDailyRecords) record.id: record
-    };
-    for (final remoteRecord in remoteRecords) {
-      if (remoteRecord.userId.isNotEmpty &&
-          remoteRecord.userId != activeUserId) {
-        throw StateError('El respaldo contiene datos de otro usuario.');
+    final maintenanceRecords = (rawMaintenance as List? ?? []).map((raw) {
+      if (raw is! Map) throw const FormatException('Mantenimiento no válido.');
+      final record = MaintenanceRecord.fromMap(raw);
+      if (record.id.isEmpty || record.id == 'null') {
+        throw const FormatException('Mantenimiento sin identificador.');
       }
-      final localRecord = localById[remoteRecord.id];
-      if (localRecord == null ||
-          remoteRecord.updatedAt.isAfter(localRecord.updatedAt)) {
-        await _box.put(remoteRecord.id, remoteRecord.toMap());
-        await _syncQueue.enqueue(
-          entityType: SyncEntityType.dailyRecord,
-          entityId: remoteRecord.id,
-          action:
-              remoteRecord.isDeleted ? SyncAction.delete : SyncAction.upsert,
-          userId:
-              remoteRecord.userId.isEmpty ? localOwnerId : remoteRecord.userId,
-          vehicleId: remoteRecord.vehicleId.isEmpty
-              ? activeVehicleId
-              : remoteRecord.vehicleId,
-        );
-        changed = true;
-      }
-    }
+      return _adaptMaintenanceRecord(
+        record,
+        userId: ownerId,
+        vehicleId: targetVehicleId,
+        deviceId: currentDeviceId,
+      );
+    }).toList();
     final settings =
         remote['settings'] is Map ? remote['settings'] as Map : remote;
-    if (settings['maintenanceIntervalKm'] != null) {
-      final remoteInterval =
-          (settings['maintenanceIntervalKm'] as num).toDouble();
-      if (remoteInterval != maintenanceIntervalKm) changed = true;
-      await _meta.put(
-        'maintenanceIntervalKm',
-        remoteInterval,
-      );
-    }
-    if (remote['maintenanceRecords'] is List) {
-      final remoteMaintenance = (remote['maintenanceRecords'] as List)
-          .map((raw) => MaintenanceRecord.fromMap(raw as Map))
-          .toList();
-      final localById = {
-        for (final record in _allMaintenanceRecords) record.id: record
-      };
-      for (final remoteRecord in remoteMaintenance) {
-        if (remoteRecord.userId.isNotEmpty &&
-            remoteRecord.userId != activeUserId) {
-          throw StateError('El respaldo contiene datos de otro usuario.');
-        }
-        final localRecord = localById[remoteRecord.id];
-        if (localRecord == null ||
-            remoteRecord.updatedAt.isAfter(localRecord.updatedAt)) {
-          await _maintenanceBox.put(remoteRecord.id, remoteRecord.toMap());
-          await _syncQueue.enqueue(
-            entityType: SyncEntityType.maintenance,
-            entityId: remoteRecord.id,
-            action:
-                remoteRecord.isDeleted ? SyncAction.delete : SyncAction.upsert,
-            userId: remoteRecord.userId.isEmpty
-                ? localOwnerId
-                : remoteRecord.userId,
-            vehicleId: remoteRecord.vehicleId.isEmpty
-                ? activeVehicleId
-                : remoteRecord.vehicleId,
-          );
-          changed = true;
+    final interval = settings['maintenanceIntervalKm'] == null
+        ? maintenanceIntervalKm
+        : (settings['maintenanceIntervalKm'] as num).toDouble();
+    return _PortableBackup(
+      vehicle: vehicle,
+      records: records,
+      maintenanceRecords: maintenanceRecords,
+      maintenanceIntervalKm: interval,
+    );
+  }
+
+  Future<void> _replaceWithPortableBackup(Map<String, dynamic> remote) async {
+    final backup = _preparePortableBackup(remote);
+    final recordsSnapshot = Map<dynamic, dynamic>.from(_box.toMap());
+    final maintenanceSnapshot =
+        Map<dynamic, dynamic>.from(_maintenanceBox.toMap());
+    final metaSnapshot = Map<dynamic, dynamic>.from(_meta.toMap());
+    final queueBox = Hive.box(_syncQueueBox);
+    final queueSnapshot = Map<dynamic, dynamic>.from(queueBox.toMap());
+    try {
+      await _box.clear();
+      await _maintenanceBox.clear();
+      await queueBox.clear();
+      for (final key in _meta.keys.toList()) {
+        if (key is String &&
+            (key.startsWith('vehicle:') ||
+                key.startsWith('activeVehicleId:'))) {
+          await _meta.delete(key);
         }
       }
+      await _meta.put('activeVehicleId:$activeUserId', backup.vehicle.id);
+      await _meta.put('vehicle:${backup.vehicle.id}', backup.vehicle.toMap());
+      await _meta.put('maintenanceIntervalKm', backup.maintenanceIntervalKm);
+      await _meta.put('databaseSchemaVersion', _databaseSchemaVersion);
+      for (final record in backup.records) {
+        await _box.put(record.id, record.toMap());
+      }
+      for (final record in backup.maintenanceRecords) {
+        await _maintenanceBox.put(record.id, record.toMap());
+      }
+      await _seedSyncQueueIfNeededAfterRestore(backup);
+    } catch (_) {
+      await _box.clear();
+      await _box.putAll(recordsSnapshot);
+      await _maintenanceBox.clear();
+      await _maintenanceBox.putAll(maintenanceSnapshot);
+      await _meta.clear();
+      await _meta.putAll(metaSnapshot);
+      await queueBox.clear();
+      await queueBox.putAll(queueSnapshot);
+      _load();
+      rethrow;
     }
-    if (changed) _load();
-    return changed;
+  }
+
+  Future<void> _seedSyncQueueIfNeededAfterRestore(
+      _PortableBackup backup) async {
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.vehicle,
+      entityId: backup.vehicle.id,
+      action: SyncAction.upsert,
+      userId: activeUserId,
+      vehicleId: backup.vehicle.id,
+    );
+    for (final record in backup.records) {
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.dailyRecord,
+        entityId: record.id,
+        action: record.isDeleted ? SyncAction.delete : SyncAction.upsert,
+        userId: activeUserId,
+        vehicleId: backup.vehicle.id,
+      );
+    }
+    for (final record in backup.maintenanceRecords) {
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.maintenance,
+        entityId: record.id,
+        action: record.isDeleted ? SyncAction.delete : SyncAction.upsert,
+        userId: activeUserId,
+        vehicleId: backup.vehicle.id,
+      );
+    }
+  }
+
+  DailyRecord _adaptDailyRecord(
+    DailyRecord record, {
+    required String userId,
+    required String vehicleId,
+    required String deviceId,
+  }) {
+    return DailyRecord(
+      id: record.id,
+      date: record.date,
+      earnings: record.earnings,
+      odometer: record.odometer,
+      expense: record.expense,
+      expenseCategory: record.expenseCategory,
+      batteryVoltage: record.batteryVoltage,
+      note: record.note,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      deletedAt: record.deletedAt,
+      deviceId: deviceId,
+      userId: userId,
+      vehicleId: vehicleId,
+      syncStatus: SyncStatus.pending,
+    );
+  }
+
+  MaintenanceRecord _adaptMaintenanceRecord(
+    MaintenanceRecord record, {
+    required String userId,
+    required String vehicleId,
+    required String deviceId,
+  }) {
+    return MaintenanceRecord(
+      id: record.id,
+      dateTime: record.dateTime,
+      odometer: record.odometer,
+      type: record.type,
+      description: record.description,
+      cost: record.cost,
+      notes: record.notes,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      deletedAt: record.deletedAt,
+      deviceId: deviceId,
+      userId: userId,
+      vehicleId: vehicleId,
+      syncStatus: SyncStatus.pending,
+    );
   }
 
   Future<void> _claimLocalDataForSignedInUser() async {
     final googleUser = user;
     if (googleUser == null) return;
-    final claimed = _meta.get('claimedUserId');
+    final legacyClaimed = _meta.get('claimedUserId');
+    final claimed = _meta.get('supabaseClaimedUserId');
     if (!OwnershipPolicy.canClaimLocalData(
       claimed is String ? claimed : null,
       googleUser.id,
@@ -940,9 +1240,15 @@ class RecordStore extends ChangeNotifier {
 
     final targetUserId = googleUser.id;
     final targetVehicleId = 'vehicle-$targetUserId-primary';
-    final sourceVehicle = _vehicleForUser(localOwnerId);
+    final sourceOwners = <String>{localOwnerId};
+    if (legacyClaimed is String && legacyClaimed.isNotEmpty) {
+      sourceOwners.add(legacyClaimed);
+    }
+    final sourceVehicle = legacyClaimed is String
+        ? _vehicleForUser(legacyClaimed) ?? _vehicleForUser(localOwnerId)
+        : _vehicleForUser(localOwnerId);
     for (final record in _allDailyRecords) {
-      if (record.userId.isEmpty || record.userId == localOwnerId) {
+      if (record.userId.isEmpty || sourceOwners.contains(record.userId)) {
         final migrated = record.withSyncInfo(
           deviceId: deviceId,
           userId: targetUserId,
@@ -953,7 +1259,7 @@ class RecordStore extends ChangeNotifier {
       }
     }
     for (final record in _allMaintenanceRecords) {
-      if (record.userId.isEmpty || record.userId == localOwnerId) {
+      if (record.userId.isEmpty || sourceOwners.contains(record.userId)) {
         final migrated = record.withSyncInfo(
           deviceId: deviceId,
           userId: targetUserId,
@@ -964,12 +1270,15 @@ class RecordStore extends ChangeNotifier {
       }
     }
     final now = DateTime.now();
-    await _syncQueue.reassignOwnership(
-      fromUserId: localOwnerId,
-      toUserId: targetUserId,
-      vehicleId: targetVehicleId,
-    );
+    for (final sourceOwner in sourceOwners) {
+      await _syncQueue.reassignOwnership(
+        fromUserId: sourceOwner,
+        toUserId: targetUserId,
+        vehicleId: targetVehicleId,
+      );
+    }
     await _meta.put('claimedUserId', targetUserId);
+    await _meta.put('supabaseClaimedUserId', targetUserId);
     final hasOwnedData = _allDailyRecords.any(
           (record) => record.userId == targetUserId,
         ) ||
@@ -995,4 +1304,25 @@ class RecordStore extends ChangeNotifier {
     }
     _load();
   }
+
+  @override
+  void dispose() {
+    _stopAutomaticSync();
+    unawaited(_authSubscription?.cancel());
+    super.dispose();
+  }
+}
+
+class _PortableBackup {
+  const _PortableBackup({
+    required this.vehicle,
+    required this.records,
+    required this.maintenanceRecords,
+    required this.maintenanceIntervalKm,
+  });
+
+  final VehicleProfile vehicle;
+  final List<DailyRecord> records;
+  final List<MaintenanceRecord> maintenanceRecords;
+  final double maintenanceIntervalKm;
 }

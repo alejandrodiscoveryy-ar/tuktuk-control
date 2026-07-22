@@ -524,7 +524,7 @@ class RecordTile extends StatelessWidget {
     final details = [
       if (record.odometer > 0) '${numFmt(record.odometer)} km',
       if (record.expenseCategory.isNotEmpty) record.expenseCategory,
-      if (record.chargeTo80v) tr('Carga hasta 80 V'),
+      if (record.batteryVoltage != null) '${trimNum(record.batteryVoltage!)} V',
       if (record.note.isNotEmpty) record.note,
     ];
     return GlassCard(
@@ -553,7 +553,7 @@ class RecordTile extends StatelessWidget {
                   icon: Icons.speed_rounded,
                   color: kSecondary,
                 ),
-              if (record.chargeTo80v)
+              if (record.batteryVoltage != null)
                 const _HistoryTypeIcon(
                   icon: Icons.ev_station_outlined,
                   color: kTertiary,
@@ -561,7 +561,7 @@ class RecordTile extends StatelessWidget {
               if (record.earnings <= 0 &&
                   record.expense <= 0 &&
                   record.odometer <= 0 &&
-                  !record.chargeTo80v)
+                  record.batteryVoltage == null)
                 const _HistoryTypeIcon(
                   icon: Icons.notes_outlined,
                   color: kMuted,
@@ -582,8 +582,8 @@ class RecordTile extends StatelessWidget {
                   ? '+${money(record.earnings)}'
                   : record.expense > 0
                       ? '-${money(record.expense)}'
-                      : record.chargeTo80v
-                          ? '80 V'
+                      : record.batteryVoltage != null
+                          ? '${trimNum(record.batteryVoltage!)} V'
                           : '0 $activeCurrency',
               style: TextStyle(
                 color: record.earnings > 0
@@ -594,8 +594,9 @@ class RecordTile extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            if (record.batteryPercent != null)
-              Text('${record.batteryPercent}% ${tr('bateria')}',
+            if (record.batteryVoltage != null &&
+                (record.earnings > 0 || record.expense > 0))
+              Text('${trimNum(record.batteryVoltage!)} V',
                   style: const TextStyle(fontSize: 11)),
           ],
         ),

@@ -17,7 +17,8 @@ class Metrics {
       records.fold(0.0, (sum, r) => sum + r.expense) +
       maintenanceRecords.fold(0.0, (sum, r) => sum + (r.cost ?? 0));
   double get netEarnings => totalEarnings - totalExpenses;
-  int get chargeEvents => records.where((record) => record.chargeTo80v).length;
+  int get chargeEvents =>
+      records.where((record) => record.batteryVoltage != null).length;
   List<DailyRecord> get earningsWithoutOdometer => records
       .where((record) => record.earnings > 0 && record.odometer <= 0)
       .toList();

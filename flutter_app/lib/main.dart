@@ -3,15 +3,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 
-import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 part 'domain/entities.dart';
@@ -22,6 +20,7 @@ part 'domain/sync.dart';
 part 'data/record_store.dart';
 part 'data/seed_data.dart';
 part 'data/sync_queue.dart';
+part 'data/supabase_sync_gateway.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
@@ -30,11 +29,19 @@ const _recordsBox = 'daily_records';
 const _maintenanceRecordsBox = 'maintenance_records';
 const _metaBox = 'meta';
 const _syncQueueBox = 'sync_queue';
-const _syncFileName = 'control_tuk_tuk_backup.json';
 const _seedVersion = 'earnings-odometer-charge80v-maintenance-2026-07-03';
 const _defaultMaintenanceIntervalKm = 5000.0;
-const _databaseSchemaVersion = 4;
-const _googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
+const _databaseSchemaVersion = 5;
+const _supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://vvxvnywzgtqhlaqpxyqh.supabase.co',
+);
+const _supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: 'sb_publishable_MOmcX334dezcrlRAaQlvbg_Scd-RJTV',
+);
+const _supabaseMobileRedirect =
+    'com.alejandrocruz.tuktukcontrol://login-callback/';
 
 const kBg = Color(0xFF080D14);
 const kSurface = Color(0xFF111923);
@@ -56,6 +63,10 @@ void main() async {
     await initializeDateFormatting(locale);
   }
   Intl.defaultLocale = 'es';
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    publishableKey: _supabasePublishableKey,
+  );
   await Hive.initFlutter();
   await Hive.openBox(_recordsBox);
   await Hive.openBox(_maintenanceRecordsBox);
@@ -262,6 +273,8 @@ String tr(String key) {
           'No trips yet. Add the first day.',
       'bateria': 'battery',
       'Batería o carga (%)': 'Battery or charge (%)',
+      'Voltaje de batería': 'Battery voltage',
+      'El voltaje no puede ser negativo': 'Voltage cannot be negative',
       'Buscar por fecha, nota o km': 'Search by date, note, or km',
       'Cada cambio recalcula el inicio y las estadísticas.':
           'Every change recalculates Home and Statistics.',
@@ -543,6 +556,8 @@ String tr(String key) {
           'Ainda não há trajetos. Registre o primeiro dia.',
       'bateria': 'bateria',
       'Batería o carga (%)': 'Bateria ou carga (%)',
+      'Voltaje de batería': 'Tensão da bateria',
+      'El voltaje no puede ser negativo': 'A tensão não pode ser negativa',
       'Buscar por fecha, nota o km': 'Buscar por data, nota ou km',
       'Cada cambio recalcula el inicio y las estadísticas.':
           'Cada alteração recalcula o início e as estatísticas.',
@@ -826,6 +841,9 @@ String tr(String key) {
           'Aucun trajet. Enregistrez le premier jour.',
       'bateria': 'batterie',
       'Batería o carga (%)': 'Batterie ou charge (%)',
+      'Voltaje de batería': 'Tension de la batterie',
+      'El voltaje no puede ser negativo':
+          'La tension ne peut pas être négative',
       'Buscar por fecha, nota o km': 'Rechercher par date, note ou km',
       'Cada cambio recalcula el inicio y las estadísticas.':
           'Chaque modification recalcule l’accueil et les statistiques.',
