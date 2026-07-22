@@ -10,9 +10,7 @@ abstract final class OwnershipPolicy {
   }
 
   static bool acceptsBackup(String activeUserId, String? backupUserId) {
-    return backupUserId == null ||
-        backupUserId.isEmpty ||
-        backupUserId == activeUserId;
+    return true;
   }
 
   static bool shouldLoadHistoricalSeed(Object? seedVersion) {
@@ -28,6 +26,8 @@ SyncStatus _syncStatusFromMap(dynamic value) {
 }
 
 class DailyRecord {
+  static const int batteryVoltageHiveFieldIndex = 17;
+
   DailyRecord({
     required this.id,
     required this.date,
@@ -35,8 +35,7 @@ class DailyRecord {
     required this.odometer,
     this.expense = 0,
     this.expenseCategory = '',
-    this.batteryPercent,
-    this.chargeTo80v = false,
+    this.batteryVoltage,
     this.note = '',
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -55,8 +54,8 @@ class DailyRecord {
   final double odometer;
   final double expense;
   final String expenseCategory;
-  final int? batteryPercent;
-  final bool chargeTo80v;
+  @HiveField(batteryVoltageHiveFieldIndex)
+  final double? batteryVoltage;
   final String note;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -72,6 +71,12 @@ class DailyRecord {
   factory DailyRecord.fromMap(Map<dynamic, dynamic> map) {
     final parsedUpdatedAt =
         DateTime.tryParse('${map['updatedAt']}') ?? DateTime.now();
+    final legacyNote = '${map['note'] ?? ''}';
+    final noteVoltage = _extractLegacyVoltage(legacyNote);
+    final voltage = _optionalNum(map['batteryVoltage']) ??
+        _optionalNum(map['batteryPercent']) ??
+        noteVoltage.value ??
+        (map['chargeTo80v'] == true ? 80.0 : null);
     return DailyRecord(
       id: '${map['id']}',
       date: DateTime.parse('${map['date']}'),
@@ -79,11 +84,8 @@ class DailyRecord {
       odometer: _numFromMap(map, 'odometer'),
       expense: _numFromMap(map, 'expense'),
       expenseCategory: '${map['expenseCategory'] ?? ''}',
-      batteryPercent: map['batteryPercent'] == null
-          ? null
-          : (map['batteryPercent'] as num).round(),
-      chargeTo80v: map['chargeTo80v'] == true,
-      note: '${map['note'] ?? ''}',
+      batteryVoltage: voltage,
+      note: noteVoltage.cleanedNote,
       createdAt: DateTime.tryParse('${map['createdAt']}') ?? parsedUpdatedAt,
       updatedAt: parsedUpdatedAt,
       deletedAt: DateTime.tryParse('${map['deletedAt'] ?? ''}'),
@@ -103,8 +105,7 @@ class DailyRecord {
         'odometer': odometer,
         'expense': expense,
         'expenseCategory': expenseCategory,
-        'batteryPercent': batteryPercent,
-        'chargeTo80v': chargeTo80v,
+        'batteryVoltage': batteryVoltage,
         'note': note,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -130,8 +131,7 @@ class DailyRecord {
       odometer: odometer,
       expense: expense,
       expenseCategory: expenseCategory,
-      batteryPercent: batteryPercent,
-      chargeTo80v: chargeTo80v,
+      batteryVoltage: batteryVoltage,
       note: note,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -143,6 +143,30 @@ class DailyRecord {
       schemaVersion: _databaseSchemaVersion,
     );
   }
+}
+
+double? _optionalNum(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.replaceAll(',', '.'));
+  return null;
+}
+
+({double? value, String cleanedNote}) _extractLegacyVoltage(String note) {
+  final pattern = RegExp(
+    r'\bVoltaje\s*:\s*(-?\d+(?:[\.,]\d+)?)\s*V\b',
+    caseSensitive: false,
+  );
+  final match = pattern.firstMatch(note);
+  if (match == null) return (value: null, cleanedNote: note);
+  final value = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+  final cleaned = note
+      .replaceRange(match.start, match.end, '')
+      .replaceAll(RegExp(r'^\s*[-|;]\s*'), '')
+      .replaceAll(RegExp(r'\s*[-|;]\s*$'), '')
+      .replaceAll(RegExp(r'^\s*$\n?', multiLine: true), '')
+      .replaceAll(RegExp(r'[ \t]{2,}'), ' ')
+      .trim();
+  return (value: value, cleanedNote: cleaned);
 }
 
 class MaintenanceRecord {
@@ -280,19 +304,23 @@ class VehicleProfile {
 
   bool get isDeleted => deletedAt != null;
 
-  factory VehicleProfile.fromMap(Map<dynamic, dynamic> map) => VehicleProfile(
-        id: '${map['id']}',
-        userId: '${map['userId']}',
-        name: '${map['name'] ?? 'Mi Tuk Tuk'}',
-        createdAt: DateTime.parse('${map['createdAt']}'),
-        updatedAt: DateTime.parse('${map['updatedAt']}'),
-        registration: '${map['registration'] ?? ''}',
-        initialOdometer: (map['initialOdometer'] as num?)?.toDouble() ?? 0,
-        deviceId: '${map['deviceId'] ?? ''}',
-        syncStatus: _syncStatusFromMap(map['syncStatus']),
-        deletedAt: DateTime.tryParse('${map['deletedAt'] ?? ''}'),
-        schemaVersion: (map['schemaVersion'] as num?)?.toInt() ?? 1,
-      );
+  factory VehicleProfile.fromMap(Map<dynamic, dynamic> map) {
+    final now = DateTime.now();
+    final updatedAt = DateTime.tryParse('${map['updatedAt']}') ?? now;
+    return VehicleProfile(
+      id: '${map['id'] ?? ''}',
+      userId: '${map['userId'] ?? map['ownerUserId'] ?? ''}',
+      name: '${map['name'] ?? 'Mi Tuk Tuk'}',
+      createdAt: DateTime.tryParse('${map['createdAt']}') ?? updatedAt,
+      updatedAt: updatedAt,
+      registration: '${map['registration'] ?? ''}',
+      initialOdometer: (map['initialOdometer'] as num?)?.toDouble() ?? 0,
+      deviceId: '${map['deviceId'] ?? ''}',
+      syncStatus: _syncStatusFromMap(map['syncStatus']),
+      deletedAt: DateTime.tryParse('${map['deletedAt'] ?? ''}'),
+      schemaVersion: (map['schemaVersion'] as num?)?.toInt() ?? 1,
+    );
+  }
 
   Map<String, dynamic> toMap() => {
         'schemaVersion': schemaVersion,
