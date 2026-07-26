@@ -1,7 +1,10 @@
 import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
-void main() {
+Future<void> main() async {
+  await initializeDateFormatting('es');
+
   test('La búsqueda de Revolico codifica términos personalizados', () {
     final uri = buildRevolicoSearchUri(' batería 72V & litio ');
 
@@ -14,13 +17,15 @@ void main() {
   });
 
   test('El soporte abre el número correcto de WhatsApp', () {
-    final uri = buildWhatsAppSupportUri();
+    final uri = buildWhatsAppSupportUri('Pedro Alejandro Cruz');
 
     expect(uri.scheme, 'https');
     expect(uri.host, 'wa.me');
     expect(uri.path, '/5355592873');
-    expect(uri.queryParameters['text'],
-        'Hola, necesito ayuda con TukTuk Control.');
+    expect(
+      uri.queryParameters['text'],
+      'Hola, soy Pedro Alejandro Cruz y quiero realizar el pago de TukTuk.',
+    );
     expect(uri.toString(), isNot(contains(' ')));
   });
 
@@ -62,6 +67,7 @@ void main() {
     expect(metrics.efficiency, 160);
     expect(metrics.latestOdometer, 150);
     expect(metrics.chargeEvents, 1);
+    expect(metrics.cycleSummaries.single.expenses, 1200);
   });
 
   test('Metrics tolera una lista vacía', () {
