@@ -122,10 +122,70 @@ class RemotePullResult {
   const RemotePullResult({
     required this.changes,
     required this.nextCursor,
+    this.hasMore = false,
   });
 
   final List<RemoteChange> changes;
   final String? nextCursor;
+  final bool hasMore;
+}
+
+class RemoteSyncCursor {
+  const RemoteSyncCursor({
+    required this.updatedAt,
+    required this.entityType,
+    required this.entityId,
+    this.isLegacy = false,
+  });
+
+  final DateTime updatedAt;
+  final String entityType;
+  final String entityId;
+  final bool isLegacy;
+
+  factory RemoteSyncCursor.fromChange(RemoteChange change) => RemoteSyncCursor(
+        updatedAt: change.updatedAt.toUtc(),
+        entityType: change.entityType.name,
+        entityId: change.entityId,
+      );
+
+  static RemoteSyncCursor? tryParse(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(value))),
+      );
+      if (decoded is! Map) return null;
+      final updatedAt = DateTime.tryParse('${decoded['updatedAt']}');
+      if (updatedAt == null) return null;
+      return RemoteSyncCursor(
+        updatedAt: updatedAt.toUtc(),
+        entityType: '${decoded['entityType'] ?? ''}',
+        entityId: '${decoded['entityId'] ?? ''}',
+      );
+    } catch (_) {
+      final legacyTimestamp = DateTime.tryParse(value);
+      return legacyTimestamp == null
+          ? null
+          : RemoteSyncCursor(
+              updatedAt: legacyTimestamp.toUtc(),
+              entityType: '',
+              entityId: '',
+              isLegacy: true,
+            );
+    }
+  }
+
+  String encode() => base64Url.encode(
+        utf8.encode(
+          jsonEncode({
+            'version': 1,
+            'updatedAt': updatedAt.toUtc().toIso8601String(),
+            'entityType': entityType,
+            'entityId': entityId,
+          }),
+        ),
+      );
 }
 
 class RemoteChange {
@@ -158,6 +218,7 @@ abstract interface class RemoteSyncGateway {
   Future<RemotePullResult> pull({
     required String userId,
     String? cursor,
+    int limit = 250,
   });
 }
 
@@ -202,10 +263,12 @@ class SyncRunReport {
     required this.completed,
     required this.failed,
     this.skippedBecauseUnconfigured = false,
+    this.completedOperationIds = const {},
   });
 
   final int attempted;
   final int completed;
   final int failed;
   final bool skippedBecauseUnconfigured;
+  final Set<String> completedOperationIds;
 }

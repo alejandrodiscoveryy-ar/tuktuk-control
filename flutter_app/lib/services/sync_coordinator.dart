@@ -37,6 +37,7 @@ class SyncCoordinator {
         attempted: pending.length,
         completed: result.acceptedOperationIds.length,
         failed: result.rejectedOperations.length,
+        completedOperationIds: result.acceptedOperationIds,
       );
     } catch (error) {
       await _queue.markFailed(

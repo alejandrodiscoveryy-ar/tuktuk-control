@@ -139,6 +139,28 @@ void main() {
     expect(gateway.pushCalls, 0);
     expect(queue.completed, isEmpty);
   });
+
+  test('el cursor paginado conserva desempate estable y cursor antiguo', () {
+    final change = RemoteChange(
+      entityType: SyncEntityType.dailyRecord,
+      entityId: 'record-250',
+      userId: 'user-1',
+      vehicleId: 'vehicle-1',
+      updatedAt: DateTime.utc(2026, 7, 15, 10, 30),
+      deviceId: 'device-a',
+      payload: const {},
+    );
+
+    final encoded = RemoteSyncCursor.fromChange(change).encode();
+    final restored = RemoteSyncCursor.tryParse(encoded);
+    final legacy = RemoteSyncCursor.tryParse('2026-07-15T10:30:00.000Z');
+
+    expect(restored?.updatedAt, change.updatedAt);
+    expect(restored?.entityType, SyncEntityType.dailyRecord.name);
+    expect(restored?.entityId, 'record-250');
+    expect(restored?.isLegacy, isFalse);
+    expect(legacy?.isLegacy, isTrue);
+  });
 }
 
 SyncOperation operationFor(String entityId) {
@@ -209,6 +231,7 @@ class _FakeGateway implements RemoteSyncGateway {
   Future<RemotePullResult> pull({
     required String userId,
     String? cursor,
+    int limit = 250,
   }) async {
     return const RemotePullResult(changes: [], nextCursor: null);
   }

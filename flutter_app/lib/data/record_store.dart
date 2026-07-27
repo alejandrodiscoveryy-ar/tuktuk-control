@@ -27,6 +27,9 @@ class RecordStore extends ChangeNotifier {
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
+  Timer? _syncDebounceTimer;
+  bool _syncRequestedWhileRunning = false;
+  String? _ensuredProfileFingerprint;
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   User? user;
@@ -695,12 +698,25 @@ class RecordStore extends ChangeNotifier {
   }
 
   void unawaitedSync() {
-    if (user != null && !syncing) {
-      syncNow();
+    if (user == null) return;
+    if (syncing) {
+      _syncRequestedWhileRunning = true;
+      return;
     }
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = Timer(
+      const Duration(milliseconds: 900),
+      () => unawaited(syncNow()),
+    );
   }
 
   Future<void> _withSync(Future<void> Function() action) async {
+    if (syncing) {
+      _syncRequestedWhileRunning = true;
+      return;
+    }
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = null;
     syncing = true;
     syncMessage = 'Sincronizando...';
     notifyListeners();
@@ -712,6 +728,10 @@ class RecordStore extends ChangeNotifier {
     } finally {
       syncing = false;
       notifyListeners();
+      if (_syncRequestedWhileRunning && user != null) {
+        _syncRequestedWhileRunning = false;
+        unawaitedSync();
+      }
     }
   }
 
@@ -759,7 +779,7 @@ class RecordStore extends ChangeNotifier {
         )
         .subscribe();
     _automaticSyncTimer = Timer.periodic(
-      const Duration(seconds: 45),
+      const Duration(minutes: 5),
       (_) => unawaitedSync(),
     );
   }
@@ -767,6 +787,10 @@ class RecordStore extends ChangeNotifier {
   void _stopAutomaticSync() {
     _automaticSyncTimer?.cancel();
     _automaticSyncTimer = null;
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = null;
+    _syncRequestedWhileRunning = false;
+    _ensuredProfileFingerprint = null;
     final channel = _realtimeChannel;
     _realtimeChannel = null;
     if (channel != null) unawaited(_supabase.removeChannel(channel));
@@ -809,27 +833,33 @@ class RecordStore extends ChangeNotifier {
     if (currentUser == null) return;
     await _ensureRemoteProfile();
     final cursorKey = 'supabaseCursor:${currentUser.id}';
-    final cursor = _meta.get(cursorKey)?.toString();
-    final remote = await _supabaseGateway.pull(
-      userId: currentUser.id,
-      cursor: cursor,
-    );
-    await _applyRemoteChanges(remote.changes);
-    if (remote.nextCursor != null) {
-      await _meta.put(cursorKey, remote.nextCursor);
+    var cursor = _meta.get(cursorKey)?.toString();
+    var pageCount = 0;
+    var hasMore = true;
+    while (hasMore && pageCount < 100) {
+      final remote = await _supabaseGateway.pull(
+        userId: currentUser.id,
+        cursor: cursor,
+      );
+      await _applyRemoteChanges(remote.changes);
+      if (remote.nextCursor != null) {
+        cursor = remote.nextCursor;
+        await _meta.put(cursorKey, cursor);
+      }
+      hasMore = remote.hasMore && remote.changes.isNotEmpty;
+      pageCount++;
     }
 
-    final pendingBefore = _syncQueue.pendingForUser(
+    final pendingBatch = _syncQueue.pendingForUser(
       currentUser.id,
-      limit: 100000,
+      limit: 500,
     );
-    await _syncCoordinator.pushPending(userId: currentUser.id, batchSize: 500);
-    final pendingAfter = _syncQueue
-        .pendingForUser(currentUser.id, limit: 100000)
-        .map((operation) => operation.id)
-        .toSet();
-    for (final operation in pendingBefore) {
-      if (!pendingAfter.contains(operation.id)) {
+    final report = await _syncCoordinator.pushPending(
+      userId: currentUser.id,
+      batchSize: 500,
+    );
+    for (final operation in pendingBatch) {
+      if (report.completedOperationIds.contains(operation.id)) {
         await _markEntitySynced(operation);
       }
     }
@@ -840,7 +870,7 @@ class RecordStore extends ChangeNotifier {
     final currentUser = user;
     if (currentUser == null) return;
     final metadata = currentUser.userMetadata ?? const <String, dynamic>{};
-    await _supabase.from('profiles').upsert({
+    final profile = {
       'id': currentUser.id,
       'email': currentUser.email,
       'display_name': metadata['full_name'] ??
@@ -848,7 +878,16 @@ class RecordStore extends ChangeNotifier {
           currentUser.email?.split('@').first,
       'avatar_url': metadata['avatar_url'] ?? metadata['picture'],
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'id');
+    };
+    final fingerprint = jsonEncode({
+      'id': profile['id'],
+      'email': profile['email'],
+      'display_name': profile['display_name'],
+      'avatar_url': profile['avatar_url'],
+    });
+    if (_ensuredProfileFingerprint == fingerprint) return;
+    await _supabase.from('profiles').upsert(profile, onConflict: 'id');
+    _ensuredProfileFingerprint = fingerprint;
   }
 
   Future<void> _applyRemoteChanges(List<RemoteChange> changes) async {

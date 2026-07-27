@@ -12,6 +12,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         _payloadFor = payloadFor;
 
   static const tableName = 'sync_entities';
+  static const defaultPageSize = 250;
 
   final SupabaseClient _client;
   final SyncPayloadResolver _payloadFor;
@@ -65,12 +66,41 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
   Future<RemotePullResult> pull({
     required String userId,
     String? cursor,
+    int limit = defaultPageSize,
   }) async {
-    dynamic query = _client.from(tableName).select().eq('user_id', userId);
-    if (cursor != null && cursor.isNotEmpty) {
-      query = query.gte('updated_at', cursor);
+    final safeLimit = limit.clamp(1, 500);
+    final parsedCursor = RemoteSyncCursor.tryParse(cursor);
+    dynamic query = _client
+        .from(tableName)
+        .select(
+          'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
+          'updated_at,deleted_at',
+        )
+        .eq('user_id', userId);
+    if (parsedCursor != null) {
+      if (parsedCursor.isLegacy) {
+        query = query.gte(
+          'updated_at',
+          parsedCursor.updatedAt.toIso8601String(),
+        );
+      } else {
+        final timestamp =
+            _postgrestLiteral(parsedCursor.updatedAt.toIso8601String());
+        final entityType = _postgrestLiteral(parsedCursor.entityType);
+        final entityId = _postgrestLiteral(parsedCursor.entityId);
+        query = query.or(
+          'updated_at.gt.$timestamp,'
+          'and(updated_at.eq.$timestamp,entity_type.gt.$entityType),'
+          'and(updated_at.eq.$timestamp,entity_type.eq.$entityType,'
+          'entity_id.gt.$entityId)',
+        );
+      }
     }
-    final response = await query.order('updated_at').limit(1000);
+    final response = await query
+        .order('updated_at')
+        .order('entity_type')
+        .order('entity_id')
+        .limit(safeLimit);
     final rows = List<Map<String, dynamic>>.from(response as List);
     final changes = rows.map((row) {
       final payload = Map<String, dynamic>.from(row['payload'] as Map);
@@ -98,7 +128,13 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
       changes: changes,
       nextCursor: changes.isEmpty
           ? cursor
-          : changes.last.updatedAt.toUtc().toIso8601String(),
+          : RemoteSyncCursor.fromChange(changes.last).encode(),
+      hasMore: changes.length == safeLimit,
     );
+  }
+
+  static String _postgrestLiteral(String value) {
+    final escaped = value.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+    return '"$escaped"';
   }
 }
