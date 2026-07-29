@@ -2,6 +2,10 @@ part of '../main.dart';
 
 class RecordStore extends ChangeNotifier {
   RecordStore() {
+    _licenseService = SupabaseLicenseService(
+      client: _supabase,
+      cache: _meta,
+    );
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
       payloadFor: _payloadForOperation,
@@ -24,6 +28,7 @@ class RecordStore extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
   late final SupabaseSyncGateway _supabaseGateway;
   late final SyncCoordinator _syncCoordinator;
+  late final SupabaseLicenseService _licenseService;
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
@@ -36,6 +41,33 @@ class RecordStore extends ChangeNotifier {
   bool initialized = false;
   bool syncing = false;
   String syncMessage = 'Base local pendiente de respaldo';
+  LicenseSnapshot license = LicenseSnapshot.local;
+
+  bool get canWrite => license.canWrite;
+  bool get isReadOnly => !canWrite;
+
+  Future<LicenseSnapshot> refreshLicense() async {
+    final currentUser = user;
+    if (currentUser == null) {
+      final claimed = _meta.get('claimedUserId');
+      license = claimed is String && claimed.isNotEmpty
+          ? _licenseService.cachedLicense(claimed)
+          : LicenseSnapshot.local;
+      notifyListeners();
+      return license;
+    }
+    license = await _licenseService.refresh(
+      userId: currentUser.id,
+      deviceFingerprint: deviceId,
+    );
+    notifyListeners();
+    return license;
+  }
+
+  Future<void> _requireWriteAccess() async {
+    await refreshLicense();
+    if (!canWrite) throw ReadOnlyLicenseException(license);
+  }
 
   List<DailyRecord> get records => [..._records]..sort(_compareRecordsDesc);
 
@@ -146,10 +178,12 @@ class RecordStore extends ChangeNotifier {
   String get preferredTheme => '${_meta.get('preferredTheme') ?? 'system'}';
 
   Future<void> setProfileDisplayName(String value) async {
+    await _requireWriteAccess();
     final clean = value.trim();
     if (clean.isEmpty) return;
+    final previousSettings = _settingsRollbackPayload();
     await _meta.put('profileDisplayName:$activeUserId', clean);
-    await _enqueueSettingsSync();
+    await _enqueueSettingsSync(previousPayload: previousSettings);
     notifyListeners();
     unawaitedSync();
   }
@@ -159,17 +193,31 @@ class RecordStore extends ChangeNotifier {
     required String language,
     required String theme,
   }) async {
+    await _requireWriteAccess();
+    final previousSettings = _settingsRollbackPayload();
     await _meta.putAll({
       'preferredCurrency': currency,
       'preferredLanguage': language,
       'preferredTheme': theme,
     });
-    await _enqueueSettingsSync();
+    await _enqueueSettingsSync(previousPayload: previousSettings);
     notifyListeners();
     unawaitedSync();
   }
 
-  Future<void> _enqueueSettingsSync() async {
+  Map<String, dynamic> _settingsRollbackPayload() => {
+        'maintenanceIntervalKm': maintenanceIntervalKm,
+        'preferredCurrency': preferredCurrency,
+        'preferredLanguage': preferredLanguage,
+        'preferredTheme': preferredTheme,
+        'profileDisplayName:$activeUserId': profileDisplayName,
+        'settingsUpdatedAt':
+            '${_meta.get('settingsUpdatedAt') ?? DateTime.now().toIso8601String()}',
+      };
+
+  Future<void> _enqueueSettingsSync({
+    Map<String, dynamic>? previousPayload,
+  }) async {
     await _meta.put('settingsUpdatedAt', DateTime.now().toIso8601String());
     await _syncQueue.enqueue(
       entityType: SyncEntityType.settings,
@@ -177,6 +225,8 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: activeVehicleId,
+      previousPayload: previousPayload,
+      rollbackOnLicenseRejection: previousPayload != null,
     );
   }
 
@@ -222,6 +272,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> restoreBackupJson(String source) async {
+    await _requireWriteAccess();
     final decoded = jsonDecode(source);
     if (decoded is! Map) throw const FormatException('Respaldo no válido');
     await _replaceWithPortableBackup(Map<String, dynamic>.from(decoded));
@@ -248,6 +299,7 @@ class RecordStore extends ChangeNotifier {
     String registration = '',
     double initialOdometer = 0,
   }) async {
+    await _requireWriteAccess();
     final cleanName = name.trim();
     if (cleanName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
@@ -273,6 +325,7 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: vehicleId,
+      rollbackOnLicenseRejection: true,
     );
     if (initialOdometer > 0 && records.isEmpty) {
       await save(
@@ -295,6 +348,7 @@ class RecordStore extends ChangeNotifier {
     String registration = '',
     double initialOdometer = 0,
   }) async {
+    await _requireWriteAccess();
     final cleanName = name.trim();
     if (cleanName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
@@ -320,6 +374,7 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: vehicleId,
+      rollbackOnLicenseRejection: true,
     );
     notifyListeners();
     unawaitedSync();
@@ -345,6 +400,7 @@ class RecordStore extends ChangeNotifier {
     required String name,
     String registration = '',
   }) async {
+    await _requireWriteAccess();
     final current = activeVehicle;
     final cleanName = name.trim();
     if (current == null || cleanName.isEmpty) return;
@@ -366,6 +422,8 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: current.id,
+      previousPayload: current.toMap(),
+      rollbackOnLicenseRejection: true,
     );
     notifyListeners();
     unawaitedSync();
@@ -562,6 +620,8 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> save(DailyRecord record) async {
+    await _requireWriteAccess();
+    final previousRaw = _box.get(record.id);
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
       userId: activeUserId,
@@ -576,12 +636,16 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
+      previousPayload:
+          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
+      rollbackOnLicenseRejection: true,
     );
     _load();
     unawaitedSync();
   }
 
   Future<void> delete(String id) async {
+    await _requireWriteAccess();
     final raw = _box.get(id);
     if (raw != null) {
       final record = DailyRecord.fromMap(raw as Map).withSyncInfo(
@@ -599,6 +663,8 @@ class RecordStore extends ChangeNotifier {
         action: SyncAction.delete,
         userId: record.userId,
         vehicleId: record.vehicleId,
+        previousPayload: Map<String, dynamic>.from(raw),
+        rollbackOnLicenseRejection: true,
       );
     }
     _load();
@@ -606,6 +672,8 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> saveMaintenance(MaintenanceRecord record) async {
+    await _requireWriteAccess();
+    final previousRaw = _maintenanceBox.get(record.id);
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
       userId: activeUserId,
@@ -620,12 +688,16 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
+      previousPayload:
+          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
+      rollbackOnLicenseRejection: true,
     );
     _load();
     unawaitedSync();
   }
 
   Future<void> deleteMaintenance(String id) async {
+    await _requireWriteAccess();
     final raw = _maintenanceBox.get(id);
     if (raw != null) {
       final record = MaintenanceRecord.fromMap(raw as Map).withSyncInfo(
@@ -643,6 +715,8 @@ class RecordStore extends ChangeNotifier {
         action: SyncAction.delete,
         userId: record.userId,
         vehicleId: record.vehicleId,
+        previousPayload: Map<String, dynamic>.from(raw),
+        rollbackOnLicenseRejection: true,
       );
     }
     _load();
@@ -650,8 +724,10 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> setMaintenanceInterval(double intervalKm) async {
+    await _requireWriteAccess();
+    final previousSettings = _settingsRollbackPayload();
     await _meta.put('maintenanceIntervalKm', intervalKm);
-    await _enqueueSettingsSync();
+    await _enqueueSettingsSync(previousPayload: previousSettings);
     _load();
     unawaitedSync();
   }
@@ -675,6 +751,7 @@ class RecordStore extends ChangeNotifier {
     _stopAutomaticSync();
     await _supabase.auth.signOut();
     user = null;
+    await refreshLicense();
     syncMessage = 'Sesion cerrada. La base local sigue en este dispositivo';
     notifyListeners();
   }
@@ -686,14 +763,17 @@ class RecordStore extends ChangeNotifier {
   Future<void> syncNow() async {
     await _withSync(() async {
       if (user == null) return;
+      await refreshLicense();
       if (activeVehicle == null) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
         return;
       }
       await _synchronizeWithSupabase();
-      syncMessage = pendingSyncCount == 0
-          ? 'Datos sincronizados de forma segura'
-          : 'Cambios guardados localmente, pendientes de conexion';
+      syncMessage = !canWrite
+          ? 'Tu licencia no permite realizar cambios. Modo solo lectura'
+          : pendingSyncCount == 0
+              ? 'Datos sincronizados de forma segura'
+              : 'Cambios guardados localmente, pendientes de conexion';
     });
   }
 
@@ -739,6 +819,7 @@ class RecordStore extends ChangeNotifier {
     if (authenticatedUser == null) {
       user = null;
       _stopAutomaticSync();
+      await refreshLicense();
       if (initialized) {
         syncMessage = 'Entra con Google para activar la sincronizacion';
         notifyListeners();
@@ -748,7 +829,11 @@ class RecordStore extends ChangeNotifier {
     user = authenticatedUser;
     notifyListeners();
     try {
-      await _claimLocalDataForSignedInUser();
+      await _ensureRemoteProfile();
+      await refreshLicense();
+      if (canWrite) {
+        await _claimLocalDataForSignedInUser();
+      }
       _startAutomaticSync();
       await syncNow();
     } on StateError {
@@ -777,10 +862,24 @@ class RecordStore extends ChangeNotifier {
           ),
           callback: (_) => unawaitedSync(),
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'licenses',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: currentUser.id,
+          ),
+          callback: (_) => unawaited(refreshLicense()),
+        )
         .subscribe();
     _automaticSyncTimer = Timer.periodic(
       const Duration(minutes: 5),
-      (_) => unawaitedSync(),
+      (_) {
+        unawaited(refreshLicense());
+        unawaitedSync();
+      },
     );
   }
 
@@ -854,6 +953,10 @@ class RecordStore extends ChangeNotifier {
       currentUser.id,
       limit: 500,
     );
+    if (!canWrite) {
+      _load();
+      return;
+    }
     final report = await _syncCoordinator.pushPending(
       userId: currentUser.id,
       batchSize: 500,
@@ -863,7 +966,57 @@ class RecordStore extends ChangeNotifier {
         await _markEntitySynced(operation);
       }
     }
+    if (report.blockedByLicense) {
+      await _licenseService.markWriteRejected(
+        currentUser.id,
+        const LicenseWriteRejectedException('RLS rejected write'),
+      );
+      await refreshLicense();
+      await _rollbackBlockedOperations(
+        pendingBatch.where(
+          (operation) =>
+              report.blockedOperationIds.contains(operation.id) &&
+              operation.rollbackOnLicenseRejection,
+        ),
+      );
+      syncMessage =
+          'Tu licencia no permite realizar cambios. Modo solo lectura';
+    }
     _load();
+  }
+
+  Future<void> _rollbackBlockedOperations(
+    Iterable<SyncOperation> operations,
+  ) async {
+    for (final operation in operations) {
+      final previous = operation.previousPayload;
+      switch (operation.entityType) {
+        case SyncEntityType.dailyRecord:
+          if (previous == null) {
+            await _box.delete(operation.entityId);
+          } else {
+            await _box.put(operation.entityId, previous);
+          }
+          break;
+        case SyncEntityType.maintenance:
+          if (previous == null) {
+            await _maintenanceBox.delete(operation.entityId);
+          } else {
+            await _maintenanceBox.put(operation.entityId, previous);
+          }
+          break;
+        case SyncEntityType.vehicle:
+          if (previous == null) {
+            await _meta.delete('vehicle:${operation.entityId}');
+          } else {
+            await _meta.put('vehicle:${operation.entityId}', previous);
+          }
+          break;
+        case SyncEntityType.settings:
+          if (previous != null) await _meta.putAll(previous);
+          break;
+      }
+    }
   }
 
   Future<void> _ensureRemoteProfile() async {
@@ -886,7 +1039,14 @@ class RecordStore extends ChangeNotifier {
       'avatar_url': profile['avatar_url'],
     });
     if (_ensuredProfileFingerprint == fingerprint) return;
-    await _supabase.from('profiles').upsert(profile, onConflict: 'id');
+    final existing = await _supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+    if (existing == null) {
+      await _supabase.from('profiles').insert(profile);
+    }
     _ensuredProfileFingerprint = fingerprint;
   }
 

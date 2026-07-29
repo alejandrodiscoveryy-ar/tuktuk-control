@@ -51,10 +51,17 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
     }
 
     if (rows.isNotEmpty) {
-      await _client.from(tableName).upsert(
-            rows,
-            onConflict: 'user_id,entity_type,entity_id',
-          );
+      try {
+        await _client.from(tableName).upsert(
+              rows,
+              onConflict: 'user_id,entity_type,entity_id',
+            );
+      } catch (error) {
+        if (isSupabaseAuthorizationFailure(error)) {
+          throw LicenseWriteRejectedException(error);
+        }
+        rethrow;
+      }
     }
     return RemotePushResult(
       acceptedOperationIds: accepted,

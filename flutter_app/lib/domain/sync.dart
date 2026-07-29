@@ -16,6 +16,8 @@ class SyncOperation {
     required this.updatedAt,
     this.attempts = 0,
     this.lastError,
+    this.previousPayload,
+    this.rollbackOnLicenseRejection = false,
   });
 
   final String id;
@@ -28,6 +30,8 @@ class SyncOperation {
   final DateTime updatedAt;
   final int attempts;
   final String? lastError;
+  final Map<String, dynamic>? previousPayload;
+  final bool rollbackOnLicenseRejection;
 
   factory SyncOperation.fromMap(Map<dynamic, dynamic> map) => SyncOperation(
         id: '${map['id']}',
@@ -44,6 +48,10 @@ class SyncOperation {
         updatedAt: DateTime.parse('${map['updatedAt']}'),
         attempts: (map['attempts'] as num?)?.toInt() ?? 0,
         lastError: map['lastError'] == null ? null : '${map['lastError']}',
+        previousPayload: map['previousPayload'] is Map
+            ? Map<String, dynamic>.from(map['previousPayload'] as Map)
+            : null,
+        rollbackOnLicenseRejection: map['rollbackOnLicenseRejection'] == true,
       );
 
   Map<String, dynamic> toMap() => {
@@ -57,6 +65,8 @@ class SyncOperation {
         'updatedAt': updatedAt.toIso8601String(),
         'attempts': attempts,
         'lastError': lastError,
+        'previousPayload': previousPayload,
+        'rollbackOnLicenseRejection': rollbackOnLicenseRejection,
       };
 
   SyncOperation reassign({
@@ -74,6 +84,8 @@ class SyncOperation {
       updatedAt: DateTime.now(),
       attempts: attempts,
       lastError: lastError,
+      previousPayload: previousPayload,
+      rollbackOnLicenseRejection: rollbackOnLicenseRejection,
     );
   }
 }
@@ -93,6 +105,9 @@ abstract final class SyncQueuePolicy {
       vehicleId: incoming.vehicleId,
       createdAt: existing.createdAt,
       updatedAt: incoming.updatedAt,
+      previousPayload: existing.previousPayload ?? incoming.previousPayload,
+      rollbackOnLicenseRejection: existing.rollbackOnLicenseRejection ||
+          incoming.rollbackOnLicenseRejection,
     );
   }
 }
@@ -264,6 +279,8 @@ class SyncRunReport {
     required this.failed,
     this.skippedBecauseUnconfigured = false,
     this.completedOperationIds = const {},
+    this.blockedByLicense = false,
+    this.blockedOperationIds = const {},
   });
 
   final int attempted;
@@ -271,4 +288,6 @@ class SyncRunReport {
   final int failed;
   final bool skippedBecauseUnconfigured;
   final Set<String> completedOperationIds;
+  final bool blockedByLicense;
+  final Set<String> blockedOperationIds;
 }

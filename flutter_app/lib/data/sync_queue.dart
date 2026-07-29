@@ -21,6 +21,8 @@ class SyncQueueStore implements SyncQueueRepository {
     required SyncAction action,
     required String userId,
     required String vehicleId,
+    Map<String, dynamic>? previousPayload,
+    bool rollbackOnLicenseRejection = false,
   }) async {
     final id = '${entityType.name}:$entityId';
     final raw = _box.get(id);
@@ -35,6 +37,8 @@ class SyncQueueStore implements SyncQueueRepository {
       vehicleId: vehicleId,
       createdAt: now,
       updatedAt: now,
+      previousPayload: previousPayload,
+      rollbackOnLicenseRejection: rollbackOnLicenseRejection,
     );
     final consolidated = SyncQueuePolicy.consolidate(existing, incoming);
     await _box.put(id, consolidated.toMap());
@@ -81,6 +85,8 @@ class SyncQueueStore implements SyncQueueRepository {
         updatedAt: DateTime.now(),
         attempts: operation.attempts + 1,
         lastError: error,
+        previousPayload: operation.previousPayload,
+        rollbackOnLicenseRejection: operation.rollbackOnLicenseRejection,
       );
       await _box.put(id, failed.toMap());
     }

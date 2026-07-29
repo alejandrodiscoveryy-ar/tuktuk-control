@@ -20,6 +20,7 @@ part 'domain/sync.dart';
 part 'data/record_store.dart';
 part 'data/seed_data.dart';
 part 'data/sync_queue.dart';
+part 'data/supabase_license_service.dart';
 part 'data/supabase_sync_gateway.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
@@ -75,10 +76,37 @@ void main() async {
   runApp(ControlTukTukApp(store: RecordStore()));
 }
 
-class ControlTukTukApp extends StatelessWidget {
+class ControlTukTukApp extends StatefulWidget {
   const ControlTukTukApp({required this.store, super.key});
 
   final RecordStore store;
+
+  @override
+  State<ControlTukTukApp> createState() => _ControlTukTukAppState();
+}
+
+class _ControlTukTukAppState extends State<ControlTukTukApp>
+    with WidgetsBindingObserver {
+  RecordStore get store => widget.store;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(store.refreshLicense());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -236,6 +264,14 @@ String activeLanguage = 'es';
 String tr(String key) {
   const translations = <String, Map<String, String>>{
     'en': {
+      'Tu licencia no permite realizar cambios.':
+          'Your license does not allow changes.',
+      'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.':
+          'Your license does not allow changes. You can view your data in read-only mode.',
+      'Estado': 'Status',
+      'Vencimiento': 'Expiration',
+      'Contacta al administrador para revisar tu licencia.':
+          'Contact the administrator to review your license.',
       'Inicio': 'Home',
       'Nuevo': 'New',
       'Historial': 'History',
@@ -530,6 +566,14 @@ String tr(String key) {
       'Mejor jornada registrada': 'Best recorded day',
     },
     'pt': {
+      'Tu licencia no permite realizar cambios.':
+          'Sua licença não permite alterações.',
+      'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.':
+          'Sua licença não permite alterações. Você pode consultar seus dados no modo somente leitura.',
+      'Estado': 'Status',
+      'Vencimiento': 'Vencimento',
+      'Contacta al administrador para revisar tu licencia.':
+          'Entre em contato com o administrador para revisar sua licença.',
       'Inicio': 'Início',
       'Nuevo': 'Novo',
       'Historial': 'Histórico',
@@ -826,6 +870,14 @@ String tr(String key) {
       'Mejor jornada registrada': 'Melhor dia registrado',
     },
     'fr': {
+      'Tu licencia no permite realizar cambios.':
+          'Votre licence ne permet pas les modifications.',
+      'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.':
+          'Votre licence ne permet pas les modifications. Vous pouvez consulter vos données en lecture seule.',
+      'Estado': 'État',
+      'Vencimiento': 'Expiration',
+      'Contacta al administrador para revisar tu licencia.':
+          'Contactez l’administrateur pour vérifier votre licence.',
       'Inicio': 'Accueil',
       'Nuevo': 'Nouveau',
       'Historial': 'Historique',

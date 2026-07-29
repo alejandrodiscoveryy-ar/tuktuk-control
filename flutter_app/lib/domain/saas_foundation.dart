@@ -32,8 +32,11 @@ enum LicenseStatus {
   trial,
   active,
   expiring,
+  pending,
   expired,
   suspended,
+  revoked,
+  deviceLimitReached,
   pendingPayment,
   unknown,
 }
@@ -47,6 +50,11 @@ class LicenseSnapshot {
     this.paidUntil,
     this.lastServerValidation,
     this.offlineGraceUntil,
+    this.expiresAt,
+    this.maxDevices,
+    this.reason,
+    this.canWrite = false,
+    this.validatedFromServer = false,
   });
 
   final String planId;
@@ -56,11 +64,82 @@ class LicenseSnapshot {
   final LicenseStatus licenseStatus;
   final DateTime? lastServerValidation;
   final DateTime? offlineGraceUntil;
+  final DateTime? expiresAt;
+  final int? maxDevices;
+  final String? reason;
+  final bool canWrite;
+  final bool validatedFromServer;
+
+  bool get isReadOnly => !canWrite;
+  bool get requiresAdministrator =>
+      licenseStatus == LicenseStatus.suspended ||
+      licenseStatus == LicenseStatus.revoked;
+
+  String get statusLabel => switch (licenseStatus) {
+        LicenseStatus.local => 'Local',
+        LicenseStatus.trial => 'Periodo inicial',
+        LicenseStatus.active => 'Activa',
+        LicenseStatus.expiring => 'Próxima a vencer',
+        LicenseStatus.pending => 'Pendiente',
+        LicenseStatus.expired => 'Vencida',
+        LicenseStatus.suspended => 'Suspendida',
+        LicenseStatus.revoked => 'Revocada',
+        LicenseStatus.deviceLimitReached => 'Límite de dispositivos',
+        LicenseStatus.pendingPayment => 'Pago pendiente',
+        LicenseStatus.unknown => 'No verificada',
+      };
+
+  Map<String, dynamic> toMap() => {
+        'planId': planId,
+        'licenseStatus': licenseStatus.name,
+        'trialStartsAt': trialStartsAt?.toIso8601String(),
+        'trialEndsAt': trialEndsAt?.toIso8601String(),
+        'paidUntil': paidUntil?.toIso8601String(),
+        'lastServerValidation': lastServerValidation?.toIso8601String(),
+        'offlineGraceUntil': offlineGraceUntil?.toIso8601String(),
+        'expiresAt': expiresAt?.toIso8601String(),
+        'maxDevices': maxDevices,
+        'reason': reason,
+        'canWrite': canWrite,
+        'validatedFromServer': validatedFromServer,
+      };
+
+  factory LicenseSnapshot.fromMap(Map<dynamic, dynamic> map) {
+    final statusName = '${map['licenseStatus'] ?? 'unknown'}';
+    return LicenseSnapshot(
+      planId: '${map['planId'] ?? 'unknown'}',
+      licenseStatus: LicenseStatus.values.firstWhere(
+        (value) => value.name == statusName,
+        orElse: () => LicenseStatus.unknown,
+      ),
+      trialStartsAt: DateTime.tryParse('${map['trialStartsAt'] ?? ''}'),
+      trialEndsAt: DateTime.tryParse('${map['trialEndsAt'] ?? ''}'),
+      paidUntil: DateTime.tryParse('${map['paidUntil'] ?? ''}'),
+      lastServerValidation:
+          DateTime.tryParse('${map['lastServerValidation'] ?? ''}'),
+      offlineGraceUntil: DateTime.tryParse('${map['offlineGraceUntil'] ?? ''}'),
+      expiresAt: DateTime.tryParse('${map['expiresAt'] ?? ''}'),
+      maxDevices: (map['maxDevices'] as num?)?.toInt(),
+      reason: map['reason']?.toString(),
+      canWrite: map['canWrite'] == true,
+      validatedFromServer: map['validatedFromServer'] == true,
+    );
+  }
 
   static const local = LicenseSnapshot(
     planId: 'local',
     licenseStatus: LicenseStatus.local,
+    canWrite: true,
   );
+}
+
+class ReadOnlyLicenseException implements Exception {
+  const ReadOnlyLicenseException(this.snapshot);
+
+  final LicenseSnapshot snapshot;
+
+  @override
+  String toString() => 'ReadOnlyLicenseException(${snapshot.reason})';
 }
 
 enum PlanId { personal, owner, fleet, enterprise }
@@ -102,6 +181,12 @@ class LocalAuthService implements AuthService {
 
 abstract interface class LicenseService {
   Future<LicenseSnapshot> currentLicense(String userId);
+  LicenseSnapshot cachedLicense(String userId);
+  Future<LicenseSnapshot> refresh({
+    required String userId,
+    required String deviceFingerprint,
+  });
+  Future<void> markWriteRejected(String userId, Object error);
   bool get restrictionsEnabled;
 }
 
@@ -112,8 +197,21 @@ class LocalLicenseService implements LicenseService {
   bool get restrictionsEnabled => false;
 
   @override
+  LicenseSnapshot cachedLicense(String userId) => LicenseSnapshot.local;
+
+  @override
   Future<LicenseSnapshot> currentLicense(String userId) async =>
       LicenseSnapshot.local;
+
+  @override
+  Future<LicenseSnapshot> refresh({
+    required String userId,
+    required String deviceFingerprint,
+  }) async =>
+      LicenseSnapshot.local;
+
+  @override
+  Future<void> markWriteRejected(String userId, Object error) async {}
 }
 
 abstract interface class SyncService {

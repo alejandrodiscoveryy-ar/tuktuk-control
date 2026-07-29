@@ -9,6 +9,21 @@ String? _googleProfilePhotoUrl(User? user) {
   return null;
 }
 
+Future<bool> _runLicensedWrite(
+  BuildContext context,
+  Future<void> Function() action,
+) async {
+  try {
+    await action();
+    return true;
+  } on ReadOnlyLicenseException {
+    if (context.mounted) {
+      toast(context, tr('Tu licencia no permite realizar cambios.'));
+    }
+    return false;
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({required this.store, super.key});
 
@@ -276,8 +291,7 @@ class _AppShellState extends State<AppShell> {
           );
         }
         final authenticatedUserId = store.user?.id;
-        if (_lastAuthenticatedUserId == null &&
-            authenticatedUserId != null) {
+        if (_lastAuthenticatedUserId == null && authenticatedUserId != null) {
           index = 0;
         }
         _lastAuthenticatedUserId = authenticatedUserId;
@@ -368,12 +382,18 @@ class _AppShellState extends State<AppShell> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 980),
-                  child: screens[index],
+                  child: Column(
+                    children: [
+                      if (store.isReadOnly)
+                        _ReadOnlyLicenseBanner(license: store.license),
+                      Expanded(child: screens[index]),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-          floatingActionButton: index == 0
+          floatingActionButton: index == 0 && store.canWrite
               ? Semantics(
                   button: true,
                   label: tr('Agregar nuevo registro'),
@@ -408,11 +428,78 @@ class _AppShellState extends State<AppShell> {
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           bottomNavigationBar: _LiquidGlassNavigation(
             selectedIndex: index,
-            onDestinationSelected: (value) => setState(() => index = value),
+            onDestinationSelected: (value) {
+              if (value == 1 && store.isReadOnly) {
+                toast(
+                  context,
+                  tr('Tu licencia no permite realizar cambios.'),
+                );
+                return;
+              }
+              setState(() => index = value);
+            },
             profilePhotoUrl: _googleProfilePhotoUrl(store.user),
           ),
         );
       },
+    );
+  }
+}
+
+class _ReadOnlyLicenseBanner extends StatelessWidget {
+  const _ReadOnlyLicenseBanner({required this.license});
+
+  final LicenseSnapshot license;
+
+  @override
+  Widget build(BuildContext context) {
+    final expiry = license.expiresAt ?? license.trialEndsAt;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kDanger.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kDanger.withValues(alpha: .55)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline_rounded, color: kDanger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr(
+                    'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${tr('Estado')}: ${license.statusLabel}'
+                  '${expiry == null ? '' : ' · ${tr('Vencimiento')}: ${DateFormat('d MMM yyyy', activeLanguage).format(expiry.toLocal())}'}',
+                  style: const TextStyle(color: kMuted, fontSize: 12),
+                ),
+                if (license.requiresAdministrator) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    tr('Contacta al administrador para revisar tu licencia.'),
+                    style: const TextStyle(
+                      color: kDanger,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -837,19 +924,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          appBar:
-                              AppBar(title: Text(tr('Nuevo mantenimiento'))),
-                          body: MaintenanceFormScreen(
-                            store: widget.store,
-                            onSaved: widget.onSaved,
-                          ),
-                        ),
-                      ),
-                    ),
+                    onPressed: widget.store.canWrite
+                        ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => Scaffold(
+                                  appBar: AppBar(
+                                    title: Text(tr('Nuevo mantenimiento')),
+                                  ),
+                                  body: MaintenanceFormScreen(
+                                    store: widget.store,
+                                    onSaved: widget.onSaved,
+                                  ),
+                                ),
+                              ),
+                            )
+                        : null,
                     icon: const Icon(Icons.add_task_outlined),
                     label: Text(tr('Completar mantenimiento')),
                   ),
@@ -932,7 +1022,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
-            onPressed: save,
+            onPressed: widget.store.canWrite ? save : null,
             icon: const Icon(Icons.save_outlined),
             label: Text(
               editing
@@ -982,32 +1072,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     final base = widget.record;
-    await widget.store.save(
-      base == null
-          ? DailyRecord(
-              id: DateTime.now().microsecondsSinceEpoch.toString(),
-              date: date,
-              earnings: earned,
-              odometer: odo,
-              expense: spent,
-              expenseCategory: expenseCategory.text.trim(),
-              batteryVoltage: batteryVoltage,
-              note: note.text.trim(),
-            )
-          : DailyRecord(
-              id: base.id,
-              date: date,
-              earnings: earned,
-              odometer: odo,
-              expense: spent,
-              expenseCategory: expenseCategory.text.trim(),
-              batteryVoltage: batteryVoltage,
-              note: note.text.trim(),
-              createdAt: base.createdAt,
-              deviceId: base.deviceId,
-              schemaVersion: base.schemaVersion,
-            ),
-    );
+    final saved = await _runLicensedWrite(
+        context,
+        () => widget.store.save(
+              base == null
+                  ? DailyRecord(
+                      id: DateTime.now().microsecondsSinceEpoch.toString(),
+                      date: date,
+                      earnings: earned,
+                      odometer: odo,
+                      expense: spent,
+                      expenseCategory: expenseCategory.text.trim(),
+                      batteryVoltage: batteryVoltage,
+                      note: note.text.trim(),
+                    )
+                  : DailyRecord(
+                      id: base.id,
+                      date: date,
+                      earnings: earned,
+                      odometer: odo,
+                      expense: spent,
+                      expenseCategory: expenseCategory.text.trim(),
+                      batteryVoltage: batteryVoltage,
+                      note: note.text.trim(),
+                      createdAt: base.createdAt,
+                      deviceId: base.deviceId,
+                      schemaVersion: base.schemaVersion,
+                    ),
+            ));
+    if (!saved) return;
     if (!mounted) return;
     toast(context, tr('Registro guardado'));
     if (base != null) {
@@ -1108,6 +1201,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         else ...[
           ...records.map((record) => Dismissible(
                 key: ValueKey(record.id),
+                direction: widget.store.canWrite
+                    ? DismissDirection.endToStart
+                    : DismissDirection.none,
                 background: Container(
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
@@ -1115,19 +1211,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: const Icon(Icons.delete_outline, color: kDanger),
                 ),
                 confirmDismiss: (_) => confirmDelete(context),
-                onDismissed: (_) => widget.store.delete(record.id),
+                onDismissed: (_) => unawaited(
+                  _runLicensedWrite(
+                    context,
+                    () => widget.store.delete(record.id),
+                  ),
+                ),
                 child: RecordTile(
                   record: record,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: Text(tr('Editar registro'))),
-                        body:
-                            RegisterScreen(store: widget.store, record: record),
-                      ),
-                    ),
-                  ),
+                  onTap: widget.store.canWrite
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                appBar:
+                                    AppBar(title: Text(tr('Editar registro'))),
+                                body: RegisterScreen(
+                                  store: widget.store,
+                                  record: record,
+                                ),
+                              ),
+                            ),
+                          )
+                      : null,
                 ),
               )),
           ...maintenances.map((record) => GlassCard(
@@ -1140,19 +1246,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} · ${numFmt(record.odometer)} km · ${money(record.cost ?? 0)}\n${record.description}',
                   ),
                   isThreeLine: true,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: Text(tr('Editar mantenimiento'))),
-                        body: MaintenanceFormScreen(
-                          store: widget.store,
-                          record: record,
-                        ),
-                      ),
-                    ),
-                  ),
+                  trailing: widget.store.canWrite
+                      ? const Icon(Icons.chevron_right)
+                      : const Icon(Icons.lock_outline, color: kMuted),
+                  onTap: widget.store.canWrite
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                appBar: AppBar(
+                                  title: Text(tr('Editar mantenimiento')),
+                                ),
+                                body: MaintenanceFormScreen(
+                                  store: widget.store,
+                                  record: record,
+                                ),
+                              ),
+                            ),
+                          )
+                      : null,
                 ),
               )),
         ],
@@ -1586,7 +1698,8 @@ class LoginScreen extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: tr('Personalizar perfil'),
-                    onPressed: () => _editProfileName(context),
+                    onPressed:
+                        store.canWrite ? () => _editProfileName(context) : null,
                     icon: const Icon(Icons.edit_outlined),
                   ),
                 ],
@@ -1704,7 +1817,7 @@ class LoginScreen extends StatelessWidget {
             label: Text(tr('Exportar CSV')),
           ),
           OutlinedButton.icon(
-            onPressed: () => _restoreBackup(context),
+            onPressed: store.canWrite ? () => _restoreBackup(context) : null,
             icon: const Icon(Icons.upload_file_outlined),
             label: Text(tr('Restaurar JSON')),
           ),
@@ -1763,7 +1876,12 @@ class LoginScreen extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (value != null) await store.setProfileDisplayName(value);
+    if (value != null && context.mounted) {
+      await _runLicensedWrite(
+        context,
+        () => store.setProfileDisplayName(value),
+      );
+    }
   }
 
   Future<void> _copyBackup(BuildContext context, {required bool csv}) async {
@@ -1802,8 +1920,13 @@ class LoginScreen extends StatelessWidget {
     );
     controller.dispose();
     if (value == null || value.trim().isEmpty) return;
+    if (!context.mounted) return;
     try {
-      await store.restoreBackupJson(value);
+      final restored = await _runLicensedWrite(
+        context,
+        () => store.restoreBackupJson(value),
+      );
+      if (!restored) return;
       if (context.mounted) toast(context, tr('Respaldo restaurado'));
     } catch (_) {
       if (context.mounted) toast(context, tr('El respaldo JSON no es válido'));
@@ -2145,16 +2268,21 @@ class _AppPreferencesPanelState extends State<AppPreferencesPanel> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () async {
-                    await widget.store.savePreferences(
-                      currency: currency,
-                      language: language,
-                      theme: theme,
-                    );
-                    if (context.mounted) {
-                      toast(context, tr('Ajustes guardados'));
-                    }
-                  },
+                  onPressed: widget.store.canWrite
+                      ? () async {
+                          final saved = await _runLicensedWrite(
+                            context,
+                            () => widget.store.savePreferences(
+                              currency: currency,
+                              language: language,
+                              theme: theme,
+                            ),
+                          );
+                          if (saved && context.mounted) {
+                            toast(context, tr('Ajustes guardados'));
+                          }
+                        }
+                      : null,
                   icon: const Icon(Icons.save_outlined),
                   label: Text(tr('Guardar ajustes')),
                 ),
@@ -2218,11 +2346,17 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
       return;
     }
     setState(() => saving = true);
-    await widget.store.updateActiveVehicle(
-      name: name.text,
-      registration: registration.text,
-    );
-    await widget.store.setMaintenanceInterval(intervalKm);
+    final saved = await _runLicensedWrite(context, () async {
+      await widget.store.updateActiveVehicle(
+        name: name.text,
+        registration: registration.text,
+      );
+      await widget.store.setMaintenanceInterval(intervalKm);
+    });
+    if (!saved) {
+      if (mounted) setState(() => saving = false);
+      return;
+    }
     if (mounted) {
       setState(() => saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2298,7 +2432,7 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: saving ? null : save,
+                  onPressed: saving || !widget.store.canWrite ? null : save,
                   icon: const Icon(Icons.save_outlined),
                   label: Text(tr('Guardar vehiculo')),
                 ),
@@ -2436,7 +2570,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: save,
+          onPressed: widget.store.canWrite ? save : null,
           icon: const Icon(Icons.save_outlined),
           label: Text(tr('Guardar mantenimiento')),
         ),
@@ -2479,8 +2613,9 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       toast(context, tr('El costo no es valido'));
       return;
     }
-    await widget.store.saveMaintenance(
-      MaintenanceRecord(
+    final saved = await _runLicensedWrite(
+      context,
+      () => widget.store.saveMaintenance(MaintenanceRecord(
         id: widget.record?.id ??
             DateTime.now().microsecondsSinceEpoch.toString(),
         dateTime:
@@ -2493,8 +2628,9 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         createdAt: widget.record?.createdAt,
         deviceId: widget.record?.deviceId ?? '',
         schemaVersion: widget.record?.schemaVersion ?? _databaseSchemaVersion,
-      ),
+      )),
     );
+    if (!saved) return;
     if (!mounted) return;
     toast(context, tr('Mantenimiento guardado'));
     Navigator.pop(context);

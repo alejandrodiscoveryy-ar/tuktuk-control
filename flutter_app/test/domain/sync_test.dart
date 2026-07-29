@@ -161,6 +161,31 @@ void main() {
     expect(restored?.isLegacy, isFalse);
     expect(legacy?.isLegacy, isTrue);
   });
+
+  test('un rechazo RLS se retira de la cola y no se reintenta', () async {
+    final pending = operation();
+    final queue = _MemoryQueue([pending]);
+    final coordinator = SyncCoordinator(
+      queue: queue,
+      gateway: _LicenseBlockedGateway(),
+    );
+
+    final report = await coordinator.pushPending(userId: 'user-1');
+
+    expect(report.blockedByLicense, isTrue);
+    expect(report.blockedOperationIds, {pending.id});
+    expect(queue.completed, {pending.id});
+    expect(queue.failed, isEmpty);
+  });
+
+  test('identifica el rechazo 42501 de RLS como bloqueo de escritura', () {
+    final rejected = isAuthorizationFailureCode(
+      code: '42501',
+      message: 'new row violates row-level security policy',
+    );
+
+    expect(rejected, isTrue);
+  });
 }
 
 SyncOperation operationFor(String entityId) {
@@ -234,5 +259,23 @@ class _FakeGateway implements RemoteSyncGateway {
     int limit = 250,
   }) async {
     return const RemotePullResult(changes: [], nextCursor: null);
+  }
+}
+
+class _LicenseBlockedGateway implements RemoteSyncGateway {
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+    int limit = 250,
+  }) async =>
+      const RemotePullResult(changes: [], nextCursor: null);
+
+  @override
+  Future<RemotePushResult> push(List<SyncOperation> operations) {
+    throw const LicenseWriteRejectedException('RLS');
   }
 }
