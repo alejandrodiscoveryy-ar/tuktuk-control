@@ -29,6 +29,21 @@ Future<void> main() async {
     expect(uri.toString(), isNot(contains(' ')));
   });
 
+  test('El soporte de licencia prepara un mensaje contextual', () {
+    final uri = buildWhatsAppSupportUri(
+      'Pedro Alejandro Cruz',
+      message:
+          'Hola, soy Pedro Alejandro Cruz. Necesito ayuda con mi licencia de TukTuk Control. Estado: suspendida.',
+    );
+
+    expect(uri.path, '/5355592873');
+    expect(
+      uri.queryParameters['text'],
+      contains('Necesito ayuda con mi licencia de TukTuk Control'),
+    );
+    expect(uri.queryParameters['text'], contains('suspendida'));
+  });
+
   test('Metrics calcula ingresos, distancia, eficiencia y cargas', () {
     final records = [
       DailyRecord(

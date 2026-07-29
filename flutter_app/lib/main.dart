@@ -272,6 +272,9 @@ String tr(String key) {
       'Vencimiento': 'Expiration',
       'Contacta al administrador para revisar tu licencia.':
           'Contact the administrator to review your license.',
+      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.':
+          'To renew your license or resolve any issue, contact us on WhatsApp.',
+      'Renovar o solicitar ayuda': 'Renew or request help',
       'Inicio': 'Home',
       'Nuevo': 'New',
       'Historial': 'History',
@@ -574,6 +577,9 @@ String tr(String key) {
       'Vencimiento': 'Vencimento',
       'Contacta al administrador para revisar tu licencia.':
           'Entre em contato com o administrador para revisar sua licença.',
+      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.':
+          'Para renovar sua licença ou resolver qualquer problema, fale conosco pelo WhatsApp.',
+      'Renovar o solicitar ayuda': 'Renovar ou pedir ajuda',
       'Inicio': 'Início',
       'Nuevo': 'Novo',
       'Historial': 'Histórico',
@@ -878,6 +884,9 @@ String tr(String key) {
       'Vencimiento': 'Expiration',
       'Contacta al administrador para revisar tu licencia.':
           'Contactez l’administrateur pour vérifier votre licence.',
+      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.':
+          'Pour renouveler votre licence ou résoudre un problème, contactez-nous sur WhatsApp.',
+      'Renovar o solicitar ayuda': 'Renouveler ou demander de l’aide',
       'Inicio': 'Accueil',
       'Nuevo': 'Nouveau',
       'Historial': 'Historique',

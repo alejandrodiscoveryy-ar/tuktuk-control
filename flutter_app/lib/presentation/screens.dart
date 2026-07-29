@@ -385,7 +385,10 @@ class _AppShellState extends State<AppShell> {
                   child: Column(
                     children: [
                       if (store.isReadOnly)
-                        _ReadOnlyLicenseBanner(license: store.license),
+                        _ReadOnlyLicenseBanner(
+                          license: store.license,
+                          customerName: supportCustomerName(store),
+                        ),
                       Expanded(child: screens[index]),
                     ],
                   ),
@@ -447,9 +450,13 @@ class _AppShellState extends State<AppShell> {
 }
 
 class _ReadOnlyLicenseBanner extends StatelessWidget {
-  const _ReadOnlyLicenseBanner({required this.license});
+  const _ReadOnlyLicenseBanner({
+    required this.license,
+    required this.customerName,
+  });
 
   final LicenseSnapshot license;
+  final String customerName;
 
   @override
   Widget build(BuildContext context) {
@@ -487,7 +494,9 @@ class _ReadOnlyLicenseBanner extends StatelessWidget {
                 if (license.requiresAdministrator) ...[
                   const SizedBox(height: 4),
                   Text(
-                    tr('Contacta al administrador para revisar tu licencia.'),
+                    tr(
+                      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.',
+                    ),
                     style: const TextStyle(
                       color: kDanger,
                       fontSize: 12,
@@ -495,6 +504,27 @@ class _ReadOnlyLicenseBanner extends StatelessWidget {
                     ),
                   ),
                 ],
+                const SizedBox(height: 10),
+                FilledButton.tonalIcon(
+                  onPressed: () async {
+                    final opened = await launchUrl(
+                      buildWhatsAppSupportUri(
+                        customerName,
+                        message:
+                            'Hola, soy $customerName. Necesito ayuda con mi licencia de TukTuk Control. Estado: ${license.statusLabel}.',
+                      ),
+                      mode: kIsWeb
+                          ? LaunchMode.platformDefault
+                          : LaunchMode.externalApplication,
+                      webOnlyWindowName: '_blank',
+                    );
+                    if (!opened && context.mounted) {
+                      toast(context, tr('No se pudo abrir WhatsApp'));
+                    }
+                  },
+                  icon: const Icon(Icons.chat_outlined, size: 18),
+                  label: Text(tr('Renovar o solicitar ayuda')),
+                ),
               ],
             ),
           ),
@@ -1399,14 +1429,29 @@ Uri buildRevolicoSearchUri(String term) => Uri.https(
       {'q': term.trim(), 'order': 'relevance'},
     );
 
-Uri buildWhatsAppSupportUri(String customerName) => Uri.https(
+Uri buildWhatsAppSupportUri(
+  String customerName, {
+  String? message,
+}) =>
+    Uri.https(
       'wa.me',
       '/5355592873',
       {
-        'text':
-            'Hola, soy ${customerName.trim()} y quiero realizar el pago de TukTuk.'
+        'text': message?.trim().isNotEmpty == true
+            ? message!.trim()
+            : 'Hola, soy ${customerName.trim()} y quiero realizar el pago de TukTuk.'
       },
     );
+
+String supportCustomerName(RecordStore store) {
+  final metadata = store.user?.userMetadata;
+  for (final key in const ['full_name', 'name']) {
+    final value = metadata?[key]?.toString().trim();
+    if (value != null && value.isNotEmpty) return value;
+  }
+  final profileName = store.profileDisplayName.trim();
+  return profileName.isEmpty ? 'cliente de TukTuk' : profileName;
+}
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
@@ -1839,13 +1884,7 @@ class LoginScreen extends StatelessWidget {
   }
 
   String get _registeredCustomerName {
-    final metadata = store.user?.userMetadata;
-    for (final key in const ['full_name', 'name']) {
-      final value = metadata?[key]?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    final profileName = store.profileDisplayName.trim();
-    return profileName.isEmpty ? 'cliente de TukTuk' : profileName;
+    return supportCustomerName(store);
   }
 
   Future<void> _editProfileName(BuildContext context) async {
