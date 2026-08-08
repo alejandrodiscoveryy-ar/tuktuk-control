@@ -1,7 +1,7 @@
 name: control_tuk_tuk
 description: App Flutter para controlar ganancias, odometro, ciclos y estadisticas de un Tuk Tuk.
 publish_to: "none"
-version: 1.0.2+3
+version: 1.0.4+5
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

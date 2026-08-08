@@ -60,6 +60,15 @@ void main() {
     expect(result.createdAt, first.createdAt);
   });
 
+  test('una edición nueva no se completa con una respuesta anterior', () {
+    final sent = operation(updatedAt: DateTime.utc(2026, 7, 15, 10));
+    final editedWhileSending =
+        operation(updatedAt: DateTime.utc(2026, 7, 15, 10, 1));
+
+    expect(SyncQueuePolicy.canComplete(sent, editedWhileSending), isFalse);
+    expect(SyncQueuePolicy.canComplete(sent, sent), isTrue);
+  });
+
   test('la propiedad pendiente puede migrarse a la cuenta Google', () {
     final local = operation();
 
@@ -139,6 +148,68 @@ void main() {
     expect(gateway.pushCalls, 0);
     expect(queue.completed, isEmpty);
   });
+
+  test('un fallo temporal conserva la operación para reintentar', () async {
+    final pending = operation();
+    final queue = _MemoryQueue([pending]);
+    final coordinator = SyncCoordinator(
+      queue: queue,
+      gateway: _TemporaryFailureGateway(),
+    );
+
+    final report = await coordinator.pushPending(userId: 'user-1');
+
+    expect(report.failed, 1);
+    expect(queue.completed, isEmpty);
+    expect(queue.failed, contains(pending.id));
+  });
+
+  test('el cursor paginado conserva desempate estable y cursor antiguo', () {
+    final change = RemoteChange(
+      entityType: SyncEntityType.dailyRecord,
+      entityId: 'record-250',
+      userId: 'user-1',
+      vehicleId: 'vehicle-1',
+      updatedAt: DateTime.utc(2026, 7, 15, 10, 30),
+      deviceId: 'device-a',
+      payload: const {},
+    );
+
+    final encoded = RemoteSyncCursor.fromChange(change).encode();
+    final restored = RemoteSyncCursor.tryParse(encoded);
+    final legacy = RemoteSyncCursor.tryParse('2026-07-15T10:30:00.000Z');
+
+    expect(restored?.updatedAt, change.updatedAt);
+    expect(restored?.entityType, SyncEntityType.dailyRecord.name);
+    expect(restored?.entityId, 'record-250');
+    expect(restored?.isLegacy, isFalse);
+    expect(legacy?.isLegacy, isTrue);
+  });
+
+  test('un rechazo RLS se retira de la cola y no se reintenta', () async {
+    final pending = operation();
+    final queue = _MemoryQueue([pending]);
+    final coordinator = SyncCoordinator(
+      queue: queue,
+      gateway: _LicenseBlockedGateway(),
+    );
+
+    final report = await coordinator.pushPending(userId: 'user-1');
+
+    expect(report.blockedByLicense, isTrue);
+    expect(report.blockedOperationIds, {pending.id});
+    expect(queue.completed, {pending.id});
+    expect(queue.failed, isEmpty);
+  });
+
+  test('identifica el rechazo 42501 de RLS como bloqueo de escritura', () {
+    final rejected = isAuthorizationFailureCode(
+      code: '42501',
+      message: 'new row violates row-level security policy',
+    );
+
+    expect(rejected, isTrue);
+  });
 }
 
 SyncOperation operationFor(String entityId) {
@@ -176,6 +247,15 @@ class _MemoryQueue implements SyncQueueRepository {
   }
 
   @override
+  Future<Set<String>> completeIfUnchanged(
+    Iterable<SyncOperation> operations,
+  ) async {
+    final ids = operations.map((operation) => operation.id).toSet();
+    completed.addAll(ids);
+    return ids;
+  }
+
+  @override
   Future<void> markFailed(
     Iterable<String> operationIds,
     String error,
@@ -209,7 +289,44 @@ class _FakeGateway implements RemoteSyncGateway {
   Future<RemotePullResult> pull({
     required String userId,
     String? cursor,
+    int limit = 250,
   }) async {
     return const RemotePullResult(changes: [], nextCursor: null);
+  }
+}
+
+class _LicenseBlockedGateway implements RemoteSyncGateway {
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+    int limit = 250,
+  }) async =>
+      const RemotePullResult(changes: [], nextCursor: null);
+
+  @override
+  Future<RemotePushResult> push(List<SyncOperation> operations) {
+    throw const LicenseWriteRejectedException('RLS');
+  }
+}
+
+class _TemporaryFailureGateway implements RemoteSyncGateway {
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+    int limit = 250,
+  }) async =>
+      const RemotePullResult(changes: [], nextCursor: null);
+
+  @override
+  Future<RemotePushResult> push(List<SyncOperation> operations) {
+    throw const TemporarySyncException('offline');
   }
 }

@@ -16,6 +16,8 @@ class SyncOperation {
     required this.updatedAt,
     this.attempts = 0,
     this.lastError,
+    this.previousPayload,
+    this.rollbackOnLicenseRejection = false,
   });
 
   final String id;
@@ -28,6 +30,8 @@ class SyncOperation {
   final DateTime updatedAt;
   final int attempts;
   final String? lastError;
+  final Map<String, dynamic>? previousPayload;
+  final bool rollbackOnLicenseRejection;
 
   factory SyncOperation.fromMap(Map<dynamic, dynamic> map) => SyncOperation(
         id: '${map['id']}',
@@ -44,6 +48,10 @@ class SyncOperation {
         updatedAt: DateTime.parse('${map['updatedAt']}'),
         attempts: (map['attempts'] as num?)?.toInt() ?? 0,
         lastError: map['lastError'] == null ? null : '${map['lastError']}',
+        previousPayload: map['previousPayload'] is Map
+            ? Map<String, dynamic>.from(map['previousPayload'] as Map)
+            : null,
+        rollbackOnLicenseRejection: map['rollbackOnLicenseRejection'] == true,
       );
 
   Map<String, dynamic> toMap() => {
@@ -57,6 +65,8 @@ class SyncOperation {
         'updatedAt': updatedAt.toIso8601String(),
         'attempts': attempts,
         'lastError': lastError,
+        'previousPayload': previousPayload,
+        'rollbackOnLicenseRejection': rollbackOnLicenseRejection,
       };
 
   SyncOperation reassign({
@@ -74,11 +84,16 @@ class SyncOperation {
       updatedAt: DateTime.now(),
       attempts: attempts,
       lastError: lastError,
+      previousPayload: previousPayload,
+      rollbackOnLicenseRejection: rollbackOnLicenseRejection,
     );
   }
 }
 
 abstract final class SyncQueuePolicy {
+  static bool canComplete(SyncOperation sent, SyncOperation current) =>
+      !current.updatedAt.isAfter(sent.updatedAt);
+
   static SyncOperation consolidate(
     SyncOperation? existing,
     SyncOperation incoming,
@@ -93,6 +108,9 @@ abstract final class SyncQueuePolicy {
       vehicleId: incoming.vehicleId,
       createdAt: existing.createdAt,
       updatedAt: incoming.updatedAt,
+      previousPayload: existing.previousPayload ?? incoming.previousPayload,
+      rollbackOnLicenseRejection: existing.rollbackOnLicenseRejection ||
+          incoming.rollbackOnLicenseRejection,
     );
   }
 }
@@ -101,6 +119,10 @@ abstract interface class SyncQueueRepository {
   List<SyncOperation> pendingForUser(String userId, {int limit = 50});
 
   Future<void> complete(Iterable<String> operationIds);
+
+  Future<Set<String>> completeIfUnchanged(
+    Iterable<SyncOperation> operations,
+  );
 
   Future<void> markFailed(
     Iterable<String> operationIds,
@@ -122,10 +144,70 @@ class RemotePullResult {
   const RemotePullResult({
     required this.changes,
     required this.nextCursor,
+    this.hasMore = false,
   });
 
   final List<RemoteChange> changes;
   final String? nextCursor;
+  final bool hasMore;
+}
+
+class RemoteSyncCursor {
+  const RemoteSyncCursor({
+    required this.updatedAt,
+    required this.entityType,
+    required this.entityId,
+    this.isLegacy = false,
+  });
+
+  final DateTime updatedAt;
+  final String entityType;
+  final String entityId;
+  final bool isLegacy;
+
+  factory RemoteSyncCursor.fromChange(RemoteChange change) => RemoteSyncCursor(
+        updatedAt: change.updatedAt.toUtc(),
+        entityType: change.entityType.name,
+        entityId: change.entityId,
+      );
+
+  static RemoteSyncCursor? tryParse(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(value))),
+      );
+      if (decoded is! Map) return null;
+      final updatedAt = DateTime.tryParse('${decoded['updatedAt']}');
+      if (updatedAt == null) return null;
+      return RemoteSyncCursor(
+        updatedAt: updatedAt.toUtc(),
+        entityType: '${decoded['entityType'] ?? ''}',
+        entityId: '${decoded['entityId'] ?? ''}',
+      );
+    } catch (_) {
+      final legacyTimestamp = DateTime.tryParse(value);
+      return legacyTimestamp == null
+          ? null
+          : RemoteSyncCursor(
+              updatedAt: legacyTimestamp.toUtc(),
+              entityType: '',
+              entityId: '',
+              isLegacy: true,
+            );
+    }
+  }
+
+  String encode() => base64Url.encode(
+        utf8.encode(
+          jsonEncode({
+            'version': 1,
+            'updatedAt': updatedAt.toUtc().toIso8601String(),
+            'entityType': entityType,
+            'entityId': entityId,
+          }),
+        ),
+      );
 }
 
 class RemoteChange {
@@ -158,6 +240,7 @@ abstract interface class RemoteSyncGateway {
   Future<RemotePullResult> pull({
     required String userId,
     String? cursor,
+    int limit = 250,
   });
 }
 
@@ -202,10 +285,25 @@ class SyncRunReport {
     required this.completed,
     required this.failed,
     this.skippedBecauseUnconfigured = false,
+    this.completedOperationIds = const {},
+    this.blockedByLicense = false,
+    this.blockedOperationIds = const {},
   });
 
   final int attempted;
   final int completed;
   final int failed;
   final bool skippedBecauseUnconfigured;
+  final Set<String> completedOperationIds;
+  final bool blockedByLicense;
+  final Set<String> blockedOperationIds;
+}
+
+class TemporarySyncException implements Exception {
+  const TemporarySyncException(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() => 'TemporarySyncException($cause)';
 }

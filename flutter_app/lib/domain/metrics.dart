@@ -128,10 +128,16 @@ class Metrics {
       final values = days.map((record) => record.odometer);
       final distance =
           days.length < 2 ? 0 : max(0, values.reduce(max) - values.reduce(min));
+      final dailyExpenses =
+          entry.value.fold(0.0, (sum, record) => sum + record.expense);
+      final maintenanceExpenses = maintenanceRecords
+          .where((record) => cycle.contains(record.dateTime))
+          .fold(0.0, (sum, record) => sum + (record.cost ?? 0));
       return CycleSummary(
         start: entry.key,
         label: cycle.label,
         earnings: entry.value.fold(0, (sum, r) => sum + r.earnings),
+        expenses: dailyExpenses + maintenanceExpenses,
         distance: distance.toDouble(),
       );
     }).toList();
@@ -240,11 +246,13 @@ class CycleSummary {
     required this.start,
     required this.label,
     required this.earnings,
+    required this.expenses,
     required this.distance,
   });
 
   final DateTime start;
   final String label;
   final double earnings;
+  final double expenses;
   final double distance;
 }

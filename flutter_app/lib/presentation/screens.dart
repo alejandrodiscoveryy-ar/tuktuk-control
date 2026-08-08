@@ -1,5 +1,29 @@
 part of '../main.dart';
 
+String? _googleProfilePhotoUrl(User? user) {
+  final metadata = user?.userMetadata;
+  for (final key in const ['avatar_url', 'picture']) {
+    final value = metadata?[key]?.toString().trim();
+    if (value != null && value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+Future<bool> _runLicensedWrite(
+  BuildContext context,
+  Future<void> Function() action,
+) async {
+  try {
+    await action();
+    return true;
+  } on ReadOnlyLicenseException {
+    if (context.mounted) {
+      toast(context, tr('Tu licencia no permite realizar cambios.'));
+    }
+    return false;
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({required this.store, super.key});
 
@@ -243,6 +267,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
 class _AppShellState extends State<AppShell> {
   int index = 0;
+  String? _lastAuthenticatedUserId;
 
   RecordStore get store => widget.store;
 
@@ -265,6 +290,11 @@ class _AppShellState extends State<AppShell> {
             previewOnly: previewWelcome && !store.needsOnboarding,
           );
         }
+        final authenticatedUserId = store.user?.id;
+        if (_lastAuthenticatedUserId == null && authenticatedUserId != null) {
+          index = 0;
+        }
+        _lastAuthenticatedUserId = authenticatedUserId;
         final isSynchronized = store.user != null &&
             store.pendingSyncCount == 0 &&
             store.lastSyncAt != null;
@@ -275,7 +305,10 @@ class _AppShellState extends State<AppShell> {
                 : kDanger;
         final screens = [
           DashboardScreen(store: store),
-          RegisterScreen(store: store),
+          RegisterScreen(
+            store: store,
+            onSaved: () => setState(() => index = 0),
+          ),
           HistoryScreen(store: store),
           StatsScreen(store: store),
           const StoreScreen(),
@@ -320,46 +353,6 @@ class _AppShellState extends State<AppShell> {
             ),
             title: const SizedBox.shrink(),
             actions: [
-              Tooltip(
-                message: tr('Tu suscripción de ejemplo vence en 7 días'),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: () => toast(
-                    context,
-                    tr('Tu suscripción de ejemplo vence en 7 días'),
-                  ),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: kTertiary.withValues(alpha: .16),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: kTertiary.withValues(alpha: .55),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.notifications_active_outlined,
-                          size: 16,
-                          color: kTertiary,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          '7d',
-                          style: TextStyle(
-                            color: kTertiary,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
               const Text(
                 'TukTuk-Contol',
                 style: TextStyle(fontWeight: FontWeight.w800),
@@ -389,12 +382,20 @@ class _AppShellState extends State<AppShell> {
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 980),
-                  child: screens[index],
+                  child: Column(
+                    children: [
+                      if (store.isReadOnly)
+                        _ReadOnlyLicenseBanner(
+                          store: store,
+                        ),
+                      Expanded(child: screens[index]),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-          floatingActionButton: index == 0
+          floatingActionButton: index == 0 && store.canWrite
               ? Semantics(
                   button: true,
                   label: tr('Agregar nuevo registro'),
@@ -429,10 +430,90 @@ class _AppShellState extends State<AppShell> {
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
           bottomNavigationBar: _LiquidGlassNavigation(
             selectedIndex: index,
-            onDestinationSelected: (value) => setState(() => index = value),
+            onDestinationSelected: (value) {
+              if (value == 1 && store.isReadOnly) {
+                toast(
+                  context,
+                  tr('Tu licencia no permite realizar cambios.'),
+                );
+                return;
+              }
+              setState(() => index = value);
+            },
+            profilePhotoUrl: _googleProfilePhotoUrl(store.user),
           ),
         );
       },
+    );
+  }
+}
+
+class _ReadOnlyLicenseBanner extends StatelessWidget {
+  const _ReadOnlyLicenseBanner({required this.store});
+
+  final RecordStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final license = store.license;
+    final expiry = license.expiresAt ?? license.trialEndsAt;
+    final paymentAction = store.paymentWhatsAppAction();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kDanger.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kDanger.withValues(alpha: .55)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline_rounded, color: kDanger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr(
+                    'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${tr('Estado')}: ${license.statusLabel}'
+                  '${expiry == null ? '' : ' · ${tr('Vencimiento')}: ${DateFormat('d MMM yyyy', activeLanguage).format(expiry.toLocal())}'}',
+                  style: const TextStyle(color: kMuted, fontSize: 12),
+                ),
+                if (license.requiresAdministrator && paymentAction != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    tr(
+                      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.',
+                    ),
+                    style: const TextStyle(
+                      color: kDanger,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (paymentAction != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _launchWhatsApp(context, paymentAction),
+                    icon: const Icon(Icons.chat_outlined, size: 18),
+                    label: Text(paymentAction.buttonText),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -441,10 +522,12 @@ class _LiquidGlassNavigation extends StatelessWidget {
   const _LiquidGlassNavigation({
     required this.selectedIndex,
     required this.onDestinationSelected,
+    required this.profilePhotoUrl,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
+  final String? profilePhotoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -544,8 +627,18 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         label: tr('Tienda'),
                       ),
                       NavigationDestination(
-                        icon: const Icon(Icons.account_circle_outlined),
-                        selectedIcon: const Icon(Icons.account_circle),
+                        icon: profilePhotoUrl == null
+                            ? const Icon(Icons.account_circle_outlined)
+                            : _UserNavigationAvatar(
+                                photoUrl: profilePhotoUrl!,
+                                selected: false,
+                              ),
+                        selectedIcon: profilePhotoUrl == null
+                            ? const Icon(Icons.account_circle)
+                            : _UserNavigationAvatar(
+                                photoUrl: profilePhotoUrl!,
+                                selected: true,
+                              ),
                         label: tr('Usuario'),
                       ),
                     ],
@@ -554,6 +647,40 @@ class _LiquidGlassNavigation extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserNavigationAvatar extends StatelessWidget {
+  const _UserNavigationAvatar({
+    required this.photoUrl,
+    required this.selected,
+  });
+
+  final String photoUrl;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 27,
+      height: 27,
+      padding: EdgeInsets.all(selected ? 2 : 1),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected ? kPrimary : kMuted,
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: ClipOval(
+        child: Image.network(
+          photoUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              const Icon(Icons.account_circle_outlined, size: 22),
         ),
       ),
     );
@@ -684,7 +811,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 14),
         MaintenanceDashboardCard(snapshot: maintenance),
         const SizedBox(height: 20),
-        SectionTitle(title: tr('Hitos y mensajes del sistema')),
+        SectionTitle(title: tr('Hitos y mensajes')),
         DriverSystemMessages(
           metrics: metrics,
           maintenance: maintenance,
@@ -696,10 +823,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({required this.store, super.key, this.record});
+  const RegisterScreen({
+    required this.store,
+    super.key,
+    this.record,
+    this.onSaved,
+  });
 
   final RecordStore store;
   final DailyRecord? record;
+  final VoidCallback? onSaved;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -805,16 +938,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          appBar:
-                              AppBar(title: Text(tr('Nuevo mantenimiento'))),
-                          body: MaintenanceFormScreen(store: widget.store),
-                        ),
-                      ),
-                    ),
+                    onPressed: widget.store.canWrite
+                        ? () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => Scaffold(
+                                  appBar: AppBar(
+                                    title: Text(tr('Nuevo mantenimiento')),
+                                  ),
+                                  body: MaintenanceFormScreen(
+                                    store: widget.store,
+                                    onSaved: widget.onSaved,
+                                  ),
+                                ),
+                              ),
+                            )
+                        : null,
                     icon: const Icon(Icons.add_task_outlined),
                     label: Text(tr('Completar mantenimiento')),
                   ),
@@ -897,7 +1036,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 18),
           FilledButton.icon(
-            onPressed: save,
+            onPressed: widget.store.canWrite ? save : null,
             icon: const Icon(Icons.save_outlined),
             label: Text(
               editing
@@ -947,35 +1086,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     final base = widget.record;
-    await widget.store.save(
-      base == null
-          ? DailyRecord(
-              id: DateTime.now().microsecondsSinceEpoch.toString(),
-              date: date,
-              earnings: earned,
-              odometer: odo,
-              expense: spent,
-              expenseCategory: expenseCategory.text.trim(),
-              batteryVoltage: batteryVoltage,
-              note: note.text.trim(),
-            )
-          : DailyRecord(
-              id: base.id,
-              date: date,
-              earnings: earned,
-              odometer: odo,
-              expense: spent,
-              expenseCategory: expenseCategory.text.trim(),
-              batteryVoltage: batteryVoltage,
-              note: note.text.trim(),
-              createdAt: base.createdAt,
-              deviceId: base.deviceId,
-              schemaVersion: base.schemaVersion,
-            ),
-    );
+    final saved = await _runLicensedWrite(
+        context,
+        () => widget.store.save(
+              base == null
+                  ? DailyRecord(
+                      id: DateTime.now().microsecondsSinceEpoch.toString(),
+                      date: date,
+                      earnings: earned,
+                      odometer: odo,
+                      expense: spent,
+                      expenseCategory: expenseCategory.text.trim(),
+                      batteryVoltage: batteryVoltage,
+                      note: note.text.trim(),
+                    )
+                  : DailyRecord(
+                      id: base.id,
+                      date: date,
+                      earnings: earned,
+                      odometer: odo,
+                      expense: spent,
+                      expenseCategory: expenseCategory.text.trim(),
+                      batteryVoltage: batteryVoltage,
+                      note: note.text.trim(),
+                      createdAt: base.createdAt,
+                      deviceId: base.deviceId,
+                      schemaVersion: base.schemaVersion,
+                    ),
+            ));
+    if (!saved) return;
     if (!mounted) return;
     toast(context, tr('Registro guardado'));
-    if (base != null) Navigator.pop(context);
+    if (base != null) {
+      Navigator.pop(context);
+    } else {
+      widget.onSaved?.call();
+    }
   }
 
   bool get editingRecord => widget.record != null;
@@ -1069,6 +1215,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         else ...[
           ...records.map((record) => Dismissible(
                 key: ValueKey(record.id),
+                direction: widget.store.canWrite
+                    ? DismissDirection.endToStart
+                    : DismissDirection.none,
                 background: Container(
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
@@ -1076,19 +1225,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: const Icon(Icons.delete_outline, color: kDanger),
                 ),
                 confirmDismiss: (_) => confirmDelete(context),
-                onDismissed: (_) => widget.store.delete(record.id),
+                onDismissed: (_) => unawaited(
+                  _runLicensedWrite(
+                    context,
+                    () => widget.store.delete(record.id),
+                  ),
+                ),
                 child: RecordTile(
                   record: record,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: Text(tr('Editar registro'))),
-                        body:
-                            RegisterScreen(store: widget.store, record: record),
-                      ),
-                    ),
-                  ),
+                  onTap: widget.store.canWrite
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                appBar:
+                                    AppBar(title: Text(tr('Editar registro'))),
+                                body: RegisterScreen(
+                                  store: widget.store,
+                                  record: record,
+                                ),
+                              ),
+                            ),
+                          )
+                      : null,
                 ),
               )),
           ...maintenances.map((record) => GlassCard(
@@ -1101,19 +1260,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} · ${numFmt(record.odometer)} km · ${money(record.cost ?? 0)}\n${record.description}',
                   ),
                   isThreeLine: true,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: Text(tr('Editar mantenimiento'))),
-                        body: MaintenanceFormScreen(
-                          store: widget.store,
-                          record: record,
-                        ),
-                      ),
-                    ),
-                  ),
+                  trailing: widget.store.canWrite
+                      ? const Icon(Icons.chevron_right)
+                      : const Icon(Icons.lock_outline, color: kMuted),
+                  onTap: widget.store.canWrite
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                appBar: AppBar(
+                                  title: Text(tr('Editar mantenimiento')),
+                                ),
+                                body: MaintenanceFormScreen(
+                                  store: widget.store,
+                                  record: record,
+                                ),
+                              ),
+                            ),
+                          )
+                      : null,
                 ),
               )),
         ],
@@ -1229,7 +1394,7 @@ class StatsScreen extends StatelessWidget {
           },
         ),
         const SizedBox(height: 18),
-        SectionTitle(title: tr('Ingresos por mes')),
+        SectionTitle(title: tr('Ingresos y gastos por mes')),
         MonthlyEarningsBars(cycles: cycles),
         const SizedBox(height: 18),
         SectionTitle(title: tr('Tendencia de días trabajados')),
@@ -1246,12 +1411,6 @@ Uri buildRevolicoSearchUri(String term) => Uri.https(
       'www.revolico.com',
       '/search',
       {'q': term.trim(), 'order': 'relevance'},
-    );
-
-Uri buildWhatsAppSupportUri() => Uri.https(
-      'wa.me',
-      '/5355592873',
-      {'text': 'Hola, necesito ayuda con TukTuk Control.'},
     );
 
 class StoreScreen extends StatefulWidget {
@@ -1491,185 +1650,62 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = store.user;
-    final photoUrl = user?.userMetadata?['avatar_url']?.toString();
+    final photoUrl = _googleProfilePhotoUrl(user);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         GlassCard(
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: kPrimary.withValues(alpha: .16),
-                backgroundImage:
-                    photoUrl == null ? null : NetworkImage(photoUrl),
-                child: photoUrl == null
-                    ? Icon(
-                        user == null ? Icons.person_outline : Icons.person,
-                        color: kPrimary,
-                        size: 34,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Label(tr('Cuenta de usuario')),
-                    const SizedBox(height: 5),
-                    Text(
-                      store.profileDisplayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      user == null
-                          ? tr('Sin cuenta Google vinculada · Guardado local')
-                          : user.email ?? '',
-                      style: TextStyle(
-                        color: user == null ? kMuted : kPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: tr('Personalizar perfil'),
-                onPressed: () => _editProfileName(context),
-                icon: const Icon(Icons.edit_outlined),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        SectionTitle(title: tr('Atención al cliente')),
-        GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.support_agent_rounded,
-                color: Color(0xFF25D366),
-                size: 38,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                tr('¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.'),
-                style: const TextStyle(color: kMuted, height: 1.4),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => _openWhatsApp(context),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF25D366),
-                    foregroundColor: const Color(0xFF06170D),
-                  ),
-                  icon: const Icon(Icons.chat_rounded),
-                  label: Text(tr('Contactar por WhatsApp')),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        SectionTitle(title: tr('Google y respaldo')),
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                user == null
-                    ? Icons.cloud_off_outlined
-                    : Icons.cloud_done_outlined,
-                color: user == null ? kMuted : kPrimary,
-                size: 42,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                user == null ? tr('No conectado') : user.email ?? '',
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                user == null
-                    ? tr(
-                        'Conecta Google para sincronizar tus datos de forma segura y recuperarlos al reinstalar.')
-                    : tr(store.syncMessage),
-                style: const TextStyle(color: kMuted),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${store.pendingSyncCount} ${tr('cambios locales pendientes de sincronizacion')}',
-                style: const TextStyle(color: kMuted, fontSize: 12),
-              ),
-              if (store.lastSyncAt != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '${tr('Ultima sincronizacion')}: ${DateFormat('d MMM, HH:mm', activeLanguage).format(store.lastSyncAt!)}',
-                  style: const TextStyle(color: kMuted, fontSize: 12),
-                ),
-              ],
-              const SizedBox(height: 18),
-              FilledButton.icon(
-                onPressed: store.syncing
-                    ? null
-                    : user == null
-                        ? store.signIn
-                        : store.syncNow,
-                icon: Icon(
-                    user == null ? Icons.login : Icons.cloud_sync_outlined),
-                label: Text(user == null
-                    ? tr('Entrar con Google')
-                    : tr('Respaldar ahora')),
-              ),
-              if (user != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: store.syncing ? null : store.restoreThenSync,
-                      icon: const Icon(Icons.restore_outlined),
-                      label: Text(tr('Recuperar desde Drive')),
-                    ),
-                    TextButton.icon(
-                      onPressed: store.signOut,
-                      icon: const Icon(Icons.logout),
-                      label: Text(tr('Cerrar sesion')),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 12),
-              const Divider(color: kOutline),
-              const SizedBox(height: 8),
-              Label(tr('Respaldo local')),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Row(
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _copyBackup(context, csv: false),
-                    icon: const Icon(Icons.data_object_outlined),
-                    label: Text(tr('Exportar JSON')),
+                  CircleAvatar(
+                    radius: 34,
+                    backgroundColor: kPrimary.withValues(alpha: .16),
+                    backgroundImage:
+                        photoUrl == null ? null : NetworkImage(photoUrl),
+                    child: photoUrl == null
+                        ? Icon(
+                            user == null ? Icons.person_outline : Icons.person,
+                            color: kPrimary,
+                            size: 34,
+                          )
+                        : null,
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _copyBackup(context, csv: true),
-                    icon: const Icon(Icons.table_view_outlined),
-                    label: Text(tr('Exportar CSV')),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Label(tr('Cuenta de usuario')),
+                        const SizedBox(height: 5),
+                        Text(
+                          store.profileDisplayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          user == null
+                              ? tr(
+                                  'Sin cuenta Google vinculada · Guardado local')
+                              : user.email ?? '',
+                          style: TextStyle(
+                            color: user == null ? kMuted : kPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _restoreBackup(context),
-                    icon: const Icon(Icons.upload_file_outlined),
-                    label: Text(tr('Restaurar JSON')),
+                  IconButton(
+                    tooltip: tr('Personalizar perfil'),
+                    onPressed:
+                        store.canWrite ? () => _editProfileName(context) : null,
+                    icon: const Icon(Icons.edit_outlined),
                   ),
                 ],
               ),
@@ -1677,25 +1713,126 @@ class LoginScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        AppPreferencesPanel(store: store),
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Label(tr('Google y respaldo')),
+              const SizedBox(height: 12),
+              ..._googleBackupChildren(context),
+            ],
+          ),
+        ),
         const SizedBox(height: 18),
         VehicleSettingsPanel(store: store),
         const SizedBox(height: 18),
-        MaintenanceSettingsPanel(store: store),
+        _SupportAndPaymentsCard(
+          supportAction: store.supportWhatsAppAction(),
+          paymentAction: store.paymentWhatsAppAction(),
+          onTap: (action) => _launchWhatsApp(context, action),
+        ),
+        const SizedBox(height: 18),
+        const _ReferralPreviewCard(),
+        const SizedBox(height: 18),
+        AppPreferencesPanel(store: store),
       ],
     );
   }
 
-  Future<void> _openWhatsApp(BuildContext context) async {
-    final opened = await launchUrl(
-      buildWhatsAppSupportUri(),
-      mode:
-          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
-      webOnlyWindowName: '_blank',
-    );
-    if (!opened && context.mounted) {
-      toast(context, tr('No se pudo abrir WhatsApp'));
-    }
+  List<Widget> _googleBackupChildren(BuildContext context) {
+    final user = store.user;
+    return [
+      Row(
+        children: [
+          Icon(
+            user == null ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
+            color: user == null ? kMuted : kPrimary,
+            size: 28,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              user == null ? tr('No conectado') : user.email ?? '',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Text(
+        user == null
+            ? tr(
+                'Conecta Google para sincronizar tus datos de forma segura y recuperarlos al reinstalar.')
+            : tr(store.syncMessage),
+        style: const TextStyle(color: kMuted),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        '${store.pendingSyncCount} ${tr('cambios locales pendientes de sincronizacion')}',
+        style: const TextStyle(color: kMuted, fontSize: 12),
+      ),
+      if (store.lastSyncAt != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          '${tr('Ultima sincronizacion')}: ${DateFormat('d MMM, HH:mm', activeLanguage).format(store.lastSyncAt!)}',
+          style: const TextStyle(color: kMuted, fontSize: 12),
+        ),
+      ],
+      const SizedBox(height: 16),
+      FilledButton.icon(
+        onPressed: store.syncing
+            ? null
+            : user == null
+                ? store.signIn
+                : store.syncNow,
+        icon: Icon(user == null ? Icons.login : Icons.cloud_sync_outlined),
+        label: Text(
+          user == null ? tr('Entrar con Google') : tr('Respaldar ahora'),
+        ),
+      ),
+      if (user != null) ...[
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: store.syncing ? null : store.restoreThenSync,
+          icon: const Icon(Icons.restore_outlined),
+          label: Text(tr('Recuperar desde Drive')),
+        ),
+        TextButton.icon(
+          onPressed: store.signOut,
+          icon: const Icon(Icons.logout),
+          label: Text(tr('Cerrar sesion')),
+        ),
+      ],
+      const SizedBox(height: 12),
+      const Divider(color: kOutline),
+      const SizedBox(height: 8),
+      Label(tr('Respaldo local')),
+      const SizedBox(height: 10),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => _copyBackup(context, csv: false),
+            icon: const Icon(Icons.data_object_outlined),
+            label: Text(tr('Exportar JSON')),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _copyBackup(context, csv: true),
+            icon: const Icon(Icons.table_view_outlined),
+            label: Text(tr('Exportar CSV')),
+          ),
+          OutlinedButton.icon(
+            onPressed: store.canWrite ? () => _restoreBackup(context) : null,
+            icon: const Icon(Icons.upload_file_outlined),
+            label: Text(tr('Restaurar JSON')),
+          ),
+        ],
+      ),
+    ];
   }
 
   Future<void> _editProfileName(BuildContext context) async {
@@ -1726,7 +1863,12 @@ class LoginScreen extends StatelessWidget {
       ),
     );
     controller.dispose();
-    if (value != null) await store.setProfileDisplayName(value);
+    if (value != null && context.mounted) {
+      await _runLicensedWrite(
+        context,
+        () => store.setProfileDisplayName(value),
+      );
+    }
   }
 
   Future<void> _copyBackup(BuildContext context, {required bool csv}) async {
@@ -1765,12 +1907,308 @@ class LoginScreen extends StatelessWidget {
     );
     controller.dispose();
     if (value == null || value.trim().isEmpty) return;
+    if (!context.mounted) return;
     try {
-      await store.restoreBackupJson(value);
+      final restored = await _runLicensedWrite(
+        context,
+        () => store.restoreBackupJson(value),
+      );
+      if (!restored) return;
       if (context.mounted) toast(context, tr('Respaldo restaurado'));
     } catch (_) {
       if (context.mounted) toast(context, tr('El respaldo JSON no es válido'));
     }
+  }
+}
+
+class _SupportAndPaymentsCard extends StatelessWidget {
+  const _SupportAndPaymentsCard({
+    required this.supportAction,
+    required this.paymentAction,
+    required this.onTap,
+  });
+
+  final WhatsAppContactAction? supportAction;
+  final WhatsAppContactAction? paymentAction;
+  final ValueChanged<WhatsAppContactAction> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (supportAction == null && paymentAction == null) {
+      return const SizedBox.shrink();
+    }
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.support_agent_rounded,
+                color: kPrimary,
+                size: 34,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  tr('Soporte y pagos'),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (supportAction != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => onTap(supportAction!),
+                icon: const Icon(Icons.support_agent_rounded, size: 19),
+                label: Text(supportAction!.buttonText),
+              ),
+            ),
+          ],
+          if (paymentAction != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => onTap(paymentAction!),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF25D366),
+                ),
+                icon: const Icon(Icons.payments_outlined, size: 19),
+                label: Text(paymentAction!.buttonText),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _launchWhatsApp(
+  BuildContext context,
+  WhatsAppContactAction action,
+) async {
+  final opened = await launchUrl(
+    action.uri,
+    mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    webOnlyWindowName: '_blank',
+  );
+  if (!opened && context.mounted) {
+    toast(context, tr('No se pudo abrir WhatsApp'));
+  }
+}
+
+class _ReferralPreviewCard extends StatelessWidget {
+  const _ReferralPreviewCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? const [Color(0xFF35191E), Color(0xFF21151B)]
+              : const [Color(0xFFFFE9EA), Color(0xFFFFF4F3)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: dark ? const Color(0xFF713640) : const Color(0xFFE8A5AA),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF9F3340).withValues(alpha: dark ? .18 : .10),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: kPrimary.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.card_giftcard_rounded,
+                  color: kPrimary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          tr('Referidos'),
+                          style: const TextStyle(
+                            color: kPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kTertiary.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            tr('Próximamente'),
+                            style: const TextStyle(
+                              color: kTertiary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      tr('Invita a otros conductores y gana días adicionales.'),
+                      style: const TextStyle(color: kMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: kOutline),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                _ReferralMetric(
+                  label: tr('Tu código'),
+                  value: 'TUK-DEMO',
+                ),
+                const _ReferralDivider(),
+                _ReferralMetric(
+                  label: tr('Referidos'),
+                  value: '0',
+                ),
+                const _ReferralDivider(),
+                _ReferralMetric(
+                  label: tr('Días acumulados'),
+                  value: '0',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Semantics(
+            button: true,
+            enabled: false,
+            label: tr('Compartir mi código'),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFB44752).withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFD65A66).withValues(alpha: .55),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.share_outlined,
+                    color: Color(0xFFFF7B86),
+                    size: 19,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    tr('Compartir mi código'),
+                    style: const TextStyle(
+                      color: Color(0xFFFF7B86),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReferralMetric extends StatelessWidget {
+  const _ReferralMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+        child: Column(
+          children: [
+            Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kMuted,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReferralDivider extends StatelessWidget {
+  const _ReferralDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 54, color: kOutline);
   }
 }
 
@@ -1851,16 +2289,21 @@ class _AppPreferencesPanelState extends State<AppPreferencesPanel> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () async {
-                    await widget.store.savePreferences(
-                      currency: currency,
-                      language: language,
-                      theme: theme,
-                    );
-                    if (context.mounted) {
-                      toast(context, tr('Ajustes guardados'));
-                    }
-                  },
+                  onPressed: widget.store.canWrite
+                      ? () async {
+                          final saved = await _runLicensedWrite(
+                            context,
+                            () => widget.store.savePreferences(
+                              currency: currency,
+                              language: language,
+                              theme: theme,
+                            ),
+                          );
+                          if (saved && context.mounted) {
+                            toast(context, tr('Ajustes guardados'));
+                          }
+                        }
+                      : null,
                   icon: const Icon(Icons.save_outlined),
                   label: Text(tr('Guardar ajustes')),
                 ),
@@ -1884,6 +2327,7 @@ class VehicleSettingsPanel extends StatefulWidget {
 
 class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
   late final TextEditingController name;
+  late final TextEditingController interval;
   late final TextEditingController registration;
   bool saving = false;
 
@@ -1892,6 +2336,9 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
     super.initState();
     final vehicle = widget.store.activeVehicle;
     name = TextEditingController(text: vehicle?.name ?? '');
+    interval = TextEditingController(
+      text: trimNum(widget.store.maintenanceIntervalKm),
+    );
     registration = TextEditingController(text: vehicle?.registration ?? '');
   }
 
@@ -1900,22 +2347,37 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
     super.didUpdateWidget(oldWidget);
     final vehicle = widget.store.activeVehicle;
     if (vehicle != null && name.text.isEmpty) name.text = vehicle.name;
+    final currentInterval = trimNum(widget.store.maintenanceIntervalKm);
+    if (interval.text != currentInterval) interval.text = currentInterval;
   }
 
   @override
   void dispose() {
     name.dispose();
+    interval.dispose();
     registration.dispose();
     super.dispose();
   }
 
   Future<void> save() async {
     if (name.text.trim().isEmpty) return;
+    final intervalKm = _parseOptionalNumber(interval.text);
+    if (intervalKm == null || intervalKm <= 0) {
+      toast(context, tr('El intervalo debe ser mayor que 0'));
+      return;
+    }
     setState(() => saving = true);
-    await widget.store.updateActiveVehicle(
-      name: name.text,
-      registration: registration.text,
-    );
+    final saved = await _runLicensedWrite(context, () async {
+      await widget.store.updateActiveVehicle(
+        name: name.text,
+        registration: registration.text,
+      );
+      await widget.store.setMaintenanceInterval(intervalKm);
+    });
+    if (!saved) {
+      if (mounted) setState(() => saving = false);
+      return;
+    }
     if (mounted) {
       setState(() => saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1944,6 +2406,15 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
                 decoration: InputDecoration(
                   labelText: tr('Nombre del vehiculo'),
                   prefixIcon: const Icon(Icons.electric_rickshaw),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: interval,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: tr('Intervalo de mantenimiento (km)'),
+                  prefixIcon: const Icon(Icons.settings_suggest_outlined),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1982,7 +2453,7 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: saving ? null : save,
+                  onPressed: saving || !widget.store.canWrite ? null : save,
                   icon: const Icon(Icons.save_outlined),
                   label: Text(tr('Guardar vehiculo')),
                 ),
@@ -1995,168 +2466,17 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
   }
 }
 
-class MaintenanceSettingsPanel extends StatefulWidget {
-  const MaintenanceSettingsPanel({required this.store, super.key});
-
-  final RecordStore store;
-
-  @override
-  State<MaintenanceSettingsPanel> createState() =>
-      _MaintenanceSettingsPanelState();
-}
-
-class _MaintenanceSettingsPanelState extends State<MaintenanceSettingsPanel> {
-  late final TextEditingController interval;
-
-  @override
-  void initState() {
-    super.initState();
-    interval = TextEditingController(
-      text: trimNum(widget.store.maintenanceIntervalKm),
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant MaintenanceSettingsPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final current = trimNum(widget.store.maintenanceIntervalKm);
-    if (interval.text != current) interval.text = current;
-  }
-
-  @override
-  void dispose() {
-    interval.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final records = widget.store.maintenanceRecords;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionTitle(title: tr('Ajustes de mantenimiento')),
-        GlassCard(
-          child: Column(
-            children: [
-              TextField(
-                controller: interval,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: tr('Intervalo de mantenimiento (km)'),
-                  prefixIcon: const Icon(Icons.settings_suggest_outlined),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: saveInterval,
-                icon: const Icon(Icons.save_outlined),
-                label: Text(tr('Guardar intervalo')),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Scaffold(
-                appBar: AppBar(title: Text(tr('Nuevo mantenimiento'))),
-                body: MaintenanceFormScreen(store: widget.store),
-              ),
-            ),
-          ),
-          icon: const Icon(Icons.add_task_outlined),
-          label: Text(tr('Registrar mantenimiento')),
-        ),
-        const SizedBox(height: 12),
-        if (records.isEmpty)
-          EmptyState(tr('Sin mantenimientos registrados.'))
-        else
-          ...records.take(8).map(
-                (record) => Dismissible(
-                  key: ValueKey(record.id),
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    color: kDanger.withValues(alpha: .25),
-                    child: const Icon(Icons.delete_outline, color: kDanger),
-                  ),
-                  confirmDismiss: (_) => confirmDeleteMaintenance(context),
-                  onDismissed: (_) => widget.store.deleteMaintenance(record.id),
-                  child: GlassCard(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => Scaffold(
-                            appBar:
-                                AppBar(title: Text(tr('Editar mantenimiento'))),
-                            body: MaintenanceFormScreen(
-                              store: widget.store,
-                              record: record,
-                            ),
-                          ),
-                        ),
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                      leading:
-                          const Icon(Icons.build_outlined, color: kPrimary),
-                      title: Text(record.type),
-                      subtitle: Text(
-                        '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} - ${numFmt(record.odometer)} km',
-                      ),
-                      trailing: record.cost == null
-                          ? null
-                          : Text(money(record.cost!)),
-                    ),
-                  ),
-                ),
-              ),
-      ],
-    );
-  }
-
-  Future<void> saveInterval() async {
-    final value = _parseOptionalNumber(interval.text);
-    if (value == null || value <= 0) {
-      toast(context, tr('El intervalo debe ser mayor que 0'));
-      return;
-    }
-    await widget.store.setMaintenanceInterval(value);
-    if (!mounted) return;
-    toast(context, tr('Intervalo guardado'));
-  }
-
-  Future<bool> confirmDeleteMaintenance(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(tr('Eliminar mantenimiento')),
-            content: Text(tr('El proximo mantenimiento se recalculara.')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(tr('Cancelar')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(tr('Eliminar')),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-}
-
 class MaintenanceFormScreen extends StatefulWidget {
-  const MaintenanceFormScreen({required this.store, super.key, this.record});
+  const MaintenanceFormScreen({
+    required this.store,
+    super.key,
+    this.record,
+    this.onSaved,
+  });
 
   final RecordStore store;
   final MaintenanceRecord? record;
+  final VoidCallback? onSaved;
 
   @override
   State<MaintenanceFormScreen> createState() => _MaintenanceFormScreenState();
@@ -2271,7 +2591,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: save,
+          onPressed: widget.store.canWrite ? save : null,
           icon: const Icon(Icons.save_outlined),
           label: Text(tr('Guardar mantenimiento')),
         ),
@@ -2314,8 +2634,9 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       toast(context, tr('El costo no es valido'));
       return;
     }
-    await widget.store.saveMaintenance(
-      MaintenanceRecord(
+    final saved = await _runLicensedWrite(
+      context,
+      () => widget.store.saveMaintenance(MaintenanceRecord(
         id: widget.record?.id ??
             DateTime.now().microsecondsSinceEpoch.toString(),
         dateTime:
@@ -2328,10 +2649,12 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         createdAt: widget.record?.createdAt,
         deviceId: widget.record?.deviceId ?? '',
         schemaVersion: widget.record?.schemaVersion ?? _databaseSchemaVersion,
-      ),
+      )),
     );
+    if (!saved) return;
     if (!mounted) return;
     toast(context, tr('Mantenimiento guardado'));
     Navigator.pop(context);
+    if (widget.record == null) widget.onSaved?.call();
   }
 }

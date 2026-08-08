@@ -21,6 +21,8 @@ class SyncQueueStore implements SyncQueueRepository {
     required SyncAction action,
     required String userId,
     required String vehicleId,
+    Map<String, dynamic>? previousPayload,
+    bool rollbackOnLicenseRejection = false,
   }) async {
     final id = '${entityType.name}:$entityId';
     final raw = _box.get(id);
@@ -35,6 +37,8 @@ class SyncQueueStore implements SyncQueueRepository {
       vehicleId: vehicleId,
       createdAt: now,
       updatedAt: now,
+      previousPayload: previousPayload,
+      rollbackOnLicenseRejection: rollbackOnLicenseRejection,
     );
     final consolidated = SyncQueuePolicy.consolidate(existing, incoming);
     await _box.put(id, consolidated.toMap());
@@ -62,6 +66,22 @@ class SyncQueueStore implements SyncQueueRepository {
   }
 
   @override
+  Future<Set<String>> completeIfUnchanged(
+    Iterable<SyncOperation> operations,
+  ) async {
+    final completed = <String>{};
+    for (final sent in operations) {
+      final raw = _box.get(sent.id);
+      if (raw is! Map) continue;
+      final current = SyncOperation.fromMap(raw);
+      if (!SyncQueuePolicy.canComplete(sent, current)) continue;
+      await _box.delete(sent.id);
+      completed.add(sent.id);
+    }
+    return completed;
+  }
+
+  @override
   Future<void> markFailed(
     Iterable<String> operationIds,
     String error,
@@ -81,6 +101,8 @@ class SyncQueueStore implements SyncQueueRepository {
         updatedAt: DateTime.now(),
         attempts: operation.attempts + 1,
         lastError: error,
+        previousPayload: operation.previousPayload,
+        rollbackOnLicenseRejection: operation.rollbackOnLicenseRejection,
       );
       await _box.put(id, failed.toMap());
     }

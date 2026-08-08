@@ -2,6 +2,19 @@ part of '../main.dart';
 
 class RecordStore extends ChangeNotifier {
   RecordStore() {
+    _licenseService = SupabaseLicenseService(
+      client: _supabase,
+      cache: _meta,
+    );
+    _whatsAppSettingsService = WhatsAppSettingsService(
+      projectId: _projectId,
+      cache: HiveWhatsAppSettingsCache(_meta),
+      loadRemote: (projectId) => _supabase.rpc(
+        'get_public_whatsapp_settings',
+        params: {'target_project_id': projectId},
+      ),
+    );
+    whatsAppSettings = _whatsAppSettingsService.cachedSettings();
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
       payloadFor: _payloadForOperation,
@@ -10,9 +23,10 @@ class RecordStore extends ChangeNotifier {
       queue: _syncQueue,
       gateway: _supabaseGateway,
     );
+    _restoreCachedIdentityAndLicense();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
       if (initialized) unawaited(_handleAuthState(state.session?.user));
-    });
+    }, onError: _handleAuthStreamError);
     _load();
     unawaited(_initialize());
   }
@@ -24,15 +38,135 @@ class RecordStore extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
   late final SupabaseSyncGateway _supabaseGateway;
   late final SyncCoordinator _syncCoordinator;
+  late final SupabaseLicenseService _licenseService;
+  late final WhatsAppSettingsService _whatsAppSettingsService;
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
+  Timer? _syncDebounceTimer;
+  Timer? _retrySyncTimer;
+  int _consecutiveSyncFailures = 0;
+  bool _syncRequestedWhileRunning = false;
+  String? _ensuredProfileFingerprint;
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   User? user;
   bool initialized = false;
   bool syncing = false;
   String syncMessage = 'Base local pendiente de respaldo';
+  LicenseSnapshot license = LicenseSnapshot.local;
+  late WhatsAppSettings whatsAppSettings;
+
+  bool get canWrite => license.canWrite;
+  bool get isReadOnly => !canWrite;
+
+  void _restoreCachedIdentityAndLicense() {
+    final restoredUser = _supabase.auth.currentUser;
+    if (restoredUser != null) {
+      user = restoredUser;
+      license = _licenseService.cachedLicense(restoredUser.id);
+      return;
+    }
+    final claimed = _meta.get('claimedUserId');
+    license = claimed is String && claimed.isNotEmpty
+        ? _licenseService.cachedLicense(claimed)
+        : LicenseSnapshot.local;
+  }
+
+  void _handleAuthStreamError(Object error, StackTrace stackTrace) {
+    syncMessage = 'Sin conexion. La sesion y los datos locales siguen activos';
+    notifyListeners();
+    _scheduleSyncRetry();
+  }
+
+  void handleAppResumed() {
+    unawaited(refreshWhatsAppSettings());
+    if (user == null) return;
+    unawaited(refreshLicense());
+    unawaited(syncNow());
+  }
+
+  Future<WhatsAppSettings> refreshWhatsAppSettings() async {
+    whatsAppSettings = await _whatsAppSettingsService.refresh();
+    notifyListeners();
+    return whatsAppSettings;
+  }
+
+  WhatsAppContactAction? supportWhatsAppAction() =>
+      buildWhatsAppContactAction(
+        settings: whatsAppSettings,
+        channel: WhatsAppChannel.support,
+        variables: _whatsAppVariables(),
+      );
+
+  WhatsAppContactAction? paymentWhatsAppAction({
+    String? requestedPlan,
+    String? contactReason,
+  }) =>
+      buildWhatsAppContactAction(
+        settings: whatsAppSettings,
+        channel: WhatsAppChannel.payment,
+        variables: _whatsAppVariables(
+          requestedPlan: requestedPlan,
+          contactReason: contactReason ?? _defaultPaymentContactReason,
+        ),
+      );
+
+  String get _defaultPaymentContactReason => switch (license.licenseStatus) {
+        LicenseStatus.trial || LicenseStatus.pending => 'pagar y activar',
+        LicenseStatus.expiring ||
+        LicenseStatus.expired ||
+        LicenseStatus.suspended ||
+        LicenseStatus.revoked =>
+          'renovar',
+        _ => 'pagar o renovar',
+      };
+
+  Map<String, String?> _whatsAppVariables({
+    String? requestedPlan,
+    String? contactReason,
+  }) {
+    final expiry = license.expiresAt ?? license.trialEndsAt;
+    return {
+      'customer_name': profileDisplayName,
+      'customer_email': user?.email,
+      'license_key': license.licenseKey,
+      'application_name': whatsAppSettings.applicationName,
+      'current_plan': license.planId,
+      'requested_plan': requestedPlan,
+      'expires_at': expiry == null
+          ? null
+          : DateFormat('yyyy-MM-dd').format(expiry.toLocal()),
+      'contact_reason': contactReason,
+    };
+  }
+
+  Future<LicenseSnapshot> refreshLicense() async {
+    final currentUser = user;
+    if (currentUser == null) {
+      final claimed = _meta.get('claimedUserId');
+      license = claimed is String && claimed.isNotEmpty
+          ? _licenseService.cachedLicense(claimed)
+          : LicenseSnapshot.local;
+      notifyListeners();
+      return license;
+    }
+    license = await _licenseService.refresh(
+      userId: currentUser.id,
+      deviceFingerprint: deviceId,
+    );
+    notifyListeners();
+    return license;
+  }
+
+  Future<void> _requireWriteAccess() async {
+    final currentUser = user;
+    if (currentUser != null) {
+      license = _licenseService.cachedLicense(currentUser.id);
+    }
+    if (!canWrite) throw ReadOnlyLicenseException(license);
+    if (currentUser != null) unawaited(refreshLicense());
+  }
 
   List<DailyRecord> get records => [..._records]..sort(_compareRecordsDesc);
 
@@ -143,10 +277,12 @@ class RecordStore extends ChangeNotifier {
   String get preferredTheme => '${_meta.get('preferredTheme') ?? 'system'}';
 
   Future<void> setProfileDisplayName(String value) async {
+    await _requireWriteAccess();
     final clean = value.trim();
     if (clean.isEmpty) return;
+    final previousSettings = _settingsRollbackPayload();
     await _meta.put('profileDisplayName:$activeUserId', clean);
-    await _enqueueSettingsSync();
+    await _enqueueSettingsSync(previousPayload: previousSettings);
     notifyListeners();
     unawaitedSync();
   }
@@ -156,17 +292,31 @@ class RecordStore extends ChangeNotifier {
     required String language,
     required String theme,
   }) async {
+    await _requireWriteAccess();
+    final previousSettings = _settingsRollbackPayload();
     await _meta.putAll({
       'preferredCurrency': currency,
       'preferredLanguage': language,
       'preferredTheme': theme,
     });
-    await _enqueueSettingsSync();
+    await _enqueueSettingsSync(previousPayload: previousSettings);
     notifyListeners();
     unawaitedSync();
   }
 
-  Future<void> _enqueueSettingsSync() async {
+  Map<String, dynamic> _settingsRollbackPayload() => {
+        'maintenanceIntervalKm': maintenanceIntervalKm,
+        'preferredCurrency': preferredCurrency,
+        'preferredLanguage': preferredLanguage,
+        'preferredTheme': preferredTheme,
+        'profileDisplayName:$activeUserId': profileDisplayName,
+        'settingsUpdatedAt':
+            '${_meta.get('settingsUpdatedAt') ?? DateTime.now().toIso8601String()}',
+      };
+
+  Future<void> _enqueueSettingsSync({
+    Map<String, dynamic>? previousPayload,
+  }) async {
     await _meta.put('settingsUpdatedAt', DateTime.now().toIso8601String());
     await _syncQueue.enqueue(
       entityType: SyncEntityType.settings,
@@ -174,6 +324,8 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: activeVehicleId,
+      previousPayload: previousPayload,
+      rollbackOnLicenseRejection: previousPayload != null,
     );
   }
 
@@ -219,6 +371,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> restoreBackupJson(String source) async {
+    await _requireWriteAccess();
     final decoded = jsonDecode(source);
     if (decoded is! Map) throw const FormatException('Respaldo no válido');
     await _replaceWithPortableBackup(Map<String, dynamic>.from(decoded));
@@ -226,6 +379,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    unawaited(refreshWhatsAppSettings());
     try {
       await _migrateLegacyMaintenance();
       await _migrateSyncMetadata();
@@ -233,11 +387,11 @@ class RecordStore extends ChangeNotifier {
       await _seedInitialMaintenanceIfEmpty();
       await _seedSyncQueueIfNeeded();
       _load();
-      await restoreGoogleSession();
     } finally {
       initialized = true;
       notifyListeners();
     }
+    unawaited(restoreGoogleSession());
   }
 
   Future<void> configureFirstVehicle({
@@ -245,6 +399,7 @@ class RecordStore extends ChangeNotifier {
     String registration = '',
     double initialOdometer = 0,
   }) async {
+    await _requireWriteAccess();
     final cleanName = name.trim();
     if (cleanName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
@@ -270,6 +425,7 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: vehicleId,
+      rollbackOnLicenseRejection: true,
     );
     if (initialOdometer > 0 && records.isEmpty) {
       await save(
@@ -292,6 +448,7 @@ class RecordStore extends ChangeNotifier {
     String registration = '',
     double initialOdometer = 0,
   }) async {
+    await _requireWriteAccess();
     final cleanName = name.trim();
     if (cleanName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
@@ -317,6 +474,7 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: vehicleId,
+      rollbackOnLicenseRejection: true,
     );
     notifyListeners();
     unawaitedSync();
@@ -342,6 +500,7 @@ class RecordStore extends ChangeNotifier {
     required String name,
     String registration = '',
   }) async {
+    await _requireWriteAccess();
     final current = activeVehicle;
     final cleanName = name.trim();
     if (current == null || cleanName.isEmpty) return;
@@ -363,6 +522,8 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: activeUserId,
       vehicleId: current.id,
+      previousPayload: current.toMap(),
+      rollbackOnLicenseRejection: true,
     );
     notifyListeners();
     unawaitedSync();
@@ -559,6 +720,8 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> save(DailyRecord record) async {
+    await _requireWriteAccess();
+    final previousRaw = _box.get(record.id);
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
       userId: activeUserId,
@@ -573,12 +736,16 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
+      previousPayload:
+          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
+      rollbackOnLicenseRejection: true,
     );
     _load();
     unawaitedSync();
   }
 
   Future<void> delete(String id) async {
+    await _requireWriteAccess();
     final raw = _box.get(id);
     if (raw != null) {
       final record = DailyRecord.fromMap(raw as Map).withSyncInfo(
@@ -596,6 +763,8 @@ class RecordStore extends ChangeNotifier {
         action: SyncAction.delete,
         userId: record.userId,
         vehicleId: record.vehicleId,
+        previousPayload: Map<String, dynamic>.from(raw),
+        rollbackOnLicenseRejection: true,
       );
     }
     _load();
@@ -603,6 +772,8 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> saveMaintenance(MaintenanceRecord record) async {
+    await _requireWriteAccess();
+    final previousRaw = _maintenanceBox.get(record.id);
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
       userId: activeUserId,
@@ -617,12 +788,16 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
+      previousPayload:
+          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
+      rollbackOnLicenseRejection: true,
     );
     _load();
     unawaitedSync();
   }
 
   Future<void> deleteMaintenance(String id) async {
+    await _requireWriteAccess();
     final raw = _maintenanceBox.get(id);
     if (raw != null) {
       final record = MaintenanceRecord.fromMap(raw as Map).withSyncInfo(
@@ -640,6 +815,8 @@ class RecordStore extends ChangeNotifier {
         action: SyncAction.delete,
         userId: record.userId,
         vehicleId: record.vehicleId,
+        previousPayload: Map<String, dynamic>.from(raw),
+        rollbackOnLicenseRejection: true,
       );
     }
     _load();
@@ -647,8 +824,10 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> setMaintenanceInterval(double intervalKm) async {
+    await _requireWriteAccess();
+    final previousSettings = _settingsRollbackPayload();
     await _meta.put('maintenanceIntervalKm', intervalKm);
-    await _enqueueSettingsSync();
+    await _enqueueSettingsSync(previousPayload: previousSettings);
     _load();
     unawaitedSync();
   }
@@ -672,6 +851,7 @@ class RecordStore extends ChangeNotifier {
     _stopAutomaticSync();
     await _supabase.auth.signOut();
     user = null;
+    await refreshLicense();
     syncMessage = 'Sesion cerrada. La base local sigue en este dispositivo';
     notifyListeners();
   }
@@ -683,35 +863,59 @@ class RecordStore extends ChangeNotifier {
   Future<void> syncNow() async {
     await _withSync(() async {
       if (user == null) return;
+      await refreshLicense();
       if (activeVehicle == null) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
         return;
       }
       await _synchronizeWithSupabase();
-      syncMessage = pendingSyncCount == 0
-          ? 'Datos sincronizados de forma segura'
-          : 'Cambios guardados localmente, pendientes de conexion';
+      syncMessage = !canWrite
+          ? 'Tu licencia no permite realizar cambios. Modo solo lectura'
+          : pendingSyncCount == 0
+              ? 'Datos sincronizados de forma segura'
+              : 'Cambios guardados localmente, pendientes de conexion';
     });
   }
 
   void unawaitedSync() {
-    if (user != null && !syncing) {
-      syncNow();
+    if (user == null) return;
+    if (syncing) {
+      _syncRequestedWhileRunning = true;
+      return;
     }
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = Timer(
+      const Duration(milliseconds: 900),
+      () => unawaited(syncNow()),
+    );
   }
 
   Future<void> _withSync(Future<void> Function() action) async {
+    if (syncing) {
+      _syncRequestedWhileRunning = true;
+      return;
+    }
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = null;
     syncing = true;
     syncMessage = 'Sincronizando...';
     notifyListeners();
     try {
       await action();
+      _consecutiveSyncFailures = 0;
+      _retrySyncTimer?.cancel();
+      _retrySyncTimer = null;
       await _meta.put('lastSyncAt', DateTime.now().toIso8601String());
     } catch (_) {
       syncMessage = 'Sin conexion. Los cambios permanecen guardados';
+      _scheduleSyncRetry();
     } finally {
       syncing = false;
       notifyListeners();
+      if (_syncRequestedWhileRunning && user != null) {
+        _syncRequestedWhileRunning = false;
+        unawaitedSync();
+      }
     }
   }
 
@@ -719,6 +923,7 @@ class RecordStore extends ChangeNotifier {
     if (authenticatedUser == null) {
       user = null;
       _stopAutomaticSync();
+      await refreshLicense();
       if (initialized) {
         syncMessage = 'Entra con Google para activar la sincronizacion';
         notifyListeners();
@@ -726,10 +931,15 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     user = authenticatedUser;
+    license = _licenseService.cachedLicense(authenticatedUser.id);
     notifyListeners();
+    _startAutomaticSync();
     try {
-      await _claimLocalDataForSignedInUser();
-      _startAutomaticSync();
+      await _ensureRemoteProfile();
+      await refreshLicense();
+      if (canWrite) {
+        await _claimLocalDataForSignedInUser();
+      }
       await syncNow();
     } on StateError {
       _stopAutomaticSync();
@@ -737,7 +947,31 @@ class RecordStore extends ChangeNotifier {
       user = null;
       syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
       notifyListeners();
+    } catch (_) {
+      syncMessage = 'Sin conexion. Trabajando con los datos locales';
+      notifyListeners();
+      _scheduleSyncRetry();
     }
+  }
+
+  void _scheduleSyncRetry() {
+    if (user == null || _retrySyncTimer?.isActive == true) return;
+    _consecutiveSyncFailures = min(_consecutiveSyncFailures + 1, 6);
+    const delays = <Duration>[
+      Duration(seconds: 5),
+      Duration(seconds: 15),
+      Duration(seconds: 30),
+      Duration(minutes: 1),
+      Duration(minutes: 2),
+      Duration(minutes: 5),
+    ];
+    _retrySyncTimer = Timer(
+      delays[_consecutiveSyncFailures - 1],
+      () {
+        _retrySyncTimer = null;
+        unawaited(syncNow());
+      },
+    );
   }
 
   void _startAutomaticSync() {
@@ -757,16 +991,38 @@ class RecordStore extends ChangeNotifier {
           ),
           callback: (_) => unawaitedSync(),
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'licenses',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: currentUser.id,
+          ),
+          callback: (_) => unawaited(refreshLicense()),
+        )
         .subscribe();
     _automaticSyncTimer = Timer.periodic(
-      const Duration(seconds: 45),
-      (_) => unawaitedSync(),
+      const Duration(minutes: 5),
+      (_) {
+        unawaited(refreshLicense());
+        unawaited(refreshWhatsAppSettings());
+        unawaitedSync();
+      },
     );
   }
 
   void _stopAutomaticSync() {
     _automaticSyncTimer?.cancel();
     _automaticSyncTimer = null;
+    _syncDebounceTimer?.cancel();
+    _syncDebounceTimer = null;
+    _retrySyncTimer?.cancel();
+    _retrySyncTimer = null;
+    _consecutiveSyncFailures = 0;
+    _syncRequestedWhileRunning = false;
+    _ensuredProfileFingerprint = null;
     final channel = _realtimeChannel;
     _realtimeChannel = null;
     if (channel != null) unawaited(_supabase.removeChannel(channel));
@@ -809,28 +1065,92 @@ class RecordStore extends ChangeNotifier {
     if (currentUser == null) return;
     await _ensureRemoteProfile();
     final cursorKey = 'supabaseCursor:${currentUser.id}';
-    final cursor = _meta.get(cursorKey)?.toString();
-    final remote = await _supabaseGateway.pull(
-      userId: currentUser.id,
-      cursor: cursor,
-    );
-    await _applyRemoteChanges(remote.changes);
-    if (remote.nextCursor != null) {
-      await _meta.put(cursorKey, remote.nextCursor);
+    var cursor = _meta.get(cursorKey)?.toString();
+    var pageCount = 0;
+    var hasMore = true;
+    while (hasMore && pageCount < 100) {
+      final remote = await _supabaseGateway.pull(
+        userId: currentUser.id,
+        cursor: cursor,
+      );
+      await _applyRemoteChanges(remote.changes);
+      if (remote.nextCursor != null) {
+        cursor = remote.nextCursor;
+        await _meta.put(cursorKey, cursor);
+      }
+      hasMore = remote.hasMore && remote.changes.isNotEmpty;
+      pageCount++;
     }
 
-    final pendingBefore = _syncQueue.pendingForUser(
+    final pendingBatch = _syncQueue.pendingForUser(
       currentUser.id,
-      limit: 100000,
+      limit: 500,
     );
-    await _syncCoordinator.pushPending(userId: currentUser.id, batchSize: 500);
-    final pendingAfter = _syncQueue
-        .pendingForUser(currentUser.id, limit: 100000)
-        .map((operation) => operation.id)
-        .toSet();
-    for (final operation in pendingBefore) {
-      if (!pendingAfter.contains(operation.id)) {
+    if (!canWrite) {
+      _load();
+      return;
+    }
+    final report = await _syncCoordinator.pushPending(
+      userId: currentUser.id,
+      batchSize: 500,
+    );
+    for (final operation in pendingBatch) {
+      if (report.completedOperationIds.contains(operation.id)) {
         await _markEntitySynced(operation);
+      }
+    }
+    if (report.blockedByLicense) {
+      await _licenseService.markWriteRejected(
+        currentUser.id,
+        const LicenseWriteRejectedException('RLS rejected write'),
+      );
+      await refreshLicense();
+      await _rollbackBlockedOperations(
+        pendingBatch.where(
+          (operation) =>
+              report.blockedOperationIds.contains(operation.id) &&
+              operation.rollbackOnLicenseRejection,
+        ),
+      );
+      syncMessage =
+          'Tu licencia no permite realizar cambios. Modo solo lectura';
+    }
+    _load();
+    if (report.failed > 0 && !report.blockedByLicense) {
+      throw const TemporarySyncException('remote push failed');
+    }
+  }
+
+  Future<void> _rollbackBlockedOperations(
+    Iterable<SyncOperation> operations,
+  ) async {
+    for (final operation in operations) {
+      final previous = operation.previousPayload;
+      switch (operation.entityType) {
+        case SyncEntityType.dailyRecord:
+          if (previous == null) {
+            await _box.delete(operation.entityId);
+          } else {
+            await _box.put(operation.entityId, previous);
+          }
+          break;
+        case SyncEntityType.maintenance:
+          if (previous == null) {
+            await _maintenanceBox.delete(operation.entityId);
+          } else {
+            await _maintenanceBox.put(operation.entityId, previous);
+          }
+          break;
+        case SyncEntityType.vehicle:
+          if (previous == null) {
+            await _meta.delete('vehicle:${operation.entityId}');
+          } else {
+            await _meta.put('vehicle:${operation.entityId}', previous);
+          }
+          break;
+        case SyncEntityType.settings:
+          if (previous != null) await _meta.putAll(previous);
+          break;
       }
     }
     _load();
@@ -840,7 +1160,7 @@ class RecordStore extends ChangeNotifier {
     final currentUser = user;
     if (currentUser == null) return;
     final metadata = currentUser.userMetadata ?? const <String, dynamic>{};
-    await _supabase.from('profiles').upsert({
+    final profile = {
       'id': currentUser.id,
       'email': currentUser.email,
       'display_name': metadata['full_name'] ??
@@ -848,7 +1168,23 @@ class RecordStore extends ChangeNotifier {
           currentUser.email?.split('@').first,
       'avatar_url': metadata['avatar_url'] ?? metadata['picture'],
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'id');
+    };
+    final fingerprint = jsonEncode({
+      'id': profile['id'],
+      'email': profile['email'],
+      'display_name': profile['display_name'],
+      'avatar_url': profile['avatar_url'],
+    });
+    if (_ensuredProfileFingerprint == fingerprint) return;
+    final existing = await _supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+    if (existing == null) {
+      await _supabase.from('profiles').insert(profile);
+    }
+    _ensuredProfileFingerprint = fingerprint;
   }
 
   Future<void> _applyRemoteChanges(List<RemoteChange> changes) async {

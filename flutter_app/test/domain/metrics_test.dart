@@ -1,7 +1,10 @@
 import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
-void main() {
+Future<void> main() async {
+  await initializeDateFormatting('es');
+
   test('La búsqueda de Revolico codifica términos personalizados', () {
     final uri = buildRevolicoSearchUri(' batería 72V & litio ');
 
@@ -13,29 +16,19 @@ void main() {
     expect(uri.toString(), isNot(contains(' ')));
   });
 
-  test('El soporte abre el número correcto de WhatsApp', () {
-    final uri = buildWhatsAppSupportUri();
-
-    expect(uri.scheme, 'https');
-    expect(uri.host, 'wa.me');
-    expect(uri.path, '/5355592873');
-    expect(uri.queryParameters['text'],
-        'Hola, necesito ayuda con TukTuk Control.');
-    expect(uri.toString(), isNot(contains(' ')));
-  });
-
   test('Metrics calcula ingresos, distancia, eficiencia y cargas', () {
+    final today = DateTime.now();
     final records = [
       DailyRecord(
         id: 'first',
-        date: DateTime(2026, 7, 14),
+        date: today.subtract(const Duration(days: 1)),
         earnings: 3000,
         odometer: 100,
         expense: 200,
       ),
       DailyRecord(
         id: 'second',
-        date: DateTime(2026, 7, 15),
+        date: today,
         earnings: 5000,
         odometer: 150,
         batteryVoltage: 80,
@@ -45,7 +38,7 @@ void main() {
     final maintenances = [
       MaintenanceRecord(
         id: 'maintenance',
-        dateTime: DateTime(2026, 7, 15),
+        dateTime: today,
         odometer: 150,
         type: 'General',
         description: 'Mantenimiento de prueba',
@@ -62,6 +55,7 @@ void main() {
     expect(metrics.efficiency, 160);
     expect(metrics.latestOdometer, 150);
     expect(metrics.chargeEvents, 1);
+    expect(metrics.cycleSummaries.single.expenses, 1200);
   });
 
   test('Metrics tolera una lista vacía', () {

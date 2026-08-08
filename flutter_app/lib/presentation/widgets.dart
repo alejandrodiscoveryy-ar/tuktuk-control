@@ -423,47 +423,135 @@ class MonthlyEarningsBars extends StatelessWidget {
     final visible = cycles.take(8).toList().reversed.toList();
     final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
     return GlassCard(
-      child: SizedBox(
-        height: 210,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (final cycle in visible)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        moneyCompact(cycle.earnings, includeCurrency: false),
-                        style: const TextStyle(color: kMuted, fontSize: 10),
-                      ),
-                      const SizedBox(height: 5),
-                      Container(
-                        height:
-                            maximum == 0 ? 2 : 130 * cycle.earnings / maximum,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          gradient: const LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [kPrimary, kSecondary],
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const _ChartLegendDot(color: kPrimary),
+              const SizedBox(width: 5),
+              Text(tr('Ingreso'), style: const TextStyle(fontSize: 11)),
+              const SizedBox(width: 18),
+              const _ChartLegendDot(color: kDanger),
+              const SizedBox(width: 5),
+              Text(tr('Gasto'), style: const TextStyle(fontSize: 11)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 195,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (final cycle in visible)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            moneyCompact(
+                              cycle.earnings,
+                              includeCurrency: false,
+                            ),
+                            style: const TextStyle(color: kMuted, fontSize: 10),
                           ),
-                        ),
+                          const SizedBox(height: 5),
+                          Tooltip(
+                            message:
+                                '${tr('Ingreso')}: ${money(cycle.earnings)}\n${tr('Gasto')}: ${money(cycle.expenses)}',
+                            child: _IncomeExpenseBar(
+                              height: maximum == 0
+                                  ? 2
+                                  : 130 * cycle.earnings / maximum,
+                              expenseRatio: cycle.earnings <= 0
+                                  ? 0
+                                  : cycle.expenses / cycle.earnings,
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            DateFormat('MMM', activeLanguage)
+                                .format(cycle.start),
+                            style: const TextStyle(color: kMuted, fontSize: 10),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 7),
-                      Text(
-                        DateFormat('MMM', activeLanguage).format(cycle.start),
-                        style: const TextStyle(color: kMuted, fontSize: 10),
-                      ),
-                    ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IncomeExpenseBar extends StatelessWidget {
+  const _IncomeExpenseBar({
+    required this.height,
+    required this.expenseRatio,
+  });
+
+  final double height;
+  final double expenseRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = expenseRatio.clamp(0.0, 1.0);
+    return SizedBox(
+      height: height,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.bottomCenter,
+          children: [
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [kPrimary, kSecondary],
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: FractionallySizedBox(
+                heightFactor: ratio,
+                widthFactor: 1,
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Color(0xFFB91C35), kDanger],
+                    ),
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ChartLegendDot extends StatelessWidget {
+  const _ChartLegendDot({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }

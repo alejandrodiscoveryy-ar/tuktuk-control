@@ -20,7 +20,9 @@ part 'domain/sync.dart';
 part 'data/record_store.dart';
 part 'data/seed_data.dart';
 part 'data/sync_queue.dart';
+part 'data/supabase_license_service.dart';
 part 'data/supabase_sync_gateway.dart';
+part 'data/whatsapp_settings_service.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
@@ -42,6 +44,10 @@ const _supabasePublishableKey = String.fromEnvironment(
 );
 const _supabaseMobileRedirect =
     'com.alejandrocruz.tuktukcontrol://login-callback/';
+const _projectId = String.fromEnvironment(
+  'PROJECT_ID',
+  defaultValue: 'dfb41cea-a812-46f2-b511-7a60bd3d78af',
+);
 
 const kBg = Color(0xFF080D14);
 const kSurface = Color(0xFF111923);
@@ -63,22 +69,49 @@ void main() async {
     await initializeDateFormatting(locale);
   }
   Intl.defaultLocale = 'es';
-  await Supabase.initialize(
-    url: _supabaseUrl,
-    publishableKey: _supabasePublishableKey,
-  );
   await Hive.initFlutter();
   await Hive.openBox(_recordsBox);
   await Hive.openBox(_maintenanceRecordsBox);
   await Hive.openBox(_metaBox);
   await Hive.openBox(_syncQueueBox);
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    publishableKey: _supabasePublishableKey,
+  );
   runApp(ControlTukTukApp(store: RecordStore()));
 }
 
-class ControlTukTukApp extends StatelessWidget {
+class ControlTukTukApp extends StatefulWidget {
   const ControlTukTukApp({required this.store, super.key});
 
   final RecordStore store;
+
+  @override
+  State<ControlTukTukApp> createState() => _ControlTukTukAppState();
+}
+
+class _ControlTukTukAppState extends State<ControlTukTukApp>
+    with WidgetsBindingObserver {
+  RecordStore get store => widget.store;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      store.handleAppResumed();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -236,12 +269,32 @@ String activeLanguage = 'es';
 String tr(String key) {
   const translations = <String, Map<String, String>>{
     'en': {
+      'Tu licencia no permite realizar cambios.':
+          'Your license does not allow changes.',
+      'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.':
+          'Your license does not allow changes. You can view your data in read-only mode.',
+      'Estado': 'Status',
+      'Vencimiento': 'Expiration',
+      'Contacta al administrador para revisar tu licencia.':
+          'Contact the administrator to review your license.',
+      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.':
+          'To renew your license or resolve any issue, contact us on WhatsApp.',
+      'Renovar o solicitar ayuda': 'Renew or request help',
       'Inicio': 'Home',
       'Nuevo': 'New',
       'Historial': 'History',
       'Estads.': 'Stats',
       'Usuario': 'User',
       'Atención al cliente': 'Customer support',
+      'Soporte y pagos': 'Support and payments',
+      'Pagos, soporte y licencias': 'Payments, support and licenses',
+      'Referidos': 'Referrals',
+      'Compartir mi código': 'Share my code',
+      'Próximamente': 'Coming soon',
+      'Invita a otros conductores y gana días adicionales.':
+          'Invite other drivers and earn additional days.',
+      'Tu código': 'Your code',
+      'Días acumulados': 'Days earned',
       '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
           'Need help with TukTuk Control? Message us on WhatsApp.',
       'Contactar por WhatsApp': 'Contact via WhatsApp',
@@ -481,6 +534,7 @@ String tr(String key) {
       'Ingresos históricos': 'Historical income',
       'Ingresos totales': 'Total income',
       'Ingresos por mes': 'Monthly income',
+      'Ingresos y gastos por mes': 'Monthly income and expenses',
       'Ingreso promedio por día trabajado': 'Average income per working day',
       'Ganancia neta': 'Net profit',
       'Ganancia neta del mes': 'Monthly net profit',
@@ -506,6 +560,7 @@ String tr(String key) {
       'Gastos totales': 'Total expenses',
       'Balance neto': 'Net balance',
       'Hitos y mensajes del sistema': 'Milestones and system messages',
+      'Hitos y mensajes': 'Milestones and messages',
       'Comienza tu recorrido': 'Start your route',
       'Agrega registros para recibir recomendaciones personalizadas.':
           'Add records to receive personalized recommendations.',
@@ -519,12 +574,32 @@ String tr(String key) {
       'Mejor jornada registrada': 'Best recorded day',
     },
     'pt': {
+      'Tu licencia no permite realizar cambios.':
+          'Sua licença não permite alterações.',
+      'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.':
+          'Sua licença não permite alterações. Você pode consultar seus dados no modo somente leitura.',
+      'Estado': 'Status',
+      'Vencimiento': 'Vencimento',
+      'Contacta al administrador para revisar tu licencia.':
+          'Entre em contato com o administrador para revisar sua licença.',
+      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.':
+          'Para renovar sua licença ou resolver qualquer problema, fale conosco pelo WhatsApp.',
+      'Renovar o solicitar ayuda': 'Renovar ou pedir ajuda',
       'Inicio': 'Início',
       'Nuevo': 'Novo',
       'Historial': 'Histórico',
       'Estads.': 'Estat.',
       'Usuario': 'Usuário',
       'Atención al cliente': 'Atendimento ao cliente',
+      'Soporte y pagos': 'Suporte e pagamentos',
+      'Pagos, soporte y licencias': 'Pagamentos, suporte e licenças',
+      'Referidos': 'Indicações',
+      'Compartir mi código': 'Compartilhar meu código',
+      'Próximamente': 'Em breve',
+      'Invita a otros conductores y gana días adicionales.':
+          'Convide outros motoristas e ganhe dias adicionais.',
+      'Tu código': 'Seu código',
+      'Días acumulados': 'Dias acumulados',
       '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
           'Precisa de ajuda com o TukTuk Control? Fale conosco pelo WhatsApp.',
       'Contactar por WhatsApp': 'Contatar pelo WhatsApp',
@@ -766,6 +841,7 @@ String tr(String key) {
       'Ingresos históricos': 'Receitas históricas',
       'Ingresos totales': 'Receitas totais',
       'Ingresos por mes': 'Receitas por mês',
+      'Ingresos y gastos por mes': 'Receitas e despesas por mês',
       'Ingreso promedio por día trabajado': 'Receita média por dia trabalhado',
       'Ganancia neta': 'Lucro líquido',
       'Ganancia neta del mes': 'Lucro líquido do mês',
@@ -791,6 +867,7 @@ String tr(String key) {
       'Gastos totales': 'Despesas totais',
       'Balance neto': 'Saldo líquido',
       'Hitos y mensajes del sistema': 'Marcos e mensagens do sistema',
+      'Hitos y mensajes': 'Marcos e mensagens',
       'Comienza tu recorrido': 'Comece sua rota',
       'Agrega registros para recibir recomendaciones personalizadas.':
           'Adicione registros para receber recomendações personalizadas.',
@@ -804,12 +881,32 @@ String tr(String key) {
       'Mejor jornada registrada': 'Melhor dia registrado',
     },
     'fr': {
+      'Tu licencia no permite realizar cambios.':
+          'Votre licence ne permet pas les modifications.',
+      'Tu licencia no permite realizar cambios. Puedes consultar tus datos en modo solo lectura.':
+          'Votre licence ne permet pas les modifications. Vous pouvez consulter vos données en lecture seule.',
+      'Estado': 'État',
+      'Vencimiento': 'Expiration',
+      'Contacta al administrador para revisar tu licencia.':
+          'Contactez l’administrateur pour vérifier votre licence.',
+      'Para renovar tu licencia o resolver cualquier problema, contáctanos por WhatsApp.':
+          'Pour renouveler votre licence ou résoudre un problème, contactez-nous sur WhatsApp.',
+      'Renovar o solicitar ayuda': 'Renouveler ou demander de l’aide',
       'Inicio': 'Accueil',
       'Nuevo': 'Nouveau',
       'Historial': 'Historique',
       'Estads.': 'Stats',
       'Usuario': 'Utilisateur',
       'Atención al cliente': 'Service client',
+      'Soporte y pagos': 'Assistance et paiements',
+      'Pagos, soporte y licencias': 'Paiements, assistance et licences',
+      'Referidos': 'Parrainages',
+      'Compartir mi código': 'Partager mon code',
+      'Próximamente': 'Bientôt disponible',
+      'Invita a otros conductores y gana días adicionales.':
+          'Invitez d’autres conducteurs et gagnez des jours supplémentaires.',
+      'Tu código': 'Votre code',
+      'Días acumulados': 'Jours cumulés',
       '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
           'Besoin d’aide avec TukTuk Control ? Écrivez-nous sur WhatsApp.',
       'Contactar por WhatsApp': 'Contacter sur WhatsApp',
@@ -1056,6 +1153,7 @@ String tr(String key) {
       'Ingresos históricos': 'Revenus historiques',
       'Ingresos totales': 'Revenus totaux',
       'Ingresos por mes': 'Revenus mensuels',
+      'Ingresos y gastos por mes': 'Revenus et dépenses mensuels',
       'Ingreso promedio por día trabajado': 'Revenu moyen par jour travaillé',
       'Ganancia neta': 'Bénéfice net',
       'Ganancia neta del mes': 'Bénéfice net du mois',
@@ -1081,6 +1179,7 @@ String tr(String key) {
       'Gastos totales': 'Dépenses totales',
       'Balance neto': 'Solde net',
       'Hitos y mensajes del sistema': 'Étapes et messages du système',
+      'Hitos y mensajes': 'Étapes et messages',
       'Comienza tu recorrido': 'Commencez votre trajet',
       'Agrega registros para recibir recomendaciones personalizadas.':
           'Ajoutez des données pour recevoir des recommandations personnalisées.',
