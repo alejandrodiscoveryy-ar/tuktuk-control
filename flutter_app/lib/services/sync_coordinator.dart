@@ -29,15 +29,19 @@ class SyncCoordinator {
 
     try {
       final result = await _gateway.push(pending);
-      await _queue.complete(result.acceptedOperationIds);
+      final acceptedOperations = pending.where(
+        (operation) => result.acceptedOperationIds.contains(operation.id),
+      );
+      final completedIds =
+          await _queue.completeIfUnchanged(acceptedOperations);
       for (final rejection in result.rejectedOperations.entries) {
         await _queue.markFailed([rejection.key], rejection.value);
       }
       return SyncRunReport(
         attempted: pending.length,
-        completed: result.acceptedOperationIds.length,
+        completed: completedIds.length,
         failed: result.rejectedOperations.length,
-        completedOperationIds: result.acceptedOperationIds,
+        completedOperationIds: completedIds,
       );
     } on LicenseWriteRejectedException {
       final blockedIds = pending.map((operation) => operation.id).toSet();

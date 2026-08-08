@@ -23,9 +23,10 @@ class RecordStore extends ChangeNotifier {
       queue: _syncQueue,
       gateway: _supabaseGateway,
     );
+    _restoreCachedIdentityAndLicense();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
       if (initialized) unawaited(_handleAuthState(state.session?.user));
-    });
+    }, onError: _handleAuthStreamError);
     _load();
     unawaited(_initialize());
   }
@@ -43,6 +44,8 @@ class RecordStore extends ChangeNotifier {
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
   Timer? _syncDebounceTimer;
+  Timer? _retrySyncTimer;
+  int _consecutiveSyncFailures = 0;
   bool _syncRequestedWhileRunning = false;
   String? _ensuredProfileFingerprint;
   final List<DailyRecord> _records = [];
@@ -56,6 +59,32 @@ class RecordStore extends ChangeNotifier {
 
   bool get canWrite => license.canWrite;
   bool get isReadOnly => !canWrite;
+
+  void _restoreCachedIdentityAndLicense() {
+    final restoredUser = _supabase.auth.currentUser;
+    if (restoredUser != null) {
+      user = restoredUser;
+      license = _licenseService.cachedLicense(restoredUser.id);
+      return;
+    }
+    final claimed = _meta.get('claimedUserId');
+    license = claimed is String && claimed.isNotEmpty
+        ? _licenseService.cachedLicense(claimed)
+        : LicenseSnapshot.local;
+  }
+
+  void _handleAuthStreamError(Object error, StackTrace stackTrace) {
+    syncMessage = 'Sin conexion. La sesion y los datos locales siguen activos';
+    notifyListeners();
+    _scheduleSyncRetry();
+  }
+
+  void handleAppResumed() {
+    unawaited(refreshWhatsAppSettings());
+    if (user == null) return;
+    unawaited(refreshLicense());
+    unawaited(syncNow());
+  }
 
   Future<WhatsAppSettings> refreshWhatsAppSettings() async {
     whatsAppSettings = await _whatsAppSettingsService.refresh();
@@ -131,8 +160,12 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _requireWriteAccess() async {
-    await refreshLicense();
+    final currentUser = user;
+    if (currentUser != null) {
+      license = _licenseService.cachedLicense(currentUser.id);
+    }
     if (!canWrite) throw ReadOnlyLicenseException(license);
+    if (currentUser != null) unawaited(refreshLicense());
   }
 
   List<DailyRecord> get records => [..._records]..sort(_compareRecordsDesc);
@@ -354,11 +387,11 @@ class RecordStore extends ChangeNotifier {
       await _seedInitialMaintenanceIfEmpty();
       await _seedSyncQueueIfNeeded();
       _load();
-      await restoreGoogleSession();
     } finally {
       initialized = true;
       notifyListeners();
     }
+    unawaited(restoreGoogleSession());
   }
 
   Future<void> configureFirstVehicle({
@@ -869,9 +902,13 @@ class RecordStore extends ChangeNotifier {
     notifyListeners();
     try {
       await action();
+      _consecutiveSyncFailures = 0;
+      _retrySyncTimer?.cancel();
+      _retrySyncTimer = null;
       await _meta.put('lastSyncAt', DateTime.now().toIso8601String());
     } catch (_) {
       syncMessage = 'Sin conexion. Los cambios permanecen guardados';
+      _scheduleSyncRetry();
     } finally {
       syncing = false;
       notifyListeners();
@@ -894,14 +931,15 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     user = authenticatedUser;
+    license = _licenseService.cachedLicense(authenticatedUser.id);
     notifyListeners();
+    _startAutomaticSync();
     try {
       await _ensureRemoteProfile();
       await refreshLicense();
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
       }
-      _startAutomaticSync();
       await syncNow();
     } on StateError {
       _stopAutomaticSync();
@@ -909,7 +947,31 @@ class RecordStore extends ChangeNotifier {
       user = null;
       syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
       notifyListeners();
+    } catch (_) {
+      syncMessage = 'Sin conexion. Trabajando con los datos locales';
+      notifyListeners();
+      _scheduleSyncRetry();
     }
+  }
+
+  void _scheduleSyncRetry() {
+    if (user == null || _retrySyncTimer?.isActive == true) return;
+    _consecutiveSyncFailures = min(_consecutiveSyncFailures + 1, 6);
+    const delays = <Duration>[
+      Duration(seconds: 5),
+      Duration(seconds: 15),
+      Duration(seconds: 30),
+      Duration(minutes: 1),
+      Duration(minutes: 2),
+      Duration(minutes: 5),
+    ];
+    _retrySyncTimer = Timer(
+      delays[_consecutiveSyncFailures - 1],
+      () {
+        _retrySyncTimer = null;
+        unawaited(syncNow());
+      },
+    );
   }
 
   void _startAutomaticSync() {
@@ -956,6 +1018,9 @@ class RecordStore extends ChangeNotifier {
     _automaticSyncTimer = null;
     _syncDebounceTimer?.cancel();
     _syncDebounceTimer = null;
+    _retrySyncTimer?.cancel();
+    _retrySyncTimer = null;
+    _consecutiveSyncFailures = 0;
     _syncRequestedWhileRunning = false;
     _ensuredProfileFingerprint = null;
     final channel = _realtimeChannel;
@@ -1051,6 +1116,9 @@ class RecordStore extends ChangeNotifier {
           'Tu licencia no permite realizar cambios. Modo solo lectura';
     }
     _load();
+    if (report.failed > 0 && !report.blockedByLicense) {
+      throw const TemporarySyncException('remote push failed');
+    }
   }
 
   Future<void> _rollbackBlockedOperations(

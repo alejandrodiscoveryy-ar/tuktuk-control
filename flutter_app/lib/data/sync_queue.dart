@@ -66,6 +66,22 @@ class SyncQueueStore implements SyncQueueRepository {
   }
 
   @override
+  Future<Set<String>> completeIfUnchanged(
+    Iterable<SyncOperation> operations,
+  ) async {
+    final completed = <String>{};
+    for (final sent in operations) {
+      final raw = _box.get(sent.id);
+      if (raw is! Map) continue;
+      final current = SyncOperation.fromMap(raw);
+      if (!SyncQueuePolicy.canComplete(sent, current)) continue;
+      await _box.delete(sent.id);
+      completed.add(sent.id);
+    }
+    return completed;
+  }
+
+  @override
   Future<void> markFailed(
     Iterable<String> operationIds,
     String error,

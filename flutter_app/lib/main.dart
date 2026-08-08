@@ -69,15 +69,15 @@ void main() async {
     await initializeDateFormatting(locale);
   }
   Intl.defaultLocale = 'es';
-  await Supabase.initialize(
-    url: _supabaseUrl,
-    publishableKey: _supabasePublishableKey,
-  );
   await Hive.initFlutter();
   await Hive.openBox(_recordsBox);
   await Hive.openBox(_maintenanceRecordsBox);
   await Hive.openBox(_metaBox);
   await Hive.openBox(_syncQueueBox);
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    publishableKey: _supabasePublishableKey,
+  );
   runApp(ControlTukTukApp(store: RecordStore()));
 }
 
@@ -103,8 +103,7 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(store.refreshLicense());
-      unawaited(store.refreshWhatsAppSettings());
+      store.handleAppResumed();
     }
   }
 

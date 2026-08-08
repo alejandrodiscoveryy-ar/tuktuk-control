@@ -91,6 +91,9 @@ class SyncOperation {
 }
 
 abstract final class SyncQueuePolicy {
+  static bool canComplete(SyncOperation sent, SyncOperation current) =>
+      !current.updatedAt.isAfter(sent.updatedAt);
+
   static SyncOperation consolidate(
     SyncOperation? existing,
     SyncOperation incoming,
@@ -116,6 +119,10 @@ abstract interface class SyncQueueRepository {
   List<SyncOperation> pendingForUser(String userId, {int limit = 50});
 
   Future<void> complete(Iterable<String> operationIds);
+
+  Future<Set<String>> completeIfUnchanged(
+    Iterable<SyncOperation> operations,
+  );
 
   Future<void> markFailed(
     Iterable<String> operationIds,
@@ -290,4 +297,13 @@ class SyncRunReport {
   final Set<String> completedOperationIds;
   final bool blockedByLicense;
   final Set<String> blockedOperationIds;
+}
+
+class TemporarySyncException implements Exception {
+  const TemporarySyncException(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() => 'TemporarySyncException($cause)';
 }
