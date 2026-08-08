@@ -386,8 +386,7 @@ class _AppShellState extends State<AppShell> {
                     children: [
                       if (store.isReadOnly)
                         _ReadOnlyLicenseBanner(
-                          license: store.license,
-                          customerName: supportCustomerName(store),
+                          store: store,
                         ),
                       Expanded(child: screens[index]),
                     ],
@@ -450,17 +449,15 @@ class _AppShellState extends State<AppShell> {
 }
 
 class _ReadOnlyLicenseBanner extends StatelessWidget {
-  const _ReadOnlyLicenseBanner({
-    required this.license,
-    required this.customerName,
-  });
+  const _ReadOnlyLicenseBanner({required this.store});
 
-  final LicenseSnapshot license;
-  final String customerName;
+  final RecordStore store;
 
   @override
   Widget build(BuildContext context) {
+    final license = store.license;
     final expiry = license.expiresAt ?? license.trialEndsAt;
+    final paymentAction = store.paymentWhatsAppAction();
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 2),
@@ -491,7 +488,7 @@ class _ReadOnlyLicenseBanner extends StatelessWidget {
                   '${expiry == null ? '' : ' · ${tr('Vencimiento')}: ${DateFormat('d MMM yyyy', activeLanguage).format(expiry.toLocal())}'}',
                   style: const TextStyle(color: kMuted, fontSize: 12),
                 ),
-                if (license.requiresAdministrator) ...[
+                if (license.requiresAdministrator && paymentAction != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     tr(
@@ -504,27 +501,14 @@ class _ReadOnlyLicenseBanner extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
-                FilledButton.tonalIcon(
-                  onPressed: () async {
-                    final opened = await launchUrl(
-                      buildWhatsAppSupportUri(
-                        customerName,
-                        message:
-                            'Hola, soy $customerName. Necesito ayuda con mi licencia de TukTuk Control. Estado: ${license.statusLabel}.',
-                      ),
-                      mode: kIsWeb
-                          ? LaunchMode.platformDefault
-                          : LaunchMode.externalApplication,
-                      webOnlyWindowName: '_blank',
-                    );
-                    if (!opened && context.mounted) {
-                      toast(context, tr('No se pudo abrir WhatsApp'));
-                    }
-                  },
-                  icon: const Icon(Icons.chat_outlined, size: 18),
-                  label: Text(tr('Renovar o solicitar ayuda')),
-                ),
+                if (paymentAction != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _launchWhatsApp(context, paymentAction),
+                    icon: const Icon(Icons.chat_outlined, size: 18),
+                    label: Text(paymentAction.buttonText),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1429,30 +1413,6 @@ Uri buildRevolicoSearchUri(String term) => Uri.https(
       {'q': term.trim(), 'order': 'relevance'},
     );
 
-Uri buildWhatsAppSupportUri(
-  String customerName, {
-  String? message,
-}) =>
-    Uri.https(
-      'wa.me',
-      '/5355592873',
-      {
-        'text': message?.trim().isNotEmpty == true
-            ? message!.trim()
-            : 'Hola, soy ${customerName.trim()} y quiero realizar el pago de TukTuk.'
-      },
-    );
-
-String supportCustomerName(RecordStore store) {
-  final metadata = store.user?.userMetadata;
-  for (final key in const ['full_name', 'name']) {
-    final value = metadata?[key]?.toString().trim();
-    if (value != null && value.isNotEmpty) return value;
-  }
-  final profileName = store.profileDisplayName.trim();
-  return profileName.isEmpty ? 'cliente de TukTuk' : profileName;
-}
-
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
 
@@ -1766,7 +1726,11 @@ class LoginScreen extends StatelessWidget {
         const SizedBox(height: 18),
         VehicleSettingsPanel(store: store),
         const SizedBox(height: 18),
-        _SupportAndPaymentsCard(onTap: () => _openWhatsApp(context)),
+        _SupportAndPaymentsCard(
+          supportAction: store.supportWhatsAppAction(),
+          paymentAction: store.paymentWhatsAppAction(),
+          onTap: (action) => _launchWhatsApp(context, action),
+        ),
         const SizedBox(height: 18),
         const _ReferralPreviewCard(),
         const SizedBox(height: 18),
@@ -1871,22 +1835,6 @@ class LoginScreen extends StatelessWidget {
     ];
   }
 
-  Future<void> _openWhatsApp(BuildContext context) async {
-    final opened = await launchUrl(
-      buildWhatsAppSupportUri(_registeredCustomerName),
-      mode:
-          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
-      webOnlyWindowName: '_blank',
-    );
-    if (!opened && context.mounted) {
-      toast(context, tr('No se pudo abrir WhatsApp'));
-    }
-  }
-
-  String get _registeredCustomerName {
-    return supportCustomerName(store);
-  }
-
   Future<void> _editProfileName(BuildContext context) async {
     final controller = TextEditingController(text: store.profileDisplayName);
     final value = await showDialog<String>(
@@ -1974,52 +1922,86 @@ class LoginScreen extends StatelessWidget {
 }
 
 class _SupportAndPaymentsCard extends StatelessWidget {
-  const _SupportAndPaymentsCard({required this.onTap});
+  const _SupportAndPaymentsCard({
+    required this.supportAction,
+    required this.paymentAction,
+    required this.onTap,
+  });
 
-  final VoidCallback onTap;
+  final WhatsAppContactAction? supportAction;
+  final WhatsAppContactAction? paymentAction;
+  final ValueChanged<WhatsAppContactAction> onTap;
 
   @override
   Widget build(BuildContext context) {
+    if (supportAction == null && paymentAction == null) {
+      return const SizedBox.shrink();
+    }
     return GlassCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.support_agent_rounded,
-            color: kPrimary,
-            size: 34,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              const Icon(
+                Icons.support_agent_rounded,
+                color: kPrimary,
+                size: 34,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
                   tr('Soporte y pagos'),
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  tr('Pagos, soporte y licencias'),
-                  style: const TextStyle(color: kMuted, fontSize: 12),
+              ),
+            ],
+          ),
+          if (supportAction != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => onTap(supportAction!),
+                icon: const Icon(Icons.support_agent_rounded, size: 19),
+                label: Text(supportAction!.buttonText),
+              ),
+            ),
+          ],
+          if (paymentAction != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => onTap(paymentAction!),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF25D366),
                 ),
-              ],
+                icon: const Icon(Icons.payments_outlined, size: 19),
+                label: Text(paymentAction!.buttonText),
+              ),
             ),
-          ),
-          OutlinedButton.icon(
-            onPressed: onTap,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 42),
-              foregroundColor: const Color(0xFF25D366),
-            ),
-            icon: const Icon(Icons.chat_rounded, size: 19),
-            label: const Text('WhatsApp'),
-          ),
+          ],
         ],
       ),
     );
+  }
+}
+
+Future<void> _launchWhatsApp(
+  BuildContext context,
+  WhatsAppContactAction action,
+) async {
+  final opened = await launchUrl(
+    action.uri,
+    mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    webOnlyWindowName: '_blank',
+  );
+  if (!opened && context.mounted) {
+    toast(context, tr('No se pudo abrir WhatsApp'));
   }
 }
 

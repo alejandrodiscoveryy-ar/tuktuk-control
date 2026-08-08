@@ -35,6 +35,7 @@ abstract final class LicenseAccessEvaluator {
     final rawStatus = '${license['status'] ?? 'unknown'}';
     final expiresAt = DateTime.tryParse('${license['expires_at'] ?? ''}');
     final maxDevices = (license['max_devices'] as num?)?.toInt();
+    final licenseKey = license['license_key']?.toString();
     final planId = '${license['plan'] ?? license['license_type'] ?? 'unknown'}';
     final status = switch (rawStatus) {
       'active' => LicenseStatus.active,
@@ -51,6 +52,7 @@ abstract final class LicenseAccessEvaluator {
         expiresAt: expiresAt,
         paidUntil: expiresAt,
         maxDevices: maxDevices,
+        licenseKey: licenseKey,
         reason: rawStatus,
         validatedFromServer: true,
         lastServerValidation: now,
@@ -63,6 +65,7 @@ abstract final class LicenseAccessEvaluator {
         expiresAt: expiresAt,
         paidUntil: expiresAt,
         maxDevices: maxDevices,
+        licenseKey: licenseKey,
         reason: 'expired',
         validatedFromServer: true,
         lastServerValidation: now,
@@ -85,6 +88,7 @@ abstract final class LicenseAccessEvaluator {
         expiresAt: expiresAt,
         paidUntil: expiresAt,
         maxDevices: maxDevices,
+        licenseKey: licenseKey,
         reason: deviceReason,
         validatedFromServer: true,
         lastServerValidation: now,
@@ -96,6 +100,7 @@ abstract final class LicenseAccessEvaluator {
       expiresAt: expiresAt,
       paidUntil: expiresAt,
       maxDevices: maxDevices,
+      licenseKey: licenseKey,
       reason: 'active',
       canWrite: true,
       validatedFromServer: true,
@@ -117,6 +122,7 @@ abstract final class LicenseAccessEvaluator {
         paidUntil: cached.paidUntil,
         expiresAt: expiry,
         maxDevices: cached.maxDevices,
+        licenseKey: cached.licenseKey,
         reason: 'expired_offline',
         validatedFromServer: false,
         lastServerValidation: cached.lastServerValidation,
@@ -217,6 +223,7 @@ class SupabaseLicenseService implements LicenseService {
           licenseStatus: LicenseStatus.unknown,
           expiresAt: cached.expiresAt,
           maxDevices: cached.maxDevices,
+          licenseKey: cached.licenseKey,
           reason: 'authorization_failed',
           validatedFromServer: true,
           lastServerValidation: DateTime.now().toUtc(),
@@ -236,6 +243,7 @@ class SupabaseLicenseService implements LicenseService {
       licenseStatus: LicenseStatus.unknown,
       expiresAt: cached.expiresAt,
       maxDevices: cached.maxDevices,
+      licenseKey: cached.licenseKey,
       reason: 'server_write_rejected',
       validatedFromServer: true,
       lastServerValidation: DateTime.now().toUtc(),
