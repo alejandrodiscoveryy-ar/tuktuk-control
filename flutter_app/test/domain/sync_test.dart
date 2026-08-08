@@ -60,6 +60,15 @@ void main() {
     expect(result.createdAt, first.createdAt);
   });
 
+  test('una edición nueva no se completa con una respuesta anterior', () {
+    final sent = operation(updatedAt: DateTime.utc(2026, 7, 15, 10));
+    final editedWhileSending =
+        operation(updatedAt: DateTime.utc(2026, 7, 15, 10, 1));
+
+    expect(SyncQueuePolicy.canComplete(sent, editedWhileSending), isFalse);
+    expect(SyncQueuePolicy.canComplete(sent, sent), isTrue);
+  });
+
   test('la propiedad pendiente puede migrarse a la cuenta Google', () {
     final local = operation();
 
@@ -138,6 +147,21 @@ void main() {
     expect(report.skippedBecauseUnconfigured, isTrue);
     expect(gateway.pushCalls, 0);
     expect(queue.completed, isEmpty);
+  });
+
+  test('un fallo temporal conserva la operación para reintentar', () async {
+    final pending = operation();
+    final queue = _MemoryQueue([pending]);
+    final coordinator = SyncCoordinator(
+      queue: queue,
+      gateway: _TemporaryFailureGateway(),
+    );
+
+    final report = await coordinator.pushPending(userId: 'user-1');
+
+    expect(report.failed, 1);
+    expect(queue.completed, isEmpty);
+    expect(queue.failed, contains(pending.id));
   });
 
   test('el cursor paginado conserva desempate estable y cursor antiguo', () {
@@ -223,6 +247,15 @@ class _MemoryQueue implements SyncQueueRepository {
   }
 
   @override
+  Future<Set<String>> completeIfUnchanged(
+    Iterable<SyncOperation> operations,
+  ) async {
+    final ids = operations.map((operation) => operation.id).toSet();
+    completed.addAll(ids);
+    return ids;
+  }
+
+  @override
   Future<void> markFailed(
     Iterable<String> operationIds,
     String error,
@@ -277,5 +310,23 @@ class _LicenseBlockedGateway implements RemoteSyncGateway {
   @override
   Future<RemotePushResult> push(List<SyncOperation> operations) {
     throw const LicenseWriteRejectedException('RLS');
+  }
+}
+
+class _TemporaryFailureGateway implements RemoteSyncGateway {
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+    int limit = 250,
+  }) async =>
+      const RemotePullResult(changes: [], nextCursor: null);
+
+  @override
+  Future<RemotePushResult> push(List<SyncOperation> operations) {
+    throw const TemporarySyncException('offline');
   }
 }
