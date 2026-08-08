@@ -1153,6 +1153,7 @@ class RecordStore extends ChangeNotifier {
           break;
       }
     }
+    _load();
   }
 
   Future<void> _ensureRemoteProfile() async {
