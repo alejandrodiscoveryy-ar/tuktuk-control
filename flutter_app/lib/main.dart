@@ -22,6 +22,7 @@ part 'data/seed_data.dart';
 part 'data/sync_queue.dart';
 part 'data/supabase_license_service.dart';
 part 'data/supabase_sync_gateway.dart';
+part 'data/whatsapp_settings_service.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
@@ -43,6 +44,10 @@ const _supabasePublishableKey = String.fromEnvironment(
 );
 const _supabaseMobileRedirect =
     'com.alejandrocruz.tuktukcontrol://login-callback/';
+const _projectId = String.fromEnvironment(
+  'PROJECT_ID',
+  defaultValue: 'dfb41cea-a812-46f2-b511-7a60bd3d78af',
+);
 
 const kBg = Color(0xFF080D14);
 const kSurface = Color(0xFF111923);
@@ -99,6 +104,7 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(store.refreshLicense());
+      unawaited(store.refreshWhatsAppSettings());
     }
   }
 

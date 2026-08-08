@@ -16,46 +16,19 @@ Future<void> main() async {
     expect(uri.toString(), isNot(contains(' ')));
   });
 
-  test('El soporte abre el número correcto de WhatsApp', () {
-    final uri = buildWhatsAppSupportUri('Pedro Alejandro Cruz');
-
-    expect(uri.scheme, 'https');
-    expect(uri.host, 'wa.me');
-    expect(uri.path, '/5355592873');
-    expect(
-      uri.queryParameters['text'],
-      'Hola, soy Pedro Alejandro Cruz y quiero realizar el pago de TukTuk.',
-    );
-    expect(uri.toString(), isNot(contains(' ')));
-  });
-
-  test('El soporte de licencia prepara un mensaje contextual', () {
-    final uri = buildWhatsAppSupportUri(
-      'Pedro Alejandro Cruz',
-      message:
-          'Hola, soy Pedro Alejandro Cruz. Necesito ayuda con mi licencia de TukTuk Control. Estado: suspendida.',
-    );
-
-    expect(uri.path, '/5355592873');
-    expect(
-      uri.queryParameters['text'],
-      contains('Necesito ayuda con mi licencia de TukTuk Control'),
-    );
-    expect(uri.queryParameters['text'], contains('suspendida'));
-  });
-
   test('Metrics calcula ingresos, distancia, eficiencia y cargas', () {
+    final today = DateTime.now();
     final records = [
       DailyRecord(
         id: 'first',
-        date: DateTime(2026, 7, 14),
+        date: today.subtract(const Duration(days: 1)),
         earnings: 3000,
         odometer: 100,
         expense: 200,
       ),
       DailyRecord(
         id: 'second',
-        date: DateTime(2026, 7, 15),
+        date: today,
         earnings: 5000,
         odometer: 150,
         batteryVoltage: 80,
@@ -65,7 +38,7 @@ Future<void> main() async {
     final maintenances = [
       MaintenanceRecord(
         id: 'maintenance',
-        dateTime: DateTime(2026, 7, 15),
+        dateTime: today,
         odometer: 150,
         type: 'General',
         description: 'Mantenimiento de prueba',

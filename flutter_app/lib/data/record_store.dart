@@ -6,6 +6,15 @@ class RecordStore extends ChangeNotifier {
       client: _supabase,
       cache: _meta,
     );
+    _whatsAppSettingsService = WhatsAppSettingsService(
+      projectId: _projectId,
+      cache: HiveWhatsAppSettingsCache(_meta),
+      loadRemote: (projectId) => _supabase.rpc(
+        'get_public_whatsapp_settings',
+        params: {'target_project_id': projectId},
+      ),
+    );
+    whatsAppSettings = _whatsAppSettingsService.cachedSettings();
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
       payloadFor: _payloadForOperation,
@@ -29,6 +38,7 @@ class RecordStore extends ChangeNotifier {
   late final SupabaseSyncGateway _supabaseGateway;
   late final SyncCoordinator _syncCoordinator;
   late final SupabaseLicenseService _licenseService;
+  late final WhatsAppSettingsService _whatsAppSettingsService;
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
@@ -42,9 +52,65 @@ class RecordStore extends ChangeNotifier {
   bool syncing = false;
   String syncMessage = 'Base local pendiente de respaldo';
   LicenseSnapshot license = LicenseSnapshot.local;
+  late WhatsAppSettings whatsAppSettings;
 
   bool get canWrite => license.canWrite;
   bool get isReadOnly => !canWrite;
+
+  Future<WhatsAppSettings> refreshWhatsAppSettings() async {
+    whatsAppSettings = await _whatsAppSettingsService.refresh();
+    notifyListeners();
+    return whatsAppSettings;
+  }
+
+  WhatsAppContactAction? supportWhatsAppAction() =>
+      buildWhatsAppContactAction(
+        settings: whatsAppSettings,
+        channel: WhatsAppChannel.support,
+        variables: _whatsAppVariables(),
+      );
+
+  WhatsAppContactAction? paymentWhatsAppAction({
+    String? requestedPlan,
+    String? contactReason,
+  }) =>
+      buildWhatsAppContactAction(
+        settings: whatsAppSettings,
+        channel: WhatsAppChannel.payment,
+        variables: _whatsAppVariables(
+          requestedPlan: requestedPlan,
+          contactReason: contactReason ?? _defaultPaymentContactReason,
+        ),
+      );
+
+  String get _defaultPaymentContactReason => switch (license.licenseStatus) {
+        LicenseStatus.trial || LicenseStatus.pending => 'pagar y activar',
+        LicenseStatus.expiring ||
+        LicenseStatus.expired ||
+        LicenseStatus.suspended ||
+        LicenseStatus.revoked =>
+          'renovar',
+        _ => 'pagar o renovar',
+      };
+
+  Map<String, String?> _whatsAppVariables({
+    String? requestedPlan,
+    String? contactReason,
+  }) {
+    final expiry = license.expiresAt ?? license.trialEndsAt;
+    return {
+      'customer_name': profileDisplayName,
+      'customer_email': user?.email,
+      'license_key': license.licenseKey,
+      'application_name': whatsAppSettings.applicationName,
+      'current_plan': license.planId,
+      'requested_plan': requestedPlan,
+      'expires_at': expiry == null
+          ? null
+          : DateFormat('yyyy-MM-dd').format(expiry.toLocal()),
+      'contact_reason': contactReason,
+    };
+  }
 
   Future<LicenseSnapshot> refreshLicense() async {
     final currentUser = user;
@@ -280,6 +346,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    unawaited(refreshWhatsAppSettings());
     try {
       await _migrateLegacyMaintenance();
       await _migrateSyncMetadata();
@@ -878,6 +945,7 @@ class RecordStore extends ChangeNotifier {
       const Duration(minutes: 5),
       (_) {
         unawaited(refreshLicense());
+        unawaited(refreshWhatsAppSettings());
         unawaitedSync();
       },
     );

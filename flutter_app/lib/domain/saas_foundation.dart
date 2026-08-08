@@ -52,6 +52,7 @@ class LicenseSnapshot {
     this.offlineGraceUntil,
     this.expiresAt,
     this.maxDevices,
+    this.licenseKey,
     this.reason,
     this.canWrite = false,
     this.validatedFromServer = false,
@@ -66,6 +67,7 @@ class LicenseSnapshot {
   final DateTime? offlineGraceUntil;
   final DateTime? expiresAt;
   final int? maxDevices;
+  final String? licenseKey;
   final String? reason;
   final bool canWrite;
   final bool validatedFromServer;
@@ -99,6 +101,7 @@ class LicenseSnapshot {
         'offlineGraceUntil': offlineGraceUntil?.toIso8601String(),
         'expiresAt': expiresAt?.toIso8601String(),
         'maxDevices': maxDevices,
+        'licenseKey': licenseKey,
         'reason': reason,
         'canWrite': canWrite,
         'validatedFromServer': validatedFromServer,
@@ -120,6 +123,7 @@ class LicenseSnapshot {
       offlineGraceUntil: DateTime.tryParse('${map['offlineGraceUntil'] ?? ''}'),
       expiresAt: DateTime.tryParse('${map['expiresAt'] ?? ''}'),
       maxDevices: (map['maxDevices'] as num?)?.toInt(),
+      licenseKey: map['licenseKey']?.toString(),
       reason: map['reason']?.toString(),
       canWrite: map['canWrite'] == true,
       validatedFromServer: map['validatedFromServer'] == true,
