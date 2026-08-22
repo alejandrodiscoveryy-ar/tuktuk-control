@@ -281,6 +281,11 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
 String activeCurrency = 'CUP';
 String activeLanguage = 'es';
 
+/// Keeps the deployed web base path (for example `/tuktuk/`) while removing
+/// transient OAuth preview parameters and fragments.
+String webOAuthRedirect(Uri currentUri) =>
+    '${currentUri.origin}${currentUri.path.isEmpty ? '/' : currentUri.path}';
+
 String tr(String key) {
   const translations = <String, Map<String, String>>{
     'en': {

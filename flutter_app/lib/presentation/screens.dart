@@ -303,6 +303,7 @@ class _AppShellState extends State<AppShell> {
             : isSynchronized
                 ? kPrimary
                 : kDanger;
+        final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
           DashboardScreen(store: store),
           RegisterScreen(
@@ -379,19 +380,40 @@ class _AppShellState extends State<AppShell> {
           ),
           body: AppBackground(
             child: SafeArea(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 980),
-                  child: Column(
-                    children: [
-                      if (store.isReadOnly)
-                        _ReadOnlyLicenseBanner(
-                          store: store,
+              child: Row(
+                children: [
+                  if (useDesktopNavigation)
+                    _DesktopNavigationRail(
+                      selectedIndex: index,
+                      onDestinationSelected: (value) {
+                        if (value == 1 && store.isReadOnly) {
+                          toast(
+                            context,
+                            tr('Tu licencia no permite realizar cambios.'),
+                          );
+                          return;
+                        }
+                        setState(() => index = value);
+                      },
+                      profilePhotoUrl: _googleProfilePhotoUrl(store.user),
+                    ),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: useDesktopNavigation ? 1120 : 980,
                         ),
-                      Expanded(child: screens[index]),
-                    ],
+                        child: Column(
+                          children: [
+                            if (store.isReadOnly)
+                              _ReadOnlyLicenseBanner(store: store),
+                            Expanded(child: screens[index]),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -428,22 +450,102 @@ class _AppShellState extends State<AppShell> {
                 )
               : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-          bottomNavigationBar: _LiquidGlassNavigation(
-            selectedIndex: index,
-            onDestinationSelected: (value) {
-              if (value == 1 && store.isReadOnly) {
-                toast(
-                  context,
-                  tr('Tu licencia no permite realizar cambios.'),
-                );
-                return;
-              }
-              setState(() => index = value);
-            },
-            profilePhotoUrl: _googleProfilePhotoUrl(store.user),
-          ),
+          bottomNavigationBar: useDesktopNavigation
+              ? null
+              : _LiquidGlassNavigation(
+                  selectedIndex: index,
+                  onDestinationSelected: (value) {
+                    if (value == 1 && store.isReadOnly) {
+                      toast(
+                        context,
+                        tr('Tu licencia no permite realizar cambios.'),
+                      );
+                      return;
+                    }
+                    setState(() => index = value);
+                  },
+                  profilePhotoUrl: _googleProfilePhotoUrl(store.user),
+                ),
         );
       },
+    );
+  }
+}
+
+class _DesktopNavigationRail extends StatelessWidget {
+  const _DesktopNavigationRail({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.profilePhotoUrl,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final String? profilePhotoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: NavigationRail(
+          selectedIndex: selectedIndex,
+          onDestinationSelected: onDestinationSelected,
+          extended: MediaQuery.sizeOf(context).width >= 1380,
+          groupAlignment: 0,
+          backgroundColor:
+              Theme.of(context).colorScheme.surface.withValues(alpha: .82),
+          indicatorColor: kPrimary.withValues(alpha: .18),
+          selectedIconTheme: const IconThemeData(color: kPrimary),
+          selectedLabelTextStyle: const TextStyle(
+            color: kPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+          destinations: [
+            NavigationRailDestination(
+              icon: const Icon(Icons.dashboard_outlined),
+              selectedIcon: const Icon(Icons.dashboard),
+              label: Text(tr('Inicio')),
+            ),
+            NavigationRailDestination(
+              icon: const Icon(Icons.add_circle_outline),
+              selectedIcon: const Icon(Icons.add_circle),
+              label: Text(tr('Nuevo')),
+            ),
+            NavigationRailDestination(
+              icon: const Icon(Icons.history_outlined),
+              selectedIcon: const Icon(Icons.history),
+              label: Text(tr('Historial')),
+            ),
+            NavigationRailDestination(
+              icon: const Icon(Icons.insights_outlined),
+              selectedIcon: const Icon(Icons.insights),
+              label: Text(tr('Estads.')),
+            ),
+            NavigationRailDestination(
+              icon: const Icon(Icons.storefront_outlined),
+              selectedIcon: const Icon(Icons.storefront),
+              label: Text(tr('Tienda')),
+            ),
+            NavigationRailDestination(
+              icon: profilePhotoUrl == null
+                  ? const Icon(Icons.account_circle_outlined)
+                  : _UserNavigationAvatar(
+                      photoUrl: profilePhotoUrl!,
+                      selected: false,
+                    ),
+              selectedIcon: profilePhotoUrl == null
+                  ? const Icon(Icons.account_circle)
+                  : _UserNavigationAvatar(
+                      photoUrl: profilePhotoUrl!,
+                      selected: true,
+                    ),
+              label: Text(tr('Usuario')),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
