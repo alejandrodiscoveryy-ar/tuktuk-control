@@ -1,7 +1,8 @@
 part of '../main.dart';
 
 class RecordStore extends ChangeNotifier {
-  RecordStore() {
+  RecordStore({PushTokenRegistrationCoordinator? pushTokenCoordinator})
+      : _pushTokenCoordinator = pushTokenCoordinator {
     _licenseService = SupabaseLicenseService(
       client: _supabase,
       cache: _meta,
@@ -40,6 +41,7 @@ class RecordStore extends ChangeNotifier {
   late final SyncCoordinator _syncCoordinator;
   late final SupabaseLicenseService _licenseService;
   late final WhatsAppSettingsService _whatsAppSettingsService;
+  final PushTokenRegistrationCoordinator? _pushTokenCoordinator;
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
@@ -82,6 +84,7 @@ class RecordStore extends ChangeNotifier {
   void handleAppResumed() {
     unawaited(refreshWhatsAppSettings());
     if (user == null) return;
+    unawaited(_pushTokenCoordinator?.retryForAuthenticatedUser(user!.id));
     unawaited(refreshLicense());
     unawaited(syncNow());
   }
@@ -849,6 +852,10 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> signOut() async {
     _stopAutomaticSync();
+    final currentUser = user;
+    if (currentUser != null) {
+      await _pushTokenCoordinator?.unregisterBeforeSignOut(currentUser.id);
+    }
     await _supabase.auth.signOut();
     user = null;
     await refreshLicense();
@@ -935,6 +942,8 @@ class RecordStore extends ChangeNotifier {
     notifyListeners();
     _startAutomaticSync();
     try {
+      await _pushTokenCoordinator
+          ?.handleAuthenticatedUser(authenticatedUser.id);
       await _ensureRemoteProfile();
       await refreshLicense();
       if (canWrite) {
@@ -943,6 +952,8 @@ class RecordStore extends ChangeNotifier {
       await syncNow();
     } on StateError {
       _stopAutomaticSync();
+      await _pushTokenCoordinator
+          ?.unregisterBeforeSignOut(authenticatedUser.id);
       await _supabase.auth.signOut();
       user = null;
       syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
@@ -1645,6 +1656,7 @@ class RecordStore extends ChangeNotifier {
   void dispose() {
     _stopAutomaticSync();
     unawaited(_authSubscription?.cancel());
+    unawaited(_pushTokenCoordinator?.dispose());
     super.dispose();
   }
 }

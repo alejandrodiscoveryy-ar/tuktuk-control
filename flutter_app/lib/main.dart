@@ -12,6 +12,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'services/push_notification_service.dart';
+import 'services/push_token_registration_coordinator.dart';
+
 part 'domain/entities.dart';
 part 'domain/access.dart';
 part 'domain/saas_foundation.dart';
@@ -78,7 +81,19 @@ void main() async {
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
   );
-  runApp(ControlTukTukApp(store: RecordStore()));
+  final pushNotifications = PushNotificationService();
+  await pushNotifications.initialize();
+  final pushTokenCoordinator = PushTokenRegistrationCoordinator.supabase(
+    client: Supabase.instance.client,
+    cache: Hive.box(_metaBox),
+    tokenProvider: pushNotifications.getToken,
+  );
+  pushTokenCoordinator.listenToTokenRefreshes(pushNotifications.tokenRefreshes);
+  runApp(
+    ControlTukTukApp(
+      store: RecordStore(pushTokenCoordinator: pushTokenCoordinator),
+    ),
+  );
 }
 
 class ControlTukTukApp extends StatefulWidget {
