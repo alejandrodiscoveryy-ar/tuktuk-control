@@ -1,12 +1,12 @@
 {
   "name": "TukTuk Control",
   "short_name": "TukTuk",
-  "start_url": ".",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0B0F14",
   "theme_color": "#22D3A6",
-  "description": "Control de ganancias, odometro, cargas y mantenimiento",
-  "orientation": "portrait-primary",
+  "description": "Control de ingresos, gastos, kilometraje y mantenimiento para TukTuk.",
   "prefer_related_applications": false,
   "icons": [
     {

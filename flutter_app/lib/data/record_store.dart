@@ -95,8 +95,7 @@ class RecordStore extends ChangeNotifier {
     return whatsAppSettings;
   }
 
-  WhatsAppContactAction? supportWhatsAppAction() =>
-      buildWhatsAppContactAction(
+  WhatsAppContactAction? supportWhatsAppAction() => buildWhatsAppContactAction(
         settings: whatsAppSettings,
         channel: WhatsAppChannel.support,
         variables: _whatsAppVariables(),
@@ -840,7 +839,7 @@ class RecordStore extends ChangeNotifier {
     notifyListeners();
     await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: kIsWeb ? Uri.base.origin : _supabaseMobileRedirect,
+      redirectTo: kIsWeb ? webOAuthRedirect(Uri.base) : _supabaseMobileRedirect,
       authScreenLaunchMode:
           kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
     );
