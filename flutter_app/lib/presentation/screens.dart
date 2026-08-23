@@ -81,9 +81,54 @@ class _ExchangeRateHeader extends StatelessWidget {
 
   final RecordStore store;
 
+  String? _updatedLabel() {
+    final updatedAt = store.exchangeRateUpdatedAt;
+    if (updatedAt == null) return null;
+
+    final local = updatedAt.toLocal();
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+    final updatedDay = DateTime(local.year, local.month, local.day);
+    final difference = today.difference(updatedDay).inDays;
+    final time = DateFormat('HH:mm').format(local);
+
+    if (difference == 0) {
+      return 'Actualizado $time';
+    }
+
+    if (difference == 1) {
+      return 'Ayer · $time';
+    }
+
+    return '${DateFormat('d MMM', activeLanguage).format(local)} · $time';
+  }
+
+  Color _freshnessColor() {
+    final updatedAt = store.exchangeRateUpdatedAt;
+
+    if (updatedAt == null) {
+      return kMuted;
+    }
+
+    final age = DateTime.now().difference(updatedAt.toLocal());
+
+    if (age <= const Duration(hours: 2)) {
+      return kPrimary;
+    }
+
+    if (age <= const Duration(hours: 6)) {
+      return kTertiary;
+    }
+
+    return kDanger;
+  }
+
   @override
   Widget build(BuildContext context) {
     final rate = store.exchangeRate;
+    final updatedLabel = _updatedLabel();
+    final freshnessColor = _freshnessColor();
 
     final text = rate == null
         ? '${store.exchangeRateBaseCurrency}/${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}'
@@ -99,25 +144,43 @@ class _ExchangeRateHeader extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 4,
-            vertical: 6,
+            vertical: 3,
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.currency_exchange_rounded,
-                color: kTertiary,
+                color: freshnessColor,
                 size: 19,
               ),
               const SizedBox(width: 7),
               Flexible(
-                child: Text(
-                  text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (updatedLabel != null)
+                      Text(
+                        updatedLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: freshnessColor,
+                          fontSize: 9.5,
+                          height: 1.05,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
