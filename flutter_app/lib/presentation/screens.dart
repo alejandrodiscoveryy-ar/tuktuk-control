@@ -76,6 +76,58 @@ class AppLogoMark extends StatelessWidget {
   }
 }
 
+class _ExchangeRateHeader extends StatelessWidget {
+  const _ExchangeRateHeader({required this.store});
+
+  final RecordStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final rate = store.exchangeRate;
+
+    final text = rate == null
+        ? '${store.exchangeRateBaseCurrency}/${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}'
+        : '1 ${store.exchangeRateBaseCurrency} = ${numFmt(rate)} ${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}';
+
+    return Tooltip(
+      message: tr('Tasa de cambio'),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: store.user == null
+            ? null
+            : () => unawaited(store.refreshExchangeRate()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 4,
+            vertical: 6,
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.currency_exchange_rounded,
+                color: kTertiary,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AppBackground extends StatelessWidget {
   const AppBackground({required this.child, super.key});
 
@@ -352,13 +404,9 @@ class _AppShellState extends State<AppShell> {
                 ),
               ),
             ),
-            title: const SizedBox.shrink(),
+            titleSpacing: 12,
+            title: _ExchangeRateHeader(store: store),
             actions: [
-              const Text(
-                'TukTuk-Contol',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(width: 4),
               IconButton(
                 tooltip: tr('Sincronizar'),
                 color: syncColor,

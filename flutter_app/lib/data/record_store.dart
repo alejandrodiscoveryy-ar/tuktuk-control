@@ -25,6 +25,7 @@ class RecordStore extends ChangeNotifier {
       gateway: _supabaseGateway,
     );
     _restoreCachedIdentityAndLicense();
+    _restoreCachedExchangeRate();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
       if (initialized) unawaited(_handleAuthState(state.session?.user));
     }, onError: _handleAuthStreamError);
@@ -59,6 +60,12 @@ class RecordStore extends ChangeNotifier {
   LicenseSnapshot license = LicenseSnapshot.local;
   late WhatsAppSettings whatsAppSettings;
 
+  double? exchangeRate;
+  String exchangeRateBaseCurrency = 'USD';
+  String exchangeRateChargeCurrency = 'CUP';
+  String exchangeRateSource = 'elTOQUE';
+  DateTime? exchangeRateUpdatedAt;
+
   bool get canWrite => license.canWrite;
   bool get isReadOnly => !canWrite;
 
@@ -75,6 +82,95 @@ class RecordStore extends ChangeNotifier {
         : LicenseSnapshot.local;
   }
 
+  void _restoreCachedExchangeRate() {
+    final cachedRate = _meta.get('exchangeRate:value');
+    exchangeRate = cachedRate is num
+        ? cachedRate.toDouble()
+        : double.tryParse('${cachedRate ?? ''}');
+
+    final base = _meta.get('exchangeRate:base')?.toString().trim();
+    final charge = _meta.get('exchangeRate:charge')?.toString().trim();
+    final source = _meta.get('exchangeRate:source')?.toString().trim();
+    final updated = _meta.get('exchangeRate:updatedAt')?.toString();
+
+    if (base != null && base.isNotEmpty) {
+      exchangeRateBaseCurrency = base;
+    }
+    if (charge != null && charge.isNotEmpty) {
+      exchangeRateChargeCurrency = charge;
+    }
+    if (source != null && source.isNotEmpty) {
+      exchangeRateSource = source;
+    }
+    exchangeRateUpdatedAt =
+        updated == null ? null : DateTime.tryParse(updated);
+  }
+
+  Future<void> refreshExchangeRate() async {
+    if (user == null) return;
+
+    try {
+      final response = await _supabase.rpc(
+        'get_my_project_exchange_rate',
+        params: {'target_project_id': _projectId},
+      );
+
+      dynamic rawRow;
+      if (response is List && response.isNotEmpty) {
+        rawRow = response.first;
+      } else if (response is Map) {
+        rawRow = response;
+      }
+
+      if (rawRow is! Map) return;
+
+      final row = Map<String, dynamic>.from(rawRow);
+      final rawRate = row['rate'];
+
+      final rate = rawRate is num
+          ? rawRate.toDouble()
+          : double.tryParse('${rawRate ?? ''}');
+
+      if (rate == null || rate <= 0) return;
+
+      final base =
+          row['base_currency']?.toString().trim();
+      final charge =
+          row['charge_currency']?.toString().trim();
+      final source =
+          row['rate_source']?.toString().trim();
+      final updated =
+          DateTime.tryParse('${row['rate_updated_at'] ?? ''}');
+
+      exchangeRate = rate;
+
+      if (base != null && base.isNotEmpty) {
+        exchangeRateBaseCurrency = base;
+      }
+      if (charge != null && charge.isNotEmpty) {
+        exchangeRateChargeCurrency = charge;
+      }
+      if (source != null && source.isNotEmpty) {
+        exchangeRateSource = source;
+      }
+
+      exchangeRateUpdatedAt = updated;
+
+      await _meta.putAll({
+        'exchangeRate:value': exchangeRate,
+        'exchangeRate:base': exchangeRateBaseCurrency,
+        'exchangeRate:charge': exchangeRateChargeCurrency,
+        'exchangeRate:source': exchangeRateSource,
+        'exchangeRate:updatedAt':
+            exchangeRateUpdatedAt?.toIso8601String(),
+      });
+
+      notifyListeners();
+    } catch (_) {
+      // La última tasa cacheada permanece visible si no hay conexión.
+    }
+  }
+
   void _handleAuthStreamError(Object error, StackTrace stackTrace) {
     syncMessage = 'Sin conexion. La sesion y los datos locales siguen activos';
     notifyListeners();
@@ -86,6 +182,7 @@ class RecordStore extends ChangeNotifier {
     if (user == null) return;
     unawaited(_pushTokenCoordinator?.retryForAuthenticatedUser(user!.id));
     unawaited(refreshLicense());
+    unawaited(refreshExchangeRate());
     unawaited(syncNow());
   }
 
@@ -939,6 +1036,7 @@ class RecordStore extends ChangeNotifier {
     user = authenticatedUser;
     license = _licenseService.cachedLicense(authenticatedUser.id);
     notifyListeners();
+    unawaited(refreshExchangeRate());
     _startAutomaticSync();
     try {
       await _pushTokenCoordinator
@@ -1018,6 +1116,7 @@ class RecordStore extends ChangeNotifier {
       (_) {
         unawaited(refreshLicense());
         unawaited(refreshWhatsAppSettings());
+        unawaited(refreshExchangeRate());
         unawaitedSync();
       },
     );
