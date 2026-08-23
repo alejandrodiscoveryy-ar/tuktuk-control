@@ -16,6 +16,30 @@
   <title>TukTuk Control</title>
 </head>
 <body>
+  <script>
+    window.tuktukShowForegroundNotification = function (title, body) {
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, {
+            body: body,
+            icon: 'icons/Icon-192.png'
+          });
+        }
+      } catch (_) {
+        // Foreground browser notifications are optional.
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('firebase-messaging-sw.js', {
+          scope: './'
+        }).catch(function () {
+          // Push is optional; the WebApp must continue when unavailable.
+        });
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
