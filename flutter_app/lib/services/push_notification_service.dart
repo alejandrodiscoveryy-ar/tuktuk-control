@@ -5,8 +5,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'firebase_web_options.dart';
+import 'web_foreground_notification.dart';
+
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Control';
+const tuktukWebVapidKey =
+    'BF-az4NW8nREYEw-RvnBOfQ2wrJGttOjBhR_PD0SKWEKDHWqWvFBLdmka5e_0d-_Mptdrpxxfy1aF-FFPQpvfEE';
+const tuktukWebMessagingServiceWorker = 'firebase-messaging-sw.js';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -25,6 +31,27 @@ Future<void> requestPushPermissionSafely(
     await requestPermission();
   } catch (_) {
     // Permission and platform failures cannot prevent local app usage.
+  }
+}
+
+typedef PushTokenGetter = Future<String?> Function({
+  String? vapidKey,
+  String? serviceWorkerScriptPath,
+});
+
+@visibleForTesting
+Future<String?> getPushTokenSafely({
+  required bool isWeb,
+  required PushTokenGetter getToken,
+}) async {
+  try {
+    return await getToken(
+      vapidKey: isWeb ? tuktukWebVapidKey : null,
+      serviceWorkerScriptPath:
+          isWeb ? tuktukWebMessagingServiceWorker : null,
+    );
+  } catch (_) {
+    return null;
   }
 }
 
@@ -56,22 +83,28 @@ class PushNotificationService {
       _messagingOverride ?? FirebaseMessaging.instance;
 
   Future<void> initialize({PushMessageOpenedCallback? onMessageOpened}) async {
-    if (_initialized || kIsWeb) return;
+    if (_initialized) return;
     try {
-      await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      await Firebase.initializeApp(
+        options: kIsWeb ? tuktukFirebaseWebOptions : null,
+      );
+      if (!kIsWeb) {
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
 
-      const initializationSettings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      );
-      await _localNotifications.initialize(
-        settings: initializationSettings,
-        onDidReceiveNotificationResponse: (_) {},
-      );
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_channel);
+        const initializationSettings = InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        );
+        await _localNotifications.initialize(
+          settings: initializationSettings,
+          onDidReceiveNotificationResponse: (_) {},
+        );
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(_channel);
+      }
 
       // A denied permission is a valid user choice and never blocks the app.
       await requestPushPermissionSafely(() async {
@@ -113,12 +146,14 @@ class PushNotificationService {
   }
 
   Future<String?> getToken() async {
-    if (!_initialized || kIsWeb) return null;
-    try {
-      return await _messaging.getToken();
-    } catch (_) {
-      return null;
-    }
+    if (!_initialized) return null;
+    return getPushTokenSafely(
+      isWeb: kIsWeb,
+      getToken: ({vapidKey, serviceWorkerScriptPath}) => _messaging.getToken(
+        vapidKey: vapidKey,
+        serviceWorkerScriptPath: serviceWorkerScriptPath,
+      ),
+    );
   }
 
   Future<void> _showForegroundMessage(RemoteMessage message) async {
@@ -126,6 +161,13 @@ class PushNotificationService {
         message.notification?.title ?? message.data['title']?.toString();
     final body = message.notification?.body ?? message.data['body']?.toString();
     if ((title == null || title.isEmpty) && (body == null || body.isEmpty)) {
+      return;
+    }
+    if (kIsWeb) {
+      showWebForegroundNotification(
+        title: title ?? tuktukNotificationChannelName,
+        body: body ?? '',
+      );
       return;
     }
     await _localNotifications.show(

@@ -1,14 +1,19 @@
 import 'dart:async';
 
 import 'package:hive/hive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const tuktukSupabaseProjectId = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
+
+@visibleForTesting
+String pushTokenPlatform({required bool isWeb}) => isWeb ? 'web' : 'android';
 
 abstract interface class PushDeviceTokenRepository {
   Future<void> register({
     required String userId,
     required String token,
+    required String platform,
     required DateTime now,
   });
 
@@ -24,6 +29,7 @@ class SupabasePushDeviceTokenRepository implements PushDeviceTokenRepository {
   Future<void> register({
     required String userId,
     required String token,
+    required String platform,
     required DateTime now,
   }) async {
     final timestamp = now.toUtc().toIso8601String();
@@ -32,7 +38,7 @@ class SupabasePushDeviceTokenRepository implements PushDeviceTokenRepository {
         'project_id': tuktukSupabaseProjectId,
         'user_id': userId,
         'token': token,
-        'platform': 'android',
+        'platform': platform,
         'enabled': true,
         'last_seen_at': timestamp,
         'updated_at': timestamp,
@@ -107,10 +113,12 @@ class PushTokenRegistrationCoordinator {
     required PushDeviceTokenRepository repository,
     required PushTokenStateStore state,
     required PushTokenProvider tokenProvider,
+    required String platform,
     DateTime Function()? clock,
   })  : _repository = repository,
         _state = state,
         _tokenProvider = tokenProvider,
+        _platform = platform,
         _clock = clock ?? DateTime.now;
 
   factory PushTokenRegistrationCoordinator.supabase({
@@ -122,11 +130,13 @@ class PushTokenRegistrationCoordinator {
         repository: SupabasePushDeviceTokenRepository(client),
         state: HivePushTokenStateStore(cache),
         tokenProvider: tokenProvider,
+        platform: pushTokenPlatform(isWeb: kIsWeb),
       );
 
   final PushDeviceTokenRepository _repository;
   final PushTokenStateStore _state;
   final PushTokenProvider _tokenProvider;
+  final String _platform;
   final DateTime Function() _clock;
   String? _activeUserId;
   Future<void> _serial = Future<void>.value();
@@ -193,7 +203,12 @@ class PushTokenRegistrationCoordinator {
 
   Future<void> _register(String userId, String token) async {
     try {
-      await _repository.register(userId: userId, token: token, now: _clock());
+      await _repository.register(
+        userId: userId,
+        token: token,
+        platform: _platform,
+        now: _clock(),
+      );
       await _state.setLastToken(token);
       await _state.setPendingToken(null);
     } catch (_) {

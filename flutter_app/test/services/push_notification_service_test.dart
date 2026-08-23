@@ -10,6 +10,35 @@ void main() {
       completes,
     );
   });
+
+  test('token web usa VAPID y service worker bajo la base actual', () async {
+    String? capturedVapidKey;
+    String? capturedServiceWorkerScriptPath;
+
+    final token = await getPushTokenSafely(
+      isWeb: true,
+      getToken: ({vapidKey, serviceWorkerScriptPath}) async {
+        capturedVapidKey = vapidKey;
+        capturedServiceWorkerScriptPath = serviceWorkerScriptPath;
+        return 'web-token';
+      },
+    );
+
+    expect(token, 'web-token');
+    expect(capturedVapidKey, tuktukWebVapidKey);
+    expect(capturedServiceWorkerScriptPath, 'firebase-messaging-sw.js');
+  });
+
+  test('fallo al obtener token web no bloquea la aplicación', () async {
+    final token = await getPushTokenSafely(
+      isWeb: true,
+      getToken: ({vapidKey, serviceWorkerScriptPath}) async {
+        throw const _PermissionRejected();
+      },
+    );
+
+    expect(token, isNull);
+  });
 }
 
 class _PermissionRejected implements Exception {

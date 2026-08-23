@@ -15,6 +15,7 @@ void main() {
       repository: repository,
       state: state,
       tokenProvider: () async => currentToken,
+      platform: 'android',
       clock: () => DateTime.utc(2026, 8, 21, 12),
     );
   });
@@ -32,7 +33,7 @@ void main() {
   test('usuario autenticado registra token con identidad actual', () async {
     await coordinator.handleAuthenticatedUser('user-1');
 
-    expect(repository.registrations, [('user-1', 'token-a')]);
+    expect(repository.registrations, [('user-1', 'token-a', 'android')]);
     expect(state.lastToken, 'token-a');
     expect(state.pendingToken, isNull);
   });
@@ -42,7 +43,10 @@ void main() {
     await coordinator.handleAuthenticatedUser('user-1');
 
     expect(repository.registrations, hasLength(2));
-    expect(repository.registrations.toSet(), {('user-1', 'token-a')});
+    expect(
+      repository.registrations.toSet(),
+      {('user-1', 'token-a', 'android')},
+    );
     expect(state.lastToken, 'token-a');
   });
 
@@ -74,10 +78,15 @@ void main() {
     expect(state.pendingToken, 'token-a');
     expect(state.lastToken, isNull);
   });
+
+  test('selecciona plataforma android y web correctamente', () {
+    expect(pushTokenPlatform(isWeb: false), 'android');
+    expect(pushTokenPlatform(isWeb: true), 'web');
+  });
 }
 
 class _FakeRepository implements PushDeviceTokenRepository {
-  final List<(String, String)> registrations = [];
+  final List<(String, String, String)> registrations = [];
   final List<(String, String)> deletions = [];
   final List<String> events = [];
   bool failRegistration = false;
@@ -86,10 +95,11 @@ class _FakeRepository implements PushDeviceTokenRepository {
   Future<void> register({
     required String userId,
     required String token,
+    required String platform,
     required DateTime now,
   }) async {
     if (failRegistration) throw const _NetworkError();
-    registrations.add((userId, token));
+    registrations.add((userId, token, platform));
     events.add('register:$userId:$token');
   }
 
