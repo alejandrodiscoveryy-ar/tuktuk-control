@@ -104,10 +104,31 @@ class _ExchangeRateHeader extends StatelessWidget {
     return '${DateFormat('d MMM', activeLanguage).format(local)} · $time';
   }
 
+  Color _freshnessColor() {
+    final updatedAt = store.exchangeRateUpdatedAt;
+
+    if (updatedAt == null) {
+      return kMuted;
+    }
+
+    final age = DateTime.now().difference(updatedAt.toLocal());
+
+    if (age <= const Duration(hours: 2)) {
+      return kPrimary;
+    }
+
+    if (age <= const Duration(hours: 6)) {
+      return kTertiary;
+    }
+
+    return kDanger;
+  }
+
   @override
   Widget build(BuildContext context) {
     final rate = store.exchangeRate;
     final updatedLabel = _updatedLabel();
+    final freshnessColor = _freshnessColor();
 
     final text = rate == null
         ? '${store.exchangeRateBaseCurrency}/${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}'
@@ -127,9 +148,9 @@ class _ExchangeRateHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.currency_exchange_rounded,
-                color: kTertiary,
+                color: freshnessColor,
                 size: 19,
               ),
               const SizedBox(width: 7),
@@ -152,8 +173,8 @@ class _ExchangeRateHeader extends StatelessWidget {
                         updatedLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: kMuted,
+                        style: TextStyle(
+                          color: freshnessColor,
                           fontSize: 9.5,
                           height: 1.05,
                           fontWeight: FontWeight.w600,
