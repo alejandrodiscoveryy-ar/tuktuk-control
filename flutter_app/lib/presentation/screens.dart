@@ -261,10 +261,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       error = null;
     });
     try {
+      // El callback OAuth completa la sesion de forma asincrona.
+      // RecordStore restaura o crea el vehiculo cuando recibe la sesion.
       await widget.store.signIn();
-      if (widget.store.user != null && widget.store.activeVehicle == null) {
-        await widget.store.configureFirstVehicle(name: tr('Mi Tuk Tuk'));
-      }
     } catch (_) {
       if (mounted) {
         setState(() => error = tr('No se pudo iniciar con Google.'));
