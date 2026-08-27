@@ -47,8 +47,12 @@ class RecordStore extends ChangeNotifier {
     _restoreCachedIdentityAndLicense();
     _restoreCachedExchangeRate();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
-      if (!initialized) return;
       final nextUser = state.session?.user;
+      if (!initialized) {
+        _hasPendingAuthState = true;
+        _pendingAuthUser = nextUser;
+        return;
+      }
       final currentUser = user;
 
       // Una renovacion normal del token conserva el mismo usuario.
@@ -82,6 +86,8 @@ class RecordStore extends ChangeNotifier {
   static const _installReferrerCheckedKey = 'referral:installReferrerChecked';
   final PushTokenRegistrationCoordinator? _pushTokenCoordinator;
   StreamSubscription<AuthState>? _authSubscription;
+  bool _hasPendingAuthState = false;
+  User? _pendingAuthUser;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
   Timer? _syncDebounceTimer;
@@ -735,7 +741,15 @@ class RecordStore extends ChangeNotifier {
       initialized = true;
       notifyListeners();
     }
-    unawaited(restoreGoogleSession());
+    final hadPendingAuthState = _hasPendingAuthState;
+    final pendingAuthUser = _pendingAuthUser;
+    _hasPendingAuthState = false;
+    _pendingAuthUser = null;
+    if (hadPendingAuthState) {
+      unawaited(_handleAuthState(pendingAuthUser));
+    } else {
+      unawaited(restoreGoogleSession());
+    }
   }
 
   Future<void> configureFirstVehicle({
@@ -1309,21 +1323,24 @@ class RecordStore extends ChangeNotifier {
       await _ensureRemoteProfile();
       await _processPendingReferralClaim(authenticatedUser.id);
       await _refreshLicenseIfNeeded(force: true);
+
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
-
-        // OAuth termina de forma asincrona. Si este usuario ya tiene
-        // datos remotos (por ejemplo, tras reinstalar o cambiar de
-        // dispositivo), se restauran antes de crear un vehiculo nuevo.
-        if (activeVehicle == null) {
-          await _synchronizeWithSupabase();
-        }
-
-        // Solo un usuario realmente nuevo recibe el vehiculo inicial.
-        if (activeVehicle == null) {
-          await configureFirstVehicle(name: 'Mi Tuk Tuk');
-        }
       }
+
+      // Los datos remotos deben restaurarse tambien en modo solo lectura.
+      // Una licencia sin permiso de escritura no debe impedir consultar
+      // el vehiculo y los registros que ya existen en Supabase.
+      if (activeVehicle == null) {
+        await _synchronizeWithSupabase();
+      }
+
+      // Solo un usuario realmente nuevo y con permiso de escritura
+      // recibe un vehiculo inicial.
+      if (canWrite && activeVehicle == null) {
+        await configureFirstVehicle(name: 'Mi Tuk Tuk');
+      }
+
       await syncNow();
     } catch (_) {
       syncMessage = 'Sin conexion. Trabajando con los datos locales';
