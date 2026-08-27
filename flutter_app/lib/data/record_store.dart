@@ -1045,6 +1045,18 @@ class RecordStore extends ChangeNotifier {
       await refreshLicense();
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
+
+        // OAuth termina de forma asincrona. Si este usuario ya tiene
+        // datos remotos (por ejemplo, tras reinstalar o cambiar de
+        // dispositivo), se restauran antes de crear un vehiculo nuevo.
+        if (activeVehicle == null) {
+          await _synchronizeWithSupabase();
+        }
+
+        // Solo un usuario realmente nuevo recibe el vehiculo inicial.
+        if (activeVehicle == null) {
+          await configureFirstVehicle(name: 'Mi Tuk Tuk');
+        }
       }
       await syncNow();
     } on StateError {
