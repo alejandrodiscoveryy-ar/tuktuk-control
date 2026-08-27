@@ -86,6 +86,81 @@ void main() {
     expect(store.code, isNull);
   });
 
+  test('captureCode valida, recorta e ignora entradas inválidas', () async {
+    final store = _MemoryPendingReferralStore();
+    final controller = PendingReferralClaimController(store);
+
+    expect(await controller.captureCode('  PEDRO-7K4P  '), isTrue);
+    expect(store.code, 'PEDRO-7K4P');
+    await store.clear();
+    expect(await controller.captureCode('   '), isFalse);
+    expect(await controller.captureCode(List.filled(129, 'x').join()), isFalse);
+  });
+
+  test('captura enlaces /tuktuk y /tuktuk/app con ref', () async {
+    for (final path in ['/tuktuk', '/tuktuk/app/']) {
+      final store = _MemoryPendingReferralStore();
+      final controller = PendingReferralClaimController(store);
+      expect(
+        await controller.capture(
+          Uri.parse('https://www.vrixora.com$path?ref=PEDRO-7K4P'),
+        ),
+        isTrue,
+      );
+      expect(store.code, 'PEDRO-7K4P');
+    }
+  });
+
+  test('ignora URI sin ref', () async {
+    final controller = PendingReferralClaimController(
+      _MemoryPendingReferralStore(),
+    );
+    expect(
+      await controller.capture(Uri.parse('https://www.vrixora.com/tuktuk')),
+      isFalse,
+    );
+  });
+
+  test('parsea únicamente ref desde Google Play Install Referrer', () {
+    expect(parseInstallReferrerCode('ref=PEDRO-7K4P'), 'PEDRO-7K4P');
+    expect(
+      parseInstallReferrerCode('utm_source=whatsapp&ref=PEDRO-7K4P'),
+      'PEDRO-7K4P',
+    );
+    expect(
+      parseInstallReferrerCode('ref=PEDRO%2D7K4P&utm_medium=share'),
+      'PEDRO-7K4P',
+    );
+    expect(parseInstallReferrerCode('utm_source=whatsapp'), isNull);
+  });
+
+  test('un App Link repetido no produce claims duplicados', () async {
+    final store = _MemoryPendingReferralStore();
+    final controller = PendingReferralClaimController(store);
+    final uri = Uri.parse(
+      'https://www.vrixora.com/tuktuk?ref=PEDRO-7K4P',
+    );
+    var claims = 0;
+
+    await controller.capture(uri);
+    expect(
+      await controller.claimForUser(
+        userId: 'user-1',
+        claim: (_) async => claims++,
+      ),
+      PendingReferralClaimResult.success,
+    );
+    await controller.capture(uri);
+    expect(
+      await controller.claimForUser(
+        userId: 'user-1',
+        claim: (_) async => claims++,
+      ),
+      PendingReferralClaimResult.alreadyAttempted,
+    );
+    expect(claims, 1);
+  });
+
   test('no intenta claim sin usuario autenticado', () async {
     final store = _MemoryPendingReferralStore()..code = 'ABC-123';
     final controller = PendingReferralClaimController(store);
@@ -134,6 +209,7 @@ class _MemoryPendingReferralStore implements PendingReferralCodeStore {
   String? assignedUserId;
   @override
   String? attemptedUserId;
+  final Map<String, String> claimedCodes = {};
 
   @override
   Future<void> saveCode(String value) async {
@@ -150,6 +226,15 @@ class _MemoryPendingReferralStore implements PendingReferralCodeStore {
 
   @override
   Future<void> resetAttempt() async => attemptedUserId = null;
+
+  @override
+  bool wasClaimedByUser(String userId, String code) =>
+      claimedCodes[userId] == code;
+
+  @override
+  Future<void> markClaimed(String userId, String code) async {
+    claimedCodes[userId] = code;
+  }
 
   @override
   Future<void> clear() async {

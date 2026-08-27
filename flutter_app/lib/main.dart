@@ -4,7 +4,9 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +16,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'services/push_notification_service.dart';
 import 'services/push_token_registration_coordinator.dart';
+import 'services/install_referrer_service.dart';
+import 'services/referral_link_listener.dart';
 import 'services/referral_share.dart';
 
 part 'domain/entities.dart';
@@ -71,6 +75,7 @@ const kCardGradientBottom = Color(0xFF0D141D);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final referralAppLinks = kIsWeb ? null : AppLinks();
   for (final locale in ['es', 'en', 'pt', 'fr']) {
     await initializeDateFormatting(locale);
   }
@@ -94,7 +99,10 @@ void main() async {
   pushTokenCoordinator.listenToTokenRefreshes(pushNotifications.tokenRefreshes);
   runApp(
     ControlTukTukApp(
-      store: RecordStore(pushTokenCoordinator: pushTokenCoordinator),
+      store: RecordStore(
+        pushTokenCoordinator: pushTokenCoordinator,
+        referralAppLinks: referralAppLinks,
+      ),
     ),
   );
 }
