@@ -2234,29 +2234,86 @@ class _ReferralCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: dark
-              ? const [Color(0xFF35191E), Color(0xFF21151B)]
-              : const [Color(0xFFFFE9EA), Color(0xFFFFF4F3)],
+              ? const [Color(0xFF102D2B), Color(0xFF0C201F)]
+              : const [Color(0xFFE5F7F2), Color(0xFFF2FBF8)],
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: dark ? const Color(0xFF713640) : const Color(0xFFE8A5AA),
+          color: dark ? const Color(0xFF2A7067) : const Color(0xFF75BEB0),
         ),
+        boxShadow: dark
+            ? const [
+                BoxShadow(
+                  color: Color(0x2400CFA0),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ]
+            : const [
+                BoxShadow(
+                  color: Color(0x16006E60),
+                  blurRadius: 14,
+                  offset: Offset(0, 6),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.card_giftcard_rounded, color: kPrimary, size: 30),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Invita y gana',
-                  style: TextStyle(
-                    color: kPrimary,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: dark
+                      ? const Color(0x332DD4A3)
+                      : const Color(0x292A9D83),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(
+                    color: dark
+                        ? const Color(0x664ED9B5)
+                        : const Color(0x6675BEB0),
                   ),
+                ),
+                child: const Icon(
+                  Icons.card_giftcard_rounded,
+                  color: Color(0xFF58E0BA),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Invita amigos y paga menos',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: dark ? kText : const Color(0xFF123D37),
+                        fontSize: 17,
+                        height: 1.15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Gana 15 días gratis por cada referido.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: dark
+                            ? const Color(0xFF8DE5CE)
+                            : const Color(0xFF287C6C),
+                        fontSize: 13,
+                        height: 1.25,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
