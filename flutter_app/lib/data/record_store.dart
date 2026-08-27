@@ -1,6 +1,11 @@
 part of '../main.dart';
 
 class RecordStore extends ChangeNotifier {
+  static const _licenseValidationInterval = Duration(minutes: 15);
+  static const _licenseRetryInterval = Duration(minutes: 2);
+  static const _resumeRefreshMinInterval = Duration(minutes: 5);
+  static const _automaticSyncInterval = Duration(minutes: 15);
+
   RecordStore({PushTokenRegistrationCoordinator? pushTokenCoordinator})
       : _pushTokenCoordinator = pushTokenCoordinator {
     _licenseService = SupabaseLicenseService(
@@ -27,7 +32,18 @@ class RecordStore extends ChangeNotifier {
     _restoreCachedIdentityAndLicense();
     _restoreCachedExchangeRate();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
-      if (initialized) unawaited(_handleAuthState(state.session?.user));
+      if (!initialized) return;
+      final nextUser = state.session?.user;
+      final currentUser = user;
+
+      // Una renovacion normal del token conserva el mismo usuario.
+      // No debe reiniciar perfil, push, Realtime, licencia y sync.
+      if (currentUser != null && nextUser?.id == currentUser.id) {
+        user = nextUser;
+        return;
+      }
+
+      unawaited(_handleAuthState(nextUser));
     }, onError: _handleAuthStreamError);
     _load();
     unawaited(_initialize());
@@ -51,6 +67,9 @@ class RecordStore extends ChangeNotifier {
   int _consecutiveSyncFailures = 0;
   bool _syncRequestedWhileRunning = false;
   String? _ensuredProfileFingerprint;
+  DateTime? _lastBackgroundRefreshAt;
+  DateTime? _lastLicenseRefreshAttemptAt;
+  Future<LicenseSnapshot>? _licenseRefreshFuture;
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   User? user;
@@ -178,10 +197,21 @@ class RecordStore extends ChangeNotifier {
   }
 
   void handleAppResumed() {
+    final now = DateTime.now().toUtc();
+    final lastRefresh = _lastBackgroundRefreshAt;
+
+    if (lastRefresh != null &&
+        now.difference(lastRefresh).compareTo(_resumeRefreshMinInterval) < 0) {
+      return;
+    }
+
+    _lastBackgroundRefreshAt = now;
     unawaited(refreshWhatsAppSettings());
+
     if (user == null) return;
+
     unawaited(_pushTokenCoordinator?.retryForAuthenticatedUser(user!.id));
-    unawaited(refreshLicense());
+    unawaited(_refreshLicenseIfNeeded());
     unawaited(refreshExchangeRate());
     unawaited(syncNow());
   }
@@ -258,13 +288,56 @@ class RecordStore extends ChangeNotifier {
     return license;
   }
 
+  bool get _hasFreshLicenseValidation {
+    if (!license.validatedFromServer) return false;
+
+    final validatedAt = license.lastServerValidation;
+    if (validatedAt == null) return false;
+
+    final age = DateTime.now().toUtc().difference(validatedAt.toUtc());
+    return age.compareTo(Duration.zero) >= 0 &&
+        age.compareTo(_licenseValidationInterval) < 0;
+  }
+
+  Future<LicenseSnapshot> _refreshLicenseIfNeeded({
+    bool force = false,
+  }) {
+    final inFlight = _licenseRefreshFuture;
+    if (inFlight != null) return inFlight;
+
+    final now = DateTime.now().toUtc();
+
+    if (!force && _hasFreshLicenseValidation) {
+      return Future.value(license);
+    }
+
+    final lastAttempt = _lastLicenseRefreshAttemptAt;
+    if (!force &&
+        lastAttempt != null &&
+        now.difference(lastAttempt).compareTo(_licenseRetryInterval) < 0) {
+      return Future.value(license);
+    }
+
+    _lastLicenseRefreshAttemptAt = now;
+
+    final future = refreshLicense();
+    _licenseRefreshFuture = future;
+
+    return future.whenComplete(() {
+      if (identical(_licenseRefreshFuture, future)) {
+        _licenseRefreshFuture = null;
+      }
+    });
+  }
+
   Future<void> _requireWriteAccess() async {
     final currentUser = user;
     if (currentUser != null) {
       license = _licenseService.cachedLicense(currentUser.id);
+      await _refreshLicenseIfNeeded();
     }
+
     if (!canWrite) throw ReadOnlyLicenseException(license);
-    if (currentUser != null) unawaited(refreshLicense());
   }
 
   List<DailyRecord> get records => [..._records]..sort(_compareRecordsDesc);
@@ -966,7 +1039,7 @@ class RecordStore extends ChangeNotifier {
   Future<void> syncNow() async {
     await _withSync(() async {
       if (user == null) return;
-      await refreshLicense();
+      await _refreshLicenseIfNeeded();
       if (activeVehicle == null) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
         return;
@@ -1042,7 +1115,7 @@ class RecordStore extends ChangeNotifier {
       await _pushTokenCoordinator
           ?.handleAuthenticatedUser(authenticatedUser.id);
       await _ensureRemoteProfile();
-      await refreshLicense();
+      await _refreshLicenseIfNeeded(force: true);
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
 
@@ -1120,13 +1193,15 @@ class RecordStore extends ChangeNotifier {
             column: 'user_id',
             value: currentUser.id,
           ),
-          callback: (_) => unawaited(refreshLicense()),
+          callback: (_) =>
+              unawaited(_refreshLicenseIfNeeded(force: true)),
         )
         .subscribe();
+
     _automaticSyncTimer = Timer.periodic(
-      const Duration(minutes: 5),
+      _automaticSyncInterval,
       (_) {
-        unawaited(refreshLicense());
+        unawaited(_refreshLicenseIfNeeded());
         unawaited(refreshWhatsAppSettings());
         unawaited(refreshExchangeRate());
         unawaitedSync();
@@ -1144,6 +1219,8 @@ class RecordStore extends ChangeNotifier {
     _consecutiveSyncFailures = 0;
     _syncRequestedWhileRunning = false;
     _ensuredProfileFingerprint = null;
+    _lastBackgroundRefreshAt = null;
+    _lastLicenseRefreshAttemptAt = null;
     final channel = _realtimeChannel;
     _realtimeChannel = null;
     if (channel != null) unawaited(_supabase.removeChannel(channel));
