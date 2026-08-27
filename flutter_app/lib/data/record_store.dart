@@ -70,6 +70,7 @@ class RecordStore extends ChangeNotifier {
   DateTime? _lastBackgroundRefreshAt;
   DateTime? _lastLicenseRefreshAttemptAt;
   Future<LicenseSnapshot>? _licenseRefreshFuture;
+  String? _licenseRefreshUserId;
   final List<DailyRecord> _records = [];
   final List<MaintenanceRecord> _maintenanceRecords = [];
   User? user;
@@ -95,10 +96,10 @@ class RecordStore extends ChangeNotifier {
       license = _licenseService.cachedLicense(restoredUser.id);
       return;
     }
-    final claimed = _meta.get('claimedUserId');
-    license = claimed is String && claimed.isNotEmpty
-        ? _licenseService.cachedLicense(claimed)
-        : LicenseSnapshot.local;
+
+    // Sin una sesión Google activa, el dispositivo vuelve a su espacio local.
+    // Nunca mostramos ni reutilizamos la licencia de la cuenta anterior.
+    license = LicenseSnapshot.local;
   }
 
   void _restoreCachedExchangeRate() {
@@ -273,17 +274,21 @@ class RecordStore extends ChangeNotifier {
   Future<LicenseSnapshot> refreshLicense() async {
     final currentUser = user;
     if (currentUser == null) {
-      final claimed = _meta.get('claimedUserId');
-      license = claimed is String && claimed.isNotEmpty
-          ? _licenseService.cachedLicense(claimed)
-          : LicenseSnapshot.local;
+      license = LicenseSnapshot.local;
       notifyListeners();
       return license;
     }
-    license = await _licenseService.refresh(
+
+    final refreshed = await _licenseService.refresh(
       userId: currentUser.id,
       deviceFingerprint: deviceId,
     );
+
+    // El usuario pudo cambiar mientras la petición estaba en curso.
+    // Una respuesta vieja nunca debe modificar la cuenta nueva.
+    if (user?.id != currentUser.id) return license;
+
+    license = refreshed;
     notifyListeners();
     return license;
   }
@@ -302,8 +307,12 @@ class RecordStore extends ChangeNotifier {
   Future<LicenseSnapshot> _refreshLicenseIfNeeded({
     bool force = false,
   }) {
+    final currentUserId = user?.id;
     final inFlight = _licenseRefreshFuture;
-    if (inFlight != null) return inFlight;
+
+    if (inFlight != null && _licenseRefreshUserId == currentUserId) {
+      return inFlight;
+    }
 
     final now = DateTime.now().toUtc();
 
@@ -322,10 +331,12 @@ class RecordStore extends ChangeNotifier {
 
     final future = refreshLicense();
     _licenseRefreshFuture = future;
+    _licenseRefreshUserId = currentUserId;
 
     return future.whenComplete(() {
       if (identical(_licenseRefreshFuture, future)) {
         _licenseRefreshFuture = null;
+        _licenseRefreshUserId = null;
       }
     });
   }
@@ -374,9 +385,7 @@ class RecordStore extends ChangeNotifier {
 
   String get activeUserId {
     final googleUser = user;
-    if (googleUser != null) return googleUser.id;
-    final claimed = _meta.get('claimedUserId');
-    return claimed is String && claimed.isNotEmpty ? claimed : localOwnerId;
+    return googleUser?.id ?? localOwnerId;
   }
 
   String get activeVehicleId {
@@ -430,8 +439,21 @@ class RecordStore extends ChangeNotifier {
   bool get needsOnboarding => initialized && activeVehicle == null;
 
   DateTime? get lastSyncAt {
-    final raw = _meta.get('lastSyncAt');
-    return raw == null ? null : DateTime.tryParse('$raw');
+    final currentUser = user;
+    if (currentUser == null) return null;
+
+    final scoped = _meta.get('lastSyncAt:${currentUser.id}');
+    if (scoped != null) return DateTime.tryParse('$scoped');
+
+    // Compatibilidad con instalaciones anteriores al aislamiento por usuario:
+    // el valor histórico solo pertenece al usuario que reclamó esos datos.
+    final claimed = _meta.get('claimedUserId');
+    if (claimed == currentUser.id) {
+      final legacy = _meta.get('lastSyncAt');
+      return legacy == null ? null : DateTime.tryParse('$legacy');
+    }
+
+    return null;
   }
 
   String get profileDisplayName {
@@ -1027,6 +1049,7 @@ class RecordStore extends ChangeNotifier {
     }
     await _supabase.auth.signOut();
     user = null;
+    _load();
     await refreshLicense();
     syncMessage = 'Sesion cerrada. La base local sigue en este dispositivo';
     notifyListeners();
@@ -1073,6 +1096,7 @@ class RecordStore extends ChangeNotifier {
     }
     _syncDebounceTimer?.cancel();
     _syncDebounceTimer = null;
+    final syncingUserId = user?.id;
     syncing = true;
     syncMessage = 'Sincronizando...';
     notifyListeners();
@@ -1081,7 +1105,12 @@ class RecordStore extends ChangeNotifier {
       _consecutiveSyncFailures = 0;
       _retrySyncTimer?.cancel();
       _retrySyncTimer = null;
-      await _meta.put('lastSyncAt', DateTime.now().toIso8601String());
+      if (syncingUserId != null) {
+        await _meta.put(
+          'lastSyncAt:$syncingUserId',
+          DateTime.now().toIso8601String(),
+        );
+      }
     } catch (_) {
       syncMessage = 'Sin conexion. Los cambios permanecen guardados';
       _scheduleSyncRetry();
@@ -1099,6 +1128,7 @@ class RecordStore extends ChangeNotifier {
     if (authenticatedUser == null) {
       user = null;
       _stopAutomaticSync();
+      _load();
       await refreshLicense();
       if (initialized) {
         syncMessage = 'Entra con Google para activar la sincronizacion';
@@ -1132,14 +1162,6 @@ class RecordStore extends ChangeNotifier {
         }
       }
       await syncNow();
-    } on StateError {
-      _stopAutomaticSync();
-      await _pushTokenCoordinator
-          ?.unregisterBeforeSignOut(authenticatedUser.id);
-      await _supabase.auth.signOut();
-      user = null;
-      syncMessage = 'Este dispositivo ya contiene datos de otro usuario';
-      notifyListeners();
     } catch (_) {
       syncMessage = 'Sin conexion. Trabajando con los datos locales';
       notifyListeners();
@@ -1221,6 +1243,7 @@ class RecordStore extends ChangeNotifier {
     _ensuredProfileFingerprint = null;
     _lastBackgroundRefreshAt = null;
     _lastLicenseRefreshAttemptAt = null;
+    _licenseRefreshUserId = null;
     final channel = _realtimeChannel;
     _realtimeChannel = null;
     if (channel != null) unawaited(_supabase.removeChannel(channel));
@@ -1763,13 +1786,23 @@ class RecordStore extends ChangeNotifier {
     final googleUser = user;
     if (googleUser == null) return;
     final legacyClaimed = _meta.get('claimedUserId');
-    final claimed = _meta.get('supabaseClaimedUserId');
+    final supabaseClaimed = _meta.get('supabaseClaimedUserId');
+    final claimedUserId =
+        supabaseClaimed is String && supabaseClaimed.isNotEmpty
+            ? supabaseClaimed
+            : legacyClaimed is String && legacyClaimed.isNotEmpty
+                ? legacyClaimed
+                : null;
+
     if (!OwnershipPolicy.canClaimLocalData(
-      claimed is String ? claimed : null,
+      claimedUserId,
       googleUser.id,
     )) {
+      // Este dispositivo ya contiene datos de otra cuenta.
+      // Se conservan intactos y la cuenta nueva usa exclusivamente
+      // sus propios datos locales/remotos.
       _load();
-      throw StateError('Este dispositivo ya contiene datos de otro usuario.');
+      return;
     }
 
     final targetUserId = googleUser.id;
