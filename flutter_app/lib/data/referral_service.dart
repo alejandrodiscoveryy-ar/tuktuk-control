@@ -51,6 +51,7 @@ class HivePendingReferralCodeStore implements PendingReferralCodeStore {
   static const _codeKey = 'referral:pendingCode';
   static const _assignedUserKey = 'referral:assignedUserId';
   static const _attemptedUserKey = 'referral:attemptedUserId';
+  static const _claimedCodesKey = 'referral:claimedCodesByUser';
 
   final Box<dynamic> _box;
 
@@ -78,6 +79,25 @@ class HivePendingReferralCodeStore implements PendingReferralCodeStore {
 
   @override
   Future<void> resetAttempt() => _box.delete(_attemptedUserKey);
+
+  @override
+  bool wasClaimedByUser(String userId, String code) {
+    final values = _box.get(_claimedCodesKey);
+    if (values is! Map) return false;
+    return values[userId]?.toString() == code;
+  }
+
+  @override
+  Future<void> markClaimed(String userId, String code) async {
+    final existing = _box.get(_claimedCodesKey);
+    final values = existing is Map
+        ? Map<String, String>.fromEntries(existing.entries.map(
+            (entry) => MapEntry('${entry.key}', '${entry.value}'),
+          ))
+        : <String, String>{};
+    values[userId] = code;
+    await _box.put(_claimedCodesKey, values);
+  }
 
   @override
   Future<void> clear() async {

@@ -6,8 +6,10 @@ class RecordStore extends ChangeNotifier {
   static const _resumeRefreshMinInterval = Duration(minutes: 5);
   static const _automaticSyncInterval = Duration(minutes: 15);
 
-  RecordStore({PushTokenRegistrationCoordinator? pushTokenCoordinator})
-      : _pushTokenCoordinator = pushTokenCoordinator {
+  RecordStore({
+    PushTokenRegistrationCoordinator? pushTokenCoordinator,
+    AppLinks? referralAppLinks,
+  }) : _pushTokenCoordinator = pushTokenCoordinator {
     _licenseService = SupabaseLicenseService(
       client: _supabase,
       cache: _meta,
@@ -27,6 +29,12 @@ class RecordStore extends ChangeNotifier {
     _initialReferralCapture = kIsWeb
         ? _pendingReferralClaims.capture(Uri.base)
         : Future<bool>.value(false);
+    if (!kIsWeb && referralAppLinks != null) {
+      _referralLinkListener = ReferralLinkListener(
+        appLinks: referralAppLinks,
+        onUri: _captureReferralUri,
+      )..start();
+    }
     whatsAppSettings = _whatsAppSettingsService.cachedSettings();
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
@@ -68,6 +76,10 @@ class RecordStore extends ChangeNotifier {
   late final ReferralRemoteService _referralRemoteService;
   late final PendingReferralClaimController _pendingReferralClaims;
   late final Future<bool> _initialReferralCapture;
+  ReferralLinkListener? _referralLinkListener;
+  Future<void>? _pendingReferralClaimFuture;
+  bool _installReferrerAttemptedThisSession = false;
+  static const _installReferrerCheckedKey = 'referral:installReferrerChecked';
   final PushTokenRegistrationCoordinator? _pushTokenCoordinator;
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
@@ -300,6 +312,20 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _processPendingReferralClaim(String userId) async {
+    final inFlight = _pendingReferralClaimFuture;
+    if (inFlight != null) return inFlight;
+    final future = _runPendingReferralClaim(userId);
+    _pendingReferralClaimFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_pendingReferralClaimFuture, future)) {
+        _pendingReferralClaimFuture = null;
+      }
+    }
+  }
+
+  Future<void> _runPendingReferralClaim(String userId) async {
     final result = await _pendingReferralClaims.claimForUser(
       userId: userId,
       claim: _referralRemoteService.claim,
@@ -310,6 +336,38 @@ class RecordStore extends ChangeNotifier {
       await loadReferrals(force: true);
     } else {
       notifyListeners();
+    }
+  }
+
+  Future<void> _captureReferralUri(Uri uri) async {
+    final captured = await _pendingReferralClaims.capture(uri);
+    final currentUser = user;
+    if (captured && initialized && currentUser != null) {
+      await _processPendingReferralClaim(currentUser.id);
+    }
+  }
+
+  Future<void> _captureInstallReferrer() async {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android ||
+        _installReferrerAttemptedThisSession ||
+        _meta.get(_installReferrerCheckedKey) == true) {
+      return;
+    }
+    _installReferrerAttemptedThisSession = true;
+    final result = await const AndroidInstallReferrerService().read();
+    if (result.status == InstallReferrerStatus.ok) {
+      final code = parseInstallReferrerCode(result.installReferrer);
+      final captured = await _pendingReferralClaims.captureCode(code);
+      await _meta.put(_installReferrerCheckedKey, true);
+      final currentUser = user;
+      if (captured && initialized && currentUser != null) {
+        await _processPendingReferralClaim(currentUser.id);
+      }
+      return;
+    }
+    if (result.isDefinitive) {
+      await _meta.put(_installReferrerCheckedKey, true);
     }
   }
 
@@ -664,6 +722,7 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> _initialize() async {
     await _initialReferralCapture;
+    unawaited(_captureInstallReferrer());
     unawaited(refreshWhatsAppSettings());
     try {
       await _migrateLegacyMaintenance();
@@ -1981,6 +2040,7 @@ class RecordStore extends ChangeNotifier {
     _stopAutomaticSync();
     unawaited(_authSubscription?.cancel());
     unawaited(_pushTokenCoordinator?.dispose());
+    unawaited(_referralLinkListener?.dispose());
     super.dispose();
   }
 }

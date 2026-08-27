@@ -153,6 +153,8 @@ abstract interface class PendingReferralCodeStore {
   Future<void> assignToUser(String userId);
   Future<void> markAttempted(String userId);
   Future<void> resetAttempt();
+  bool wasClaimedByUser(String userId, String code);
+  Future<void> markClaimed(String userId, String code);
   Future<void> clear();
 }
 
@@ -163,11 +165,16 @@ class PendingReferralClaimController {
 
   final PendingReferralCodeStore _store;
 
-  Future<bool> capture(Uri uri) async {
-    final raw = uri.queryParameters['ref']?.trim();
-    if (raw == null || raw.isEmpty || raw.length > 128) return false;
-    if (_store.code == raw) return true;
-    await _store.saveCode(raw);
+  Future<bool> capture(Uri uri) => captureCode(uri.queryParameters['ref']);
+
+  Future<bool> captureCode(String? value) async {
+    final code = normalizeReferralCode(value);
+    if (code == null) return false;
+    if (_store.code == code) return true;
+    // A pending code may already be assigned or attempted for another account.
+    // Never replace it implicitly, because doing so would break account isolation.
+    if (_store.code != null) return false;
+    await _store.saveCode(code);
     return true;
   }
 
@@ -178,6 +185,10 @@ class PendingReferralClaimController {
     if (userId.trim().isEmpty) return PendingReferralClaimResult.none;
     final code = _store.code;
     if (code == null || code.isEmpty) return PendingReferralClaimResult.none;
+    if (_store.wasClaimedByUser(userId, code)) {
+      await _store.clear();
+      return PendingReferralClaimResult.alreadyAttempted;
+    }
 
     final assignedUserId = _store.assignedUserId;
     if (assignedUserId != null && assignedUserId != userId) {
@@ -191,6 +202,7 @@ class PendingReferralClaimController {
     await _store.markAttempted(userId);
     try {
       await claim(code);
+      await _store.markClaimed(userId, code);
       await _store.clear();
       return PendingReferralClaimResult.success;
     } catch (_) {
@@ -200,5 +212,21 @@ class PendingReferralClaimController {
 
   Future<void> allowRetryForUser(String userId) async {
     if (_store.assignedUserId == userId) await _store.resetAttempt();
+  }
+}
+
+String? normalizeReferralCode(String? value) {
+  final code = value?.trim();
+  if (code == null || code.isEmpty || code.length > 128) return null;
+  return code;
+}
+
+String? parseInstallReferrerCode(String? installReferrer) {
+  final value = installReferrer?.trim();
+  if (value == null || value.isEmpty) return null;
+  try {
+    return normalizeReferralCode(Uri.splitQueryString(value)['ref']);
+  } on FormatException {
+    return null;
   }
 }
