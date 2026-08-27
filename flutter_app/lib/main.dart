@@ -14,12 +14,15 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'services/push_notification_service.dart';
 import 'services/push_token_registration_coordinator.dart';
+import 'services/referral_share.dart';
 
 part 'domain/entities.dart';
 part 'domain/access.dart';
 part 'domain/saas_foundation.dart';
 part 'domain/metrics.dart';
+part 'domain/referrals.dart';
 part 'domain/sync.dart';
+part 'data/referral_service.dart';
 part 'data/record_store.dart';
 part 'data/seed_data.dart';
 part 'data/sync_queue.dart';

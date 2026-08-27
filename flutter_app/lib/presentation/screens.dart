@@ -503,6 +503,7 @@ class _AppShellState extends State<AppShell> {
                           );
                           return;
                         }
+                        if (value == 5) unawaited(store.loadReferrals());
                         setState(() => index = value);
                       },
                       profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -572,6 +573,7 @@ class _AppShellState extends State<AppShell> {
                       );
                       return;
                     }
+                    if (value == 5) unawaited(store.loadReferrals());
                     setState(() => index = value);
                   },
                   profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -1944,7 +1946,7 @@ class LoginScreen extends StatelessWidget {
           onTap: (action) => _launchWhatsApp(context, action),
         ),
         const SizedBox(height: 18),
-        const _ReferralPreviewCard(),
+        _ReferralCard(store: store),
         const SizedBox(height: 18),
         AppPreferencesPanel(store: store),
       ],
@@ -2217,8 +2219,326 @@ Future<void> _launchWhatsApp(
   }
 }
 
-class _ReferralPreviewCard extends StatelessWidget {
-  const _ReferralPreviewCard();
+class _ReferralCard extends StatelessWidget {
+  const _ReferralCard({required this.store});
+
+  final RecordStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? const [Color(0xFF35191E), Color(0xFF21151B)]
+              : const [Color(0xFFFFE9EA), Color(0xFFFFF4F3)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: dark ? const Color(0xFF713640) : const Color(0xFFE8A5AA),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.card_giftcard_rounded, color: kPrimary, size: 30),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Invita y gana',
+                  style: TextStyle(
+                    color: kPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (store.user == null) ...[
+            const Text(
+              'Inicia sesión con Google para obtener tu enlace personal, invitar conductores y consultar tus recompensas.',
+              style: TextStyle(color: kMuted, height: 1.4),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: store.signIn,
+              icon: const Icon(Icons.login),
+              label: const Text('Entrar con Google'),
+            ),
+          ] else
+            ..._authenticatedContent(context),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _authenticatedContent(BuildContext context) {
+    if (store.referralLoadState == ReferralLoadState.loading ||
+        store.referralLoadState == ReferralLoadState.idle) {
+      return const [
+        Center(
+          child: Padding(
+            padding: EdgeInsets.all(18),
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      ];
+    }
+    if (store.referralLoadState == ReferralLoadState.error) {
+      return [
+        Text(
+          store.referralError ?? 'No se pudo cargar el programa de referidos.',
+          style: const TextStyle(color: kMuted),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: () => store.loadReferrals(force: true),
+          icon: const Icon(Icons.refresh),
+          label: const Text('Reintentar'),
+        ),
+      ];
+    }
+
+    final program = store.referralProgram;
+    if (program == null || !program.enabled) {
+      return const [
+        Text(
+          'No hay una campaña de referidos activa en este momento.',
+          style: TextStyle(color: kMuted),
+        ),
+      ];
+    }
+
+    final link = program.link;
+    return [
+      if (program.campaignName != null) ...[
+        Text(
+          program.campaignName!,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 5),
+      ],
+      Text(
+        referralQualificationLabel(program.qualificationMode),
+        style: const TextStyle(color: kMuted),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Gana ${program.rewardDays} días por cada referido',
+        style: const TextStyle(color: kPrimary, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 14),
+      _ReferralValue(label: 'Tu código', value: program.code ?? '—'),
+      const SizedBox(height: 8),
+      _ReferralValue(label: 'Tu enlace', value: link ?? '—'),
+      if (link != null) ...[
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _copyLink(context, link),
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('Copiar enlace'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: () => _shareLink(context, link),
+              icon: const Icon(Icons.share_outlined, size: 18),
+              label: const Text('Compartir'),
+            ),
+          ],
+        ),
+      ],
+      if (store.referralClaimNeedsRetry) ...[
+        const SizedBox(height: 12),
+        const Text(
+          'No se pudo verificar el código recibido. Puedes reintentarlo.',
+          style: TextStyle(color: kTertiary, fontSize: 12),
+        ),
+        TextButton.icon(
+          onPressed: store.retryPendingReferralClaim,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Reintentar código'),
+        ),
+      ],
+      const SizedBox(height: 16),
+      Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: kOutline),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            _ReferralMetric(
+              label: 'Invitados',
+              value: '${program.referredCount}',
+            ),
+            const _ReferralDivider(),
+            _ReferralMetric(
+              label: 'Cumplieron',
+              value: '${program.qualifiedCount}',
+            ),
+            const _ReferralDivider(),
+            _ReferralMetric(
+              label: 'Días obtenidos',
+              value: '${program.earnedDays}',
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
+        style: const TextStyle(color: kMuted, fontSize: 12),
+      ),
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Mis referidos',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Actualizar',
+            onPressed: () => store.loadReferrals(force: true),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      if (store.referrals.isEmpty)
+        const Text(
+          'Todavía no tienes referidos.',
+          style: TextStyle(color: kMuted),
+        )
+      else
+        ...store.referrals.map(_ReferralEntryTile.new),
+    ];
+  }
+
+  Future<void> _copyLink(BuildContext context, String link) async {
+    await Clipboard.setData(ClipboardData(text: link));
+    if (context.mounted) toast(context, 'Enlace copiado');
+  }
+
+  Future<void> _shareLink(BuildContext context, String link) async {
+    final shared = await shareReferralLink(
+      title: 'TukTuk Control',
+      text: 'Únete a TukTuk Control con mi invitación.',
+      url: link,
+    );
+    if (!shared && context.mounted) await _copyLink(context, link);
+  }
+}
+
+class _ReferralValue extends StatelessWidget {
+  const _ReferralValue({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kSurface.withValues(alpha: .42),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kOutline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: kMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          SelectableText(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReferralEntryTile extends StatelessWidget {
+  const _ReferralEntryTile(this.entry);
+
+  final ReferralEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final createdAt = entry.createdAt;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kSurface.withValues(alpha: .35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kOutline),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Color(0x222DD4A3),
+            child: Icon(Icons.person_outline, color: kPrimary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${referralEntryStatusLabel(entry.status)}'
+                  '${createdAt == null ? '' : ' · ${DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal())}'}',
+                  style: const TextStyle(color: kMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          if (entry.rewardDays > 0)
+            Text(
+              '+${entry.rewardDays} días',
+              style: const TextStyle(
+                color: kPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// Kept temporarily as a visual migration reference; it is never rendered.
+// ignore: unused_element
+class _ReferralPreviewCardLegacy extends StatelessWidget {
+  const _ReferralPreviewCardLegacy();
 
   @override
   Widget build(BuildContext context) {

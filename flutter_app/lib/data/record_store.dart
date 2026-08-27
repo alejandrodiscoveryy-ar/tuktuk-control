@@ -20,6 +20,13 @@ class RecordStore extends ChangeNotifier {
         params: {'target_project_id': projectId},
       ),
     );
+    _referralRemoteService = ReferralRemoteService(_supabase);
+    _pendingReferralClaims = PendingReferralClaimController(
+      HivePendingReferralCodeStore(_meta),
+    );
+    _initialReferralCapture = kIsWeb
+        ? _pendingReferralClaims.capture(Uri.base)
+        : Future<bool>.value(false);
     whatsAppSettings = _whatsAppSettingsService.cachedSettings();
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
@@ -58,6 +65,9 @@ class RecordStore extends ChangeNotifier {
   late final SyncCoordinator _syncCoordinator;
   late final SupabaseLicenseService _licenseService;
   late final WhatsAppSettingsService _whatsAppSettingsService;
+  late final ReferralRemoteService _referralRemoteService;
+  late final PendingReferralClaimController _pendingReferralClaims;
+  late final Future<bool> _initialReferralCapture;
   final PushTokenRegistrationCoordinator? _pushTokenCoordinator;
   StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
@@ -79,6 +89,13 @@ class RecordStore extends ChangeNotifier {
   String syncMessage = 'Base local pendiente de respaldo';
   LicenseSnapshot license = LicenseSnapshot.local;
   late WhatsAppSettings whatsAppSettings;
+  ReferralProgram? referralProgram;
+  List<ReferralEntry> referrals = const [];
+  ReferralLoadState referralLoadState = ReferralLoadState.idle;
+  String? referralError;
+  bool referralClaimNeedsRetry = false;
+  String? _referralLoadUserId;
+  Future<void>? _referralLoadFuture;
 
   double? exchangeRate;
   String exchangeRateBaseCurrency = 'USD';
@@ -221,6 +238,79 @@ class RecordStore extends ChangeNotifier {
     whatsAppSettings = await _whatsAppSettingsService.refresh();
     notifyListeners();
     return whatsAppSettings;
+  }
+
+  Future<void> loadReferrals({bool force = false}) {
+    final currentUser = user;
+    if (currentUser == null) {
+      referralProgram = null;
+      referrals = const [];
+      referralLoadState = ReferralLoadState.idle;
+      referralError = null;
+      notifyListeners();
+      return Future<void>.value();
+    }
+
+    final inFlight = _referralLoadFuture;
+    if (inFlight != null && _referralLoadUserId == currentUser.id) {
+      return inFlight;
+    }
+    if (!force && referralLoadState == ReferralLoadState.loaded) {
+      return Future<void>.value();
+    }
+
+    final future = _loadReferralsForUser(currentUser.id);
+    _referralLoadFuture = future;
+    _referralLoadUserId = currentUser.id;
+    return future.whenComplete(() {
+      if (identical(_referralLoadFuture, future)) {
+        _referralLoadFuture = null;
+        _referralLoadUserId = null;
+      }
+    });
+  }
+
+  Future<void> _loadReferralsForUser(String userId) async {
+    referralLoadState = ReferralLoadState.loading;
+    referralError = null;
+    notifyListeners();
+    try {
+      final values = await Future.wait<dynamic>([
+        _referralRemoteService.loadProgram(),
+        _referralRemoteService.loadReferrals(),
+      ]);
+      if (user?.id != userId) return;
+      referralProgram = values[0] as ReferralProgram?;
+      referrals = values[1] as List<ReferralEntry>;
+      referralLoadState = ReferralLoadState.loaded;
+    } catch (_) {
+      if (user?.id != userId) return;
+      referralLoadState = ReferralLoadState.error;
+      referralError = 'No se pudo cargar el programa de referidos.';
+    }
+    notifyListeners();
+  }
+
+  Future<void> retryPendingReferralClaim() async {
+    final currentUser = user;
+    if (currentUser == null) return;
+    await _pendingReferralClaims.allowRetryForUser(currentUser.id);
+    referralClaimNeedsRetry = false;
+    await _processPendingReferralClaim(currentUser.id);
+  }
+
+  Future<void> _processPendingReferralClaim(String userId) async {
+    final result = await _pendingReferralClaims.claimForUser(
+      userId: userId,
+      claim: _referralRemoteService.claim,
+    );
+    if (user?.id != userId) return;
+    referralClaimNeedsRetry = result == PendingReferralClaimResult.failed;
+    if (result == PendingReferralClaimResult.success) {
+      await loadReferrals(force: true);
+    } else {
+      notifyListeners();
+    }
   }
 
   WhatsAppContactAction? supportWhatsAppAction() => buildWhatsAppContactAction(
@@ -573,6 +663,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    await _initialReferralCapture;
     unawaited(refreshWhatsAppSettings());
     try {
       await _migrateLegacyMaintenance();
@@ -1127,6 +1218,11 @@ class RecordStore extends ChangeNotifier {
   Future<void> _handleAuthState(User? authenticatedUser) async {
     if (authenticatedUser == null) {
       user = null;
+      referralProgram = null;
+      referrals = const [];
+      referralLoadState = ReferralLoadState.idle;
+      referralError = null;
+      referralClaimNeedsRetry = false;
       _stopAutomaticSync();
       _load();
       await refreshLicense();
@@ -1135,6 +1231,13 @@ class RecordStore extends ChangeNotifier {
         notifyListeners();
       }
       return;
+    }
+    if (user?.id != authenticatedUser.id) {
+      referralProgram = null;
+      referrals = const [];
+      referralLoadState = ReferralLoadState.idle;
+      referralError = null;
+      referralClaimNeedsRetry = false;
     }
     user = authenticatedUser;
     license = _licenseService.cachedLicense(authenticatedUser.id);
@@ -1145,6 +1248,7 @@ class RecordStore extends ChangeNotifier {
       await _pushTokenCoordinator
           ?.handleAuthenticatedUser(authenticatedUser.id);
       await _ensureRemoteProfile();
+      await _processPendingReferralClaim(authenticatedUser.id);
       await _refreshLicenseIfNeeded(force: true);
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
