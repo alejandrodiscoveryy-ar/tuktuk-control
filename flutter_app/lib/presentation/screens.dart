@@ -278,28 +278,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       body: AppBackground(
         child: SafeArea(
-          child: Center(
+          child: Align(
+            alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: ListView(
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
-                  vertical: 18,
+                  vertical: 8,
                 ),
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: AspectRatio(
-                      aspectRatio: 2,
-                      child: Image.asset(
-                        'assets/branding/tuktuk_welcome.png',
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                      ),
+                  const Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'TukTuk ',
+                          style: TextStyle(color: kPrimary),
+                        ),
+                        TextSpan(
+                          text: 'Control',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 32,
+                      height: 1.05,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.8,
                     ),
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 6),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final heroWidth = (constraints.maxWidth * .68).clamp(
+                        220.0,
+                        330.0,
+                      );
+                      return Center(
+                        child: SizedBox(
+                          width: heroWidth,
+                          height: heroWidth / 1.25,
+                          child: ClipRect(
+                            child: Image.asset(
+                              'assets/branding/tuktuk_logo_transparent.png',
+                              fit: BoxFit.cover,
+                              alignment: Alignment.centerRight,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   GlassCard(
                     child: Column(
                       children: [
@@ -341,32 +374,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 110),
                   Center(
-                    child: Semantics(
-                      label: 'Vrixora Solutions',
-                      image: true,
-                      child: SizedBox(
-                        width: 230,
-                        height: 58,
-                        child: Image.asset(
-                          'assets/branding/vrixora_solutions.png',
-                          fit: BoxFit.contain,
-                          alignment: Alignment.center,
+                    child: Opacity(
+                      opacity: .96,
+                      child: Semantics(
+                        label: 'Vrixora Solutions',
+                        image: true,
+                        child: SizedBox(
+                          width: 240,
+                          height: 58,
+                          child: Image.asset(
+                            'assets/branding/vrixora_solutions.png',
+                            fit: BoxFit.contain,
+                            alignment: Alignment.center,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Soluciones inteligentes para negocios inteligentes',
+                  const SizedBox(height: 4),
+                  const Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: 'Soluciones '),
+                        TextSpan(
+                          text: 'inteligentes',
+                          style: TextStyle(color: Color(0xFF00D7E8)),
+                        ),
+                        TextSpan(text: ' para negocios '),
+                        TextSpan(
+                          text: 'inteligentes',
+                          style: TextStyle(color: Color(0xFF00D7E8)),
+                        ),
+                      ],
+                    ),
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      height: 1.35,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: .35,
+                      color: Color(0xFFE1E8ED),
+                      fontSize: 14,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: .15,
                     ),
                   ),
                 ],
