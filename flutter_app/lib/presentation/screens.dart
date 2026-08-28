@@ -351,7 +351,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         height: 58,
                         child: Image.asset(
                           'assets/branding/vrixora_solutions.png',
-                          fit: BoxFit.cover,
+                          fit: BoxFit.contain,
                           alignment: Alignment.center,
                         ),
                       ),
