@@ -2406,7 +2406,7 @@ class _ReferralCard extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
-          onPressed: () => store.loadReferrals(force: true),
+          onPressed: store.refreshReferralsAndLicense,
           icon: const Icon(Icons.refresh),
           label: const Text('Reintentar'),
         ),
@@ -2517,7 +2517,7 @@ class _ReferralCard extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Actualizar',
-            onPressed: () => store.loadReferrals(force: true),
+            onPressed: store.refreshReferralsAndLicense,
             icon: const Icon(Icons.refresh),
           ),
         ],

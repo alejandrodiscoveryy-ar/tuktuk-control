@@ -136,6 +136,31 @@ class ReferralEntry {
 
 enum ReferralLoadState { idle, loading, loaded, error }
 
+typedef ForcedReferralRefresh = Future<void> Function({required bool force});
+typedef ForcedLicenseRefresh = Future<LicenseSnapshot> Function({
+  required bool force,
+});
+
+class ReferralLicenseRefreshCoordinator {
+  const ReferralLicenseRefreshCoordinator({
+    required this.refreshReferrals,
+    required this.refreshLicense,
+  });
+
+  final ForcedReferralRefresh refreshReferrals;
+  final ForcedLicenseRefresh refreshLicense;
+
+  Future<void> refresh() async {
+    await refreshReferrals(force: true);
+    await refreshLicense(force: true);
+  }
+}
+
+abstract final class LicenseResumeRefreshPolicy {
+  static bool requiresImmediateValidation(LicenseSnapshot license) =>
+      license.licenseStatus == LicenseStatus.expired;
+}
+
 enum PendingReferralClaimResult {
   none,
   success,
