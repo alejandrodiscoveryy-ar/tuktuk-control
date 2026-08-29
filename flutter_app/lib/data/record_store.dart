@@ -235,6 +235,12 @@ class RecordStore extends ChangeNotifier {
   void handleAppResumed() {
     final now = DateTime.now().toUtc();
     final lastRefresh = _lastBackgroundRefreshAt;
+    final forceExpiredLicenseValidation = user != null &&
+        LicenseResumeRefreshPolicy.requiresImmediateValidation(license);
+
+    if (forceExpiredLicenseValidation) {
+      unawaited(_refreshLicenseIfNeeded(force: true));
+    }
 
     if (lastRefresh != null &&
         now.difference(lastRefresh).compareTo(_resumeRefreshMinInterval) < 0) {
@@ -247,7 +253,9 @@ class RecordStore extends ChangeNotifier {
     if (user == null) return;
 
     unawaited(_pushTokenCoordinator?.retryForAuthenticatedUser(user!.id));
-    unawaited(_refreshLicenseIfNeeded());
+    if (!forceExpiredLicenseValidation) {
+      unawaited(_refreshLicenseIfNeeded());
+    }
     unawaited(refreshExchangeRate());
     unawaited(syncNow());
   }
@@ -286,6 +294,24 @@ class RecordStore extends ChangeNotifier {
         _referralLoadUserId = null;
       }
     });
+  }
+
+  Future<void> refreshReferralsAndLicense() async {
+    final currentUserId = user?.id;
+    if (currentUserId == null) {
+      await loadReferrals(force: true);
+      return;
+    }
+
+    final coordinator = ReferralLicenseRefreshCoordinator(
+      refreshReferrals: loadReferrals,
+      refreshLicense: ({required bool force}) {
+        if (user?.id != currentUserId) return Future.value(license);
+        return _refreshLicenseIfNeeded(force: force);
+      },
+    );
+    await coordinator.refresh();
+    if (user?.id == currentUserId) notifyListeners();
   }
 
   Future<void> _loadReferralsForUser(String userId) async {
