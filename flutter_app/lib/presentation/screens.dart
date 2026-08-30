@@ -138,7 +138,7 @@ class _ExchangeRateHeader extends StatelessWidget {
 
     final text = rate == null
         ? '${store.exchangeRateBaseCurrency}/${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}'
-        : '1 ${store.exchangeRateBaseCurrency} = ${numFmt(rate)} ${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}';
+        : '1 ${store.exchangeRateBaseCurrency} = ${numFmt(rate)} ${store.exchangeRateChargeCurrency}';
 
     return Tooltip(
       message: tr('Tasa de cambio'),
@@ -177,6 +177,8 @@ class _ExchangeRateHeader extends StatelessWidget {
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
+                          if (rate != null)
+                            TextSpan(text: ' · ${store.exchangeRateSource}'),
                         ],
                       ),
                       maxLines: 1,
