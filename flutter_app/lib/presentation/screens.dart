@@ -129,6 +129,12 @@ class _ExchangeRateHeader extends StatelessWidget {
     final rate = store.exchangeRate;
     final updatedLabel = _updatedLabel();
     final freshnessColor = _freshnessColor();
+    final (directionSymbol, directionColor) =
+        switch (store.exchangeRateDirection) {
+      ExchangeRateDirection.up => ('↑', kDanger),
+      ExchangeRateDirection.down => ('↓', kPrimary),
+      ExchangeRateDirection.same => ('→', kAccentPink),
+    };
 
     final text = rate == null
         ? '${store.exchangeRateBaseCurrency}/${store.exchangeRateChargeCurrency} · ${store.exchangeRateSource}'
@@ -159,8 +165,20 @@ class _ExchangeRateHeader extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      text,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: text),
+                          if (rate != null)
+                            TextSpan(
+                              text: ' $directionSymbol',
+                              style: TextStyle(
+                                color: directionColor,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                        ],
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -2316,9 +2334,8 @@ class _ReferralCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: dark
-                      ? const Color(0x332DD4A3)
-                      : const Color(0x292A9D83),
+                  color:
+                      dark ? const Color(0x332DD4A3) : const Color(0x292A9D83),
                   borderRadius: BorderRadius.circular(13),
                   border: Border.all(
                     color: dark

@@ -1,5 +1,19 @@
 part of '../main.dart';
 
+enum ExchangeRateDirection { up, down, same }
+
+ExchangeRateDirection exchangeRateDirectionFor(
+  double? previousRate,
+  double currentRate,
+) {
+  if (previousRate == null || currentRate == previousRate) {
+    return ExchangeRateDirection.same;
+  }
+  return currentRate > previousRate
+      ? ExchangeRateDirection.up
+      : ExchangeRateDirection.down;
+}
+
 class RecordStore extends ChangeNotifier {
   static const _licenseValidationInterval = Duration(minutes: 15);
   static const _licenseRetryInterval = Duration(minutes: 2);
@@ -120,6 +134,7 @@ class RecordStore extends ChangeNotifier {
   String exchangeRateChargeCurrency = 'CUP';
   String exchangeRateSource = 'elTOQUE';
   DateTime? exchangeRateUpdatedAt;
+  ExchangeRateDirection exchangeRateDirection = ExchangeRateDirection.same;
 
   bool get canWrite => license.canWrite;
   bool get isReadOnly => !canWrite;
@@ -147,6 +162,7 @@ class RecordStore extends ChangeNotifier {
     final charge = _meta.get('exchangeRate:charge')?.toString().trim();
     final source = _meta.get('exchangeRate:source')?.toString().trim();
     final updated = _meta.get('exchangeRate:updatedAt')?.toString();
+    final direction = _meta.get('exchangeRate:direction')?.toString();
 
     if (base != null && base.isNotEmpty) {
       exchangeRateBaseCurrency = base;
@@ -157,8 +173,12 @@ class RecordStore extends ChangeNotifier {
     if (source != null && source.isNotEmpty) {
       exchangeRateSource = source;
     }
-    exchangeRateUpdatedAt =
-        updated == null ? null : DateTime.tryParse(updated);
+    exchangeRateUpdatedAt = updated == null ? null : DateTime.tryParse(updated);
+    exchangeRateDirection = switch (direction) {
+      'up' => ExchangeRateDirection.up,
+      'down' => ExchangeRateDirection.down,
+      _ => ExchangeRateDirection.same,
+    };
   }
 
   Future<void> refreshExchangeRate() async {
@@ -188,15 +208,13 @@ class RecordStore extends ChangeNotifier {
 
       if (rate == null || rate <= 0) return;
 
-      final base =
-          row['base_currency']?.toString().trim();
-      final charge =
-          row['charge_currency']?.toString().trim();
-      final source =
-          row['rate_source']?.toString().trim();
-      final updated =
-          DateTime.tryParse('${row['rate_updated_at'] ?? ''}');
+      final base = row['base_currency']?.toString().trim();
+      final charge = row['charge_currency']?.toString().trim();
+      final source = row['rate_source']?.toString().trim();
+      final updated = DateTime.tryParse('${row['rate_updated_at'] ?? ''}');
 
+      final previousRate = exchangeRate;
+      exchangeRateDirection = exchangeRateDirectionFor(previousRate, rate);
       exchangeRate = rate;
 
       if (base != null && base.isNotEmpty) {
@@ -216,8 +234,8 @@ class RecordStore extends ChangeNotifier {
         'exchangeRate:base': exchangeRateBaseCurrency,
         'exchangeRate:charge': exchangeRateChargeCurrency,
         'exchangeRate:source': exchangeRateSource,
-        'exchangeRate:updatedAt':
-            exchangeRateUpdatedAt?.toIso8601String(),
+        'exchangeRate:direction': exchangeRateDirection.name,
+        'exchangeRate:updatedAt': exchangeRateUpdatedAt?.toIso8601String(),
       });
 
       notifyListeners();
@@ -1421,8 +1439,7 @@ class RecordStore extends ChangeNotifier {
             column: 'user_id',
             value: currentUser.id,
           ),
-          callback: (_) =>
-              unawaited(_refreshLicenseIfNeeded(force: true)),
+          callback: (_) => unawaited(_refreshLicenseIfNeeded(force: true)),
         )
         .subscribe();
 
