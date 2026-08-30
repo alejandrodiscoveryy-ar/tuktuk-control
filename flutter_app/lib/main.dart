@@ -90,7 +90,7 @@ void main() async {
     publishableKey: _supabasePublishableKey,
   );
   final pushNotifications = PushNotificationService();
-  await pushNotifications.initialize();
+  await pushNotifications.initialize(onMessageOpened: openPushMessageAction);
   final pushTokenCoordinator = PushTokenRegistrationCoordinator.supabase(
     client: Supabase.instance.client,
     cache: Hive.box(_metaBox),
