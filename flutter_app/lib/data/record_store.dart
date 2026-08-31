@@ -58,6 +58,7 @@ class RecordStore extends ChangeNotifier {
       queue: _syncQueue,
       gateway: _supabaseGateway,
     );
+    _restoreCachedProjectIdentity();
     _restoreCachedIdentityAndLicense();
     _restoreCachedExchangeRate();
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
@@ -128,6 +129,9 @@ class RecordStore extends ChangeNotifier {
   bool referralClaimNeedsRetry = false;
   String? _referralLoadUserId;
   Future<void>? _referralLoadFuture;
+  Future<void>? _projectIdentityRefreshFuture;
+
+  ProjectIdentity projectIdentity = ProjectIdentity.fallback;
 
   double? exchangeRate;
   String exchangeRateBaseCurrency = 'USD';
@@ -138,6 +142,55 @@ class RecordStore extends ChangeNotifier {
 
   bool get canWrite => license.canWrite;
   bool get isReadOnly => !canWrite;
+
+  void _restoreCachedProjectIdentity() {
+    final cached = ProjectIdentity.fromCache({
+      'name': _meta.get('projectIdentity:name'),
+      'logoUrl': _meta.get('projectIdentity:logoUrl'),
+      'iconUrl': _meta.get('projectIdentity:iconUrl'),
+      'primaryColor': _meta.get('projectIdentity:primaryColor'),
+      'secondaryColor': _meta.get('projectIdentity:secondaryColor'),
+      'updatedAt': _meta.get('projectIdentity:updatedAt'),
+    });
+    projectIdentity = cached ?? ProjectIdentity.fallback;
+    _applyProjectIdentityToPlatform();
+  }
+
+  Future<void> refreshProjectIdentity() {
+    final inFlight = _projectIdentityRefreshFuture;
+    if (inFlight != null) return inFlight;
+    final future = _refreshProjectIdentity();
+    _projectIdentityRefreshFuture = future;
+    return future.whenComplete(() {
+      if (identical(_projectIdentityRefreshFuture, future)) {
+        _projectIdentityRefreshFuture = null;
+      }
+    });
+  }
+
+  Future<void> _refreshProjectIdentity() async {
+    try {
+      final response = await _supabase.rpc(
+        'get_public_project_identity',
+        params: {'target_project_id': _projectId},
+      );
+      final refreshed = ProjectIdentity.fromRpc(response);
+      if (refreshed == null || refreshed.projectId != _projectId) return;
+      await _meta.putAll(refreshed.toCacheMap());
+      projectIdentity = refreshed;
+      _applyProjectIdentityToPlatform();
+      notifyListeners();
+    } catch (_) {
+      // La identidad cacheada/local permanece activa sin conexión.
+    }
+  }
+
+  void _applyProjectIdentityToPlatform() {
+    applyProjectIdentityToPlatform(
+      name: projectIdentity.name,
+      iconUrl: projectIdentity.iconUrl,
+    );
+  }
 
   void _restoreCachedIdentityAndLicense() {
     final restoredUser = _supabase.auth.currentUser;
@@ -267,6 +320,7 @@ class RecordStore extends ChangeNotifier {
 
     _lastBackgroundRefreshAt = now;
     unawaited(refreshWhatsAppSettings());
+    unawaited(refreshProjectIdentity());
 
     if (user == null) return;
 
@@ -771,6 +825,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
+    unawaited(refreshProjectIdentity());
     await _initialReferralCapture;
     unawaited(_captureInstallReferrer());
     unawaited(refreshWhatsAppSettings());

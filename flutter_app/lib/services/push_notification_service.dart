@@ -144,7 +144,7 @@ class PushNotificationService {
         );
 
         const initializationSettings = InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings('ic_stat_tuktuk'),
         );
         await _localNotifications.initialize(
           settings: initializationSettings,
@@ -236,7 +236,7 @@ class PushNotificationService {
           channelDescription: 'Notificaciones generales de TukTuk Control',
           importance: Importance.high,
           priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+          icon: 'ic_stat_tuktuk',
         ),
       ),
       payload: encodePushMessageData(message.data),

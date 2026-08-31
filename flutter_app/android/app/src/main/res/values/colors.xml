@@ -1,3 +1,4 @@
 <resources>
-    <color name="brand_background">#080D14</color>
+    <color name="brand_primary">#06B6D4</color>
+    <color name="brand_background">#0F172A</color>
 </resources>

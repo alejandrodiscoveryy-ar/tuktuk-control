@@ -19,12 +19,14 @@ import 'services/push_token_registration_coordinator.dart';
 import 'services/install_referrer_service.dart';
 import 'services/referral_link_listener.dart';
 import 'services/referral_share.dart';
+import 'services/project_identity_runtime.dart';
 
 part 'domain/entities.dart';
 part 'domain/access.dart';
 part 'domain/saas_foundation.dart';
 part 'domain/metrics.dart';
 part 'domain/referrals.dart';
+part 'domain/project_identity.dart';
 part 'domain/sync.dart';
 part 'data/referral_service.dart';
 part 'data/record_store.dart';
@@ -154,7 +156,7 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
         };
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'TukTuk Control',
+          title: store.projectIdentity.name,
           themeMode: themeMode,
           theme: _appTheme(Brightness.light),
           darkTheme: _appTheme(Brightness.dark),

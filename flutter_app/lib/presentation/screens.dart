@@ -34,8 +34,14 @@ class AppShell extends StatefulWidget {
 }
 
 class AppLogoMark extends StatelessWidget {
-  const AppLogoMark({this.size = 34, this.transparent = false, super.key});
+  const AppLogoMark({
+    required this.identity,
+    this.size = 34,
+    this.transparent = false,
+    super.key,
+  });
 
+  final ProjectIdentity identity;
   final double size;
   final bool transparent;
 
@@ -44,10 +50,13 @@ class AppLogoMark extends StatelessWidget {
     if (transparent) {
       return SizedBox.square(
         dimension: size,
-        child: Image.asset(
-          'assets/branding/tuktuk_logo_transparent.png',
-          fit: BoxFit.contain,
-          semanticLabel: 'TukTuk Control',
+        child: Padding(
+          padding: EdgeInsets.all(size * .06),
+          child: _ProjectIdentityImage(
+            remoteUrl: identity.iconUrl,
+            fallbackAsset: 'assets/branding/tuktuk_logo_transparent.png',
+            semanticLabel: identity.name,
+          ),
         ),
       );
     }
@@ -64,14 +73,131 @@ class AppLogoMark extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(size * .24),
-        child: Image.asset(
-          'assets/branding/tuktuk_logo.png',
-          fit: BoxFit.cover,
-          semanticLabel: 'TukTuk Control',
+      child: Padding(
+        padding: EdgeInsets.all(size * .08),
+        child: _ProjectIdentityImage(
+          remoteUrl: identity.iconUrl,
+          fallbackAsset: 'assets/branding/tuktuk_logo.png',
+          semanticLabel: identity.name,
         ),
       ),
+    );
+  }
+}
+
+class _OnboardingProjectIdentity extends StatelessWidget {
+  const _OnboardingProjectIdentity({required this.identity});
+
+  final ProjectIdentity identity;
+
+  @override
+  Widget build(BuildContext context) {
+    final remoteLogo = identity.logoUrl;
+    if (remoteLogo == null) return const _LocalOnboardingProjectIdentity();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = MediaQuery.sizeOf(context).width >= 700;
+        final logoWidth = (constraints.maxWidth * .65).clamp(
+          220.0,
+          isDesktop ? 340.0 : 270.0,
+        );
+        return Center(
+          child: Image.network(
+            remoteLogo,
+            width: logoWidth,
+            fit: BoxFit.contain,
+            semanticLabel: identity.name,
+            loadingBuilder: (context, child, progress) => progress == null
+                ? child
+                : const _LocalOnboardingProjectIdentity(),
+            errorBuilder: (_, __, ___) =>
+                const _LocalOnboardingProjectIdentity(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LocalOnboardingProjectIdentity extends StatelessWidget {
+  const _LocalOnboardingProjectIdentity();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: 'TukTuk ',
+                style: TextStyle(color: kPrimary),
+              ),
+              TextSpan(
+                text: 'Control',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 32,
+            height: 1.05,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.8,
+          ),
+        ),
+        const SizedBox(height: 6),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final heroWidth = (constraints.maxWidth * .68).clamp(
+              220.0,
+              330.0,
+            );
+            return Center(
+              child: SizedBox(
+                width: heroWidth,
+                height: heroWidth / 1.25,
+                child: Image.asset(
+                  'assets/branding/tuktuk_logo_transparent.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ProjectIdentityImage extends StatelessWidget {
+  const _ProjectIdentityImage({
+    required this.remoteUrl,
+    required this.fallbackAsset,
+    required this.semanticLabel,
+  });
+
+  final String? remoteUrl;
+  final String fallbackAsset;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget fallback() => Image.asset(
+          fallbackAsset,
+          fit: BoxFit.contain,
+          semanticLabel: semanticLabel,
+        );
+    final url = remoteUrl;
+    if (url == null) return fallback();
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      semanticLabel: semanticLabel,
+      errorBuilder: (_, __, ___) => fallback(),
     );
   }
 }
@@ -298,149 +424,157 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       body: AppBackground(
         child: SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                children: [
-                  const Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'TukTuk ',
-                          style: TextStyle(color: kPrimary),
+          child: LayoutBuilder(
+            builder: (context, viewport) {
+              final isDesktop = MediaQuery.sizeOf(context).width >= 700;
+              final verticalPadding = isDesktop ? 36.0 : 28.0;
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: viewport.maxHeight),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: verticalPadding,
                         ),
-                        TextSpan(
-                          text: 'Control',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 32,
-                      height: 1.05,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -.8,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final heroWidth = (constraints.maxWidth * .68).clamp(
-                        220.0,
-                        330.0,
-                      );
-                      return Center(
-                        child: SizedBox(
-                          width: heroWidth,
-                          height: heroWidth / 1.25,
-                          child: ClipRect(
-                            child: Image.asset(
-                              'assets/branding/tuktuk_logo_transparent.png',
-                              fit: BoxFit.cover,
-                              alignment: Alignment.centerRight,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _OnboardingProjectIdentity(
+                              identity: widget.store.projectIdentity,
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  GlassCard(
-                    child: Column(
-                      children: [
-                        Text(
-                          tr('Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: kMuted, height: 1.4),
-                        ),
-                        if (error != null) ...[
-                          const SizedBox(height: 12),
-                          Text(error!, style: const TextStyle(color: kDanger)),
-                        ],
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: saving ? null : continueWithGoogle,
-                            icon: saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                            const SizedBox(height: 26),
+                            Center(
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 460),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: GlassCard(
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          tr('Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.'),
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: kMuted,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                        if (error != null) ...[
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            error!,
+                                            style: const TextStyle(
+                                              color: kDanger,
+                                            ),
+                                          ),
+                                        ],
+                                        const SizedBox(height: 18),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            onPressed: saving
+                                                ? null
+                                                : continueWithGoogle,
+                                            icon: saving
+                                                ? const SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.login_rounded,
+                                                  ),
+                                            label: Text(
+                                              tr('Continuar con Google'),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: OutlinedButton.icon(
+                                            onPressed: saving
+                                                ? null
+                                                : continueDirectly,
+                                            icon: const Icon(
+                                              Icons.arrow_forward_rounded,
+                                            ),
+                                            label: Text(
+                                              tr('Entrar directamente'),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  )
-                                : const Icon(Icons.login_rounded),
-                            label: Text(tr('Continuar con Google')),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: saving ? null : continueDirectly,
-                            icon: const Icon(Icons.arrow_forward_rounded),
-                            label: Text(tr('Entrar directamente')),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 110),
-                  Center(
-                    child: Opacity(
-                      opacity: .96,
-                      child: Semantics(
-                        label: 'Vrixora Solutions',
-                        image: true,
-                        child: SizedBox(
-                          width: 240,
-                          height: 58,
-                          child: Image.asset(
-                            'assets/branding/vrixora_solutions.png',
-                            fit: BoxFit.contain,
-                            alignment: Alignment.center,
-                          ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: isDesktop ? 64 : 56),
+                            Center(
+                              child: Opacity(
+                                opacity: .96,
+                                child: Semantics(
+                                  label: 'Vrixora Solutions',
+                                  image: true,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: isDesktop ? 190 : 170,
+                                    ),
+                                    child: Image.asset(
+                                      'assets/branding/vrixora_solutions.png',
+                                      fit: BoxFit.contain,
+                                      alignment: Alignment.center,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(text: 'Soluciones '),
+                                  TextSpan(
+                                    text: 'inteligentes',
+                                    style: TextStyle(
+                                      color: Color(0xFF00D7E8),
+                                    ),
+                                  ),
+                                  TextSpan(text: ' para negocios '),
+                                  TextSpan(
+                                    text: 'inteligentes',
+                                    style: TextStyle(
+                                      color: Color(0xFF00D7E8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFFE1E8ED),
+                                fontSize: 14,
+                                height: 1.3,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: .15,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  const Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(text: 'Soluciones '),
-                        TextSpan(
-                          text: 'inteligentes',
-                          style: TextStyle(color: Color(0xFF00D7E8)),
-                        ),
-                        TextSpan(text: ' para negocios '),
-                        TextSpan(
-                          text: 'inteligentes',
-                          style: TextStyle(color: Color(0xFF00D7E8)),
-                        ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFFE1E8ED),
-                      fontSize: 14,
-                      height: 1.3,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: .15,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -1001,7 +1135,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           sublabel:
               '${tr('Mes actual')}: ${money(metrics.currentCycleEarnings)}',
           icon: Icons.payments_outlined,
-          trailing: const AppLogoMark(size: 90, transparent: true),
+          trailing: AppLogoMark(
+            identity: widget.store.projectIdentity,
+            size: 90,
+            transparent: true,
+          ),
         ),
         const SizedBox(height: 12),
         IntrinsicHeight(
