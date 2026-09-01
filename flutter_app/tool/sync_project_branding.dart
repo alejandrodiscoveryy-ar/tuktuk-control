@@ -268,7 +268,7 @@ Future<void> _addAndroidResources(
     name: 'adaptive-foreground-432.png',
     size: 432,
     fallback: (source) =>
-        _renderTransparent(source, size: 432, contentScale: 78 / 108),
+        _renderTransparent(source, size: 432, contentScale: 66 / 108),
   );
   final monochrome = await _variant(
     identity,
@@ -278,7 +278,7 @@ Future<void> _addAndroidResources(
     size: 432,
     alpha: ProjectIconAlpha.monochrome,
     fallback: (source) =>
-        _renderMonochrome(source, size: 432, contentScale: 78 / 108),
+        _renderMonochrome(source, size: 432, contentScale: 66 / 108),
   );
   for (final entry in adaptiveSizes.entries) {
     outputs[_file(
