@@ -18,17 +18,19 @@ Future<void> main() async {
 
   test('Metrics calcula ingresos, distancia, eficiencia y cargas', () {
     final today = DateTime.now();
+    final firstDayOfCurrentMonth = DateTime(today.year, today.month);
+    final secondDayOfCurrentMonth = DateTime(today.year, today.month, 2);
     final records = [
       DailyRecord(
         id: 'first',
-        date: today.subtract(const Duration(days: 1)),
+        date: firstDayOfCurrentMonth,
         earnings: 3000,
         odometer: 100,
         expense: 200,
       ),
       DailyRecord(
         id: 'second',
-        date: today,
+        date: secondDayOfCurrentMonth,
         earnings: 5000,
         odometer: 150,
         batteryVoltage: 80,
