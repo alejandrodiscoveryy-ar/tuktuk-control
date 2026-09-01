@@ -93,7 +93,6 @@ class _OnboardingProjectIdentity extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final remoteLogo = identity.logoUrl;
-    if (remoteLogo == null) return const _LocalOnboardingProjectIdentity();
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = MediaQuery.sizeOf(context).width >= 700;
@@ -102,73 +101,55 @@ class _OnboardingProjectIdentity extends StatelessWidget {
           isDesktop ? 340.0 : 270.0,
         );
         return Center(
-          child: Image.network(
-            remoteLogo,
-            width: logoWidth,
-            fit: BoxFit.contain,
-            semanticLabel: identity.name,
-            loadingBuilder: (context, child, progress) => progress == null
-                ? child
-                : const _LocalOnboardingProjectIdentity(),
-            errorBuilder: (_, __, ___) =>
-                const _LocalOnboardingProjectIdentity(),
-          ),
+          child: remoteLogo == null
+              ? SizedBox(
+                  width: logoWidth,
+                  child: const _OnboardingProjectIdentityFallback(),
+                )
+              : Image.network(
+                  remoteLogo,
+                  width: logoWidth,
+                  fit: BoxFit.contain,
+                  semanticLabel: identity.name,
+                  loadingBuilder: (context, child, progress) => progress == null
+                      ? child
+                      : Opacity(opacity: 0, child: child),
+                  errorBuilder: (_, __, ___) =>
+                      const _OnboardingProjectIdentityFallback(),
+                ),
         );
       },
     );
   }
 }
 
-class _LocalOnboardingProjectIdentity extends StatelessWidget {
-  const _LocalOnboardingProjectIdentity();
+class _OnboardingProjectIdentityFallback extends StatelessWidget {
+  const _OnboardingProjectIdentityFallback();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'TukTuk ',
-                style: TextStyle(color: kPrimary),
-              ),
-              TextSpan(
-                text: 'Control',
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 32,
-            height: 1.05,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -.8,
-          ),
+    return const Center(
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: 'TukTuk ',
+              style: TextStyle(color: kPrimary),
+            ),
+            TextSpan(
+              text: 'Control',
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
         ),
-        const SizedBox(height: 6),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final heroWidth = (constraints.maxWidth * .68).clamp(
-              220.0,
-              330.0,
-            );
-            return Center(
-              child: SizedBox(
-                width: heroWidth,
-                height: heroWidth / 1.25,
-                child: Image.asset(
-                  'assets/branding/tuktuk_logo_transparent.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
-                ),
-              ),
-            );
-          },
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 32,
+          height: 1.05,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -.8,
         ),
-      ],
+      ),
     );
   }
 }
