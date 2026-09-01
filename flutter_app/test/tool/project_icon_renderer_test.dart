@@ -60,6 +60,7 @@ void main() {
       'web/favicon.png': (size: 32, scale: .92),
       'web/icons/Icon-192.png': (size: 192, scale: .92),
       'web/icons/Icon-512.png': (size: 512, scale: .92),
+      'web/icons/Icon-shortcut-192.png': (size: 192, scale: .70),
       'web/icons/Icon-maskable-192.png': (size: 192, scale: .72),
       'web/icons/Icon-maskable-512.png': (size: 512, scale: .72),
     };
@@ -80,16 +81,69 @@ void main() {
   });
 
   test('manifest referencia variantes any y maskable correctas', () {
-    final manifest = jsonDecode(File('web/manifest.json').readAsStringSync())
-        as Map<String, dynamic>;
+    final manifest = _readManifest();
     final icons = <String, Map<String, dynamic>>{
       for (final value in (manifest['icons'] as List<dynamic>))
         if (value is Map<String, dynamic>) value['src'] as String: value,
     };
 
     expect(icons['icons/Icon-192.png']?['sizes'], '192x192');
+    expect(icons['icons/Icon-192.png']?['purpose'], 'any');
     expect(icons['icons/Icon-512.png']?['sizes'], '512x512');
+    expect(icons['icons/Icon-512.png']?['purpose'], 'any');
     expect(icons['icons/Icon-maskable-192.png']?['purpose'], 'maskable');
     expect(icons['icons/Icon-maskable-512.png']?['purpose'], 'maskable');
+    expect(icons, isNot(contains('icons/Icon-shortcut-192.png')));
+  });
+
+  test('manifest cumple campos de instalación Chromium', () {
+    final manifest = _readManifest();
+
+    expect(manifest['name'], 'TukTuk Control');
+    expect(manifest['short_name'], 'TukTuk Control');
+    expect(manifest['start_url'], './');
+    expect(manifest['scope'], './');
+    expect(manifest['display'], 'standalone');
+    expect(manifest['background_color'], '#0B0F14');
+    expect(manifest['theme_color'], '#06B6D4');
+    expect(manifest['prefer_related_applications'], isFalse);
+  });
+
+  test('rutas del manifest se resuelven dentro de /tuktuk/app/', () {
+    final manifest = _readManifest();
+    final manifestUrl =
+        Uri.parse('https://www.vrixora.com/tuktuk/app/manifest.json');
+
+    expect(
+      manifestUrl.resolve(manifest['start_url'] as String).path,
+      '/tuktuk/app/',
+    );
+    expect(
+      manifestUrl.resolve(manifest['scope'] as String).path,
+      '/tuktuk/app/',
+    );
+    for (final icon in (manifest['icons'] as List<dynamic>)) {
+      expect(
+        manifestUrl
+            .resolve((icon as Map<String, dynamic>)['src'] as String)
+            .path,
+        startsWith('/tuktuk/app/icons/'),
+      );
+    }
+  });
+
+  test('index expone un manifiesto estático y un fallback shortcut externo',
+      () {
+    final index = File('web/index.html').readAsStringSync();
+
+    expect(index, contains('<link rel="manifest" href="manifest.json">'));
+    expect(index, isNot(contains('manifest-mobile.json')));
+    expect(index, isNot(contains('userAgent')));
+    expect(
+        index, contains('sizes="192x192" href="icons/Icon-shortcut-192.png"'));
   });
 }
+
+Map<String, dynamic> _readManifest() =>
+    jsonDecode(File('web/manifest.json').readAsStringSync())
+        as Map<String, dynamic>;
