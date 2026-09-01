@@ -11,7 +11,7 @@ const _defaultSupabaseUrl = 'https://vvxvnywzgtqhlaqpxyqh.supabase.co';
 const _defaultPublishableKey = 'sb_publishable_MOmcX334dezcrlRAaQlvbg_Scd-RJTV';
 const _maximumDownloadBytes = 16 * 1024 * 1024;
 
-enum _BrandingTarget { web, android, all }
+enum _BrandingTarget { web, webMaskable, android, all }
 
 Future<void> main(List<String> arguments) async {
   final root = File.fromUri(Platform.script).parent.parent;
@@ -20,7 +20,7 @@ Future<void> main(List<String> arguments) async {
     target = _parseTarget(arguments);
   } catch (error) {
     stderr.writeln('$error\nUso: dart run tool/sync_project_branding.dart '
-        '[--web|--android|--all]');
+        '[--web|--web-maskable|--android|--all]');
     exitCode = 64;
     return;
   }
@@ -30,9 +30,14 @@ Future<void> main(List<String> arguments) async {
     final master = await _downloadMasterIcon(identity.iconUrl);
     final outputs = <File, Uint8List>{};
     if (target != _BrandingTarget.android) {
-      _addWebResources(root, identity, master, outputs);
+      if (target == _BrandingTarget.webMaskable) {
+        _addWebMaskableResources(root, master, outputs);
+      } else {
+        _addWebResources(root, identity, master, outputs);
+      }
     }
-    if (target != _BrandingTarget.web) {
+    if (target != _BrandingTarget.web &&
+        target != _BrandingTarget.webMaskable) {
       _addAndroidResources(root, identity, master, outputs);
     }
     _validateGeneratedPngs(outputs);
@@ -65,6 +70,9 @@ _BrandingTarget _parseTarget(List<String> arguments) {
   if (arguments.length == 1 && arguments.single == '--web') {
     return _BrandingTarget.web;
   }
+  if (arguments.length == 1 && arguments.single == '--web-maskable') {
+    return _BrandingTarget.webMaskable;
+  }
   if (arguments.length == 1 && arguments.single == '--android') {
     return _BrandingTarget.android;
   }
@@ -73,6 +81,7 @@ _BrandingTarget _parseTarget(List<String> arguments) {
 
 String _targetLabel(_BrandingTarget target) => switch (target) {
       _BrandingTarget.web => 'Web/PWA',
+      _BrandingTarget.webMaskable => 'maskable Web/PWA',
       _BrandingTarget.android => 'Android',
       _BrandingTarget.all => 'Web/PWA y Android',
     };
@@ -83,6 +92,7 @@ void _addWebResources(
   image.Image master,
   Map<File, Uint8List> outputs,
 ) {
+  final manifest = _file(root, 'web/manifest.json');
   outputs
     ..[_file(root, 'web/favicon.png')] =
         renderTransparentWebIcon(master, size: 32, contentScale: .92)
@@ -91,13 +101,34 @@ void _addWebResources(
     ..[_file(root, 'web/icons/Icon-512.png')] =
         renderTransparentWebIcon(master, size: 512, contentScale: .92)
     ..[_file(root, 'web/icons/Icon-shortcut-192.png')] =
-        renderTransparentWebIcon(master, size: 192, contentScale: .70)
-    ..[_file(root, 'web/icons/Icon-maskable-192.png')] =
-        renderTransparentWebIcon(master, size: 192, contentScale: .72)
-    ..[_file(root, 'web/icons/Icon-maskable-512.png')] =
-        renderTransparentWebIcon(master, size: 512, contentScale: .72);
-  final manifest = _file(root, 'web/manifest.json');
+        renderTransparentWebIcon(master, size: 192, contentScale: .70);
+  _addWebMaskableResources(root, master, outputs);
   outputs[manifest] = _updatedManifest(manifest, identity);
+}
+
+void _addWebMaskableResources(
+  Directory root,
+  image.Image master,
+  Map<File, Uint8List> outputs,
+) {
+  final background = _manifestBackgroundColor(_file(root, 'web/manifest.json'));
+  outputs
+    ..[_file(root, 'web/icons/Icon-maskable-192.png')] = renderOpaqueWebIcon(
+      master,
+      size: 192,
+      contentScale: .72,
+      backgroundRed: background.$1,
+      backgroundGreen: background.$2,
+      backgroundBlue: background.$3,
+    )
+    ..[_file(root, 'web/icons/Icon-maskable-512.png')] = renderOpaqueWebIcon(
+      master,
+      size: 512,
+      contentScale: .72,
+      backgroundRed: background.$1,
+      backgroundGreen: background.$2,
+      backgroundBlue: background.$3,
+    );
 }
 
 void _addAndroidResources(
@@ -414,6 +445,23 @@ Uint8List _updatedManifest(File manifest, _PublicProjectIdentity identity) {
   );
 }
 
+(int, int, int) _manifestBackgroundColor(File manifest) {
+  if (!manifest.existsSync()) {
+    throw StateError('No existe ${manifest.path}.');
+  }
+  final decoded = jsonDecode(manifest.readAsStringSync());
+  if (decoded is! Map) {
+    throw const FormatException('web/manifest.json no es un objeto JSON.');
+  }
+  final background = decoded['background_color']?.toString().toUpperCase();
+  if (!_PublicProjectIdentity._isHexColor(background)) {
+    throw const FormatException(
+      'web/manifest.json no contiene background_color hexadecimal válido.',
+    );
+  }
+  return _parseColor(background!);
+}
+
 void _validateGeneratedPngs(Map<File, Uint8List> outputs) {
   for (final entry in outputs.entries) {
     if (!entry.key.path.toLowerCase().endsWith('.png')) continue;
@@ -431,15 +479,17 @@ void _validateGeneratedPngs(Map<File, Uint8List> outputs) {
     }
     final normalizedPath = entry.key.path.replaceAll('\\', '/').toLowerCase();
     if (normalizedPath.contains('/web/')) {
-      final bounds = visibleAlphaBounds(decoded);
+      final maskable = normalizedPath.contains('maskable');
+      final shortcut = normalizedPath.contains('shortcut');
+      final bounds = maskable
+          ? _nonBackgroundBounds(decoded, entry.key.path)
+          : visibleAlphaBounds(decoded);
       if (bounds == null) {
         throw StateError('${entry.key.path} no contiene arte visible.');
       }
       final occupiedExtent =
           (bounds.width > bounds.height ? bounds.width : bounds.height) /
               expected;
-      final maskable = normalizedPath.contains('maskable');
-      final shortcut = normalizedPath.contains('shortcut');
       if (shortcut && (occupiedExtent < .68 || occupiedExtent > .72)) {
         throw StateError(
           '${entry.key.path} debe ocupar entre 68% y 72% del lienzo.',
@@ -459,6 +509,28 @@ void _validateGeneratedPngs(Map<File, Uint8List> outputs) {
       }
     }
   }
+}
+
+AlphaBounds? _nonBackgroundBounds(image.Image source, String label) {
+  final corner = source.getPixel(0, 0);
+  var left = source.width;
+  var top = source.height;
+  var right = -1;
+  var bottom = -1;
+  for (final pixel in source) {
+    if (pixel.a.toInt() != 255) {
+      throw StateError('$label debe ser completamente opaco.');
+    }
+    if (pixel.r == corner.r && pixel.g == corner.g && pixel.b == corner.b) {
+      continue;
+    }
+    if (pixel.x < left) left = pixel.x;
+    if (pixel.y < top) top = pixel.y;
+    if (pixel.x > right) right = pixel.x;
+    if (pixel.y > bottom) bottom = pixel.y;
+  }
+  if (right < left || bottom < top) return null;
+  return AlphaBounds(left: left, top: top, right: right, bottom: bottom);
 }
 
 int? _expectedPngSize(File file) {
@@ -544,7 +616,7 @@ bool _existingResourcesAreValid(Directory root, _BrandingTarget target) {
     ]);
     requiredFiles.add(_file(root, 'web/manifest.json'));
   }
-  if (target != _BrandingTarget.web) {
+  if (target != _BrandingTarget.web && target != _BrandingTarget.webMaskable) {
     for (final density in ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
       files.addAll([
         _file(root, 'android/app/src/main/res/mipmap-$density/ic_launcher.png'),
