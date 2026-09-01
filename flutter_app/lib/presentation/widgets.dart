@@ -420,7 +420,7 @@ class MonthlyEarningsBars extends StatelessWidget {
     if (cycles.isEmpty) {
       return EmptyState(tr('Todavía no hay ingresos para graficar.'));
     }
-    final visible = cycles.take(8).toList().reversed.toList();
+    final visible = cycles.reversed.take(8).toList().reversed.toList();
     final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
     return GlassCard(
       child: Column(
