@@ -1,0 +1,95 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image;
+
+import '../../tool/project_icon_renderer.dart';
+
+void main() {
+  test('recorta sólo transparencia exterior y ocupa 92% sin deformar', () {
+    final master = image.Image(width: 100, height: 100, numChannels: 4);
+    for (var y = 30; y < 70; y++) {
+      for (var x = 20; x < 80; x++) {
+        master.setPixelRgba(x, y, 10, 20, 30, 255);
+      }
+    }
+    final original = image.encodePng(master);
+
+    final rendered = image.decodePng(
+      renderTransparentWebIcon(master, size: 100, contentScale: .92),
+    )!;
+    final bounds = visibleAlphaBounds(rendered)!;
+
+    expect(bounds.width, 92);
+    expect(bounds.height, 61);
+    expect(bounds.width / bounds.height, closeTo(1.5, .02));
+    expect(bounds.left, 4);
+    expect(image.encodePng(master), original);
+    expect(rendered.getPixel(0, 0).a, 0);
+  });
+
+  test('mantiene el arte maskable dentro de la zona segura', () {
+    final master = image.Image(width: 100, height: 100, numChannels: 4);
+    for (var y = 10; y < 90; y++) {
+      for (var x = 10; x < 90; x++) {
+        master.setPixelRgba(x, y, 255, 255, 255, 255);
+      }
+    }
+
+    final rendered = image.decodePng(
+      renderTransparentWebIcon(master, size: 192, contentScale: .72),
+    )!;
+    final bounds = visibleAlphaBounds(rendered)!;
+
+    expect(bounds.width / rendered.width, lessThanOrEqualTo(.73));
+    expect(bounds.height / rendered.height, lessThanOrEqualTo(.73));
+  });
+
+  test('rechaza un maestro totalmente transparente', () {
+    final master = image.Image(width: 16, height: 16, numChannels: 4);
+
+    expect(
+      () => renderTransparentWebIcon(master, size: 32, contentScale: .92),
+      throwsFormatException,
+    );
+  });
+
+  test('los recursos Web/PWA generados cumplen dimensiones y ocupación', () {
+    final expectations = <String, ({int size, double scale})>{
+      'web/favicon.png': (size: 32, scale: .92),
+      'web/icons/Icon-192.png': (size: 192, scale: .92),
+      'web/icons/Icon-512.png': (size: 512, scale: .92),
+      'web/icons/Icon-maskable-192.png': (size: 192, scale: .72),
+      'web/icons/Icon-maskable-512.png': (size: 512, scale: .72),
+    };
+
+    for (final entry in expectations.entries) {
+      final icon = image.decodePng(File(entry.key).readAsBytesSync())!;
+      final bounds = visibleAlphaBounds(icon)!;
+      final occupiedExtent =
+          (bounds.width > bounds.height ? bounds.width : bounds.height) /
+              entry.value.size;
+
+      expect(icon.width, entry.value.size, reason: entry.key);
+      expect(icon.height, entry.value.size, reason: entry.key);
+      expect(occupiedExtent, closeTo(entry.value.scale, .015),
+          reason: entry.key);
+      expect(icon.getPixel(0, 0).a, 0, reason: entry.key);
+    }
+  });
+
+  test('manifest referencia variantes any y maskable correctas', () {
+    final manifest = jsonDecode(File('web/manifest.json').readAsStringSync())
+        as Map<String, dynamic>;
+    final icons = <String, Map<String, dynamic>>{
+      for (final value in (manifest['icons'] as List<dynamic>))
+        if (value is Map<String, dynamic>) value['src'] as String: value,
+    };
+
+    expect(icons['icons/Icon-192.png']?['sizes'], '192x192');
+    expect(icons['icons/Icon-512.png']?['sizes'], '512x512');
+    expect(icons['icons/Icon-maskable-192.png']?['purpose'], 'maskable');
+    expect(icons['icons/Icon-maskable-512.png']?['purpose'], 'maskable');
+  });
+}
