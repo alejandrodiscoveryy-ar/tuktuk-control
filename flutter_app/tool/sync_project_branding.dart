@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as image;
 
+import 'project_icon_renderer.dart';
+
 const _projectId = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
 const _defaultSupabaseUrl = 'https://vvxvnywzgtqhlaqpxyqh.supabase.co';
 const _defaultPublishableKey = 'sb_publishable_MOmcX334dezcrlRAaQlvbg_Scd-RJTV';
@@ -83,15 +85,15 @@ void _addWebResources(
 ) {
   outputs
     ..[_file(root, 'web/favicon.png')] =
-        _renderTransparent(master, size: 32, contentScale: .90)
+        renderTransparentWebIcon(master, size: 32, contentScale: .92)
     ..[_file(root, 'web/icons/Icon-192.png')] =
-        _renderTransparent(master, size: 192, contentScale: .88)
+        renderTransparentWebIcon(master, size: 192, contentScale: .92)
     ..[_file(root, 'web/icons/Icon-512.png')] =
-        _renderTransparent(master, size: 512, contentScale: .88)
+        renderTransparentWebIcon(master, size: 512, contentScale: .92)
     ..[_file(root, 'web/icons/Icon-maskable-192.png')] =
-        _renderTransparent(master, size: 192, contentScale: .72)
+        renderTransparentWebIcon(master, size: 192, contentScale: .72)
     ..[_file(root, 'web/icons/Icon-maskable-512.png')] =
-        _renderTransparent(master, size: 512, contentScale: .72);
+        renderTransparentWebIcon(master, size: 512, contentScale: .72);
   final manifest = _file(root, 'web/manifest.json');
   outputs[manifest] = _updatedManifest(manifest, identity);
 }
@@ -424,6 +426,27 @@ void _validateGeneratedPngs(Map<File, Uint8List> outputs) {
     if (entry.key.path.contains('ic_stat_tuktuk') ||
         entry.key.path.contains('ic_launcher_monochrome')) {
       _validateVisibleAlpha(entry.value, entry.key.path);
+    }
+    final normalizedPath = entry.key.path.replaceAll('\\', '/').toLowerCase();
+    if (normalizedPath.contains('/web/')) {
+      final bounds = visibleAlphaBounds(decoded);
+      if (bounds == null) {
+        throw StateError('${entry.key.path} no contiene arte visible.');
+      }
+      final occupiedExtent =
+          (bounds.width > bounds.height ? bounds.width : bounds.height) /
+              expected;
+      final maskable = normalizedPath.contains('maskable');
+      if (!maskable && (occupiedExtent < .90 || occupiedExtent > .94)) {
+        throw StateError(
+          '${entry.key.path} debe ocupar entre 90% y 94% del lienzo.',
+        );
+      }
+      if (maskable && occupiedExtent > .80) {
+        throw StateError(
+          '${entry.key.path} excede la zona segura maskable.',
+        );
+      }
     }
   }
 }
