@@ -101,21 +101,22 @@ class _OnboardingProjectIdentity extends StatelessWidget {
           isDesktop ? 340.0 : 270.0,
         );
         return Center(
-          child: SizedBox(
-            width: logoWidth,
-            height: logoWidth,
-            child: remoteLogo == null
-                ? const _OnboardingProjectIdentityFallback()
-                : Image.network(
-                    remoteLogo,
-                    fit: BoxFit.contain,
-                    semanticLabel: identity.name,
-                    loadingBuilder: (context, child, progress) =>
-                        progress == null ? child : const SizedBox.expand(),
-                    errorBuilder: (_, __, ___) =>
-                        const _OnboardingProjectIdentityFallback(),
-                  ),
-          ),
+          child: remoteLogo == null
+              ? SizedBox(
+                  width: logoWidth,
+                  child: const _OnboardingProjectIdentityFallback(),
+                )
+              : Image.network(
+                  remoteLogo,
+                  width: logoWidth,
+                  fit: BoxFit.contain,
+                  semanticLabel: identity.name,
+                  loadingBuilder: (context, child, progress) => progress == null
+                      ? child
+                      : Opacity(opacity: 0, child: child),
+                  errorBuilder: (_, __, ___) =>
+                      const _OnboardingProjectIdentityFallback(),
+                ),
         );
       },
     );
