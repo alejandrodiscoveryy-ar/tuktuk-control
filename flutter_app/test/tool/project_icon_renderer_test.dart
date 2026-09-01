@@ -29,7 +29,7 @@ void main() {
     expect(rendered.getPixel(0, 0).a, 0);
   });
 
-  test('mantiene el arte maskable dentro de la zona segura', () {
+  test('mantiene el arte maskable opaco dentro de la zona segura', () {
     final master = image.Image(width: 100, height: 100, numChannels: 4);
     for (var y = 10; y < 90; y++) {
       for (var x = 10; x < 90; x++) {
@@ -38,12 +38,23 @@ void main() {
     }
 
     final rendered = image.decodePng(
-      renderTransparentWebIcon(master, size: 192, contentScale: .72),
+      renderOpaqueWebIcon(
+        master,
+        size: 192,
+        contentScale: .72,
+        backgroundRed: 11,
+        backgroundGreen: 15,
+        backgroundBlue: 20,
+      ),
     )!;
-    final bounds = visibleAlphaBounds(rendered)!;
+    final bounds = _nonBackgroundBounds(rendered, (11, 15, 20))!;
 
     expect(bounds.width / rendered.width, lessThanOrEqualTo(.73));
     expect(bounds.height / rendered.height, lessThanOrEqualTo(.73));
+    expect(rendered.every((pixel) => pixel.a.toInt() == 255), isTrue);
+    expect(rendered.getPixel(0, 0).r.toInt(), 11);
+    expect(rendered.getPixel(0, 0).g.toInt(), 15);
+    expect(rendered.getPixel(0, 0).b.toInt(), 20);
   });
 
   test('rechaza un maestro totalmente transparente', () {
@@ -56,6 +67,7 @@ void main() {
   });
 
   test('los recursos Web/PWA generados cumplen dimensiones y ocupación', () {
+    final background = _hexRgb(_readManifest()['background_color'] as String);
     final expectations = <String, ({int size, double scale})>{
       'web/favicon.png': (size: 32, scale: .92),
       'web/icons/Icon-192.png': (size: 192, scale: .92),
@@ -67,7 +79,10 @@ void main() {
 
     for (final entry in expectations.entries) {
       final icon = image.decodePng(File(entry.key).readAsBytesSync())!;
-      final bounds = visibleAlphaBounds(icon)!;
+      final maskable = entry.key.contains('maskable');
+      final bounds = maskable
+          ? _nonBackgroundBounds(icon, background)!
+          : visibleAlphaBounds(icon)!;
       final occupiedExtent =
           (bounds.width > bounds.height ? bounds.width : bounds.height) /
               entry.value.size;
@@ -76,7 +91,18 @@ void main() {
       expect(icon.height, entry.value.size, reason: entry.key);
       expect(occupiedExtent, closeTo(entry.value.scale, .015),
           reason: entry.key);
-      expect(icon.getPixel(0, 0).a, 0, reason: entry.key);
+      if (maskable) {
+        expect(icon.every((pixel) => pixel.a.toInt() == 255), isTrue,
+            reason: entry.key);
+        final corner = icon.getPixel(0, 0);
+        expect(
+          (corner.r.toInt(), corner.g.toInt(), corner.b.toInt()),
+          background,
+          reason: entry.key,
+        );
+      } else {
+        expect(icon.getPixel(0, 0).a, 0, reason: entry.key);
+      }
     }
   });
 
@@ -144,6 +170,34 @@ void main() {
   });
 }
 
+AlphaBounds? _nonBackgroundBounds(
+  image.Image source,
+  (int, int, int) background,
+) {
+  var left = source.width;
+  var top = source.height;
+  var right = -1;
+  var bottom = -1;
+  for (final pixel in source) {
+    if (pixel.r.toInt() == background.$1 &&
+        pixel.g.toInt() == background.$2 &&
+        pixel.b.toInt() == background.$3) {
+      continue;
+    }
+    if (pixel.x < left) left = pixel.x;
+    if (pixel.y < top) top = pixel.y;
+    if (pixel.x > right) right = pixel.x;
+    if (pixel.y > bottom) bottom = pixel.y;
+  }
+  if (right < left || bottom < top) return null;
+  return AlphaBounds(left: left, top: top, right: right, bottom: bottom);
+}
+
 Map<String, dynamic> _readManifest() =>
     jsonDecode(File('web/manifest.json').readAsStringSync())
         as Map<String, dynamic>;
+
+(int, int, int) _hexRgb(String value) {
+  final rgb = int.parse(value.substring(1), radix: 16);
+  return ((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+}

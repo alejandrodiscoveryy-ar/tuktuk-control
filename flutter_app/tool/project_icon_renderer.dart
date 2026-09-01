@@ -17,6 +17,42 @@ Uint8List renderTransparentWebIcon(
     throw ArgumentError.value(contentScale, 'contentScale');
   }
 
+  return _renderWebIcon(master, size: size, contentScale: contentScale);
+}
+
+/// Renders a proportionally scaled icon on a fully opaque solid background.
+Uint8List renderOpaqueWebIcon(
+  image.Image master, {
+  required int size,
+  required double contentScale,
+  required int backgroundRed,
+  required int backgroundGreen,
+  required int backgroundBlue,
+}) {
+  for (final channel in [backgroundRed, backgroundGreen, backgroundBlue]) {
+    if (channel < 0 || channel > 255) {
+      throw ArgumentError.value(channel, 'background channel');
+    }
+  }
+  return _renderWebIcon(
+    master,
+    size: size,
+    contentScale: contentScale,
+    background: (backgroundRed, backgroundGreen, backgroundBlue),
+  );
+}
+
+Uint8List _renderWebIcon(
+  image.Image master, {
+  required int size,
+  required double contentScale,
+  (int, int, int)? background,
+}) {
+  if (size <= 0) throw ArgumentError.value(size, 'size');
+  if (contentScale <= 0 || contentScale > 1) {
+    throw ArgumentError.value(contentScale, 'contentScale');
+  }
+
   final bounds = visibleAlphaBounds(master);
   if (bounds == null) {
     throw const FormatException('El PNG maestro no contiene arte visible.');
@@ -41,6 +77,11 @@ Uint8List renderTransparentWebIcon(
     interpolation: image.Interpolation.cubic,
   );
   final canvas = image.Image(width: size, height: size, numChannels: 4);
+  if (background case (final red, final green, final blue)) {
+    for (final pixel in canvas) {
+      pixel.setRgba(red, green, blue, 255);
+    }
+  }
   image.compositeImage(
     canvas,
     resized,
