@@ -58,7 +58,8 @@ jobs:
           FLUTTER_ANDROID_DEFAULTS="$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
 
           test "$VERSION_CODE" = "${{ inputs.expected_version_code }}"
-          grep -Fq 'android:label="TukTuk"' android/app/src/main/AndroidManifest.xml
+          grep -Fq 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
+          grep -Fq '<string name="app_name">TukTuk Control</string>' android/app/src/main/res/values/strings.xml
           grep -Fq 'applicationId = "com.alejandrocruz.tuktukcontrol"' android/app/build.gradle.kts
           grep -Eq 'compileSdkVersion: Int = 36' "$FLUTTER_ANDROID_DEFAULTS"
           grep -Eq 'targetSdkVersion: Int = 36' "$FLUTTER_ANDROID_DEFAULTS"
@@ -68,7 +69,7 @@ jobs:
           echo "  versionName: $VERSION_NAME"
           echo "  versionCode: $VERSION_CODE"
           echo "  applicationId: com.alejandrocruz.tuktukcontrol"
-          echo "  visible name: TukTuk"
+          echo "  visible name: TukTuk Control"
           echo "  compileSdk: 36"
           echo "  targetSdk: 36"
           echo "  minSdk: 24"
