@@ -90,6 +90,8 @@ void _addWebResources(
         renderTransparentWebIcon(master, size: 192, contentScale: .92)
     ..[_file(root, 'web/icons/Icon-512.png')] =
         renderTransparentWebIcon(master, size: 512, contentScale: .92)
+    ..[_file(root, 'web/icons/Icon-shortcut-192.png')] =
+        renderTransparentWebIcon(master, size: 192, contentScale: .70)
     ..[_file(root, 'web/icons/Icon-maskable-192.png')] =
         renderTransparentWebIcon(master, size: 192, contentScale: .72)
     ..[_file(root, 'web/icons/Icon-maskable-512.png')] =
@@ -437,7 +439,15 @@ void _validateGeneratedPngs(Map<File, Uint8List> outputs) {
           (bounds.width > bounds.height ? bounds.width : bounds.height) /
               expected;
       final maskable = normalizedPath.contains('maskable');
-      if (!maskable && (occupiedExtent < .90 || occupiedExtent > .94)) {
+      final shortcut = normalizedPath.contains('shortcut');
+      if (shortcut && (occupiedExtent < .68 || occupiedExtent > .72)) {
+        throw StateError(
+          '${entry.key.path} debe ocupar entre 68% y 72% del lienzo.',
+        );
+      }
+      if (!maskable &&
+          !shortcut &&
+          (occupiedExtent < .90 || occupiedExtent > .94)) {
         throw StateError(
           '${entry.key.path} debe ocupar entre 90% y 94% del lienzo.',
         );
@@ -455,8 +465,16 @@ int? _expectedPngSize(File file) {
   final path = file.path.replaceAll('\\', '/').toLowerCase();
   final name = file.uri.pathSegments.last.toLowerCase();
   if (name == 'favicon.png') return 32;
-  if (name == 'icon-192.png' || name == 'icon-maskable-192.png') return 192;
-  if (name == 'icon-512.png' || name == 'icon-maskable-512.png') return 512;
+  if (name == 'icon-192.png' ||
+      name == 'icon-shortcut-192.png' ||
+      name == 'icon-maskable-192.png') {
+    return 192;
+  }
+  if (name == 'icon-512.png' ||
+      name == 'icon-shortcut-512.png' ||
+      name == 'icon-maskable-512.png') {
+    return 512;
+  }
   final density = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'].firstWhere(
     (value) => path.contains('-$value/'),
     orElse: () => '',
@@ -520,6 +538,7 @@ bool _existingResourcesAreValid(Directory root, _BrandingTarget target) {
       _file(root, 'web/favicon.png'),
       _file(root, 'web/icons/Icon-192.png'),
       _file(root, 'web/icons/Icon-512.png'),
+      _file(root, 'web/icons/Icon-shortcut-192.png'),
       _file(root, 'web/icons/Icon-maskable-192.png'),
       _file(root, 'web/icons/Icon-maskable-512.png'),
     ]);
