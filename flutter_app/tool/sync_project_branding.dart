@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as image;
 
 import 'project_icon_renderer.dart';
+import 'project_icon_variant_loader.dart';
 
 const _projectId = 'dfb41cea-a812-46f2-b511-7a60bd3d78af';
 const _defaultSupabaseUrl = 'https://vvxvnywzgtqhlaqpxyqh.supabase.co';
@@ -27,18 +28,32 @@ Future<void> main(List<String> arguments) async {
 
   try {
     final identity = await _loadIdentity();
-    final master = await _downloadMasterIcon(identity.iconUrl);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
+    Future<image.Image>? masterDownload;
+    Future<image.Image> master() =>
+        masterDownload ??= _downloadMasterIcon(identity.iconUrl);
     final outputs = <File, Uint8List>{};
-    if (target != _BrandingTarget.android) {
-      if (target == _BrandingTarget.webMaskable) {
-        _addWebMaskableResources(root, master, outputs);
-      } else {
-        _addWebResources(root, identity, master, outputs);
+    try {
+      if (target != _BrandingTarget.android) {
+        if (target == _BrandingTarget.webMaskable) {
+          await _addWebMaskableResources(
+            root,
+            identity,
+            master,
+            client,
+            outputs,
+          );
+        } else {
+          await _addWebResources(root, identity, master, client, outputs);
+        }
       }
-    }
-    if (target != _BrandingTarget.web &&
-        target != _BrandingTarget.webMaskable) {
-      _addAndroidResources(root, identity, master, outputs);
+      if (target != _BrandingTarget.web &&
+          target != _BrandingTarget.webMaskable) {
+        await _addAndroidResources(root, identity, master, client, outputs);
+      }
+    } finally {
+      client.close(force: true);
     }
     _validateGeneratedPngs(outputs);
     await _replaceAtomically(outputs);
@@ -86,57 +101,105 @@ String _targetLabel(_BrandingTarget target) => switch (target) {
       _BrandingTarget.all => 'Web/PWA y Android',
     };
 
-void _addWebResources(
+Future<void> _addWebResources(
   Directory root,
   _PublicProjectIdentity identity,
-  image.Image master,
+  Future<image.Image> Function() master,
+  HttpClient client,
   Map<File, Uint8List> outputs,
-) {
+) async {
   final manifest = _file(root, 'web/manifest.json');
   outputs
-    ..[_file(root, 'web/favicon.png')] =
-        renderTransparentWebIcon(master, size: 32, contentScale: .92)
-    ..[_file(root, 'web/icons/Icon-192.png')] =
-        renderTransparentWebIcon(master, size: 192, contentScale: .92)
-    ..[_file(root, 'web/icons/Icon-512.png')] =
-        renderTransparentWebIcon(master, size: 512, contentScale: .92)
-    ..[_file(root, 'web/icons/Icon-shortcut-192.png')] =
-        renderTransparentWebIcon(master, size: 192, contentScale: .70);
-  _addWebMaskableResources(root, master, outputs);
+    ..[_file(root, 'web/favicon.png')] = await _variant(
+      identity,
+      master,
+      client,
+      name: 'favicon-32.png',
+      size: 32,
+      fallback: (source) =>
+          renderTransparentWebIcon(source, size: 32, contentScale: .92),
+    )
+    ..[_file(root, 'web/icons/Icon-192.png')] = await _variant(
+      identity,
+      master,
+      client,
+      name: 'pwa-192.png',
+      size: 192,
+      fallback: (source) =>
+          renderTransparentWebIcon(source, size: 192, contentScale: .92),
+    )
+    ..[_file(root, 'web/icons/Icon-512.png')] = await _variant(
+      identity,
+      master,
+      client,
+      name: 'pwa-512.png',
+      size: 512,
+      fallback: (source) =>
+          renderTransparentWebIcon(source, size: 512, contentScale: .92),
+    )
+    ..[_file(root, 'web/icons/Icon-shortcut-192.png')] = await _variant(
+      identity,
+      master,
+      client,
+      name: 'shortcut-192.png',
+      size: 192,
+      fallback: (source) =>
+          renderTransparentWebIcon(source, size: 192, contentScale: .70),
+    );
+  await _addWebMaskableResources(root, identity, master, client, outputs);
   outputs[manifest] = _updatedManifest(manifest, identity);
 }
 
-void _addWebMaskableResources(
+Future<void> _addWebMaskableResources(
   Directory root,
-  image.Image master,
+  _PublicProjectIdentity identity,
+  Future<image.Image> Function() master,
+  HttpClient client,
   Map<File, Uint8List> outputs,
-) {
+) async {
   final background = _manifestBackgroundColor(_file(root, 'web/manifest.json'));
   outputs
-    ..[_file(root, 'web/icons/Icon-maskable-192.png')] = renderOpaqueWebIcon(
+    ..[_file(root, 'web/icons/Icon-maskable-192.png')] = await _variant(
+      identity,
       master,
+      client,
+      name: 'maskable-192.png',
       size: 192,
-      contentScale: .72,
-      backgroundRed: background.$1,
-      backgroundGreen: background.$2,
-      backgroundBlue: background.$3,
+      alpha: ProjectIconAlpha.opaque,
+      fallback: (source) => renderOpaqueWebIcon(
+        source,
+        size: 192,
+        contentScale: .72,
+        backgroundRed: background.$1,
+        backgroundGreen: background.$2,
+        backgroundBlue: background.$3,
+      ),
     )
-    ..[_file(root, 'web/icons/Icon-maskable-512.png')] = renderOpaqueWebIcon(
+    ..[_file(root, 'web/icons/Icon-maskable-512.png')] = await _variant(
+      identity,
       master,
+      client,
+      name: 'maskable-512.png',
       size: 512,
-      contentScale: .72,
-      backgroundRed: background.$1,
-      backgroundGreen: background.$2,
-      backgroundBlue: background.$3,
+      alpha: ProjectIconAlpha.opaque,
+      fallback: (source) => renderOpaqueWebIcon(
+        source,
+        size: 512,
+        contentScale: .72,
+        backgroundRed: background.$1,
+        backgroundGreen: background.$2,
+        backgroundBlue: background.$3,
+      ),
     );
 }
 
-void _addAndroidResources(
+Future<void> _addAndroidResources(
   Directory root,
   _PublicProjectIdentity identity,
-  image.Image master,
+  Future<image.Image> Function() master,
+  HttpClient client,
   Map<File, Uint8List> outputs,
-) {
+) async {
   const launcherSizes = <String, int>{
     'mdpi': 48,
     'hdpi': 72,
@@ -159,51 +222,94 @@ void _addAndroidResources(
     'xxxhdpi': 96,
   };
 
-  for (final entry in launcherSizes.entries) {
-    final bytes = _renderOnBackground(
-      master,
-      size: entry.value,
+  final launcher = await _variant(
+    identity,
+    master,
+    client,
+    name: 'android-launcher-192.png',
+    size: 192,
+    alpha: ProjectIconAlpha.opaque,
+    fallback: (source) => _renderOnBackground(
+      source,
+      size: 192,
       contentScale: .74,
       backgroundHex: identity.secondaryColor,
-    );
+    ),
+  );
+  final round = await _variant(
+    identity,
+    master,
+    client,
+    name: 'round-192.png',
+    size: 192,
+    alpha: ProjectIconAlpha.opaque,
+    fallback: (source) => _renderOnBackground(
+      source,
+      size: 192,
+      contentScale: .60,
+      backgroundHex: identity.secondaryColor,
+    ),
+  );
+  for (final entry in launcherSizes.entries) {
     outputs[_file(
       root,
       'android/app/src/main/res/mipmap-${entry.key}/ic_launcher.png',
-    )] = bytes;
+    )] = _resizePng(launcher, entry.value);
     outputs[_file(
       root,
       'android/app/src/main/res/mipmap-${entry.key}/ic_launcher_round.png',
-    )] = bytes;
+    )] = _resizePng(round, entry.value);
   }
 
+  final foreground = await _variant(
+    identity,
+    master,
+    client,
+    name: 'adaptive-foreground-432.png',
+    size: 432,
+    fallback: (source) =>
+        _renderTransparent(source, size: 432, contentScale: 66 / 108),
+  );
+  final monochrome = await _variant(
+    identity,
+    master,
+    client,
+    name: 'adaptive-monochrome-432.png',
+    size: 432,
+    alpha: ProjectIconAlpha.monochrome,
+    fallback: (source) =>
+        _renderMonochrome(source, size: 432, contentScale: 66 / 108),
+  );
   for (final entry in adaptiveSizes.entries) {
     outputs[_file(
       root,
       'android/app/src/main/res/mipmap-${entry.key}/ic_launcher_foreground.png',
-    )] = _renderTransparent(
-      master,
-      size: entry.value,
-      contentScale: 66 / 108,
-    );
+    )] = _resizePng(foreground, entry.value);
     outputs[_file(
       root,
       'android/app/src/main/res/mipmap-${entry.key}/ic_launcher_monochrome.png',
-    )] = _renderMonochrome(
-      master,
-      size: entry.value,
-      contentScale: 66 / 108,
-    );
+    )] = _resizePng(monochrome, entry.value);
   }
 
+  final notifications = <int, Uint8List>{};
+  for (final remoteSize in {24, 48, 72, 96}) {
+    notifications[remoteSize] = await _variant(
+      identity,
+      master,
+      client,
+      name: 'notification-$remoteSize.png',
+      size: remoteSize,
+      alpha: ProjectIconAlpha.monochrome,
+      fallback: (source) =>
+          _renderMonochrome(source, size: remoteSize, contentScale: .76),
+    );
+  }
   for (final entry in notificationSizes.entries) {
+    final remoteSize = entry.value == 36 ? 48 : entry.value;
     outputs[_file(
       root,
       'android/app/src/main/res/drawable-${entry.key}/ic_stat_tuktuk.png',
-    )] = _renderMonochrome(
-      master,
-      size: entry.value,
-      contentScale: .76,
-    );
+    )] = _resizePng(notifications[remoteSize]!, entry.value);
   }
 
   const adaptiveIcon = '''<?xml version="1.0" encoding="utf-8"?>
@@ -249,6 +355,41 @@ void _addAndroidResources(
 </resources>
 ''',
     );
+}
+
+Future<Uint8List> _variant(
+  _PublicProjectIdentity identity,
+  Future<image.Image> Function() master,
+  HttpClient client, {
+  required String name,
+  required int size,
+  required Uint8List Function(image.Image source) fallback,
+  ProjectIconAlpha alpha = ProjectIconAlpha.transparent,
+}) =>
+    loadProjectIconVariant(
+      iconUrl: identity.iconUrl,
+      variantName: name,
+      size: size,
+      alpha: alpha,
+      client: client,
+      fallback: () async => fallback(await master()),
+    );
+
+Uint8List _resizePng(Uint8List source, int size) {
+  final decoded = image.decodePng(source);
+  if (decoded == null) throw const FormatException('Variante PNG inválida.');
+  if (decoded.width == size && decoded.height == size) return source;
+  return Uint8List.fromList(
+    image.encodePng(
+      image.copyResize(
+        decoded,
+        width: size,
+        height: size,
+        interpolation: image.Interpolation.cubic,
+      ),
+      level: 9,
+    ),
+  );
 }
 
 File _file(Directory root, String relativePath) => File(
@@ -490,16 +631,16 @@ void _validateGeneratedPngs(Map<File, Uint8List> outputs) {
       final occupiedExtent =
           (bounds.width > bounds.height ? bounds.width : bounds.height) /
               expected;
-      if (shortcut && (occupiedExtent < .68 || occupiedExtent > .72)) {
+      if (shortcut && (occupiedExtent < .68 || occupiedExtent > .82)) {
         throw StateError(
-          '${entry.key.path} debe ocupar entre 68% y 72% del lienzo.',
+          '${entry.key.path} debe ocupar entre 68% y 82% del lienzo.',
         );
       }
       if (!maskable &&
           !shortcut &&
-          (occupiedExtent < .90 || occupiedExtent > .94)) {
+          (occupiedExtent < .78 || occupiedExtent > .94)) {
         throw StateError(
-          '${entry.key.path} debe ocupar entre 90% y 94% del lienzo.',
+          '${entry.key.path} debe ocupar entre 78% y 94% del lienzo.',
         );
       }
       if (maskable && occupiedExtent > .80) {
@@ -731,7 +872,10 @@ class _PublicProjectIdentity {
       throw const FormatException('La identidad no corresponde al proyecto.');
     }
     final iconUri = Uri.tryParse(iconUrl ?? '');
-    if (iconUri == null || iconUri.scheme != 'https' || iconUri.host.isEmpty) {
+    if (iconUri == null ||
+        iconUri.scheme != 'https' ||
+        iconUri.host.isEmpty ||
+        !iconUri.path.toLowerCase().endsWith('.png')) {
       throw const FormatException('La identidad no contiene icon_url HTTPS.');
     }
     if (!_isHexColor(primaryColor) || !_isHexColor(secondaryColor)) {
