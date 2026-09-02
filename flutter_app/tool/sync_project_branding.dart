@@ -269,8 +269,11 @@ Future<void> _addAndroidResources(
     size: 432,
     maximumVisibleExtent: 264,
     visibleExtentTolerance: 2,
-    fallback: (source) =>
-        _renderTransparent(source, size: 432, contentScale: 66 / 108),
+    fallback: (source) => renderTransparentWebIcon(
+      source,
+      size: 432,
+      contentScale: 66 / 108,
+    ),
   );
   final monochrome = await _variant(
     identity,
@@ -281,8 +284,11 @@ Future<void> _addAndroidResources(
     alpha: ProjectIconAlpha.monochrome,
     maximumVisibleExtent: 264,
     visibleExtentTolerance: 2,
-    fallback: (source) =>
-        _renderMonochrome(source, size: 432, contentScale: 66 / 108),
+    fallback: (source) => renderMonochromeTransparentIcon(
+      source,
+      size: 432,
+      contentScale: 66 / 108,
+    ),
   );
   for (final entry in adaptiveSizes.entries) {
     outputs[_file(
@@ -495,28 +501,6 @@ Future<image.Image> _downloadMasterIcon(String iconUrl) async {
   } finally {
     client.close(force: true);
   }
-}
-
-Uint8List _renderTransparent(
-  image.Image master, {
-  required int size,
-  required double contentScale,
-}) {
-  final contentSize = (size * contentScale).round().clamp(1, size);
-  final resized = image.copyResize(
-    master,
-    width: contentSize,
-    height: contentSize,
-    interpolation: image.Interpolation.cubic,
-  );
-  final canvas = image.Image(width: size, height: size, numChannels: 4);
-  image.compositeImage(
-    canvas,
-    resized,
-    dstX: (size - contentSize) ~/ 2,
-    dstY: (size - contentSize) ~/ 2,
-  );
-  return Uint8List.fromList(image.encodePng(canvas, level: 9));
 }
 
 Uint8List _renderOnBackground(
