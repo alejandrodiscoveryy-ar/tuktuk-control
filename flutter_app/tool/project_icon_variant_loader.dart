@@ -37,6 +37,8 @@ Future<Uint8List> loadProjectIconVariant({
   required Future<Uint8List> Function() fallback,
   HttpClient? client,
   ProjectIconBytesFetcher? fetch,
+  int? maximumVisibleExtent,
+  int visibleExtentTolerance = 0,
 }) async {
   final ownedClient = client == null;
   final httpClient =
@@ -52,6 +54,8 @@ Future<Uint8List> loadProjectIconVariant({
         label: variantName,
         size: size,
         alpha: alpha,
+        maximumVisibleExtent: maximumVisibleExtent,
+        visibleExtentTolerance: visibleExtentTolerance,
       );
       return bytes;
     } catch (_) {
@@ -61,6 +65,8 @@ Future<Uint8List> loadProjectIconVariant({
         label: 'fallback de $variantName',
         size: size,
         alpha: alpha,
+        maximumVisibleExtent: maximumVisibleExtent,
+        visibleExtentTolerance: visibleExtentTolerance,
       );
       return bytes;
     }
@@ -99,7 +105,18 @@ void validateProjectIconVariant(
   required String label,
   required int size,
   required ProjectIconAlpha alpha,
+  int? maximumVisibleExtent,
+  int visibleExtentTolerance = 0,
 }) {
+  if (maximumVisibleExtent != null && maximumVisibleExtent <= 0) {
+    throw ArgumentError.value(maximumVisibleExtent, 'maximumVisibleExtent');
+  }
+  if (visibleExtentTolerance < 0) {
+    throw ArgumentError.value(
+      visibleExtentTolerance,
+      'visibleExtentTolerance',
+    );
+  }
   final decoded = image.decodePng(bytes);
   if (decoded == null || decoded.width != size || decoded.height != size) {
     throw FormatException('$label debe ser un PNG ${size}x$size válido.');
@@ -107,9 +124,17 @@ void validateProjectIconVariant(
   var visible = 0;
   var transparent = 0;
   var nonWhiteVisible = 0;
+  var left = size;
+  var top = size;
+  var right = -1;
+  var bottom = -1;
   for (final pixel in decoded) {
     if (pixel.a.toInt() > 16) {
       visible++;
+      if (pixel.x < left) left = pixel.x;
+      if (pixel.y < top) top = pixel.y;
+      if (pixel.x > right) right = pixel.x;
+      if (pixel.y > bottom) bottom = pixel.y;
       if (pixel.r.toInt() != 255 ||
           pixel.g.toInt() != 255 ||
           pixel.b.toInt() != 255) {
@@ -129,5 +154,17 @@ void validateProjectIconVariant(
   }
   if (alpha == ProjectIconAlpha.monochrome && nonWhiteVisible != 0) {
     throw FormatException('$label debe contener una silueta blanca.');
+  }
+  if (maximumVisibleExtent != null) {
+    final visibleWidth = right - left + 1;
+    final visibleHeight = bottom - top + 1;
+    final visibleExtent =
+        visibleWidth > visibleHeight ? visibleWidth : visibleHeight;
+    if (visibleExtent > maximumVisibleExtent + visibleExtentTolerance) {
+      throw FormatException(
+        '$label ocupa $visibleExtent px; el máximo permitido es '
+        '${maximumVisibleExtent + visibleExtentTolerance} px.',
+      );
+    }
   }
 }

@@ -267,6 +267,8 @@ Future<void> _addAndroidResources(
     client,
     name: 'adaptive-foreground-432.png',
     size: 432,
+    maximumVisibleExtent: 264,
+    visibleExtentTolerance: 2,
     fallback: (source) =>
         _renderTransparent(source, size: 432, contentScale: 66 / 108),
   );
@@ -277,6 +279,8 @@ Future<void> _addAndroidResources(
     name: 'adaptive-monochrome-432.png',
     size: 432,
     alpha: ProjectIconAlpha.monochrome,
+    maximumVisibleExtent: 264,
+    visibleExtentTolerance: 2,
     fallback: (source) =>
         _renderMonochrome(source, size: 432, contentScale: 66 / 108),
   );
@@ -365,12 +369,16 @@ Future<Uint8List> _variant(
   required int size,
   required Uint8List Function(image.Image source) fallback,
   ProjectIconAlpha alpha = ProjectIconAlpha.transparent,
+  int? maximumVisibleExtent,
+  int visibleExtentTolerance = 0,
 }) =>
     loadProjectIconVariant(
       iconUrl: identity.iconUrl,
       variantName: name,
       size: size,
       alpha: alpha,
+      maximumVisibleExtent: maximumVisibleExtent,
+      visibleExtentTolerance: visibleExtentTolerance,
       client: client,
       fallback: () async => fallback(await master()),
     );
