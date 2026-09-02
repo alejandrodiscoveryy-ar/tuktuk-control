@@ -66,6 +66,66 @@ void main() {
     );
   });
 
+  test('fallback adaptive recorta padding y ocupa 264 px sin deformar', () {
+    final master = _adaptiveMasterWithTransparentPadding();
+    final original = image.encodePng(master);
+
+    final foreground = image.decodePng(
+      renderTransparentWebIcon(
+        master,
+        size: 432,
+        contentScale: 66 / 108,
+      ),
+    )!;
+    final monochrome = image.decodePng(
+      renderMonochromeTransparentIcon(
+        master,
+        size: 432,
+        contentScale: 66 / 108,
+      ),
+    )!;
+    final foregroundBounds = visibleAlphaBounds(foreground)!;
+    final monochromeBounds = visibleAlphaBounds(monochrome)!;
+
+    expect(foregroundBounds.width, 264);
+    expect(foregroundBounds.height, 179);
+    expect(
+      foregroundBounds.width / foregroundBounds.height,
+      closeTo(624 / 424, .01),
+    );
+    expect(
+      (foregroundBounds.left - (432 - foregroundBounds.right - 1)).abs(),
+      lessThanOrEqualTo(1),
+    );
+    expect(
+      (foregroundBounds.top - (432 - foregroundBounds.bottom - 1)).abs(),
+      lessThanOrEqualTo(1),
+    );
+    expect(monochromeBounds.width, foregroundBounds.width);
+    expect(monochromeBounds.height, foregroundBounds.height);
+    expect(image.encodePng(master), original);
+
+    var hasSemitransparentEdge = false;
+    var alphaMismatchCount = 0;
+    var nonWhiteVisibleCount = 0;
+    for (final pixel in foreground) {
+      final alpha = pixel.a.toInt();
+      if (alpha > 0 && alpha < 255) hasSemitransparentEdge = true;
+      final monochromePixel = monochrome.getPixel(pixel.x, pixel.y);
+      if (monochromePixel.a.toInt() != alpha) alphaMismatchCount++;
+      if (alpha > 0) {
+        if (monochromePixel.r.toInt() != 255 ||
+            monochromePixel.g.toInt() != 255 ||
+            monochromePixel.b.toInt() != 255) {
+          nonWhiteVisibleCount++;
+        }
+      }
+    }
+    expect(hasSemitransparentEdge, isTrue);
+    expect(alphaMismatchCount, 0);
+    expect(nonWhiteVisibleCount, 0);
+  });
+
   test('los recursos Web/PWA generados cumplen dimensiones y ocupación', () {
     final background = _hexRgb(_readManifest()['background_color'] as String);
     final expectations = <String, ({int size, double scale})>{
@@ -200,4 +260,15 @@ Map<String, dynamic> _readManifest() =>
 (int, int, int) _hexRgb(String value) {
   final rgb = int.parse(value.substring(1), radix: 16);
   return ((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+}
+
+image.Image _adaptiveMasterWithTransparentPadding() {
+  final master = image.Image(width: 1024, height: 1024, numChannels: 4);
+  for (var y = 300; y < 724; y++) {
+    for (var x = 200; x < 824; x++) {
+      final edge = x == 200 || x == 823 || y == 300 || y == 723;
+      master.setPixelRgba(x, y, 10, 20, 30, edge ? 96 : 255);
+    }
+  }
+  return master;
 }

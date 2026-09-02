@@ -20,6 +20,27 @@ Uint8List renderTransparentWebIcon(
   return _renderWebIcon(master, size: size, contentScale: contentScale);
 }
 
+/// Uses the transparent renderer geometry and then converts the artwork to a
+/// white silhouette without changing any alpha value.
+Uint8List renderMonochromeTransparentIcon(
+  image.Image master, {
+  required int size,
+  required double contentScale,
+}) {
+  final rendered = image.decodePng(
+    renderTransparentWebIcon(
+      master,
+      size: size,
+      contentScale: contentScale,
+    ),
+  )!;
+  for (final pixel in rendered) {
+    if (pixel.a.toInt() == 0) continue;
+    pixel.setRgba(255, 255, 255, pixel.a.toInt());
+  }
+  return Uint8List.fromList(image.encodePng(rendered, level: 9));
+}
+
 /// Renders a proportionally scaled icon on a fully opaque solid background.
 Uint8List renderOpaqueWebIcon(
   image.Image master, {
