@@ -102,10 +102,7 @@ class _OnboardingProjectIdentity extends StatelessWidget {
         );
         return Center(
           child: remoteLogo == null
-              ? SizedBox(
-                  width: logoWidth,
-                  child: const _OnboardingProjectIdentityFallback(),
-                )
+              ? _onboardingProjectIdentityPlaceholder(logoWidth)
               : Image.network(
                   remoteLogo,
                   width: logoWidth,
@@ -115,7 +112,7 @@ class _OnboardingProjectIdentity extends StatelessWidget {
                       ? child
                       : Opacity(opacity: 0, child: child),
                   errorBuilder: (_, __, ___) =>
-                      const _OnboardingProjectIdentityFallback(),
+                      _onboardingProjectIdentityPlaceholder(logoWidth),
                 ),
         );
       },
@@ -123,36 +120,14 @@ class _OnboardingProjectIdentity extends StatelessWidget {
   }
 }
 
-class _OnboardingProjectIdentityFallback extends StatelessWidget {
-  const _OnboardingProjectIdentityFallback();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: 'TukTuk ',
-              style: TextStyle(color: kPrimary),
-            ),
-            TextSpan(
-              text: 'Control',
-              style: TextStyle(color: Colors.white),
-            ),
-          ],
-        ),
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 32,
-          height: 1.05,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -.8,
-        ),
-      ),
+Widget _onboardingProjectIdentityPlaceholder(double logoWidth) => SizedBox(
+      width: logoWidth,
+      height: logoWidth / 2.5,
     );
-  }
-}
+
+@visibleForTesting
+Widget onboardingProjectIdentityForTesting(ProjectIdentity identity) =>
+    _OnboardingProjectIdentity(identity: identity);
 
 class _ProjectIdentityImage extends StatelessWidget {
   const _ProjectIdentityImage({
