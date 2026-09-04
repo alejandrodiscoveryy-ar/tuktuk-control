@@ -20,7 +20,6 @@ messaging.onBackgroundMessage((payload) => {
 
   self.registration.showNotification(title || 'TukTuk Control', {
     body: body || '',
-    icon: 'icons/Icon-192.png',
     data: payload.data || {}
   });
 });
