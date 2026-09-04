@@ -1,0 +1,4 @@
+[functions.send-push-notifications]
+# Service-to-service callers use a dedicated secret header. The function body
+# performs authentication so pg_cron can use the modern non-JWT secret.
+verify_jwt = false
