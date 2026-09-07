@@ -115,6 +115,19 @@ void main() {
     }
   });
 
+  test('captura enlace público /ref/CODIGO', () async {
+    final store = _MemoryPendingReferralStore();
+    final controller = PendingReferralClaimController(store);
+
+    expect(
+      await controller.capture(
+        Uri.parse('https://www.vrixora.com/ref/tuk-qc59'),
+      ),
+      isTrue,
+    );
+    expect(store.code, 'TUK-QC59');
+  });
+
   test('ignora URI sin ref', () async {
     final controller = PendingReferralClaimController(
       _MemoryPendingReferralStore(),
@@ -288,14 +301,34 @@ void main() {
         [5, 15, 30, 60, 120, 300, 900, 900]);
   });
 
-  test('el enlace compartido corrige ref y conserva parámetros adicionales',
+  test(
+      'el enlace compartido respeta configuración remota y conserva parámetros',
       () {
     final program = ReferralProgram.fromMap({
       'code': 'tuk-qc59',
-      'link': 'https://example.com/invite?campaign=summer&ref=WRONG'
+      'link':
+          'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?campaign=summer&ref=WRONG',
     });
-    expect(Uri.parse(program.shareLink!).queryParameters,
-        {'campaign': 'summer', 'ref': 'TUK-QC59'});
+
+    expect(
+      program.shareLink,
+      'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?campaign=summer&ref=TUK-QC59',
+    );
+  });
+  test('ruta pública rechaza host, esquema y estructura distintos', () {
+    for (final link in [
+      'https://example.com/ref/TUK-QC59',
+      'http://www.vrixora.com/ref/TUK-QC59',
+      'https://www.vrixora.com/ref/',
+      'https://www.vrixora.com/ref/TUK-QC59/extra',
+      'https://www.vrixora.com/other/TUK-QC59',
+    ]) {
+      expect(referralCodeFromUri(Uri.parse(link)), isNull, reason: link);
+    }
+    expect(
+        referralCodeFromUri(
+            Uri.parse('https://www.vrixora.com/ref/TUK-QC59?ref=PEDRO-7K4P')),
+        'PEDRO-7K4P');
   });
 }
 

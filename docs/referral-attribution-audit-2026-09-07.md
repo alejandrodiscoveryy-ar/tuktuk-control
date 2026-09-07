@@ -127,7 +127,8 @@ administrativo; no se implementó en esta corrección.
 - Redirect: 11 pruebas Node aprobadas.
 - Funciones SQL recuperadas: 7 pruebas PostgreSQL en memoria aprobadas.
 - Worker existente: 17 pruebas Deno aprobadas.
-- Compilación Android debug: en ejecución al redactar (NDK instalado).
+- Compilación Android debug: aprobada en CI para `4641c70`. La ejecución local
+  Windows falló al cerrar cachés incrementales Kotlin; no se presenta como aprobada.
 - Prueba Python PostgreSQL existente: rechazada localmente por revisión automática
   porque elimina `public` y no había una base desechable verificada. El job backend
   del PR sí terminó correctamente: ejecuta sus 5 pruebas en PostgreSQL exclusivo
@@ -175,7 +176,7 @@ La firma release sigue requiriendo sus propiedades; compilar debug ya no exige t
 - Pendiente: prueba física instalada/no instalada/reinstalación desde Play, incluida
   restauración automática de Android si está habilitada. Una simulación de canal y
   persistencia no demuestra el comportamiento de Google Play o Android Auto Backup.
-- Pendiente: certificado de firma Play y comprobaciones CI/compilación finales.
+- Pendiente: certificado de firma Play y prueba física; la compilación CI anterior pasó.
 - Hace falta una nueva versión Android para distribuir esta corrección. No se
   incrementó versión ni se publicó una APK/AAB en esta tarea.
 
@@ -204,3 +205,22 @@ La firma release sigue requiriendo sus propiedades; compilar debug ya no exige t
    instalación desde el enlace de Play, y comprobar idempotencia con cuenta ya
    atribuida. Repetir con/sin restauración de Android Auto Backup.
 9. No usar ni reparar de nuevo las cuentas o registros reales mencionados por el owner.
+
+## Revisión de los cambios del owner: ruta pública /ref/CODIGO
+
+Se conservaron la captura de códigos en rutas HTTPS de www.vrixora.com y el
+App Link Android adicional `/ref`, manteniendo `/tuktuk` y los enlaces con `?ref=`.
+Las pruebas cubren captura inicial/eventos, rechazo de host/esquema/ruta incorrectos
+y prioridad compatible del parámetro `ref`.
+
+Se corrigió el enlace compartido para respetar la configuración remota y conservar
+parámetros adicionales. No se fija `/ref/CODIGO` como salida: el 7 de septiembre de
+2026, las peticiones HTTP a esa ruta devolvieron 200 HTML sin Location y la navegación
+real a `/ref/TUK-QC59` mostró la página principal, sin redirección a Play. El archivo
+local del sitio `src/routes/ref/$code.ts` prepara un 302 a Play con `referrer=ref%3D...`,
+pero ese comportamiento no se observó en el sitio publicado. No se modificó ni
+se desplegó el repositorio web. El redirect remoto existente conserva la atribución.
+
+Antes de cambiar la configuración remota a la ruta pública, validar su despliegue,
+la redirección real a Play y App Links con firma de Play en un dispositivo.
+También se modificó `flutter_app/android/app/src/main/AndroidManifest.xml`.

@@ -219,7 +219,7 @@ class PendingReferralClaimController {
   bool get hasPending => _store.code != null;
   String? get assignedUserId => _store.assignedUserId;
 
-  Future<bool> capture(Uri uri) => captureCode(uri.queryParameters['ref']);
+  Future<bool> capture(Uri uri) => captureCode(referralCodeFromUri(uri));
 
   Future<bool> captureCode(String? value) => _serialize(() async {
         final code = normalizeReferralCode(value);
@@ -300,6 +300,24 @@ String? referralRejection(Object error) {
     'REFERRAL_PROGRAM_NOT_ACTIVE' => 'La campaña de referidos no está activa.',
     _ => null,
   };
+}
+
+String? referralCodeFromUri(Uri uri) {
+  final queryCode = normalizeReferralCode(uri.queryParameters['ref']);
+  if (queryCode != null) return queryCode;
+
+  final segments = uri.pathSegments
+      .where((segment) => segment.isNotEmpty)
+      .toList(growable: false);
+
+  if (uri.scheme.toLowerCase() != 'https' ||
+      uri.host.toLowerCase() != 'www.vrixora.com' ||
+      segments.length != 2 ||
+      segments.first.toLowerCase() != 'ref') {
+    return null;
+  }
+
+  return normalizeReferralCode(segments[1]);
 }
 
 String? normalizeReferralCode(String? value) {

@@ -45,7 +45,7 @@ void main() {
     const messages = MethodChannel('com.llfbandit.app_links/messages');
     const events = MethodChannel('com.llfbandit.app_links/events');
     const initial = 'https://www.vrixora.com/tuktuk/app/?ref=TUK-QC59';
-    const live = 'https://www.vrixora.com/tuktuk?ref=PEDRO-7K4P';
+    const live = 'https://www.vrixora.com/ref/TUK-EZ61';
     messenger.setMockMethodCallHandler(messages, (call) async {
       expect(call.method, 'getInitialLink');
       return initial;
@@ -62,11 +62,21 @@ void main() {
     await messenger.handlePlatformMessage(events.name,
         const StandardMethodCodec().encodeSuccessEnvelope(live), (_) {});
     await delivered.future;
-    expect(received.map((uri) => uri.queryParameters['ref']),
-        ['TUK-QC59', 'PEDRO-7K4P']);
+    expect(
+      received.map(referralCodeFromUri),
+      ['TUK-QC59', 'TUK-EZ61'],
+    );
     await listener.dispose();
     messenger.setMockMethodCallHandler(messages, null);
     messenger.setMockMethodCallHandler(events, null);
+  });
+
+  test('Android declara App Links para /tuktuk y /ref', () async {
+    final manifest =
+        await File('android/app/src/main/AndroidManifest.xml').readAsString();
+
+    expect(manifest, contains('android:pathPrefix="/tuktuk"'));
+    expect(manifest, contains('android:pathPrefix="/ref"'));
   });
 
   test('Hive conserva captura antes de login, fallo, cuenta y reinicio',

@@ -41,6 +41,10 @@
                     android:scheme="https"
                     android:host="www.vrixora.com"
                     android:pathPrefix="/tuktuk" />
+                <data
+                    android:scheme="https"
+                    android:host="www.vrixora.com"
+                    android:pathPrefix="/ref" />
             </intent-filter>
         </activity>
         <meta-data
