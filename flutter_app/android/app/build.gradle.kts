@@ -35,12 +35,15 @@ android {
 
     signingConfigs {
         create("release") {
-            check(keystorePropertiesFile.exists()) {
+            val releaseRequested = gradle.startParameter.taskNames.any {
+                it.contains("release", ignoreCase = true)
+            }
+            check(keystorePropertiesFile.exists() || !releaseRequested) {
                 "Falta android/key.properties. La compilación release requiere la clave de carga."
             }
             keyAlias = keystoreProperties.getProperty("keyAlias")
             keyPassword = keystoreProperties.getProperty("keyPassword")
-            storeFile = file(keystoreProperties.getProperty("storeFile"))
+            storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
             storePassword = keystoreProperties.getProperty("storePassword")
         }
     }

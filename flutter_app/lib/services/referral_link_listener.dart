@@ -15,12 +15,26 @@ class ReferralLinkListener {
   final AppLinks _appLinks;
   StreamSubscription<Uri>? _subscription;
 
-  void start() {
+  Future<void> start() async {
     if (_subscription != null) return;
     _subscription = _appLinks.uriLinkStream.listen(
-      (uri) => _onUri(uri),
+      (uri) => unawaited(_deliver(uri)),
       onError: (_) {},
     );
+    try {
+      final uri = await _appLinks.getInitialLink();
+      if (uri != null && _subscription != null) await _deliver(uri);
+    } catch (_) {
+      // The live stream remains available if the platform initial read fails.
+    }
+  }
+
+  Future<void> _deliver(Uri uri) async {
+    try {
+      await _onUri(uri);
+    } catch (_) {
+      // A platform event must not escape as an unhandled asynchronous error.
+    }
   }
 
   Future<void> dispose() async {

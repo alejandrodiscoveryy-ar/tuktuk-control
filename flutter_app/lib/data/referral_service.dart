@@ -26,14 +26,23 @@ class ReferralRemoteService {
         .toList(growable: false);
   }
 
-  Future<void> claim(String code) async {
-    await _client.rpc(
+  Future<void> claim(String code, {required String userId}) async {
+    final session = _client.auth.currentSession;
+    if (session == null || session.user.id != userId) {
+      throw StateError('La cuenta cambió antes del claim');
+    }
+    // Bind this request to the intended account even if auth changes while
+    // the HTTP client is preparing the request. Never log this header.
+    final response = await _client.rpc(
       'claim_referral_code',
       params: {
         'target_project_id': _projectId,
         'target_code': code,
       },
-    );
+    ).setHeader('Authorization', 'Bearer ${session.accessToken}');
+    if (response is! String || response.isEmpty) {
+      throw const FormatException('Claim sin confirmación de relación');
+    }
   }
 
   Map<dynamic, dynamic>? _firstMap(dynamic response) {
@@ -52,39 +61,64 @@ class HivePendingReferralCodeStore implements PendingReferralCodeStore {
   static const _assignedUserKey = 'referral:assignedUserId';
   static const _attemptedUserKey = 'referral:attemptedUserId';
   static const _claimedCodesKey = 'referral:claimedCodesByUser';
+  static const _failureKey = 'referral:failure';
+  static const _stateKey = 'referral:pendingV2';
 
   final Box<dynamic> _box;
 
-  @override
-  String? get code => _text(_box.get(_codeKey));
-  @override
-  String? get assignedUserId => _text(_box.get(_assignedUserKey));
-  @override
-  String? get attemptedUserId => _text(_box.get(_attemptedUserKey));
+  Map<dynamic, dynamic> get _state {
+    final value = _box.get(_stateKey);
+    if (value is Map) return value;
+    return {
+      _codeKey: _box.get(_codeKey),
+      _assignedUserKey:
+          _box.get(_assignedUserKey) ?? _box.get(_attemptedUserKey),
+      _attemptedUserKey: _box.get(_attemptedUserKey),
+      _failureKey: _box.get(_failureKey),
+    };
+  }
+
+  Future<void> _update(String key, Object? value) =>
+      _box.put(_stateKey, {..._state, key: value});
 
   @override
-  Future<void> saveCode(String value) async {
-    await _box.put(_codeKey, value);
-    await _box.delete(_assignedUserKey);
-    await _box.delete(_attemptedUserKey);
+  String? get code => normalizeReferralCode(_text(_state[_codeKey]));
+  @override
+  String? get assignedUserId => _text(_state[_assignedUserKey]);
+  @override
+  String? get attemptedUserId => _text(_state[_attemptedUserKey]);
+
+  @override
+  Map<dynamic, dynamic>? get failure {
+    final value = _state[_failureKey];
+    return value is Map ? value : null;
   }
 
   @override
-  Future<void> assignToUser(String userId) =>
-      _box.put(_assignedUserKey, userId);
+  Future<void> saveFailure(Map<String, dynamic> value) =>
+      _update(_failureKey, value);
+
+  @override
+  Future<void> saveCode(String value) async {
+    await _box.put(_stateKey, {_codeKey: value});
+  }
+
+  @override
+  Future<void> assignToUser(String userId) => _update(_assignedUserKey, userId);
 
   @override
   Future<void> markAttempted(String userId) =>
-      _box.put(_attemptedUserKey, userId);
+      _update(_attemptedUserKey, userId);
 
   @override
-  Future<void> resetAttempt() => _box.delete(_attemptedUserKey);
+  Future<void> resetAttempt() => _box
+      .put(_stateKey, {..._state, _attemptedUserKey: null, _failureKey: null});
 
   @override
   bool wasClaimedByUser(String userId, String code) {
     final values = _box.get(_claimedCodesKey);
     if (values is! Map) return false;
-    return values[userId]?.toString() == code;
+    return normalizeReferralCode(values[userId]?.toString()) == code;
   }
 
   @override
@@ -101,7 +135,9 @@ class HivePendingReferralCodeStore implements PendingReferralCodeStore {
 
   @override
   Future<void> clear() async {
-    await _box.deleteAll([_codeKey, _assignedUserKey, _attemptedUserKey]);
+    // A single Hive value keeps code and account ownership consistent on crash.
+    // The tombstone prevents a previously migrated legacy code resurfacing.
+    await _box.put(_stateKey, <String, dynamic>{});
   }
 
   String? _text(Object? value) {

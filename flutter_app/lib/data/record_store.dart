@@ -40,15 +40,16 @@ class RecordStore extends ChangeNotifier {
     _pendingReferralClaims = PendingReferralClaimController(
       HivePendingReferralCodeStore(_meta),
     );
-    _initialReferralCapture = kIsWeb
-        ? _pendingReferralClaims.capture(Uri.base)
-        : Future<bool>.value(false);
     if (!kIsWeb && referralAppLinks != null) {
       _referralLinkListener = ReferralLinkListener(
         appLinks: referralAppLinks,
         onUri: _captureReferralUri,
-      )..start();
+      );
     }
+    _initialReferralCapture = kIsWeb
+        ? _pendingReferralClaims.capture(Uri.base)
+        : (_referralLinkListener?.start() ?? Future<void>.value())
+            .then((_) => false);
     whatsAppSettings = _whatsAppSettingsService.cachedSettings();
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
@@ -98,6 +99,10 @@ class RecordStore extends ChangeNotifier {
   ReferralLinkListener? _referralLinkListener;
   Future<void>? _pendingReferralClaimFuture;
   bool _installReferrerAttemptedThisSession = false;
+  Timer? _referralRetryTimer;
+  Timer? _installReferrerRetryTimer;
+  int _installReferrerFailures = 0;
+  bool _referralsDisposed = false;
   static const _installReferrerCheckedKey = 'referral:installReferrerChecked';
   final PushTokenRegistrationCoordinator? _pushTokenCoordinator;
   StreamSubscription<AuthState>? _authSubscription;
@@ -127,6 +132,15 @@ class RecordStore extends ChangeNotifier {
   ReferralLoadState referralLoadState = ReferralLoadState.idle;
   String? referralError;
   bool referralClaimNeedsRetry = false;
+  String? get referralClaimMessage {
+    if (!_pendingReferralClaims.hasPending) return null;
+    final assigned = _pendingReferralClaims.assignedUserId;
+    if (assigned != null && assigned != user?.id) {
+      return 'La invitación pendiente pertenece a otra cuenta. Inicia sesión con esa cuenta.';
+    }
+    return _pendingReferralClaims.rejection;
+  }
+
   String? _referralLoadUserId;
   Future<void>? _referralLoadFuture;
   Future<void>? _projectIdentityRefreshFuture;
@@ -304,6 +318,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   void handleAppResumed() {
+    unawaited(_resumeReferralAttribution());
     final now = DateTime.now().toUtc();
     final lastRefresh = _lastBackgroundRefreshAt;
     final forceExpiredLicenseValidation = user != null &&
@@ -319,6 +334,7 @@ class RecordStore extends ChangeNotifier {
     }
 
     _lastBackgroundRefreshAt = now;
+    if (user != null) unawaited(loadReferrals(force: true));
     unawaited(refreshWhatsAppSettings());
     unawaited(refreshProjectIdentity());
 
@@ -416,6 +432,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _processPendingReferralClaim(String userId) async {
+    if (_referralsDisposed || user?.id != userId) return;
     final inFlight = _pendingReferralClaimFuture;
     if (inFlight != null) return inFlight;
     final future = _runPendingReferralClaim(userId);
@@ -432,14 +449,41 @@ class RecordStore extends ChangeNotifier {
   Future<void> _runPendingReferralClaim(String userId) async {
     final result = await _pendingReferralClaims.claimForUser(
       userId: userId,
-      claim: _referralRemoteService.claim,
+      claim: (code) async {
+        if (_supabase.auth.currentUser?.id != userId || user?.id != userId) {
+          throw StateError('La cuenta cambió antes del claim');
+        }
+        await _ensureRemoteProfile();
+        if (_supabase.auth.currentUser?.id != userId || user?.id != userId) {
+          throw StateError('La cuenta cambió antes del claim');
+        }
+        await _referralRemoteService.claim(code, userId: userId);
+      },
     );
-    if (user?.id != userId) return;
-    referralClaimNeedsRetry = result == PendingReferralClaimResult.failed;
+    if (_referralsDisposed || user?.id != userId) return;
+    _referralRetryTimer?.cancel();
+    referralClaimNeedsRetry = result == PendingReferralClaimResult.failed ||
+        result == PendingReferralClaimResult.deferred;
+    if (referralClaimNeedsRetry) {
+      final due = _pendingReferralClaims.nextAttemptAt;
+      final delay = due?.difference(DateTime.now()) ?? referralRetryDelay(1);
+      _referralRetryTimer = Timer(delay.isNegative ? Duration.zero : delay, () {
+        unawaited(_processPendingReferralClaim(userId));
+      });
+    }
     if (result == PendingReferralClaimResult.success) {
-      await loadReferrals(force: true);
+      await refreshReferralsAndLicense();
     } else {
       notifyListeners();
+    }
+  }
+
+  Future<void> _resumeReferralAttribution() async {
+    if (_referralsDisposed) return;
+    await _captureInstallReferrer();
+    final currentUser = user;
+    if (initialized && currentUser != null) {
+      await _processPendingReferralClaim(currentUser.id);
     }
   }
 
@@ -452,9 +496,11 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _captureInstallReferrer() async {
-    if (kIsWeb ||
+    if (_referralsDisposed ||
+        kIsWeb ||
         defaultTargetPlatform != TargetPlatform.android ||
         _installReferrerAttemptedThisSession ||
+        _installReferrerRetryTimer?.isActive == true ||
         _meta.get(_installReferrerCheckedKey) == true) {
       return;
     }
@@ -472,6 +518,16 @@ class RecordStore extends ChangeNotifier {
     }
     if (result.isDefinitive) {
       await _meta.put(_installReferrerCheckedKey, true);
+    } else {
+      _installReferrerAttemptedThisSession = false;
+      _installReferrerFailures++;
+      if (!_referralsDisposed) {
+        _installReferrerRetryTimer =
+            Timer(referralRetryDelay(_installReferrerFailures), () {
+          _installReferrerRetryTimer = null;
+          unawaited(_captureInstallReferrer());
+        });
+      }
     }
   }
 
@@ -1417,10 +1473,10 @@ class RecordStore extends ChangeNotifier {
     unawaited(refreshExchangeRate());
     _startAutomaticSync();
     try {
+      await _processPendingReferralClaim(authenticatedUser.id);
       await _pushTokenCoordinator
           ?.handleAuthenticatedUser(authenticatedUser.id);
       await _ensureRemoteProfile();
-      await _processPendingReferralClaim(authenticatedUser.id);
       await _refreshLicenseIfNeeded(force: true);
 
       if (canWrite) {
@@ -1494,13 +1550,15 @@ class RecordStore extends ChangeNotifier {
             column: 'user_id',
             value: currentUser.id,
           ),
-          callback: (_) => unawaited(_refreshLicenseIfNeeded(force: true)),
+          callback: (_) => unawaited(refreshReferralsAndLicense()),
         )
         .subscribe();
 
     _automaticSyncTimer = Timer.periodic(
       _automaticSyncInterval,
       (_) {
+        unawaited(loadReferrals(force: true));
+        unawaited(_resumeReferralAttribution());
         unawaited(_refreshLicenseIfNeeded());
         unawaited(refreshWhatsAppSettings());
         unawaited(refreshExchangeRate());
@@ -2152,6 +2210,9 @@ class RecordStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    _referralsDisposed = true;
+    _referralRetryTimer?.cancel();
+    _installReferrerRetryTimer?.cancel();
     _stopAutomaticSync();
     unawaited(_authSubscription?.cancel());
     unawaited(_pushTokenCoordinator?.dispose());

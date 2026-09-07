@@ -6,6 +6,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.atomic.AtomicBoolean
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -35,9 +37,12 @@ class MainActivity : FlutterActivity() {
             return
         }
         val completed = AtomicBoolean(false)
+        val handler = Handler(Looper.getMainLooper())
+        var timeout: Runnable? = null
 
         fun complete(status: String, installReferrer: String? = null) {
             if (!completed.compareAndSet(false, true)) return
+            timeout?.let { handler.removeCallbacks(it) }
             try {
                 val payload = mutableMapOf<String, Any?>("status" to status)
                 if (installReferrer != null) {
@@ -52,6 +57,10 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+
+        val timeoutTask = Runnable { complete("service_unavailable") }
+        timeout = timeoutTask
+        handler.postDelayed(timeoutTask, 10_000)
 
         try {
             client.startConnection(object : InstallReferrerStateListener {

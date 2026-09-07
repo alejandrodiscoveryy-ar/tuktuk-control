@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   test('parsea el programa y sus métricas dinámicas', () {
@@ -27,7 +30,8 @@ void main() {
     expect(program.link, contains('ABC-123'));
   });
 
-  test('muestra condiciones registration y first_payment sin hardcodearlas', () {
+  test('muestra condiciones registration y first_payment sin hardcodearlas',
+      () {
     expect(
       referralQualificationLabel(ReferralQualificationMode.registration),
       'Cuando tu invitado se registre',
@@ -111,6 +115,19 @@ void main() {
     }
   });
 
+  test('captura enlace público /ref/CODIGO', () async {
+    final store = _MemoryPendingReferralStore();
+    final controller = PendingReferralClaimController(store);
+
+    expect(
+      await controller.capture(
+        Uri.parse('https://www.vrixora.com/ref/tuk-qc59'),
+      ),
+      isTrue,
+    );
+    expect(store.code, 'TUK-QC59');
+  });
+
   test('ignora URI sin ref', () async {
     final controller = PendingReferralClaimController(
       _MemoryPendingReferralStore(),
@@ -176,7 +193,7 @@ void main() {
     expect(store.code, 'ABC-123');
   });
 
-  test('un claim fallido no se repite y queda aislado por cuenta', () async {
+  test('un claim fallido espera y queda aislado por cuenta', () async {
     final store = _MemoryPendingReferralStore()..code = 'ABC-123';
     final controller = PendingReferralClaimController(store);
     var claims = 0;
@@ -192,13 +209,126 @@ void main() {
     );
     expect(
       await controller.claimForUser(userId: 'user-1', claim: fail),
-      PendingReferralClaimResult.alreadyAttempted,
+      PendingReferralClaimResult.deferred,
     );
     expect(
       await controller.claimForUser(userId: 'user-2', claim: fail),
       PendingReferralClaimResult.accountMismatch,
     );
     expect(claims, 1);
+  });
+
+  test('reintenta tras reinicio y recupera attemptedUserId histórico',
+      () async {
+    var now = DateTime.utc(2026, 9, 7);
+    final store = _MemoryPendingReferralStore()
+      ..code = 'TUK-QC59'
+      ..assignedUserId = 'a'
+      ..attemptedUserId = 'a';
+    var controller = PendingReferralClaimController(store, now: () => now);
+    expect(
+        await controller.claimForUser(
+            userId: 'a',
+            claim: (_) async {
+              throw TimeoutException('offline');
+            }),
+        PendingReferralClaimResult.failed);
+    expect(store.code, 'TUK-QC59');
+    controller = PendingReferralClaimController(store, now: () => now);
+    now = now.add(const Duration(seconds: 5));
+    expect(await controller.claimForUser(userId: 'a', claim: (_) async {}),
+        PendingReferralClaimResult.success);
+    expect(store.code, isNull);
+  });
+
+  for (final reason in [
+    'SELF_REFERRAL_NOT_ALLOWED',
+    'REFERRAL_RELATIONSHIP_LOCKED',
+    'REFERRAL_CODE_NOT_FOUND',
+    'REFERRAL_PROGRAM_NOT_ACTIVE'
+  ]) {
+    test('$reason conserva rechazo y no reintenta tras reinicio', () async {
+      final store = _MemoryPendingReferralStore()..code = 'ABC-123';
+      var calls = 0;
+      Future<void> claim(String _) async {
+        calls++;
+        throw PostgrestException(message: reason);
+      }
+
+      var controller = PendingReferralClaimController(store);
+      expect(await controller.claimForUser(userId: 'a', claim: claim),
+          PendingReferralClaimResult.rejected);
+      controller = PendingReferralClaimController(store);
+      await controller.allowRetryForUser('a');
+      expect(await controller.claimForUser(userId: 'a', claim: claim),
+          PendingReferralClaimResult.rejected);
+      expect(calls, 1);
+      expect(store.code, 'ABC-123');
+      expect(controller.rejection, isNotNull);
+    });
+  }
+
+  test('capturas y claims simultáneos conservan el primer código', () async {
+    final store = _MemoryPendingReferralStore();
+    final controller = PendingReferralClaimController(store);
+    expect(
+        await Future.wait([
+          controller.captureCode('abc-123'),
+          controller.captureCode('XYZ-456')
+        ]),
+        [true, false]);
+    var calls = 0;
+    final gate = Completer<void>();
+    Future<void> claim(String code) async {
+      calls++;
+      expect(code, 'ABC-123');
+      await gate.future;
+    }
+
+    final first = controller.claimForUser(userId: 'a', claim: claim);
+    final second = controller.claimForUser(userId: 'a', claim: claim);
+    gate.complete();
+    expect(await Future.wait([first, second]),
+        [PendingReferralClaimResult.success, PendingReferralClaimResult.none]);
+    expect(calls, 1);
+  });
+
+  test('espera progresiva limitada a quince minutos', () {
+    expect(
+        [1, 2, 3, 4, 5, 6, 7, 100]
+            .map(referralRetryDelay)
+            .map((d) => d.inSeconds),
+        [5, 15, 30, 60, 120, 300, 900, 900]);
+  });
+
+  test(
+      'el enlace compartido respeta configuración remota y conserva parámetros',
+      () {
+    final program = ReferralProgram.fromMap({
+      'code': 'tuk-qc59',
+      'link':
+          'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?campaign=summer&ref=WRONG',
+    });
+
+    expect(
+      program.shareLink,
+      'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?campaign=summer&ref=TUK-QC59',
+    );
+  });
+  test('ruta pública rechaza host, esquema y estructura distintos', () {
+    for (final link in [
+      'https://example.com/ref/TUK-QC59',
+      'http://www.vrixora.com/ref/TUK-QC59',
+      'https://www.vrixora.com/ref/',
+      'https://www.vrixora.com/ref/TUK-QC59/extra',
+      'https://www.vrixora.com/other/TUK-QC59',
+    ]) {
+      expect(referralCodeFromUri(Uri.parse(link)), isNull, reason: link);
+    }
+    expect(
+        referralCodeFromUri(
+            Uri.parse('https://www.vrixora.com/ref/TUK-QC59?ref=PEDRO-7K4P')),
+        'PEDRO-7K4P');
   });
 }
 
@@ -209,6 +339,10 @@ class _MemoryPendingReferralStore implements PendingReferralCodeStore {
   String? assignedUserId;
   @override
   String? attemptedUserId;
+  @override
+  Map<dynamic, dynamic>? failure;
+  @override
+  Future<void> saveFailure(Map<String, dynamic> value) async => failure = value;
   final Map<String, String> claimedCodes = {};
 
   @override
@@ -216,6 +350,7 @@ class _MemoryPendingReferralStore implements PendingReferralCodeStore {
     code = value;
     assignedUserId = null;
     attemptedUserId = null;
+    failure = null;
   }
 
   @override
@@ -225,7 +360,10 @@ class _MemoryPendingReferralStore implements PendingReferralCodeStore {
   Future<void> markAttempted(String userId) async => attemptedUserId = userId;
 
   @override
-  Future<void> resetAttempt() async => attemptedUserId = null;
+  Future<void> resetAttempt() async {
+    attemptedUserId = null;
+    failure = null;
+  }
 
   @override
   bool wasClaimedByUser(String userId, String code) =>
@@ -241,5 +379,6 @@ class _MemoryPendingReferralStore implements PendingReferralCodeStore {
     code = null;
     assignedUserId = null;
     attemptedUserId = null;
+    failure = null;
   }
 }

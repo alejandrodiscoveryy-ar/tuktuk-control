@@ -1,0 +1,17 @@
+{
+  "project_info": {
+    "project_number": "123456789012",
+    "project_id": "tuktuk-validation-only",
+    "storage_bucket": "tuktuk-validation-only.invalid"
+  },
+  "client": [{
+    "client_info": {
+      "mobilesdk_app_id": "1:123456789012:android:0000000000000000000000",
+      "android_client_info": {"package_name": "com.alejandrocruz.tuktukcontrol"}
+    },
+    "oauth_client": [],
+    "api_key": [{"current_key": "validation-only-not-a-real-firebase-key"}],
+    "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+  }],
+  "configuration_version": "1"
+}

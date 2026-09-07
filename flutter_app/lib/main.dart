@@ -87,6 +87,20 @@ void main() async {
   await Hive.openBox(_maintenanceRecordsBox);
   await Hive.openBox(_metaBox);
   await Hive.openBox(_syncQueueBox);
+  // Persist a cold-start invitation before Supabase restores authentication.
+  final pendingReferral = PendingReferralClaimController(
+    HivePendingReferralCodeStore(Hive.box(_metaBox)),
+  );
+  if (kIsWeb) {
+    await pendingReferral.capture(Uri.base);
+  } else {
+    try {
+      final initialLink = await referralAppLinks?.getInitialLink();
+      if (initialLink != null) await pendingReferral.capture(initialLink);
+    } catch (_) {
+      // RecordStore also listens for subsequent platform deliveries.
+    }
+  }
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,

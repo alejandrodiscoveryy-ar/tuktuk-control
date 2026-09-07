@@ -2536,7 +2536,7 @@ class _ReferralCard extends StatelessWidget {
       ];
     }
 
-    final link = program.link;
+    final link = program.shareLink;
     return [
       if (program.campaignName != null) ...[
         Text(
@@ -2589,6 +2589,8 @@ class _ReferralCard extends StatelessWidget {
           label: const Text('Reintentar código'),
         ),
       ],
+      if (store.referralClaimMessage != null)
+        Text(store.referralClaimMessage!, style: const TextStyle(color: kTertiary)),
       const SizedBox(height: 16),
       Container(
         decoration: BoxDecoration(
