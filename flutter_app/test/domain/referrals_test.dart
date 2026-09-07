@@ -301,18 +301,16 @@ void main() {
         [5, 15, 30, 60, 120, 300, 900, 900]);
   });
 
-  test(
-      'el enlace compartido respeta configuración remota y conserva parámetros',
-      () {
+  test('el enlace compartido usa la URL pública de Vrixora', () {
     final program = ReferralProgram.fromMap({
       'code': 'tuk-qc59',
       'link':
-          'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?campaign=summer&ref=WRONG',
+          'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?ref=WRONG',
     });
 
     expect(
       program.shareLink,
-      'https://vvxvnywzgtqhlaqpxyqh.supabase.co/functions/v1/referral-redirect?campaign=summer&ref=TUK-QC59',
+      'https://www.vrixora.com/ref/TUK-QC59',
     );
   });
   test('ruta pública rechaza host, esquema y estructura distintos', () {
