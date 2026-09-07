@@ -151,6 +151,62 @@ void main() {
     expect(store.referralProgram?.appliedDays, 15);
     expect(store.license.expiresAt, DateTime.utc(2030, 1, 16));
   });
+  test('RPC conserva la autorización original durante un cambio de cuenta',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final received = Completer<String?>();
+    server.listen((request) async {
+      await request.drain<void>();
+      received.complete(request.headers.value(HttpHeaders.authorizationHeader));
+      request.response.headers.contentType = ContentType.json;
+      request.response
+          .write(jsonEncode('55555555-5555-5555-5555-555555555555'));
+      await request.response.close();
+    });
+    final client = SupabaseClient(
+        'http://127.0.0.1:${server.port}', 'test-only',
+        authOptions: const AuthClientOptions(autoRefreshToken: false));
+    addTearDown(() async {
+      await client.dispose();
+      await server.close(force: true);
+    });
+    String session(String id) {
+      final expiry =
+          DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+              1000;
+      String encode(Object value) =>
+          base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
+      final token = '${encode({'alg': 'none'})}.${encode({
+            'exp': expiry,
+            'sub': id
+          })}.test';
+      return jsonEncode({
+        'access_token': token,
+        'refresh_token': 'test',
+        'token_type': 'bearer',
+        'expires_in': 3600,
+        'expires_at': expiry,
+        'user': {
+          'id': id,
+          'app_metadata': {},
+          'user_metadata': {},
+          'aud': 'authenticated',
+          'created_at': '2026-01-01T00:00:00Z'
+        }
+      });
+    }
+
+    await client.auth.recoverSession(session('account-a'));
+    final originalToken = client.auth.currentSession!.accessToken;
+    final request =
+        ReferralRemoteService(client).claim('TUK-AA01', userId: 'account-a');
+    await client.auth.recoverSession(session('account-b'));
+    await request;
+    expect(await received.future, 'Bearer $originalToken');
+    await expectLater(
+        ReferralRemoteService(client).claim('TUK-AA01', userId: 'account-a'),
+        throwsStateError);
+  });
 }
 
 // This test uses only a loopback HTTP fixture, never a real Supabase project.

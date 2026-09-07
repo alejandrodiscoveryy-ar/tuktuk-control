@@ -457,7 +457,7 @@ class RecordStore extends ChangeNotifier {
         if (_supabase.auth.currentUser?.id != userId || user?.id != userId) {
           throw StateError('La cuenta cambió antes del claim');
         }
-        await _referralRemoteService.claim(code);
+        await _referralRemoteService.claim(code, userId: userId);
       },
     );
     if (_referralsDisposed || user?.id != userId) return;

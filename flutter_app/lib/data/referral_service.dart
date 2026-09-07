@@ -26,14 +26,20 @@ class ReferralRemoteService {
         .toList(growable: false);
   }
 
-  Future<void> claim(String code) async {
+  Future<void> claim(String code, {required String userId}) async {
+    final session = _client.auth.currentSession;
+    if (session == null || session.user.id != userId) {
+      throw StateError('La cuenta cambió antes del claim');
+    }
+    // Bind this request to the intended account even if auth changes while
+    // the HTTP client is preparing the request. Never log this header.
     final response = await _client.rpc(
       'claim_referral_code',
       params: {
         'target_project_id': _projectId,
         'target_code': code,
       },
-    );
+    ).setHeader('Authorization', 'Bearer ${session.accessToken}');
     if (response is! String || response.isEmpty) {
       throw const FormatException('Claim sin confirmación de relación');
     }

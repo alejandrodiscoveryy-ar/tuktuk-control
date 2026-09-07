@@ -50,7 +50,9 @@ ocurrió en cada instalación; no se presenta esa inferencia como causa históri
 | Compartir | Usaba el enlace remoto sin corregirlo | Garantiza `ref` con el código propio y conserva otros parámetros |
 
 Las operaciones de captura/claim se serializan. Antes del RPC se vuelve a comprobar
-la cuenta autenticada. Solo una confirmación no vacía del backend permite marcar
+la cuenta autenticada y se fija su token de sesión en la cabecera de esa petición,
+para impedir que el cliente HTTP use otra cuenta tras un cambio de sesión.
+Solo una confirmación no vacía del backend permite marcar
 éxito y limpiar el pendiente. Se conserva la protección frente a enlaces repetidos.
 La escritura de éxito precede a la limpieza: si se interrumpe, el siguiente arranque
 limpia el pendiente confirmado sin repetir días. No cambian registros, vehículos,
@@ -120,21 +122,46 @@ administrativo; no se implementó en esta corrección.
 
 - `dart format`: ejecutado sobre los archivos Dart de la corrección.
 - `flutter analyze --no-pub`: sin incidencias en la última ejecución.
-- Suite Flutter: 126 aprobadas antes de añadir la integración; integración real
-  de RecordStore aprobada por separado. Suite final completa en ejecución al redactar.
+- Suite Flutter local: 127 aprobadas. Después se añadió la protección de token;
+  las dos pruebas de integración de RecordStore/RPC pasaron en la ejecución posterior.
 - Redirect: 11 pruebas Node aprobadas.
 - Funciones SQL recuperadas: 7 pruebas PostgreSQL en memoria aprobadas.
 - Worker existente: 17 pruebas Deno aprobadas.
 - Compilación Android debug: en ejecución al redactar (NDK instalado).
 - Prueba Python PostgreSQL existente: rechazada localmente por revisión automática
-  porque elimina `public` y no había una base desechable verificada. El nuevo CI usa
-  un servicio PostgreSQL exclusivo del job con destino explícito y datos ficticios.
+  porque elimina `public` y no había una base desechable verificada. El job backend
+  del PR sí terminó correctamente: ejecuta sus 5 pruebas en PostgreSQL exclusivo
+  del job, con destino explícito y datos ficticios.
 
 El CI nuevo ejecuta análisis, suite Flutter, compilación debug, pruebas SQL/redirect y
 la prueba Python existente en su servicio desechable. La configuración Firebase de
 `test/fixtures/google-services.debug.json` es ficticia y sirve únicamente para compilar;
 no valida Google Sign-In/FCM en dispositivo ni se debe usar en una publicación.
 La firma release sigue requiriendo sus propiedades; compilar debug ya no exige tenerlas.
+
+## Archivos modificados
+
+- `flutter_app/lib/domain/referrals.dart`: estado y política de reintento, serialización,
+  rechazos y enlace compartido.
+- `flutter_app/lib/data/referral_service.dart`: persistencia Hive V2 y RPC ligado a sesión.
+- `flutter_app/lib/data/record_store.dart`: login, resume, timers y actualización de datos.
+- `flutter_app/lib/main.dart`: captura antes de restaurar autenticación.
+- `flutter_app/lib/presentation/screens.dart`: enlace validado y mensajes de rechazo/cuenta.
+- `flutter_app/lib/services/install_referrer_service.dart` y
+  `referral_link_listener.dart`: errores recuperables y captura inicial/eventos.
+- `flutter_app/android/app/src/main/kotlin/com/alejandrocruz/tuktukcontrol/MainActivity.kt`:
+  timeout nativo y cierre único de conexión.
+- `flutter_app/android/app/build.gradle.kts`: permite compilar debug sin firma release.
+- `flutter_app/test/domain/referrals_test.dart`, `test/services/referral_platform_test.dart`
+  y `test/services/referral_record_store_test.dart`: regresiones, plataformas e integración.
+- `flutter_app/test/fixtures/google-services.debug.json`: configuración ficticia de compilación.
+- `flutter_app/supabase/functions/referral-redirect/index.ts` e `index.test.mjs`:
+  fuente desplegada y pruebas.
+- `flutter_app/supabase/tests/fixtures/referral_functions_snapshot.sql`,
+  `referral_integration.test.mjs`, `package.json`, `package-lock.json` y `.gitignore`:
+  entorno de pruebas SQL aislado.
+- `.github/workflows/referral-validation.yml`: CI reproducible sin despliegue.
+- Este informe. PR: https://github.com/alejandrodiscoveryy-ar/tuktuk-control/pull/52.
 
 ## Revisión de impacto y pendientes antes del merge
 
