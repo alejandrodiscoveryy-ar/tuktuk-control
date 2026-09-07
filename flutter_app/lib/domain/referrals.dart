@@ -59,8 +59,7 @@ class ReferralProgram {
         uri.host.isEmpty) {
       return null;
     }
-    return uri.replace(
-        queryParameters: {...uri.queryParameters, 'ref': value}).toString();
+    return Uri.https('www.vrixora.com', '/ref/$value').toString();
   }
 
   factory ReferralProgram.fromMap(Map<dynamic, dynamic> map) {
