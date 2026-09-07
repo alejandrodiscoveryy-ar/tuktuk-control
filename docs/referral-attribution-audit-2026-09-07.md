@@ -122,8 +122,8 @@ administrativo; no se implementó en esta corrección.
 
 - `dart format`: ejecutado sobre los archivos Dart de la corrección.
 - `flutter analyze --no-pub`: sin incidencias en la última ejecución.
-- Suite Flutter local: 127 aprobadas. Después se añadió la protección de token;
-  las dos pruebas de integración de RecordStore/RPC pasaron en la ejecución posterior.
+- Suite Flutter local final: 131 aprobadas, incluyendo protección del token ante
+  cambio de cuenta, recuperación persistente y las rutas públicas añadidas por el owner.
 - Redirect: 11 pruebas Node aprobadas.
 - Funciones SQL recuperadas: 7 pruebas PostgreSQL en memoria aprobadas.
 - Worker existente: 17 pruebas Deno aprobadas.
