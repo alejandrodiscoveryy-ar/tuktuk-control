@@ -19,9 +19,9 @@ class InstallReferrerResult {
 
   bool get isDefinitive => switch (status) {
         InstallReferrerStatus.ok ||
-        InstallReferrerStatus.featureNotSupported ||
-        InstallReferrerStatus.platformError =>
+        InstallReferrerStatus.featureNotSupported =>
           true,
+        InstallReferrerStatus.platformError ||
         InstallReferrerStatus.serviceUnavailable ||
         InstallReferrerStatus.serviceDisconnected =>
           false,
