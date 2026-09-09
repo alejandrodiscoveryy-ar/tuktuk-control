@@ -32,8 +32,7 @@ class SyncCoordinator {
       final acceptedOperations = pending.where(
         (operation) => result.acceptedOperationIds.contains(operation.id),
       );
-      final completedIds =
-          await _queue.completeIfUnchanged(acceptedOperations);
+      final completedIds = await _queue.completeIfUnchanged(acceptedOperations);
       for (final rejection in result.rejectedOperations.entries) {
         await _queue.markFailed([rejection.key], rejection.value);
       }

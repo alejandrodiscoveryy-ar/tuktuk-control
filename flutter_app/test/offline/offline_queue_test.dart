@@ -111,8 +111,7 @@ class _ReconnectGateway implements RemoteSyncGateway {
       operations.map((operation) => operation.entityId),
     );
     return RemotePushResult(
-      acceptedOperationIds:
-          operations.map((operation) => operation.id).toSet(),
+      acceptedOperationIds: operations.map((operation) => operation.id).toSet(),
     );
   }
 
