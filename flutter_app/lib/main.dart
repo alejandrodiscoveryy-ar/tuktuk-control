@@ -362,7 +362,7 @@ String tr(String key) {
       'Tendencia de días trabajados': 'Working days trend',
       'Información relevante': 'Relevant information',
       'Cuenta de usuario': 'User account',
-      'Google y respaldo': 'Google and backup',
+      'Cuenta y sincronización': 'Account and sync',
       'Vehiculo activo': 'Active vehicle',
       'Ajustes de mantenimiento': 'Maintenance settings',
       'Actividad reciente': 'Recent activity',
@@ -386,14 +386,12 @@ String tr(String key) {
       'Cerrar sesion': 'Sign out',
       'Comenzar': 'Start',
       'Completar mantenimiento': 'Complete maintenance',
-      'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.':
-          'Connect Google to save the database to Google Drive and recover it after reinstalling.',
       'Configura tu primer Tuk Tuk': 'Set up your first Tuk Tuk',
       'Bienvenido a TukTuk': 'Welcome to TukTuk',
       'Controla tus ingresos, gastos y mantenimiento de forma sencilla.':
           'Manage your income, expenses, and maintenance with ease.',
-      'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.':
-          'You can sign in with Google to back up your data or enter directly and use the app offline.',
+      'Puedes iniciar sesión con Google para sincronizar tus datos o entrar directamente y usar la aplicación sin conexión.':
+          'You can sign in with Google to sync your data or continue directly and use the app offline.',
       'Continuar con Google': 'Continue with Google',
       'Entrar directamente': 'Enter directly',
       'No se pudo iniciar la aplicacion.': 'The app could not be started.',
@@ -460,11 +458,11 @@ String tr(String key) {
           'Paste the JSON backup content here',
       'Personalizar perfil': 'Customize profile',
       'Proximo mantenimiento': 'Next maintenance',
-      'Recuperar desde Drive': 'Restore from Drive',
+      'Recuperar y sincronizar': 'Recover and sync',
       'Registrar mantenimiento': 'Add maintenance',
       'Registro guardado': 'Record saved',
       'Registros con ganancia': 'Records with earnings',
-      'Respaldar ahora': 'Back up now',
+      'Sincronizar ahora': 'Sync now',
       'Respaldo local': 'Local backup',
       'Respaldo restaurado': 'Backup restored',
       'Restaurar': 'Restore',
@@ -489,14 +487,10 @@ String tr(String key) {
       'Vencido por': 'Overdue by',
       'Agregar nuevo': 'Add new',
       'Agregar nuevo registro': 'Add new record',
-      'Base local pendiente de respaldo': 'Local database awaiting backup',
-      'Base recuperada desde Google Drive':
-          'Database restored from Google Drive',
-      'Base respaldada en Google Drive': 'Database backed up to Google Drive',
+      'Cambios locales pendientes de sincronización':
+          'Local changes pending synchronization',
       'Configura tu primer vehiculo para comenzar':
           'Set up your first vehicle to begin',
-      'Entra con Google para respaldar en Drive':
-          'Sign in with Google to back up to Drive',
       'Este dispositivo ya contiene datos de otro usuario':
           'This device already contains another user’s data',
       'Sesion cerrada. La base local sigue en este dispositivo':
@@ -667,7 +661,7 @@ String tr(String key) {
       'Tendencia de días trabajados': 'Tendência de dias trabalhados',
       'Información relevante': 'Informação relevante',
       'Cuenta de usuario': 'Conta de usuário',
-      'Google y respaldo': 'Google e backup',
+      'Cuenta y sincronización': 'Conta e sincronização',
       'Vehiculo activo': 'Veículo ativo',
       'Ajustes de mantenimiento': 'Ajustes de manutenção',
       'Actividad reciente': 'Atividade recente',
@@ -691,14 +685,12 @@ String tr(String key) {
       'Cerrar sesion': 'Sair',
       'Comenzar': 'Começar',
       'Completar mantenimiento': 'Preencher manutenção',
-      'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.':
-          'Conecte o Google para salvar o banco de dados no Google Drive e recuperá-lo após reinstalar.',
       'Configura tu primer Tuk Tuk': 'Configure seu primeiro Tuk Tuk',
       'Bienvenido a TukTuk': 'Bem-vindo ao TukTuk',
       'Controla tus ingresos, gastos y mantenimiento de forma sencilla.':
           'Controle suas receitas, despesas e manutenção com facilidade.',
-      'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.':
-          'Você pode entrar com o Google para proteger seus dados ou entrar diretamente e usar o aplicativo offline.',
+      'Puedes iniciar sesión con Google para sincronizar tus datos o entrar directamente y usar la aplicación sin conexión.':
+          'Você pode entrar com o Google para sincronizar seus dados ou continuar diretamente e usar o aplicativo offline.',
       'Continuar con Google': 'Continuar com o Google',
       'Entrar directamente': 'Entrar diretamente',
       'No se pudo iniciar la aplicacion.':
@@ -766,11 +758,11 @@ String tr(String key) {
           'Cole aqui o conteúdo do backup JSON',
       'Personalizar perfil': 'Personalizar perfil',
       'Proximo mantenimiento': 'Próxima manutenção',
-      'Recuperar desde Drive': 'Restaurar do Drive',
+      'Recuperar y sincronizar': 'Recuperar e sincronizar',
       'Registrar mantenimiento': 'Registrar manutenção',
       'Registro guardado': 'Registro salvo',
       'Registros con ganancia': 'Registros com ganho',
-      'Respaldar ahora': 'Fazer backup agora',
+      'Sincronizar ahora': 'Sincronizar agora',
       'Respaldo local': 'Backup local',
       'Respaldo restaurado': 'Backup restaurado',
       'Restaurar': 'Restaurar',
@@ -796,13 +788,10 @@ String tr(String key) {
       'Vencido por': 'Atrasado em',
       'Agregar nuevo': 'Adicionar novo',
       'Agregar nuevo registro': 'Adicionar novo registro',
-      'Base local pendiente de respaldo': 'Banco local aguardando backup',
-      'Base recuperada desde Google Drive': 'Banco restaurado do Google Drive',
-      'Base respaldada en Google Drive': 'Banco salvo no Google Drive',
+      'Cambios locales pendientes de sincronización':
+          'Alterações locais pendentes de sincronização',
       'Configura tu primer vehiculo para comenzar':
           'Configure seu primeiro veículo para começar',
-      'Entra con Google para respaldar en Drive':
-          'Entre com Google para fazer backup no Drive',
       'Este dispositivo ya contiene datos de otro usuario':
           'Este dispositivo já contém dados de outro usuário',
       'Sesion cerrada. La base local sigue en este dispositivo':
@@ -974,7 +963,7 @@ String tr(String key) {
       'Tendencia de días trabajados': 'Tendance des jours travaillés',
       'Información relevante': 'Informations pertinentes',
       'Cuenta de usuario': 'Compte utilisateur',
-      'Google y respaldo': 'Google et sauvegarde',
+      'Cuenta y sincronización': 'Compte et synchronisation',
       'Vehiculo activo': 'Véhicule actif',
       'Ajustes de mantenimiento': 'Paramètres de maintenance',
       'Actividad reciente': 'Activité récente',
@@ -999,14 +988,12 @@ String tr(String key) {
       'Cerrar sesion': 'Se déconnecter',
       'Comenzar': 'Commencer',
       'Completar mantenimiento': 'Compléter la maintenance',
-      'Conecta Google para guardar la base de datos en Google Drive y recuperarla al reinstalar.':
-          'Connectez Google pour enregistrer la base dans Google Drive et la récupérer après réinstallation.',
       'Configura tu primer Tuk Tuk': 'Configurez votre premier Tuk Tuk',
       'Bienvenido a TukTuk': 'Bienvenue sur TukTuk',
       'Controla tus ingresos, gastos y mantenimiento de forma sencilla.':
           'Gérez facilement vos revenus, dépenses et entretiens.',
-      'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.':
-          'Vous pouvez vous connecter avec Google pour sauvegarder vos données ou entrer directement et utiliser l’application hors ligne.',
+      'Puedes iniciar sesión con Google para sincronizar tus datos o entrar directamente y usar la aplicación sin conexión.':
+          'Vous pouvez vous connecter avec Google pour synchroniser vos données ou continuer directement et utiliser l’application hors connexion.',
       'Continuar con Google': 'Continuer avec Google',
       'Entrar directamente': 'Entrer directement',
       'No se pudo iniciar la aplicacion.':
@@ -1075,11 +1062,11 @@ String tr(String key) {
           'Collez ici le contenu de la sauvegarde JSON',
       'Personalizar perfil': 'Personnaliser le profil',
       'Proximo mantenimiento': 'Prochaine maintenance',
-      'Recuperar desde Drive': 'Restaurer depuis Drive',
+      'Recuperar y sincronizar': 'Récupérer et synchroniser',
       'Registrar mantenimiento': 'Enregistrer une maintenance',
       'Registro guardado': 'Enregistrement sauvegardé',
       'Registros con ganancia': 'Enregistrements avec gain',
-      'Respaldar ahora': 'Sauvegarder maintenant',
+      'Sincronizar ahora': 'Synchroniser maintenant',
       'Respaldo local': 'Sauvegarde locale',
       'Respaldo restaurado': 'Sauvegarde restaurée',
       'Restaurar': 'Restaurer',
@@ -1103,15 +1090,10 @@ String tr(String key) {
       'Vencido por': 'En retard de',
       'Agregar nuevo': 'Ajouter',
       'Agregar nuevo registro': 'Ajouter un enregistrement',
-      'Base local pendiente de respaldo':
-          'Base locale en attente de sauvegarde',
-      'Base recuperada desde Google Drive':
-          'Base restaurée depuis Google Drive',
-      'Base respaldada en Google Drive': 'Base sauvegardée dans Google Drive',
+      'Cambios locales pendientes de sincronización':
+          'Modifications locales en attente de synchronisation',
       'Configura tu primer vehiculo para comenzar':
           'Configurez votre premier véhicule pour commencer',
-      'Entra con Google para respaldar en Drive':
-          'Connectez-vous avec Google pour sauvegarder dans Drive',
       'Este dispositivo ya contiene datos de otro usuario':
           'Cet appareil contient déjà les données d’un autre utilisateur',
       'Sesion cerrada. La base local sigue en este dispositivo':

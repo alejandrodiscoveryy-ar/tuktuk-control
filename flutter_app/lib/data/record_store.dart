@@ -124,7 +124,7 @@ class RecordStore extends ChangeNotifier {
   User? user;
   bool initialized = false;
   bool syncing = false;
-  String syncMessage = 'Base local pendiente de respaldo';
+  String syncMessage = 'Cambios locales pendientes de sincronización';
   LicenseSnapshot license = LicenseSnapshot.local;
   late WhatsAppSettings whatsAppSettings;
   ReferralProgram? referralProgram;
