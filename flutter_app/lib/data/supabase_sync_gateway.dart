@@ -1,8 +1,7 @@
 part of '../main.dart';
 
 typedef SyncPayloadResolver = Map<String, dynamic>? Function(
-  SyncOperation operation,
-);
+    SyncOperation operation);
 
 class SupabaseSyncGateway implements RemoteSyncGateway {
   SupabaseSyncGateway({
@@ -52,10 +51,9 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
 
     if (rows.isNotEmpty) {
       try {
-        await _client.from(tableName).upsert(
-              rows,
-              onConflict: 'user_id,entity_type,entity_id',
-            );
+        await _client
+            .from(tableName)
+            .upsert(rows, onConflict: 'user_id,entity_type,entity_id');
       } catch (error) {
         if (isSupabaseAuthorizationFailure(error)) {
           throw LicenseWriteRejectedException(error);
@@ -91,8 +89,9 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
           parsedCursor.updatedAt.toIso8601String(),
         );
       } else {
-        final timestamp =
-            _postgrestLiteral(parsedCursor.updatedAt.toIso8601String());
+        final timestamp = _postgrestLiteral(
+          parsedCursor.updatedAt.toIso8601String(),
+        );
         final entityType = _postgrestLiteral(parsedCursor.entityType);
         final entityId = _postgrestLiteral(parsedCursor.entityId);
         query = query.or(

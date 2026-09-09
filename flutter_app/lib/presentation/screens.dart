@@ -120,10 +120,8 @@ class _OnboardingProjectIdentity extends StatelessWidget {
   }
 }
 
-Widget _onboardingProjectIdentityPlaceholder(double logoWidth) => SizedBox(
-      width: logoWidth,
-      height: logoWidth / 2.5,
-    );
+Widget _onboardingProjectIdentityPlaceholder(double logoWidth) =>
+    SizedBox(width: logoWidth, height: logoWidth / 2.5);
 
 @visibleForTesting
 Widget onboardingProjectIdentityForTesting(ProjectIdentity identity) =>
@@ -211,8 +209,10 @@ class _ExchangeRateHeader extends StatelessWidget {
     final rate = store.exchangeRate;
     final updatedLabel = _updatedLabel();
     final freshnessColor = _freshnessColor();
-    final (directionSymbol, directionColor) =
-        switch (store.exchangeRateDirection) {
+    final (
+      directionSymbol,
+      directionColor,
+    ) = switch (store.exchangeRateDirection) {
       ExchangeRateDirection.up => ('↑', kDanger),
       ExchangeRateDirection.down => ('↓', kPrimary),
       ExchangeRateDirection.same => ('→', kAccentPink),
@@ -230,10 +230,7 @@ class _ExchangeRateHeader extends StatelessWidget {
             ? null
             : () => unawaited(store.refreshExchangeRate()),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 3,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
           child: Row(
             children: [
               Icon(
@@ -307,16 +304,8 @@ class AppBackground extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: dark
-              ? const [
-                  Color(0xFF0B1718),
-                  Color(0xFF080D14),
-                  Color(0xFF101827),
-                ]
-              : const [
-                  Color(0xFFE7F8F3),
-                  Color(0xFFF7FAFE),
-                  Color(0xFFEAF1FC),
-                ],
+              ? const [Color(0xFF0B1718), Color(0xFF080D14), Color(0xFF101827)]
+              : const [Color(0xFFE7F8F3), Color(0xFFF7FAFE), Color(0xFFEAF1FC)],
         ),
       ),
       child: child,
@@ -325,8 +314,11 @@ class AppBackground extends StatelessWidget {
 }
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen(
-      {required this.store, this.previewOnly = false, super.key});
+  const OnboardingScreen({
+    required this.store,
+    this.previewOnly = false,
+    super.key,
+  });
 
   final RecordStore store;
   final bool previewOnly;
@@ -405,15 +397,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             const SizedBox(height: 26),
                             Center(
                               child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 460),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 460,
+                                ),
                                 child: SizedBox(
                                   width: double.infinity,
                                   child: GlassCard(
                                     child: Column(
                                       children: [
                                         Text(
-                                          tr('Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.'),
+                                          tr(
+                                            'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.',
+                                          ),
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(
                                             color: kMuted,
@@ -501,16 +496,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   TextSpan(text: 'Soluciones '),
                                   TextSpan(
                                     text: 'inteligentes',
-                                    style: TextStyle(
-                                      color: Color(0xFF00D7E8),
-                                    ),
+                                    style: TextStyle(color: Color(0xFF00D7E8)),
                                   ),
                                   TextSpan(text: ' para negocios '),
                                   TextSpan(
                                     text: 'inteligentes',
-                                    style: TextStyle(
-                                      color: Color(0xFF00D7E8),
-                                    ),
+                                    style: TextStyle(color: Color(0xFF00D7E8)),
                                   ),
                                 ],
                               ),
@@ -765,8 +756,9 @@ class _DesktopNavigationRail extends StatelessWidget {
           onDestinationSelected: onDestinationSelected,
           extended: MediaQuery.sizeOf(context).width >= 1380,
           groupAlignment: 0,
-          backgroundColor:
-              Theme.of(context).colorScheme.surface.withValues(alpha: .82),
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.surface.withValues(alpha: .82),
           indicatorColor: kPrimary.withValues(alpha: .18),
           selectedIconTheme: const IconThemeData(color: kPrimary),
           selectedLabelTextStyle: const TextStyle(
@@ -1027,10 +1019,7 @@ class _LiquidGlassNavigation extends StatelessWidget {
 }
 
 class _UserNavigationAvatar extends StatelessWidget {
-  const _UserNavigationAvatar({
-    required this.photoUrl,
-    required this.selected,
-  });
+  const _UserNavigationAvatar({required this.photoUrl, required this.selected});
 
   final String photoUrl;
   final bool selected;
@@ -1074,8 +1063,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final metrics =
-        Metrics(widget.store.records, widget.store.maintenanceRecords);
+    final metrics = Metrics(
+      widget.store.records,
+      widget.store.maintenanceRecords,
+    );
     final maintenance = MaintenanceSnapshot.from(
       records: widget.store.maintenanceRecords,
       intervalKm: widget.store.maintenanceIntervalKm,
@@ -1174,12 +1165,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         MonthlyComparisonGauge(
           comparison: comparison,
           onPreviousMonth: () => setState(
-            () => selectedMonth =
-                DateTime(selectedMonth.year, selectedMonth.month - 1),
+            () => selectedMonth = DateTime(
+              selectedMonth.year,
+              selectedMonth.month - 1,
+            ),
           ),
           onNextMonth: () => setState(
-            () => selectedMonth =
-                DateTime(selectedMonth.year, selectedMonth.month + 1),
+            () => selectedMonth = DateTime(
+              selectedMonth.year,
+              selectedMonth.month + 1,
+            ),
           ),
           canGoNext: selectedMonth.isBefore(
             DateTime(DateTime.now().year, DateTime.now().month),
@@ -1233,13 +1228,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final record = widget.record;
     date = record?.date ?? DateTime.now();
     earnings = TextEditingController(
-        text: record == null ? '' : trimNum(record.earnings));
+      text: record == null ? '' : trimNum(record.earnings),
+    );
     expense = TextEditingController(
-        text: record == null ? '' : trimNum(record.expense));
-    expenseCategory =
-        TextEditingController(text: record?.expenseCategory ?? '');
+      text: record == null ? '' : trimNum(record.expense),
+    );
+    expenseCategory = TextEditingController(
+      text: record?.expenseCategory ?? '',
+    );
     odometer = TextEditingController(
-        text: record == null ? '' : trimNum(record.odometer));
+      text: record == null ? '' : trimNum(record.odometer),
+    );
     battery = TextEditingController(
       text: record?.batteryVoltage == null
           ? ''
@@ -1308,7 +1307,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Label(tr('Registrar mantenimiento')),
                 const SizedBox(height: 8),
                 Text(
-                  tr('Guarda kilometraje, trabajo realizado, fecha, hora y costo.'),
+                  tr(
+                    'Guarda kilometraje, trabajo realizado, fecha, hora y costo.',
+                  ),
                   style: const TextStyle(color: kMuted),
                 ),
                 const SizedBox(height: 16),
@@ -1344,7 +1345,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             onPressed: pickDate,
             icon: const Icon(Icons.calendar_month_outlined),
             label: Text(
-                DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date)),
+              DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date),
+            ),
           ),
           const SizedBox(height: 14),
           if ((editing && !editingExpense) ||
@@ -1464,33 +1466,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
     final base = widget.record;
     final saved = await _runLicensedWrite(
-        context,
-        () => widget.store.save(
-              base == null
-                  ? DailyRecord(
-                      id: DateTime.now().microsecondsSinceEpoch.toString(),
-                      date: date,
-                      earnings: earned,
-                      odometer: odo,
-                      expense: spent,
-                      expenseCategory: expenseCategory.text.trim(),
-                      batteryVoltage: batteryVoltage,
-                      note: note.text.trim(),
-                    )
-                  : DailyRecord(
-                      id: base.id,
-                      date: date,
-                      earnings: earned,
-                      odometer: odo,
-                      expense: spent,
-                      expenseCategory: expenseCategory.text.trim(),
-                      batteryVoltage: batteryVoltage,
-                      note: note.text.trim(),
-                      createdAt: base.createdAt,
-                      deviceId: base.deviceId,
-                      schemaVersion: base.schemaVersion,
-                    ),
-            ));
+      context,
+      () => widget.store.save(
+        base == null
+            ? DailyRecord(
+                id: DateTime.now().microsecondsSinceEpoch.toString(),
+                date: date,
+                earnings: earned,
+                odometer: odo,
+                expense: spent,
+                expenseCategory: expenseCategory.text.trim(),
+                batteryVoltage: batteryVoltage,
+                note: note.text.trim(),
+              )
+            : DailyRecord(
+                id: base.id,
+                date: date,
+                earnings: earned,
+                odometer: odo,
+                expense: spent,
+                expenseCategory: expenseCategory.text.trim(),
+                batteryVoltage: batteryVoltage,
+                note: note.text.trim(),
+                createdAt: base.createdAt,
+                deviceId: base.deviceId,
+                schemaVersion: base.schemaVersion,
+              ),
+      ),
+    );
     if (!saved) return;
     if (!mounted) return;
     toast(context, tr('Registro guardado'));
@@ -1590,74 +1593,78 @@ class _HistoryScreenState extends State<HistoryScreen> {
         if (records.isEmpty && maintenances.isEmpty)
           EmptyState(tr('Cuando guardes registros, apareceran aqui.'))
         else ...[
-          ...records.map((record) => Dismissible(
-                key: ValueKey(record.id),
-                direction: widget.store.canWrite
-                    ? DismissDirection.endToStart
-                    : DismissDirection.none,
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 20),
-                  color: kDanger.withValues(alpha: .25),
-                  child: const Icon(Icons.delete_outline, color: kDanger),
+          ...records.map(
+            (record) => Dismissible(
+              key: ValueKey(record.id),
+              direction: widget.store.canWrite
+                  ? DismissDirection.endToStart
+                  : DismissDirection.none,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                color: kDanger.withValues(alpha: .25),
+                child: const Icon(Icons.delete_outline, color: kDanger),
+              ),
+              confirmDismiss: (_) => confirmDelete(context),
+              onDismissed: (_) => unawaited(
+                _runLicensedWrite(
+                  context,
+                  () => widget.store.delete(record.id),
                 ),
-                confirmDismiss: (_) => confirmDelete(context),
-                onDismissed: (_) => unawaited(
-                  _runLicensedWrite(
-                    context,
-                    () => widget.store.delete(record.id),
-                  ),
-                ),
-                child: RecordTile(
-                  record: record,
-                  onTap: widget.store.canWrite
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => Scaffold(
-                                appBar:
-                                    AppBar(title: Text(tr('Editar registro'))),
-                                body: RegisterScreen(
-                                  store: widget.store,
-                                  record: record,
-                                ),
+              ),
+              child: RecordTile(
+                record: record,
+                onTap: widget.store.canWrite
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar:
+                                  AppBar(title: Text(tr('Editar registro'))),
+                              body: RegisterScreen(
+                                store: widget.store,
+                                record: record,
                               ),
                             ),
-                          )
-                      : null,
+                          ),
+                        )
+                    : null,
+              ),
+            ),
+          ),
+          ...maintenances.map(
+            (record) => GlassCard(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.build_outlined, color: kPrimary),
+                title: Text(record.type),
+                subtitle: Text(
+                  '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} · ${numFmt(record.odometer)} km · ${money(record.cost ?? 0)}\n${record.description}',
                 ),
-              )),
-          ...maintenances.map((record) => GlassCard(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.build_outlined, color: kPrimary),
-                  title: Text(record.type),
-                  subtitle: Text(
-                    '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} · ${numFmt(record.odometer)} km · ${money(record.cost ?? 0)}\n${record.description}',
-                  ),
-                  isThreeLine: true,
-                  trailing: widget.store.canWrite
-                      ? const Icon(Icons.chevron_right)
-                      : const Icon(Icons.lock_outline, color: kMuted),
-                  onTap: widget.store.canWrite
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => Scaffold(
-                                appBar: AppBar(
-                                  title: Text(tr('Editar mantenimiento')),
-                                ),
-                                body: MaintenanceFormScreen(
-                                  store: widget.store,
-                                  record: record,
-                                ),
+                isThreeLine: true,
+                trailing: widget.store.canWrite
+                    ? const Icon(Icons.chevron_right)
+                    : const Icon(Icons.lock_outline, color: kMuted),
+                onTap: widget.store.canWrite
+                    ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar: AppBar(
+                                title: Text(tr('Editar mantenimiento')),
+                              ),
+                              body: MaintenanceFormScreen(
+                                store: widget.store,
+                                record: record,
                               ),
                             ),
-                          )
-                      : null,
-                ),
-              )),
+                          ),
+                        )
+                    : null,
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -1719,27 +1726,32 @@ class StatsScreen extends StatelessWidget {
               runSpacing: 12,
               children: [
                 StatOverviewCard(
-                    width: width,
-                    label: tr('Ingresos totales'),
-                    value: money(metrics.totalEarnings)),
+                  width: width,
+                  label: tr('Ingresos totales'),
+                  value: money(metrics.totalEarnings),
+                ),
                 StatOverviewCard(
-                    width: width,
-                    label: tr('Gastos totales'),
-                    value: money(metrics.totalExpenses),
-                    color: kDanger),
+                  width: width,
+                  label: tr('Gastos totales'),
+                  value: money(metrics.totalExpenses),
+                  color: kDanger,
+                ),
                 StatOverviewCard(
-                    width: width,
-                    label: tr('Ganancia neta'),
-                    value: money(metrics.netEarnings),
-                    color: metrics.netEarnings >= 0 ? kPrimary : kDanger),
+                  width: width,
+                  label: tr('Ganancia neta'),
+                  value: money(metrics.netEarnings),
+                  color: metrics.netEarnings >= 0 ? kPrimary : kDanger,
+                ),
                 StatOverviewCard(
-                    width: width,
-                    label: tr('Ingreso promedio por día trabajado'),
-                    value: money(metrics.averageDailyEarnings)),
+                  width: width,
+                  label: tr('Ingreso promedio por día trabajado'),
+                  value: money(metrics.averageDailyEarnings),
+                ),
                 StatOverviewCard(
-                    width: width,
-                    label: tr('Eficiencia'),
-                    value: '${numFmt(metrics.efficiency)} $activeCurrency/km'),
+                  width: width,
+                  label: tr('Eficiencia'),
+                  value: '${numFmt(metrics.efficiency)} $activeCurrency/km',
+                ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Mejor día'),
@@ -1748,8 +1760,10 @@ class StatsScreen extends StatelessWidget {
                       : money(earningRecords.first.earnings),
                   note: earningRecords.isEmpty
                       ? tr('Sin datos')
-                      : DateFormat('d MMM yyyy', activeLanguage)
-                          .format(earningRecords.first.date),
+                      : DateFormat(
+                          'd MMM yyyy',
+                          activeLanguage,
+                        ).format(earningRecords.first.date),
                 ),
                 StatOverviewCard(
                   width: width,
@@ -1805,21 +1819,13 @@ class _StoreScreenState extends State<StoreScreen> {
     _StoreCategory('Cargadores', 'cargador 72V', Icons.electrical_services),
     _StoreCategory('Neumáticos', 'neumático triciclo', Icons.tire_repair),
     _StoreCategory('Motores', 'motor eléctrico', Icons.electric_bolt),
-    _StoreCategory(
-      'Controladores',
-      'controlador moto eléctrica',
-      Icons.memory,
-    ),
+    _StoreCategory('Controladores', 'controlador moto eléctrica', Icons.memory),
     _StoreCategory(
       'Piezas eléctricas',
       'piezas eléctricas triciclo',
       Icons.cable,
     ),
-    _StoreCategory(
-      'Repuestos mecánicos',
-      'repuestos triciclo',
-      Icons.settings,
-    ),
+    _StoreCategory('Repuestos mecánicos', 'repuestos triciclo', Icons.settings),
     _StoreCategory(
       'Luces y accesorios',
       'luces accesorios triciclo',
@@ -1874,7 +1880,9 @@ class _StoreScreenState extends State<StoreScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  tr('Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.'),
+                  tr(
+                    'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.',
+                  ),
                   style: const TextStyle(color: kMuted, height: 1.4),
                 ),
               ),
@@ -2062,13 +2070,16 @@ class LoginScreen extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w900),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           user == null
                               ? tr(
-                                  'Sin cuenta Google vinculada · Guardado local')
+                                  'Sin cuenta Google vinculada · Guardado local',
+                                )
                               : user.email ?? '',
                           style: TextStyle(
                             color: user == null ? kMuted : kPrimary,
@@ -2130,10 +2141,7 @@ class LoginScreen extends StatelessWidget {
           Expanded(
             child: Text(
               user == null ? tr('No conectado') : user.email ?? '',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -2142,7 +2150,8 @@ class LoginScreen extends StatelessWidget {
       Text(
         user == null
             ? tr(
-                'Conecta Google para sincronizar tus datos de forma segura y recuperarlos al reinstalar.')
+                'Conecta Google para sincronizar tus datos de forma segura y recuperarlos al reinstalar.',
+              )
             : tr(store.syncMessage),
         style: const TextStyle(color: kMuted),
       ),
@@ -2590,7 +2599,10 @@ class _ReferralCard extends StatelessWidget {
         ),
       ],
       if (store.referralClaimMessage != null)
-        Text(store.referralClaimMessage!, style: const TextStyle(color: kTertiary)),
+        Text(
+          store.referralClaimMessage!,
+          style: const TextStyle(color: kTertiary),
+        ),
       const SizedBox(height: 16),
       Container(
         decoration: BoxDecoration(
@@ -2837,15 +2849,21 @@ class _AppPreferencesPanelState extends State<AppPreferencesPanel> {
                 ),
                 items: [
                   DropdownMenuItem(
-                      value: 'CUP', child: Text('CUP · ${tr('Peso cubano')}')),
+                    value: 'CUP',
+                    child: Text('CUP · ${tr('Peso cubano')}'),
+                  ),
                   DropdownMenuItem(
-                      value: 'USD',
-                      child: Text('USD · ${tr('Dólar estadounidense')}')),
+                    value: 'USD',
+                    child: Text('USD · ${tr('Dólar estadounidense')}'),
+                  ),
                   DropdownMenuItem(
-                      value: 'EUR', child: Text('EUR · ${tr('Euro')}')),
+                    value: 'EUR',
+                    child: Text('EUR · ${tr('Euro')}'),
+                  ),
                   DropdownMenuItem(
-                      value: 'MXN',
-                      child: Text('MXN · ${tr('Peso mexicano')}')),
+                    value: 'MXN',
+                    child: Text('MXN · ${tr('Peso mexicano')}'),
+                  ),
                 ],
                 onChanged: (value) => setState(() => currency = value ?? 'CUP'),
               ),
@@ -2873,7 +2891,9 @@ class _AppPreferencesPanelState extends State<AppPreferencesPanel> {
                 ),
                 items: [
                   DropdownMenuItem(
-                      value: 'system', child: Text(tr('Predeterminado'))),
+                    value: 'system',
+                    child: Text(tr('Predeterminado')),
+                  ),
                   DropdownMenuItem(value: 'dark', child: Text(tr('Oscuro'))),
                   DropdownMenuItem(value: 'light', child: Text(tr('Claro'))),
                 ],
@@ -2974,9 +2994,9 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
     }
     if (mounted) {
       setState(() => saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Vehiculo actualizado'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(tr('Vehiculo actualizado'))));
     }
   }
 
@@ -3121,15 +3141,18 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         SectionTitle(
-          title: tr(widget.record == null
-              ? 'Registrar mantenimiento'
-              : 'Editar mantenimiento'),
+          title: tr(
+            widget.record == null
+                ? 'Registrar mantenimiento'
+                : 'Editar mantenimiento',
+          ),
         ),
         FilledButton.tonalIcon(
           onPressed: pickDate,
           icon: const Icon(Icons.calendar_month_outlined),
-          label:
-              Text(DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date)),
+          label: Text(
+            DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date),
+          ),
         ),
         const SizedBox(height: 10),
         FilledButton.tonalIcon(
@@ -3205,10 +3228,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   }
 
   Future<void> pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: time,
-    );
+    final picked = await showTimePicker(context: context, initialTime: time);
     if (!mounted) return;
     if (picked != null) setState(() => time = picked);
   }
@@ -3230,20 +3250,27 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
     }
     final saved = await _runLicensedWrite(
       context,
-      () => widget.store.saveMaintenance(MaintenanceRecord(
-        id: widget.record?.id ??
-            DateTime.now().microsecondsSinceEpoch.toString(),
-        dateTime:
-            DateTime(date.year, date.month, date.day, time.hour, time.minute),
-        odometer: odo,
-        type: type.text.trim(),
-        description: description.text.trim(),
-        cost: parsedCost,
-        notes: notes.text.trim(),
-        createdAt: widget.record?.createdAt,
-        deviceId: widget.record?.deviceId ?? '',
-        schemaVersion: widget.record?.schemaVersion ?? _databaseSchemaVersion,
-      )),
+      () => widget.store.saveMaintenance(
+        MaintenanceRecord(
+          id: widget.record?.id ??
+              DateTime.now().microsecondsSinceEpoch.toString(),
+          dateTime: DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+          ),
+          odometer: odo,
+          type: type.text.trim(),
+          description: description.text.trim(),
+          cost: parsedCost,
+          notes: notes.text.trim(),
+          createdAt: widget.record?.createdAt,
+          deviceId: widget.record?.deviceId ?? '',
+          schemaVersion: widget.record?.schemaVersion ?? _databaseSchemaVersion,
+        ),
+      ),
     );
     if (!saved) return;
     if (!mounted) return;
