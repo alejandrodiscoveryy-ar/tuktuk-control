@@ -407,7 +407,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       children: [
                                         Text(
                                           tr(
-                                            'Puedes registrarte con Google para respaldar tus datos o entrar directamente y usar la aplicacion sin conexion.',
+                                            'Puedes iniciar sesión con Google para sincronizar tus datos o entrar directamente y usar la aplicación sin conexión.',
                                           ),
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(
@@ -2105,7 +2105,7 @@ class LoginScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Label(tr('Google y respaldo')),
+              Label(tr('Cuenta y sincronización')),
               const SizedBox(height: 12),
               ..._googleBackupChildren(context),
             ],
@@ -2176,7 +2176,7 @@ class LoginScreen extends StatelessWidget {
                 : store.syncNow,
         icon: Icon(user == null ? Icons.login : Icons.cloud_sync_outlined),
         label: Text(
-          user == null ? tr('Entrar con Google') : tr('Respaldar ahora'),
+          user == null ? tr('Entrar con Google') : tr('Sincronizar ahora'),
         ),
       ),
       if (user != null) ...[
@@ -2184,7 +2184,7 @@ class LoginScreen extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: store.syncing ? null : store.restoreThenSync,
           icon: const Icon(Icons.restore_outlined),
-          label: Text(tr('Recuperar desde Drive')),
+          label: Text(tr('Recuperar y sincronizar')),
         ),
         TextButton.icon(
           onPressed: store.signOut,
