@@ -3,19 +3,21 @@
 Aplicación para registrar la operación diaria de un Tuk Tuk: ganancias,
 odómetro, ciclos de carga, mantenimientos, historial y estadísticas. El
 repositorio incluye la aplicación Flutter y una vista web de referencia usada
-para validar la experiencia y los cálculos.
+históricamente para validar la experiencia y los cálculos. Esa vista se conserva
+como respaldo y no forma parte de la aplicación activa.
 
 ## Estado del proyecto
 
 - Aplicación principal: Flutter para Android y web.
-- Persistencia local: Hive.
-- Inicio de sesión: Google.
-- Respaldo por usuario: Google Drive `appDataFolder`.
+- Persistencia local y funcionamiento offline: Hive.
+- Inicio de sesión: Google mediante Supabase Auth.
+- Sincronización remota: Supabase, con cola local de operaciones pendientes.
 - Versión web compilada desde la misma aplicación Flutter que genera el APK.
 - Registros asociados a propietario y vehículo desde el esquema local 3.
 - Onboarding vacío y configuración del primer vehículo para usuarios nuevos.
-- Cola local persistente para cambios pendientes de futura sincronización SaaS.
-- Contrato remoto desacoplado con lotes, reintentos y conflictos deterministas.
+- Cola local persistente para conservar cambios mientras no hay conexión.
+- Sincronización por lotes con reintentos y conflictos deterministas al recuperar
+  la conexión.
 - Modelo neutral de roles, membresías, planes y aislamiento organizacional.
 
 ## Requisitos
@@ -84,10 +86,11 @@ El repositorio no requiere variables de entorno para ejecutar su estado
 actual. Los archivos `.env`, certificados, claves de firma y credenciales de
 Google están excluidos mediante `.gitignore`.
 
-Para usar Google Sign-In y Google Drive en Android, cada desarrollador debe:
+Para usar Google Sign-In y los servicios Firebase requeridos en Android, cada
+desarrollador debe:
 
 1. Configurar un proyecto en Google Cloud para el paquete
-   `com.example.control_tuk_tuk`.
+   `com.alejandrocruz.tuktukcontrol`.
 2. Registrar el SHA-1 correspondiente a su firma de desarrollo o producción.
 3. Si utiliza Firebase, colocar su propio `google-services.json` en
    `flutter_app/android/app/`.
@@ -130,10 +133,10 @@ migraciones. La asignación inicial de propietario y vehículo está documentada
 en [la migración del esquema 3](docs/migrations/schema-v3.md).
 El comportamiento de nuevas instalaciones y la edición del vehículo activo se
 describe en [la Fase 3](docs/phases/phase-3-onboarding.md).
-La separación entre respaldo y sincronización futura se documenta en
-[la Fase 4](docs/phases/phase-4-offline-queue.md).
-El contrato neutral para integrar una futura base remota se define en
-[la Fase 5](docs/phases/phase-5-remote-contract.md).
+Los antecedentes de la cola offline y del contrato remoto se documentan en
+[la Fase 4](docs/phases/phase-4-offline-queue.md) y
+[la Fase 5](docs/phases/phase-5-remote-contract.md). La implementación activa
+utiliza Supabase para sincronizar los cambios conservados en esa cola.
 Las reglas preparatorias de autorización y capacidades SaaS se explican en
 [la Fase 6](docs/phases/phase-6-access-contract.md).
 
@@ -164,8 +167,9 @@ Después crea un Pull Request en GitHub para integrar la rama en `main`.
 
 ## Protección de datos
 
-- Los datos operativos permanecen locales y pueden respaldarse en el espacio
-  privado `appDataFolder` de Google Drive.
+- Los datos operativos permanecen disponibles localmente en Hive y se
+  sincronizan con Supabase. Si no hay conexión, los cambios quedan en la cola
+  local y se reintentan posteriormente.
 - Cada registro debe conservar `ownerUserId` para evitar cruces entre usuarios.
 - Antes de cambios grandes, exporta los datos de la aplicación y conserva un
   respaldo fuera del repositorio.
