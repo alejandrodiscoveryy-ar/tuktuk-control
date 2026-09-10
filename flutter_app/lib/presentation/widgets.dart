@@ -24,8 +24,13 @@ class MetricHero extends StatelessWidget {
           Positioned(
             right: 2,
             top: 2,
-            child: trailing ??
-                Icon(icon, size: 86, color: kText.withValues(alpha: .08)),
+            child:
+                trailing ??
+                Icon(
+                  icon,
+                  size: 86,
+                  color: appTextColor(context).withValues(alpha: .08),
+                ),
           ),
           Positioned(
             right: 0,
@@ -35,8 +40,12 @@ class MetricHero extends StatelessWidget {
               height: 4,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(999),
-                gradient: const LinearGradient(
-                  colors: [kPrimary, kSecondary, kAccentPink],
+                gradient: LinearGradient(
+                  colors: [
+                    appPrimaryColor(context),
+                    appSecondaryColor(context),
+                    kAccentPink,
+                  ],
                 ),
               ),
             ),
@@ -48,15 +57,15 @@ class MetricHero extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 value,
-                style: const TextStyle(
-                  color: kPrimary,
+                style: TextStyle(
+                  color: appPrimaryColor(context),
                   fontSize: 36,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 14),
-              const Divider(color: kOutline),
-              Text(sublabel, style: const TextStyle(color: kMuted)),
+              Divider(color: appOutlineColor(context)),
+              Text(sublabel, style: TextStyle(color: appMutedColor(context))),
             ],
           ),
         ],
@@ -97,8 +106,10 @@ class MaintenanceDashboardCard extends StatelessWidget {
             label: tr('Ultimo mantenimiento'),
             value: last == null
                 ? tr('Sin registrar')
-                : DateFormat('d MMM yyyy, HH:mm', activeLanguage)
-                    .format(last.dateTime),
+                : DateFormat(
+                    'd MMM yyyy, HH:mm',
+                    activeLanguage,
+                  ).format(last.dateTime),
           ),
           InfoLine(
             label: tr('Km del ultimo mantenimiento'),
@@ -121,11 +132,12 @@ class MaintenanceDashboardCard extends StatelessWidget {
 }
 
 class DriverSystemMessages extends StatelessWidget {
-  const DriverSystemMessages(
-      {required this.metrics,
-      required this.maintenance,
-      required this.comparison,
-      super.key});
+  const DriverSystemMessages({
+    required this.metrics,
+    required this.maintenance,
+    required this.comparison,
+    super.key,
+  });
 
   final Metrics metrics;
   final MaintenanceSnapshot maintenance;
@@ -134,26 +146,32 @@ class DriverSystemMessages extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final messages = <_DriverMessage>[_maintenanceMessage()];
-    if (metrics.records.isNotEmpty) messages.add(_progressMessage());
+    if (metrics.records.isNotEmpty) messages.add(_progressMessage(context));
     if (metrics.records.any((record) => record.earnings > 0)) {
       messages.add(_bestDayMessage());
     } else {
-      messages.add(_DriverMessage(
+      messages.add(
+        _DriverMessage(
           Icons.add_road_outlined,
-          kSecondary,
+          appSecondaryColor(context),
           tr('Comienza tu recorrido'),
-          tr('Agrega registros para recibir recomendaciones personalizadas.')));
+          tr('Agrega registros para recibir recomendaciones personalizadas.'),
+        ),
+      );
     }
     return GlassCard(
-      child: Column(children: [
-        for (var i = 0; i < messages.length; i++) ...[
-          _DriverMessageRow(message: messages[i]),
-          if (i != messages.length - 1)
-            const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Divider(height: 1, color: kOutline)),
+      child: Column(
+        children: [
+          for (var i = 0; i < messages.length; i++) ...[
+            _DriverMessageRow(message: messages[i]),
+            if (i != messages.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Divider(height: 1, color: appOutlineColor(context)),
+              ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 
@@ -170,13 +188,13 @@ class DriverSystemMessages extends StatelessWidget {
     );
   }
 
-  _DriverMessage _progressMessage() {
+  _DriverMessage _progressMessage(BuildContext context) {
     final percentage = comparison.percentage;
     return _DriverMessage(
       percentage >= 100
           ? Icons.emoji_events_outlined
           : Icons.trending_up_rounded,
-      monthlyGaugeColor(percentage),
+      _themedMonthlyGaugeColor(context, percentage),
       tr(percentage >= 100 ? 'Meta mensual superada' : 'Avance del mes'),
       '${tr('Has alcanzado')} ${percentage.toStringAsFixed(1)}% ${tr('del resultado del mes anterior')}.',
     );
@@ -185,17 +203,22 @@ class DriverSystemMessages extends StatelessWidget {
   _DriverMessage _bestDayMessage() {
     final totals = <DateTime, double>{};
     for (final record in metrics.records.where((r) => r.earnings > 0)) {
-      final day =
-          DateTime(record.date.year, record.date.month, record.date.day);
+      final day = DateTime(
+        record.date.year,
+        record.date.month,
+        record.date.day,
+      );
       totals[day] = (totals[day] ?? 0) + record.earnings;
     }
     final best = totals.entries.reduce(
-        (current, entry) => entry.value > current.value ? entry : current);
+      (current, entry) => entry.value > current.value ? entry : current,
+    );
     return _DriverMessage(
-        Icons.workspace_premium_outlined,
-        kTertiary,
-        tr('Mejor jornada registrada'),
-        '${DateFormat('d MMM yyyy', activeLanguage).format(best.key)} · ${money(best.value)}');
+      Icons.workspace_premium_outlined,
+      kTertiary,
+      tr('Mejor jornada registrada'),
+      '${DateFormat('d MMM yyyy', activeLanguage).format(best.key)} · ${money(best.value)}',
+    );
   }
 }
 
@@ -213,34 +236,41 @@ class _DriverMessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                  color: message.color.withValues(alpha: .13),
-                  borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: message.color.withValues(alpha: .28))),
-              child: Icon(message.icon, color: message.color, size: 23)),
-          const SizedBox(width: 13),
-          Expanded(
-              child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(message.title,
-                  style: TextStyle(
-                      color: message.color,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900)),
-              const SizedBox(height: 4),
-              Text(message.body,
-                  style: const TextStyle(color: kMuted, height: 1.35)),
-            ],
-          )),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: message.color.withValues(alpha: .13),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: message.color.withValues(alpha: .28)),
+        ),
+        child: Icon(message.icon, color: message.color, size: 23),
+      ),
+      const SizedBox(width: 13),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message.title,
+              style: TextStyle(
+                color: message.color,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              message.body,
+              style: TextStyle(color: appMutedColor(context), height: 1.35),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class DataHealthCard extends StatelessWidget {
@@ -252,7 +282,9 @@ class DataHealthCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final missing = metrics.earningsWithoutOdometer.length;
     final drops = metrics.odometerDrops;
-    final statusColor = missing == 0 && drops.isEmpty ? kPrimary : kTertiary;
+    final statusColor = missing == 0 && drops.isEmpty
+        ? appPrimaryColor(context)
+        : kTertiary;
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +319,7 @@ class DataHealthCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               _healthMessage(missing, drops),
-              style: const TextStyle(color: kMuted),
+              style: TextStyle(color: appMutedColor(context)),
             ),
           ],
         ],
@@ -317,17 +349,18 @@ class MetricCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
-    this.color = kPrimary,
+    this.color,
     super.key,
   });
 
   final String label;
   final String value;
   final IconData icon;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? appPrimaryColor(context);
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,10 +372,10 @@ class MetricCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: .14),
+                  color: effectiveColor.withValues(alpha: .14),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 19),
+                child: Icon(icon, color: effectiveColor, size: 19),
               ),
             ],
           ),
@@ -363,7 +396,7 @@ class StatOverviewCard extends StatelessWidget {
     required this.label,
     required this.value,
     this.note,
-    this.color = kPrimary,
+    this.color,
     super.key,
   });
 
@@ -371,10 +404,11 @@ class StatOverviewCard extends StatelessWidget {
   final String label;
   final String value;
   final String? note;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? appPrimaryColor(context);
     return SizedBox(
       width: width,
       height: 126,
@@ -389,7 +423,7 @@ class StatOverviewCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: color,
+                color: effectiveColor,
                 fontSize: 19,
                 fontWeight: FontWeight.w900,
               ),
@@ -400,7 +434,7 @@ class StatOverviewCard extends StatelessWidget {
                 note!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: kMuted, fontSize: 11),
+                style: TextStyle(color: appMutedColor(context), fontSize: 11),
               ),
             ],
           ],
@@ -428,7 +462,7 @@ class MonthlyEarningsBars extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const _ChartLegendDot(color: kPrimary),
+              _ChartLegendDot(color: appPrimaryColor(context)),
               const SizedBox(width: 5),
               Text(tr('Ingreso'), style: const TextStyle(fontSize: 11)),
               const SizedBox(width: 18),
@@ -455,7 +489,10 @@ class MonthlyEarningsBars extends StatelessWidget {
                               cycle.earnings,
                               includeCurrency: false,
                             ),
-                            style: const TextStyle(color: kMuted, fontSize: 10),
+                            style: TextStyle(
+                              color: appMutedColor(context),
+                              fontSize: 10,
+                            ),
                           ),
                           const SizedBox(height: 5),
                           Tooltip(
@@ -472,9 +509,14 @@ class MonthlyEarningsBars extends StatelessWidget {
                           ),
                           const SizedBox(height: 7),
                           Text(
-                            DateFormat('MMM', activeLanguage)
-                                .format(cycle.start),
-                            style: const TextStyle(color: kMuted, fontSize: 10),
+                            DateFormat(
+                              'MMM',
+                              activeLanguage,
+                            ).format(cycle.start),
+                            style: TextStyle(
+                              color: appMutedColor(context),
+                              fontSize: 10,
+                            ),
                           ),
                         ],
                       ),
@@ -490,10 +532,7 @@ class MonthlyEarningsBars extends StatelessWidget {
 }
 
 class _IncomeExpenseBar extends StatelessWidget {
-  const _IncomeExpenseBar({
-    required this.height,
-    required this.expenseRatio,
-  });
+  const _IncomeExpenseBar({required this.height, required this.expenseRatio});
 
   final double height;
   final double expenseRatio;
@@ -509,12 +548,15 @@ class _IncomeExpenseBar extends StatelessWidget {
           fit: StackFit.expand,
           alignment: Alignment.bottomCenter,
           children: [
-            const DecoratedBox(
+            DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [kPrimary, kSecondary],
+                  colors: [
+                    appPrimaryColor(context),
+                    appSecondaryColor(context),
+                  ],
                 ),
               ),
             ),
@@ -593,7 +635,9 @@ class InfoLine extends StatelessWidget {
       padding: const EdgeInsets.only(top: 6),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: const TextStyle(color: kMuted))),
+          Expanded(
+            child: Text(label, style: TextStyle(color: appMutedColor(context))),
+          ),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
         ],
       ),
@@ -627,9 +671,9 @@ class RecordTile extends StatelessWidget {
             runSpacing: 3,
             children: [
               if (record.earnings > 0)
-                const _HistoryTypeIcon(
+                _HistoryTypeIcon(
                   icon: Icons.payments_outlined,
-                  color: kPrimary,
+                  color: appPrimaryColor(context),
                 ),
               if (record.expense > 0)
                 const _HistoryTypeIcon(
@@ -637,9 +681,9 @@ class RecordTile extends StatelessWidget {
                   color: kDanger,
                 ),
               if (record.odometer > 0)
-                const _HistoryTypeIcon(
+                _HistoryTypeIcon(
                   icon: Icons.speed_rounded,
-                  color: kSecondary,
+                  color: appSecondaryColor(context),
                 ),
               if (record.batteryVoltage != null)
                 const _HistoryTypeIcon(
@@ -650,17 +694,19 @@ class RecordTile extends StatelessWidget {
                   record.expense <= 0 &&
                   record.odometer <= 0 &&
                   record.batteryVoltage == null)
-                const _HistoryTypeIcon(
+                _HistoryTypeIcon(
                   icon: Icons.notes_outlined,
-                  color: kMuted,
+                  color: appMutedColor(context),
                 ),
             ],
           ),
         ),
-        title:
-            Text(DateFormat('d MMMM yyyy', activeLanguage).format(record.date)),
-        subtitle:
-            Text(details.isEmpty ? tr('Sin detalles') : details.join(' - ')),
+        title: Text(
+          DateFormat('d MMMM yyyy', activeLanguage).format(record.date),
+        ),
+        subtitle: Text(
+          details.isEmpty ? tr('Sin detalles') : details.join(' - '),
+        ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -669,23 +715,25 @@ class RecordTile extends StatelessWidget {
               record.earnings > 0
                   ? '+${money(record.earnings)}'
                   : record.expense > 0
-                      ? '-${money(record.expense)}'
-                      : record.batteryVoltage != null
-                          ? '${trimNum(record.batteryVoltage!)} V'
-                          : '0 $activeCurrency',
+                  ? '-${money(record.expense)}'
+                  : record.batteryVoltage != null
+                  ? '${trimNum(record.batteryVoltage!)} V'
+                  : '0 $activeCurrency',
               style: TextStyle(
                 color: record.earnings > 0
-                    ? kPrimary
+                    ? appPrimaryColor(context)
                     : record.expense > 0
-                        ? kDanger
-                        : kSecondary,
+                    ? kDanger
+                    : appSecondaryColor(context),
                 fontWeight: FontWeight.w800,
               ),
             ),
             if (record.batteryVoltage != null &&
                 (record.earnings > 0 || record.expense > 0))
-              Text('${trimNum(record.batteryVoltage!)} V',
-                  style: const TextStyle(fontSize: 11)),
+              Text(
+                '${trimNum(record.batteryVoltage!)} V',
+                style: const TextStyle(fontSize: 11),
+              ),
           ],
         ),
       ),
@@ -736,9 +784,12 @@ class BarRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                  child: Text(label,
-                      style: const TextStyle(fontWeight: FontWeight.w700))),
-              Text(value, style: const TextStyle(color: kPrimary)),
+                child: Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Text(value, style: TextStyle(color: appPrimaryColor(context))),
             ],
           ),
           const SizedBox(height: 6),
@@ -747,8 +798,8 @@ class BarRow extends StatelessWidget {
             child: LinearProgressIndicator(
               value: percent.clamp(0, 1),
               minHeight: 10,
-              color: kPrimary,
-              backgroundColor: kSurfaceHigh,
+              color: appPrimaryColor(context),
+              backgroundColor: appSurfaceHighColor(context),
             ),
           ),
         ],
@@ -773,10 +824,11 @@ class MonthlyComparisonGauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = monthlyGaugeColor(comparison.percentage);
-    final monthLabel = DateFormat('MMMM yyyy', activeLanguage)
-        .format(comparison.month)
-        .toUpperCase();
+    final color = _themedMonthlyGaugeColor(context, comparison.percentage);
+    final monthLabel = DateFormat(
+      'MMMM yyyy',
+      activeLanguage,
+    ).format(comparison.month).toUpperCase();
     return GlassCard(
       child: Column(
         children: [
@@ -813,7 +865,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
           ),
           Text(
             tr('Mes anterior = 100%'),
-            style: const TextStyle(color: kMuted, fontSize: 12),
+            style: TextStyle(color: appMutedColor(context), fontSize: 12),
           ),
           const SizedBox(height: 2),
           Center(
@@ -826,51 +878,67 @@ class MonthlyComparisonGauge extends StatelessWidget {
                   duration: const Duration(milliseconds: 900),
                   curve: Curves.easeOutCubic,
                   builder: (context, animatedPercentage, _) {
-                    final animatedColor = monthlyGaugeColor(animatedPercentage);
-                    return LayoutBuilder(builder: (context, constraints) {
-                      final dimension = constraints.maxWidth;
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: MonthlyGaugePainter(
-                                percentage: animatedPercentage,
-                                scaleMaximum: comparison.scaleMaximum,
-                                activeColor: animatedColor,
+                    final animatedColor = _themedMonthlyGaugeColor(
+                      context,
+                      animatedPercentage,
+                    );
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final dimension = constraints.maxWidth;
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: MonthlyGaugePainter(
+                                  percentage: animatedPercentage,
+                                  scaleMaximum: comparison.scaleMaximum,
+                                  activeColor: animatedColor,
+                                  trackColor: appMutedColor(context).withValues(
+                                    alpha:
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? .10
+                                        : .24,
+                                  ),
+                                  labelColor: appMutedColor(context),
+                                ),
                               ),
                             ),
-                          ),
-                          Positioned(
-                            top: dimension * .23,
-                            left: 0,
-                            right: 0,
-                            child: Column(
-                              children: [
-                                Text(
-                                  formatGaugePercentage(animatedPercentage),
-                                  style: TextStyle(
-                                    color: animatedColor,
-                                    fontSize: (dimension * .12).clamp(36, 58),
-                                    height: 1,
-                                    fontWeight: FontWeight.w900,
+                            Positioned(
+                              top: dimension * .23,
+                              left: 0,
+                              right: 0,
+                              child: Column(
+                                children: [
+                                  Text(
+                                    formatGaugePercentage(animatedPercentage),
+                                    style: TextStyle(
+                                      color: animatedColor,
+                                      fontSize: (dimension * .12).clamp(36, 58),
+                                      height: 1,
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  moneyCompact(comparison.currentEarnings),
-                                  style: TextStyle(
-                                    color: animatedColor,
-                                    fontSize: (dimension * .055).clamp(19, 28),
-                                    fontWeight: FontWeight.w800,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    moneyCompact(comparison.currentEarnings),
+                                    style: TextStyle(
+                                      color: animatedColor,
+                                      fontSize: (dimension * .055).clamp(
+                                        19,
+                                        28,
+                                      ),
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      );
-                    });
+                          ],
+                        );
+                      },
+                    );
                   },
                 ),
               ),
@@ -887,7 +955,11 @@ class MonthlyComparisonGauge extends StatelessWidget {
                     color: color,
                   ),
                 ),
-                Container(width: 1, height: 42, color: kOutline),
+                Container(
+                  width: 1,
+                  height: 42,
+                  color: appOutlineColor(context),
+                ),
                 Expanded(
                   child: _GaugeSummaryValue(
                     label: tr('Mes anterior'),
@@ -907,23 +979,26 @@ class _GaugeSummaryValue extends StatelessWidget {
   const _GaugeSummaryValue({
     required this.label,
     required this.value,
-    this.color = kText,
+    this.color,
   });
 
   final String label;
   final String value;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(color: kMuted, fontSize: 11)),
+        Text(
+          label,
+          style: TextStyle(color: appMutedColor(context), fontSize: 11),
+        ),
         const SizedBox(height: 3),
         Text(
           value,
           style: TextStyle(
-            color: color,
+            color: color ?? appTextColor(context),
             fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
@@ -938,11 +1013,15 @@ class MonthlyGaugePainter extends CustomPainter {
     required this.percentage,
     required this.scaleMaximum,
     required this.activeColor,
+    required this.trackColor,
+    required this.labelColor,
   });
 
   final double percentage;
   final double scaleMaximum;
   final Color activeColor;
+  final Color trackColor;
+  final Color labelColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -981,7 +1060,7 @@ class MonthlyGaugePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth + 6
         ..strokeCap = StrokeCap.round
-        ..color = kMuted.withValues(alpha: .10),
+        ..color = trackColor,
     );
     canvas.drawArc(arcRect, pi, pi, false, arcPaint);
 
@@ -1005,12 +1084,13 @@ class MonthlyGaugePainter extends CustomPainter {
     final labelPainter = TextPainter(textDirection: ui.TextDirection.ltr);
     for (final value in const [0, 25, 50, 75, 100]) {
       final angle = pi + pi * (value / scaleMaximum);
-      final labelCenter = center +
+      final labelCenter =
+          center +
           Offset(cos(angle), sin(angle)) * (radius + strokeWidth * .72);
       labelPainter.text = TextSpan(
         text: '$value',
-        style: const TextStyle(
-          color: Color(0xFFD9E1EA),
+        style: TextStyle(
+          color: labelColor,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
@@ -1055,6 +1135,18 @@ Color monthlyGaugeColor(double percentage) {
   return const Color(0xFFFF2340);
 }
 
+Color _themedMonthlyGaugeColor(BuildContext context, double percentage) {
+  if (Theme.of(context).brightness == Brightness.dark) {
+    return monthlyGaugeColor(percentage);
+  }
+  if (percentage > 100) return const Color(0xFF7E22CE);
+  if (percentage >= 100) return const Color(0xFF1D4ED8);
+  if (percentage >= 75) return const Color(0xFF3F7D10);
+  if (percentage >= 50) return const Color(0xFF8A6500);
+  if (percentage >= 25) return const Color(0xFFC2410C);
+  return const Color(0xFFB91C1C);
+}
+
 String formatGaugePercentage(double value) {
   final rounded = value.roundToDouble();
   return value == rounded
@@ -1088,6 +1180,7 @@ class GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final blueAccent = isBlueAccentTheme(context);
     return Container(
       margin: margin,
       padding: padding,
@@ -1095,13 +1188,19 @@ class GlassCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: dark
+          colors: blueAccent
+              ? const [Color(0xFF101B2A), Color(0xFF0B1420)]
+              : dark
               ? const [kCardGradientTop, kCardGradientBottom]
-              : const [Color(0xF8FFFFFF), Color(0xF0E8F0F8)],
+              : const [Color(0xFFF8FBFF), Color(0xFFE8F0F8)],
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: dark ? const Color(0xFF304055) : const Color(0xFFCBD9E8),
+          color: blueAccent
+              ? const Color(0xFF294766)
+              : dark
+              ? const Color(0xFF304055)
+              : const Color(0xFF647B95),
         ),
         boxShadow: [
           BoxShadow(
@@ -1124,6 +1223,7 @@ class GradientMetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final blueAccent = isBlueAccentTheme(context);
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -1131,22 +1231,22 @@ class GradientMetricCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: dark
-              ? const [
-                  Color(0xFF153329),
-                  Color(0xFF132239),
-                  Color(0xFF191A2A),
-                ]
-              : const [
-                  Color(0xFFDDF8EF),
-                  Color(0xFFE7F0FF),
-                  Color(0xFFF4EFFF),
-                ],
+          colors: blueAccent
+              ? const [Color(0xFF102842), Color(0xFF132239), Color(0xFF111827)]
+              : dark
+              ? const [Color(0xFF153329), Color(0xFF132239), Color(0xFF191A2A)]
+              : const [Color(0xFFF4F8FD), Color(0xFFE4EDF7), Color(0xFFD9E6F3)],
         ),
-        border: Border.all(color: const Color(0xFF315044)),
+        border: Border.all(
+          color: blueAccent
+              ? const Color(0xFF2D5A87)
+              : dark
+              ? const Color(0xFF315044)
+              : const Color(0xFF647B95),
+        ),
         boxShadow: [
           BoxShadow(
-            color: kPrimary.withValues(alpha: .12),
+            color: appPrimaryColor(context).withValues(alpha: .12),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
@@ -1180,8 +1280,10 @@ class SectionTitle extends StatelessWidget {
             ),
           ),
           if (trailing != null)
-            Text(trailing!,
-                style: const TextStyle(color: kMuted, fontSize: 12)),
+            Text(
+              trailing!,
+              style: TextStyle(color: appMutedColor(context), fontSize: 12),
+            ),
         ],
       ),
     );
@@ -1197,8 +1299,8 @@ class Label extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
-        color: kMuted,
+      style: TextStyle(
+        color: appMutedColor(context),
         fontSize: 10,
         fontWeight: FontWeight.w800,
         letterSpacing: 1.1,
@@ -1215,7 +1317,7 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassCard(
-      child: Text(text, style: const TextStyle(color: kMuted)),
+      child: Text(text, style: TextStyle(color: appMutedColor(context))),
     );
   }
 }

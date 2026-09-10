@@ -184,17 +184,17 @@ class _ExchangeRateHeader extends StatelessWidget {
     return '${DateFormat('d MMM', activeLanguage).format(local)} · $time';
   }
 
-  Color _freshnessColor() {
+  Color _freshnessColor(BuildContext context) {
     final updatedAt = store.exchangeRateUpdatedAt;
 
     if (updatedAt == null) {
-      return kMuted;
+      return appMutedColor(context);
     }
 
     final age = DateTime.now().difference(updatedAt.toLocal());
 
     if (age <= const Duration(hours: 2)) {
-      return kPrimary;
+      return appPrimaryColor(context);
     }
 
     if (age <= const Duration(hours: 6)) {
@@ -208,13 +208,13 @@ class _ExchangeRateHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final rate = store.exchangeRate;
     final updatedLabel = _updatedLabel();
-    final freshnessColor = _freshnessColor();
+    final freshnessColor = _freshnessColor(context);
     final (
       directionSymbol,
       directionColor,
     ) = switch (store.exchangeRateDirection) {
       ExchangeRateDirection.up => ('↑', kDanger),
-      ExchangeRateDirection.down => ('↓', kPrimary),
+      ExchangeRateDirection.down => ('↓', appPrimaryColor(context)),
       ExchangeRateDirection.same => ('→', kAccentPink),
     };
 
@@ -298,14 +298,25 @@ class AppBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final blueAccent = isBlueAccentTheme(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: dark
-              ? const [Color(0xFF0B1718), Color(0xFF080D14), Color(0xFF101827)]
-              : const [Color(0xFFE7F8F3), Color(0xFFF7FAFE), Color(0xFFEAF1FC)],
+          colors: blueAccent
+              ? const [Color(0xFF0A1422), Color(0xFF080D14), Color(0xFF101827)]
+              : dark
+                  ? const [
+                      Color(0xFF0B1718),
+                      Color(0xFF080D14),
+                      Color(0xFF101827)
+                    ]
+                  : const [
+                      Color(0xFFE8F0F8),
+                      Color(0xFFF3F7FB),
+                      Color(0xFFDDE8F4)
+                    ],
         ),
       ),
       child: child,
@@ -565,7 +576,7 @@ class _AppShellState extends State<AppShell> {
         final syncColor = store.syncing
             ? kTertiary
             : isSynchronized
-                ? kPrimary
+                ? appPrimaryColor(context)
                 : kDanger;
         final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
@@ -602,14 +613,14 @@ class _AppShellState extends State<AppShell> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        kPrimary.withValues(alpha: .13),
-                        kSurfaceHigh.withValues(alpha: .72),
-                        kSecondary.withValues(alpha: .08),
+                        appPrimaryColor(context).withValues(alpha: .13),
+                        appSurfaceHighColor(context).withValues(alpha: .72),
+                        appSecondaryColor(context).withValues(alpha: .08),
                       ],
                     ),
                     border: Border(
                       bottom: BorderSide(
-                        color: kPrimary.withValues(alpha: .22),
+                        color: appPrimaryColor(context).withValues(alpha: .22),
                       ),
                     ),
                   ),
@@ -685,14 +696,17 @@ class _AppShellState extends State<AppShell> {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [kPrimary, kSecondary],
+                      gradient: LinearGradient(
+                        colors: [
+                          appPrimaryColor(context),
+                          appSecondaryColor(context),
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: kPrimary.withValues(alpha: .3),
+                          color: appPrimaryColor(context).withValues(alpha: .3),
                           blurRadius: 24,
                           offset: const Offset(0, 10),
                         ),
@@ -759,10 +773,10 @@ class _DesktopNavigationRail extends StatelessWidget {
           backgroundColor: Theme.of(
             context,
           ).colorScheme.surface.withValues(alpha: .82),
-          indicatorColor: kPrimary.withValues(alpha: .18),
-          selectedIconTheme: const IconThemeData(color: kPrimary),
-          selectedLabelTextStyle: const TextStyle(
-            color: kPrimary,
+          indicatorColor: appPrimaryColor(context).withValues(alpha: .18),
+          selectedIconTheme: IconThemeData(color: appPrimaryColor(context)),
+          selectedLabelTextStyle: TextStyle(
+            color: appPrimaryColor(context),
             fontWeight: FontWeight.w800,
           ),
           destinations: [
@@ -851,7 +865,7 @@ class _ReadOnlyLicenseBanner extends StatelessWidget {
                 Text(
                   '${tr('Estado')}: ${license.statusLabel}'
                   '${expiry == null ? '' : ' · ${tr('Vencimiento')}: ${DateFormat('d MMM yyyy', activeLanguage).format(expiry.toLocal())}'}',
-                  style: const TextStyle(color: kMuted, fontSize: 12),
+                  style: TextStyle(color: appMutedColor(context), fontSize: 12),
                 ),
                 if (license.requiresAdministrator && paymentAction != null) ...[
                   const SizedBox(height: 4),
@@ -923,7 +937,11 @@ class _LiquidGlassNavigation extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withValues(alpha: .13)),
+                border: Border.all(
+                  color: dark
+                      ? Colors.white.withValues(alpha: .13)
+                      : appOutlineColor(context),
+                ),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -934,9 +952,9 @@ class _LiquidGlassNavigation extends StatelessWidget {
                           const Color(0xE6081019),
                         ]
                       : [
-                          Colors.white.withValues(alpha: .92),
-                          const Color(0xDDE7F1FA),
-                          const Color(0xEED8E7F3),
+                          Colors.white,
+                          const Color(0xFFE8F0F8),
+                          const Color(0xFFDDE8F4),
                         ],
                   stops: const [0, .42, 1],
                 ),
@@ -953,7 +971,9 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         gradient: LinearGradient(
                           colors: [
                             Colors.transparent,
-                            Colors.white.withValues(alpha: .5),
+                            dark
+                                ? Colors.white.withValues(alpha: .5)
+                                : appOutlineColor(context),
                             Colors.transparent,
                           ],
                         ),
@@ -1033,7 +1053,7 @@ class _UserNavigationAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: selected ? kPrimary : kMuted,
+          color: selected ? appPrimaryColor(context) : appMutedColor(context),
           width: selected ? 2 : 1,
         ),
       ),
@@ -1107,7 +1127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: tr('Distancia del mes'),
                   value: '${numFmt(metrics.currentCycleDistance)} km',
                   icon: Icons.route_outlined,
-                  color: kSecondary,
+                  color: appSecondaryColor(context),
                 ),
               ),
             ],
@@ -1155,7 +1175,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: tr('Ganancia neta del mes'),
                   value: money(metrics.currentCycleNet),
                   icon: Icons.account_balance_outlined,
-                  color: metrics.currentCycleNet >= 0 ? kPrimary : kDanger,
+                  color: metrics.currentCycleNet >= 0
+                      ? appPrimaryColor(context)
+                      : kDanger,
                 ),
               ),
             ],
@@ -1271,7 +1293,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 8),
           Text(
             tr('Selecciona qué dato vas a guardar.'),
-            style: const TextStyle(color: kMuted),
+            style: TextStyle(color: appMutedColor(context)),
           ),
           const SizedBox(height: 14),
           SegmentedButton<_NewRecordType>(
@@ -1310,7 +1332,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   tr(
                     'Guarda kilometraje, trabajo realizado, fecha, hora y costo.',
                   ),
-                  style: const TextStyle(color: kMuted),
+                  style: TextStyle(color: appMutedColor(context)),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -1560,7 +1582,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: [
         Text(
           tr('Cada cambio recalcula el inicio y las estadísticas.'),
-          style: const TextStyle(color: kMuted),
+          style: TextStyle(color: appMutedColor(context)),
         ),
         const SizedBox(height: 14),
         Wrap(
@@ -1637,7 +1659,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.build_outlined, color: kPrimary),
+                leading:
+                    Icon(Icons.build_outlined, color: appPrimaryColor(context)),
                 title: Text(record.type),
                 subtitle: Text(
                   '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} · ${numFmt(record.odometer)} km · ${money(record.cost ?? 0)}\n${record.description}',
@@ -1645,7 +1668,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 isThreeLine: true,
                 trailing: widget.store.canWrite
                     ? const Icon(Icons.chevron_right)
-                    : const Icon(Icons.lock_outline, color: kMuted),
+                    : Icon(Icons.lock_outline, color: appMutedColor(context)),
                 onTap: widget.store.canWrite
                     ? () => Navigator.push(
                           context,
@@ -1740,7 +1763,9 @@ class StatsScreen extends StatelessWidget {
                   width: width,
                   label: tr('Ganancia neta'),
                   value: money(metrics.netEarnings),
-                  color: metrics.netEarnings >= 0 ? kPrimary : kDanger,
+                  color: metrics.netEarnings >= 0
+                      ? appPrimaryColor(context)
+                      : kDanger,
                 ),
                 StatOverviewCard(
                   width: width,
@@ -1819,13 +1844,21 @@ class _StoreScreenState extends State<StoreScreen> {
     _StoreCategory('Cargadores', 'cargador 72V', Icons.electrical_services),
     _StoreCategory('Neumáticos', 'neumático triciclo', Icons.tire_repair),
     _StoreCategory('Motores', 'motor eléctrico', Icons.electric_bolt),
-    _StoreCategory('Controladores', 'controlador moto eléctrica', Icons.memory),
+    _StoreCategory(
+      'Controladores',
+      'controlador moto eléctrica',
+      Icons.memory,
+    ),
     _StoreCategory(
       'Piezas eléctricas',
       'piezas eléctricas triciclo',
       Icons.cable,
     ),
-    _StoreCategory('Repuestos mecánicos', 'repuestos triciclo', Icons.settings),
+    _StoreCategory(
+      'Repuestos mecánicos',
+      'repuestos triciclo',
+      Icons.settings,
+    ),
     _StoreCategory(
       'Luces y accesorios',
       'luces accesorios triciclo',
@@ -1869,7 +1902,7 @@ class _StoreScreenState extends State<StoreScreen> {
       children: [
         Text(
           tr('Encuentra piezas, accesorios y servicios para tu vehículo.'),
-          style: const TextStyle(color: kMuted, height: 1.4),
+          style: TextStyle(color: appMutedColor(context), height: 1.4),
         ),
         const SizedBox(height: 14),
         GlassCard(
@@ -1883,7 +1916,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   tr(
                     'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.',
                   ),
-                  style: const TextStyle(color: kMuted, height: 1.4),
+                  style: TextStyle(color: appMutedColor(context), height: 1.4),
                 ),
               ),
             ],
@@ -2002,7 +2035,7 @@ class _StoreCategoryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(category.icon, color: kPrimary, size: 25),
+                Icon(category.icon, color: appPrimaryColor(context), size: 25),
                 const SizedBox(height: 12),
                 Text(
                   tr(category.label),
@@ -2016,7 +2049,7 @@ class _StoreCategoryCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   tr('Abrir búsqueda'),
-                  style: const TextStyle(color: kMuted, fontSize: 11),
+                  style: TextStyle(color: appMutedColor(context), fontSize: 11),
                 ),
               ],
             ),
@@ -2047,13 +2080,15 @@ class LoginScreen extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 34,
-                    backgroundColor: kPrimary.withValues(alpha: .16),
+                    backgroundColor: appPrimaryColor(
+                      context,
+                    ).withValues(alpha: .16),
                     backgroundImage:
                         photoUrl == null ? null : NetworkImage(photoUrl),
                     child: photoUrl == null
                         ? Icon(
                             user == null ? Icons.person_outline : Icons.person,
-                            color: kPrimary,
+                            color: appPrimaryColor(context),
                             size: 34,
                           )
                         : null,
@@ -2082,7 +2117,9 @@ class LoginScreen extends StatelessWidget {
                                 )
                               : user.email ?? '',
                           style: TextStyle(
-                            color: user == null ? kMuted : kPrimary,
+                            color: user == null
+                                ? appMutedColor(context)
+                                : appPrimaryColor(context),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -2134,7 +2171,9 @@ class LoginScreen extends StatelessWidget {
         children: [
           Icon(
             user == null ? Icons.cloud_off_outlined : Icons.cloud_done_outlined,
-            color: user == null ? kMuted : kPrimary,
+            color: user == null
+                ? appMutedColor(context)
+                : appPrimaryColor(context),
             size: 28,
           ),
           const SizedBox(width: 10),
@@ -2153,18 +2192,18 @@ class LoginScreen extends StatelessWidget {
                 'Conecta Google para sincronizar tus datos de forma segura y recuperarlos al reinstalar.',
               )
             : tr(store.syncMessage),
-        style: const TextStyle(color: kMuted),
+        style: TextStyle(color: appMutedColor(context)),
       ),
       const SizedBox(height: 8),
       Text(
         '${store.pendingSyncCount} ${tr('cambios locales pendientes de sincronizacion')}',
-        style: const TextStyle(color: kMuted, fontSize: 12),
+        style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
       if (store.lastSyncAt != null) ...[
         const SizedBox(height: 8),
         Text(
           '${tr('Ultima sincronizacion')}: ${DateFormat('d MMM, HH:mm', activeLanguage).format(store.lastSyncAt!)}',
-          style: const TextStyle(color: kMuted, fontSize: 12),
+          style: TextStyle(color: appMutedColor(context), fontSize: 12),
         ),
       ],
       const SizedBox(height: 16),
@@ -2193,7 +2232,7 @@ class LoginScreen extends StatelessWidget {
         ),
       ],
       const SizedBox(height: 12),
-      const Divider(color: kOutline),
+      Divider(color: appOutlineColor(context)),
       const SizedBox(height: 8),
       Label(tr('Respaldo local')),
       const SizedBox(height: 10),
@@ -2329,9 +2368,9 @@ class _SupportAndPaymentsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.support_agent_rounded,
-                color: kPrimary,
+                color: appPrimaryColor(context),
                 size: 34,
               ),
               const SizedBox(width: 12),
@@ -2491,9 +2530,9 @@ class _ReferralCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           if (store.user == null) ...[
-            const Text(
+            Text(
               'Inicia sesión con Google para obtener tu enlace personal, invitar conductores y consultar tus recompensas.',
-              style: TextStyle(color: kMuted, height: 1.4),
+              style: TextStyle(color: appMutedColor(context), height: 1.4),
             ),
             const SizedBox(height: 14),
             FilledButton.icon(
@@ -2524,7 +2563,7 @@ class _ReferralCard extends StatelessWidget {
       return [
         Text(
           store.referralError ?? 'No se pudo cargar el programa de referidos.',
-          style: const TextStyle(color: kMuted),
+          style: TextStyle(color: appMutedColor(context)),
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
@@ -2537,10 +2576,10 @@ class _ReferralCard extends StatelessWidget {
 
     final program = store.referralProgram;
     if (program == null || !program.enabled) {
-      return const [
+      return [
         Text(
           'No hay una campaña de referidos activa en este momento.',
-          style: TextStyle(color: kMuted),
+          style: TextStyle(color: appMutedColor(context)),
         ),
       ];
     }
@@ -2556,12 +2595,15 @@ class _ReferralCard extends StatelessWidget {
       ],
       Text(
         referralQualificationLabel(program.qualificationMode),
-        style: const TextStyle(color: kMuted),
+        style: TextStyle(color: appMutedColor(context)),
       ),
       const SizedBox(height: 4),
       Text(
         'Gana ${program.rewardDays} días por cada referido',
-        style: const TextStyle(color: kPrimary, fontWeight: FontWeight.w800),
+        style: TextStyle(
+          color: appPrimaryColor(context),
+          fontWeight: FontWeight.w800,
+        ),
       ),
       const SizedBox(height: 14),
       _ReferralValue(label: 'Tu código', value: program.code ?? '—'),
@@ -2606,7 +2648,7 @@ class _ReferralCard extends StatelessWidget {
       const SizedBox(height: 16),
       Container(
         decoration: BoxDecoration(
-          border: Border.all(color: kOutline),
+          border: Border.all(color: appOutlineColor(context)),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
@@ -2631,7 +2673,7 @@ class _ReferralCard extends StatelessWidget {
       const SizedBox(height: 8),
       Text(
         'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
-        style: const TextStyle(color: kMuted, fontSize: 12),
+        style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
       const SizedBox(height: 18),
       Row(
@@ -2650,9 +2692,9 @@ class _ReferralCard extends StatelessWidget {
         ],
       ),
       if (store.referrals.isEmpty)
-        const Text(
+        Text(
           'Todavía no tienes referidos.',
-          style: TextStyle(color: kMuted),
+          style: TextStyle(color: appMutedColor(context)),
         )
       else
         ...store.referrals.map(_ReferralEntryTile.new),
@@ -2686,17 +2728,20 @@ class _ReferralValue extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: kSurface.withValues(alpha: .42),
+        color: Theme.of(context).colorScheme.surface.withValues(
+              alpha:
+                  Theme.of(context).brightness == Brightness.dark ? .42 : .92,
+            ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kOutline),
+        border: Border.all(color: appOutlineColor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label.toUpperCase(),
-            style: const TextStyle(
-              color: kMuted,
+            style: TextStyle(
+              color: appMutedColor(context),
               fontSize: 10,
               fontWeight: FontWeight.w800,
             ),
@@ -2724,15 +2769,18 @@ class _ReferralEntryTile extends StatelessWidget {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: kSurface.withValues(alpha: .35),
+        color: Theme.of(context).colorScheme.surface.withValues(
+              alpha:
+                  Theme.of(context).brightness == Brightness.dark ? .35 : .88,
+            ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kOutline),
+        border: Border.all(color: appOutlineColor(context)),
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            backgroundColor: Color(0x222DD4A3),
-            child: Icon(Icons.person_outline, color: kPrimary),
+          CircleAvatar(
+            backgroundColor: const Color(0x222DD4A3),
+            child: Icon(Icons.person_outline, color: appPrimaryColor(context)),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -2749,7 +2797,7 @@ class _ReferralEntryTile extends StatelessWidget {
                 Text(
                   '${referralEntryStatusLabel(entry.status)}'
                   '${createdAt == null ? '' : ' · ${DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal())}'}',
-                  style: const TextStyle(color: kMuted, fontSize: 12),
+                  style: TextStyle(color: appMutedColor(context), fontSize: 12),
                 ),
               ],
             ),
@@ -2757,8 +2805,8 @@ class _ReferralEntryTile extends StatelessWidget {
           if (entry.rewardDays > 0)
             Text(
               '+${entry.rewardDays} días',
-              style: const TextStyle(
-                color: kPrimary,
+              style: TextStyle(
+                color: appPrimaryColor(context),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -2785,8 +2833,8 @@ class _ReferralMetric extends StatelessWidget {
               label.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: kMuted,
+              style: TextStyle(
+                color: appMutedColor(context),
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
               ),
@@ -2796,8 +2844,8 @@ class _ReferralMetric extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: kPrimary,
+              style: TextStyle(
+                color: appPrimaryColor(context),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
@@ -2814,7 +2862,7 @@ class _ReferralDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(width: 1, height: 54, color: kOutline);
+    return Container(width: 1, height: 54, color: appOutlineColor(context));
   }
 }
 
@@ -3046,18 +3094,21 @@ class _VehicleSettingsPanelState extends State<VehicleSettingsPanel> {
                   Expanded(
                     child: Text(
                       tr('ID interno'),
-                      style: const TextStyle(color: kMuted, fontSize: 12),
+                      style: TextStyle(
+                        color: appMutedColor(context),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   Tooltip(
                     message: vehicle.id,
                     child: Text(
                       shortId,
-                      style: const TextStyle(
-                        color: kMuted,
+                      style: TextStyle(
+                        color: appMutedColor(context),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        fontFeatures: [ui.FontFeature.tabularFigures()],
+                        fontFeatures: const [ui.FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
