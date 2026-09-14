@@ -22,7 +22,7 @@ Hive/sync_entities ── compatibilidad y proyección idempotente de vehículos
 ## Modelo relacional propuesto
 
 `profiles` continúa canónico. `driver_profiles(profile_id PK)` guarda estado
-(`incomplete`, `pending_topup`, `active`, `suspended`), requisitos, suspensión y
+(`incomplete`, `active`, `suspended`), requisitos, suspensión y
 referencia a la foto controlada; WhatsApp permanece canónico en `profiles.phone`.
 
 `vehicles(id text PK)` es la representación relacional queryable de Trabajos y usa
@@ -42,6 +42,9 @@ varios vehículos y futuros conductores compartidos.
 congelado, comisión en puntos básicos, expiración y ganador. `job_assignments`
 registra ganador e intentos relevantes; `job_events` es append-only.
 
+`marketplace_work_trials` es una tabla server-first, inmutable y única por
+usuario/proyecto; guarda botón/idempotencia, vehículo inicial y exactamente 30 días.
+`job_assignments` congela `billing_mode` como `trial_free` o `wallet_commission`.
 `wallets` es una por conductor/usuario y moneda en el MVP (CUP inicialmente), con saldo total,
 reservado y disponible cacheados/reconciliables. `wallet_transactions` es el
 ledger inmutable firmado. `commission_reservations` tiene una reserva canónica
@@ -63,8 +66,9 @@ ledger ni asignaciones.
 
 El entitlement se deriva, no se materializa como licencia falsa:
 `control_allowed = control_trial_valid OR control_license_valid OR suite_active`.
-La suite se activa automáticamente si requisitos completos + topup confirmado;
-pueden llegar en cualquier orden. Requisitos MVP: perfil/nombre, WhatsApp, foto
+`suite_active = perfil activo/no suspendido AND (trial_Trabajos_activo OR
+depósito_inicial_confirmado)`. Requisitos completos + inicio explícito del trial
+otorgan 30 días; después, topup confirmado permite nuevas aceptaciones. Requisitos MVP: perfil/nombre, WhatsApp, foto
 conductor, vehículo con categoría, propulsión, marca, modelo, identificación si
 aplica, capacidades, servicios y foto principal. No hay aprobación documental ni
 botón administrativo adicional; Vrixora puede suspender después.
@@ -73,17 +77,20 @@ botón administrativo adicional; Vrixora puede suspender después.
 
 Primer topup: CUP, mínimo configurable por Vrixora con 500 CUP inicial; el
 crédito entra íntegro al ledger. No es cuota y no hay mínimo permanente posterior.
-Aceptar exige `available >= commission`, donde comisión es 10% del precio final.
+Durante trial no se exige billetera, reserva ni saldo. Fuera de trial, aceptar exige
+`available >= commission`, donde comisión es 10% del precio final.
 Nunca hay saldo negativo ni se bloquea Control por falta de saldo.
 
-`accept_job(job_id, vehicle_id, idempotency_key)` bloquea job y wallet en orden
-estable, valida actor, suite activa, vehículo/requisitos/compatibilidad y saldo,
-crea reserva, assignment ganador y event, y cambia a `accepted` en una transacción.
+`accept_job(job_id, vehicle_id, idempotency_key)` bloquea job, valida actor,
+trial/depósito, vehículo/requisitos y compatibilidad. En `trial_free` crea
+assignment/event sin billetera ni reserva; en `wallet_commission` bloquea wallet,
+comprueba saldo y crea reserva. Ambos cambian a `accepted` en una transacción.
 Restricciones únicas e idempotencia impiden segundo ganador/reserva. Antes de
 `in_progress`, cancelar libera totalmente la reserva. Después, pasa a `incident`;
 Vrixora resuelve con asientos compensatorios auditables. El conductor marca
-`in_progress` y `completed`; al completar, servidor valida asignación/estado/
-reserva y consume reserva + débito una vez, sin confirmación obligatoria cliente.
+`in_progress` y `completed`; al completar, `trial_free` no consulta billetera ni
+reserva y nunca debita, incluso vencido. `wallet_commission` consume reserva +
+débito una vez. Cancelar trial no crea ledger; cancelar wallet libera reserva.
 
 `confirm_topup(topup_id, idempotency_key)` es exclusivo de capacidad Vrixora:
 bloquea topup pendiente, crea crédito único, audita y recalcula activación. La
@@ -131,8 +138,9 @@ ingreso bruto y comisión gasto separado, con unicidad para impedir doble conteo
 ## Riesgos y pruebas requeridas
 
 Riesgos: modelo canónico desconocido, contención de aceptación, PII/abuso PWA,
-recargas manuales, fotos privadas, estados ambiguos e integración offline. Pruebas:
+recargas manuales, fotos privadas, estados ambiguos, frontera de 30 días e integración offline. Pruebas:
 compatibilidad 1.0.8+10/Hive/restauración; RLS/IDOR; concurrencia de aceptación;
 idempotencia de todas las RPC; ledger/reconciliación y compensaciones; topup antes/
 después de ficha; privacidad antes/después de asignación; PWA abuso/duplicados;
-push duplicado/perdido; offline; carga y `EXPLAIN`; actualización/rollback.
+push duplicado/perdido; inicio/reintento único de trial; aceptación gratis; fin de
+trial sin comisión retroactiva; transición trial → wallet; offline; carga y `EXPLAIN`; actualización/rollback.

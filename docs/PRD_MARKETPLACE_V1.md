@@ -4,9 +4,9 @@
 
 **Componentes:** TUKTUK Control Conductor, TUKTUK Cliente y Vrixora Admin
 
-**Versión del documento:** 1.0
+**Versión del documento:** 1.1
 
-**Fecha:** 13 de septiembre de 2026
+**Fecha:** 14 de septiembre de 2026
 
 **Estado:** Fase 0 — diseño y arquitectura; no implementado
 
@@ -63,9 +63,8 @@ gobernanza y aprobación del owner; esa fuente no se modifica en esta fase.
    compensatorios.
 4. Toda mutación crítica admite reintentos idempotentes.
 5. Los datos de contacto se exponen por capacidad y estado, no por conocer un ID.
-6. La licencia de TUKTUK Control y la billetera de Trabajos son conceptos
-   distintos: Solo Control usa su prueba/licencia; una suite completa activa
-   incluye Control y Trabajos. No existe una licencia Marketplace separada.
+6. La prueba/licencia de TUKTUK Control, la prueba única de Trabajos y la
+   billetera son conceptos distintos. No existe una licencia Marketplace separada.
 7. Marketplace requiere conexión para publicar, aceptar y cambiar estados. Una
    caché local nunca autoriza una operación crítica.
 8. Las listas de trabajos y eventos usan paginación por cursor, filtros e índices;
@@ -343,9 +342,9 @@ operación pública, pero no cambia este contrato técnico.
 ### 8.4. Habilitación Marketplace y estados del conductor
 
 El perfil de Trabajos tiene estados independientes de la licencia de Solo
-Control: **incompleto**, **pendiente de depósito**, **activo** y **suspendido**.
-Solo un conductor **activo**, con vehículo activo y saldo disponible suficiente,
-puede aceptar trabajos.
+Control: **incompleto**, **activo** y **suspendido**. Tras completar onboarding,
+el conductor inicia explícitamente su única prueba con “Comenzar 30 días gratis”.
+Durante ella, un conductor activo con vehículo activo puede aceptar sin depósito.
 
 Como mínimo para activar Trabajos requiere nombre/perfil válido, WhatsApp,
 foto del conductor, vehículo, categoría, propulsión, marca, modelo,
@@ -354,9 +353,10 @@ foto principal del vehículo. El MVP no exige aprobación documental administrat
 previa; Vrixora puede suspender posteriormente.
 
 El primer depósito mínimo es CUP 500 por defecto y configurable desde Vrixora.
-Se acredita íntegro al saldo; no es cuota ni pago de activación. La activación es
-automática cuando están completos requisitos y recarga confirmada, en cualquier
-orden; no existe un segundo botón ni aprobación administrativa de activación.
+Se acredita íntegro al saldo; no es cuota ni pago de activación. Requisitos
+completos + inicio explícito del trial otorgan 30 días gratuitos; al vencer,
+depósito confirmado = continuidad para nuevas aceptaciones. Personal con
+`payments.manage` verifica y acredita el pago; no existe un segundo activador.
 
 Un conductor es elegible solo si, en el momento de consultar y nuevamente al
 aceptar:
@@ -464,11 +464,11 @@ Dentro de una transacción corta, la operación debe:
    no expiró y no tiene ganador;
 3. reevaluar compatibilidad, disponibilidad, estado activo de Trabajos y
    bloqueos;
-4. calcular la comisión esperada a partir del precio final congelado;
-5. bloquear la billetera en un orden consistente y comprobar saldo disponible
-   para reservar la comisión; sin saldo suficiente la aceptación se rechaza;
-6. crear exactamente una reserva de comisión para el trabajo;
-7. crear la asignación ganadora;
+4. congelar `trial_free` si el trial está activo, o `wallet_commission` si existe
+   depósito inicial confirmado;
+5. en trial no bloquear billetera ni crear reserva; fuera de él, comprobar saldo;
+6. crear una reserva solo en `wallet_commission`;
+7. crear la asignación ganadora con snapshots inmutables;
 8. actualizar trabajo, disponibilidad y estado a **Aceptado**;
 9. añadir el evento auditable;
 10. devolver el mismo resultado ante un reintento con la misma clave.
@@ -500,12 +500,12 @@ billetera, que es un concepto financiero distinto y sí existe en el MVP.
 |---|---|---|
 | Solicitado | Borrador validable aún no visible a conductores | Publicado, Cancelado por cliente |
 | Publicado | Disponible para conductores elegibles | Aceptado, Cancelado por cliente, Expirado |
-| Aceptado | Conductor asignado y comisión reservada | En camino, Cancelado por cliente, Cancelado por conductor, Incidente |
+| Aceptado | Conductor asignado; modo económico congelado. Durante trial no hay reserva; fuera del trial se reserva comisión | En camino, Cancelado por cliente, Cancelado por conductor, Incidente |
 | En camino | Conductor se dirige al origen | Recogida, Cancelado, Incidente |
 | Recogida | Llegó o inició la recogida/abordaje | En curso, Cancelado, Incidente |
 | En curso | Servicio en ejecución | Completado, Incidente |
-| Completado | El conductor finalizó; el servidor liquida la reserva sin confirmación obligatoria del cliente | Liquidado, Incidente |
-| Liquidado | Comisión asentada y trabajo cerrado | Incidente administrativo excepcional |
+| Completado | El conductor finalizó; trial queda gratis o el servidor liquida la reserva | Liquidado, Incidente |
+| Liquidado | Trabajo cerrado; comisión asentada solo en `wallet_commission` | Incidente administrativo excepcional |
 | Cancelado por cliente | Terminal operativo | — |
 | Cancelado por conductor | Terminal operativo | — |
 | Expirado | Nadie aceptó dentro del plazo | — |
@@ -569,11 +569,16 @@ mantienen para quienes comienzan en la modalidad **TUKTUK Control**. Después de
 período inicial, quien solo usa herramientas de gestión requiere una licencia
 periódica vigente conforme al PRD maestro.
 
-La **suite completa (Control + Trabajos)** no exige esperar esos 30 días:
-un candidato puede iniciar la habilitación desde el onboarding. Cuando completa
-requisitos y tiene depósito confirmado, recibe TUKTUK Control completo y TUKTUK
-Trabajos. Conserva el mismo `profiles.id`, los mismos IDs de vehículo y todos los
-datos/ajustes/históricos existentes; solo completa campos nuevos o faltantes.
+TUKTUK Trabajos ofrece una única prueba gratuita de 30 días por usuario, iniciada
+explícitamente después de completar onboarding. Durante la prueba no requiere
+depósito, no reserva ni cobra comisión y no genera deuda posterior. El modo
+económico se congela al aceptar cada trabajo. Tras vencer, los nuevos trabajos
+requieren depósito inicial confirmado y saldo suficiente para reservar el 10 %.
+
+La prueba de Trabajos ≠ la prueba de Control: usuarios antiguos de Control también
+reciben sus 30 días al pulsar el botón. Un depósito temprano se acredita íntegro y
+no termina el trial; un trabajo aceptado en trial sigue gratis aunque termine
+después. No hay comisión retroactiva.
 
 Regla comercial: **Solo Control → licencia. Suite completa activa → Control incluido
 + Trabajos + comisión del 10 %.** Conceptualmente, TUKTUK gana cuando el conductor
@@ -581,11 +586,11 @@ gana; esta regla no sustituye las validaciones de perfil, saldo o reserva.
 
 ### 14.2. Activación con saldo prepago
 
-Pulsar “Quiero trabajar con TUKTUK” inicia ficha personal, ficha del vehículo y
-fotos. Tras una recarga confirmada por Vrixora se acredita el saldo; la suite se
-activa automáticamente al cumplirse todos los requisitos. El mínimo inicial es
-500 CUP por defecto y configurable desde Vrixora; aplica solo al primer depósito,
-no establece saldo mínimo permanente.
+Pulsar “Comenzar 30 días gratis” tras completar ficha personal, vehículo y fotos
+inicia el trial con tiempo de servidor. Durante los 30 días las oportunidades son
+gratuitas. Después, una recarga física o transferencia confirmada por Vrixora
+habilita nuevas aceptaciones. El mínimo inicial es 500 CUP por defecto y
+configurable; aplica solo al primer depósito.
 
 Las oportunidades reales de **Trabajos** se muestran cuando la suite está activa.
 Antes de activar, el onboarding puede mostrar información explicativa o ejemplos,
@@ -602,7 +607,7 @@ completa del trabajo.
 Los tres se muestran juntos y con moneda. Los saldos cacheados pueden mantenerse
 para rendimiento, pero deben poder reconciliarse con el ledger y las reservas.
 
-Si el saldo disponible no permite reservar el 10 %, el conductor no puede aceptar
+Fuera del trial, si el saldo disponible no permite reservar el 10 %, el conductor no puede aceptar
 el trabajo y se le solicita recargar. Esto solo bloquea nuevas operaciones
 Marketplace que requieren reserva; nunca bloquea registros, ingresos/gastos
 históricos, estadísticas, mantenimiento, datos del vehículo ni las demás funciones
@@ -616,11 +621,12 @@ de ese dinero. TUKTUK obtiene su ingreso al liquidar el 10 % desde el saldo
 prepago del conductor. Los pagos digitales del cliente dentro de TUKTUK quedan
 fuera del MVP.
 
-1. Al aceptar, se reserva el 10 % esperado del precio final.
-2. Al marcar Completado, el servidor valida asignación, estado y reserva y la
-   liquida sin confirmación adicional obligatoria del cliente.
-3. Al liquidar, se crea un débito inmutable en `wallet_transactions` y la reserva
-   cambia a consumida dentro de la misma transacción.
+1. En `trial_free` no se reserva ni cobra nada; en `wallet_commission` se reserva
+   el 10 % esperado del precio final al aceptar.
+2. Al marcar Completado, el servidor valida asignación y estado; solo
+   `wallet_commission` valida y liquida reserva sin confirmación adicional.
+3. Solo al liquidar `wallet_commission` se crea un débito inmutable en
+   `wallet_transactions` y la reserva cambia a consumida.
 4. En una cancelación válida, la reserva se libera. Si ya existió un asiento, se
    crea un asiento compensatorio; no se edita ni elimina el original.
 5. Un incidente congela el efecto pendiente hasta una resolución autorizada.
@@ -648,7 +654,8 @@ validarse contra el esquema canónico de Vrixora antes de una migración.
 | `customers` | Identidad de solicitante, nombre y WhatsApp normalizado; vínculo opcional a Auth/empresa | No duplica `profiles`; PII privada; deduplicación controlada |
 | `service_requests` | Entrada del cliente, origen/destino, horario, servicio, detalles de carga/pasajeros, observaciones, foto privada | Pertenece a customer; conserva snapshot solicitado |
 | `jobs` | Trabajo publicable/operable, estado actual, precio recomendado/final, moneda, versión de precio, expiración y ganador | Uno por solicitud publicada; actualización condicional de estado |
-| `job_assignments` | Historial de intentos relevantes, ganador, conductor, vehículo, aceptación y finalización | Índice único para un ganador por job |
+| `job_assignments` | Ganador, conductor, vehículo, aceptación, finalización y modo económico congelado | `trial_free` o `wallet_commission`; snapshots inmutables |
+| `marketplace_work_trials` | Una prueba explícita por usuario/proyecto | Inmutable; inicio/fin exactos de 30 días |
 | `job_events` | Historial append-only de transiciones y acciones | Orden por `(job_id, created_at, id)`; no editable por clientes |
 | `vehicles` | Proyección relacional canónica para Trabajos usando exactamente el `vehicle_id text` existente; propietario, categoría, propulsión, marca, modelo, año, matrícula/identificación, capacidades, servicios y foto principal | No sustituye `VehicleProfile`/`sync_entities`; el puente legacy actualiza solo campos legacy y nunca borra campos de Trabajos |
 | `driver_availability` | Relación conductor–vehículo, disponible/ocupado, ventanas y futura zona | Un estado actual por relación; solapes controlados; las capacidades físicas permanecen en `vehicles` |
@@ -941,6 +948,7 @@ no geoespaciales y ámbito operativo configurado.
 - valoración básica de cliente al conductor/servicio después de liquidar;
 - flujo hasta completado/liquidado;
 - wallet ledger, recarga mínima configurable, reserva y comisión del 10 %;
+- prueba explícita de Trabajos, congelación de `billing_mode` y transición trial → wallet;
 - operación y conciliación mínima en Vrixora Admin.
 
 ### Fase 2 — integración automática
@@ -987,7 +995,7 @@ no geoespaciales y ámbito operativo configurado.
    durable visible.
 9. El contacto permanece oculto hasta asignar; después se usa WhatsApp como contacto operativo autorizado.
 10. No hay chat interno en el MVP.
-11. La comisión es 10 % del precio final y se reserva al aceptar.
+11. La comisión es 10 % del precio final y se reserva al aceptar solo en `wallet_commission`; el trial es `trial_free` sin deuda ni retroactividad.
 12. Wallet y comisión se implementan como ledger/reserva, no como saldo editable.
 13. Se mantiene una licencia por usuario/aplicación; los 30 días y la licencia
     periódica aplican a Solo Control, mientras Marketplace activo incluye Control.
@@ -1018,9 +1026,8 @@ no geoespaciales y ámbito operativo configurado.
 24. Marketplace admite categorías configurables de vehículos; las categorías
     iniciales no limitan rígidamente la elegibilidad, que se basa en capacidades y
     requisitos concretos del trabajo.
-25. El conductor puede iniciar TUKTUK Trabajos desde el primer onboarding sin
-    esperar Control; conserva perfil/vehículo/datos y acepta solo con suite activa
-    y saldo suficiente para reservar la comisión.
+25. El conductor inicia una sola prueba explícita de 30 días de Trabajos tras
+    onboarding, sin esperar Control; durante ella acepta sin billetera.
 26. El primer depósito es CUP 500 por defecto, configurable desde Vrixora, entra
     íntegro como saldo y no crea un mínimo permanente ni es cuota/comisión.
 27. El cliente paga directamente al conductor en el MVP; TUKTUK no custodia ese
@@ -1031,6 +1038,8 @@ no geoespaciales y ámbito operativo configurado.
     confisca saldo ni se borra historia.
 30. Las notificaciones al cliente reflejan eventos de servidor y cubren asignación,
     avance, completado, cancelación e incidente.
+31. Tras vencer el trial, depósito físico o transferencia confirmado y acreditado
+    por `payments.manage` permite nuevas aceptaciones; no hay segundo activador.
 
 ## 24. Decisiones pendientes
 
@@ -1114,10 +1123,10 @@ en un entorno no productivo:
    coherentes para los demás.
 8. Repetir una aceptación con la misma idempotency key no crea asignación, reserva,
    evento ni cargo adicional.
-9. Aceptar crea una reserva exacta del 10 % y actualiza los tres saldos de forma
-   consistente; la aceptación se rechaza si el saldo disponible no la cubre.
-10. Completar/liquidar produce exactamente un débito; una cancelación válida libera
-    o compensa según la regla configurada.
+9. Durante trial, aceptar no crea reserva ni exige billetera; fuera de trial crea
+   reserva exacta del 10 % y exige saldo disponible.
+10. Un trabajo `trial_free` termina gratis incluso tras vencer; `wallet_commission`
+    produce exactamente un débito y una cancelación válida libera la reserva.
 11. Cada transición acepta solo actores y estados permitidos y genera un evento
     append-only con tiempo de servidor.
 12. Después de asignar, solo cliente y conductor asignado obtienen los contactos
@@ -1172,11 +1181,10 @@ en un entorno no productivo:
 32. La solución técnica de multimedia debe proteger acceso, actualización, respaldo
     y disponibilidad de fotos personalizadas o procedentes de Google antes de su
     despliegue, sin exponer activos privados ni depender de URLs externas caducables.
-33. Desde el onboarding, “Quiero trabajar con TUKTUK” solicita ficha personal,
-    vehículo y fotos; Vrixora confirma la recarga y la suite se activa automática
-    cuando ambos grupos de requisitos estén completos, sin aprobación adicional.
-34. Solo el estado activo acepta; incompleto, pendiente de depósito y suspendido
-    lo impiden sin borrar datos, historial o saldo.
+33. “Comenzar 30 días gratis” inicia una sola prueba exacta de 30 días con tiempo
+    de servidor; reintentos, reinstalación o cambios de vehículo no la reinician.
+34. Durante trial, activo acepta sin depósito; vencida, una nueva aceptación exige
+    depósito confirmado y saldo. Suspendido nunca acepta.
 35. Una recarga inicial permanece como saldo del conductor y no se contabiliza como
     cuota, comisión ni ingreso automático de TUKTUK; si el saldo disponible no
     cubre la reserva del 10 %, se bloquea solo la aceptación Marketplace y se
