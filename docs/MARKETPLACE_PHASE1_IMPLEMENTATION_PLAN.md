@@ -1,0 +1,23 @@
+# Plan de implementación — Fase 1 TUKTUK Trabajos
+
+**Precondición:** aprobar el blueprint. Ningún bloque autoriza despliegue remoto.
+
+| Bloque | Objetivo y sistemas probables | Dependencias y pruebas | Terminado / rollback / regresión |
+|---|---|---|---|
+| 1. Schema foundations | Tablas, catálogos, índices, checks y auditoría: Vrixora/Supabase staging. | Blueprint aprobado; pruebas de esquema e índices. | Migraciones reversibles antes de datos; rollback deshabilita objetos nuevos. Riesgo: nombres canónicos. |
+| 2. Compatibility/migration | Extensiones `profiles`, `vehicles.id text` relacional y relación conductor–vehículo; puente idempotente desde `VehicleProfile`/`sync_entities`. | Inventario real 1.0.8+10; pruebas de backfill repetido, Hive/restauración y APK antiguo que sincroniza después del backfill. | Sin ID cambiado ni sync destruido; el puente legacy nunca borra campos de Trabajos; rollback corta proyector. Riesgo: duplicado/desasociación. |
+| 3. Entitlement | Estado suite y cálculo `control_allowed`; ficha y requisitos. | Bloques 1–2; pruebas de prueba/licencia/suite/suspensión. | No licencia Marketplace ni bloqueo Control; rollback apaga entitlement suite. |
+| 4. Wallet/topups | Wallet por conductor/usuario en CUP, ledger, topups y configuración Vrixora (500 CUP por defecto). | 1, 3; pruebas de crédito único, 500 solo inicial, activación automática en cualquier orden y saldo no negativo. | Conciliación exacta; rollback deshabilita confirmación, conserva historia. |
+| 5. Jobs/state machine | Requests, jobs, events, estados e incidente. | 1–3; pruebas de transición y roles. | Eventos append-only; rollback cierra publicación nueva. Riesgo: estados inválidos. |
+| 6. Atomic acceptance | RPC aceptar, reserva 10 %, ganador único y completar/liquidar. | 4–5; pruebas de carreras, reintentos, cancelación e incidente. | Cero doble reserva/cargo; rollback bloquea aceptación. Riesgo financiero crítico. |
+| 7. Privacy/RLS/RPC | Proyecciones sin PII, contacto post-asignación, grants y rate limits. | 2, 5–6; pruebas RLS/IDOR/PWA abuso. | Ninguna PII previa; rollback revoca RPC/vistas. |
+| 8. Vrixora | Recargas, configuración, supervisión, incidentes y auditoría. | 3–7; pruebas RBAC, confirmación, compensación. | Activación automática comprobada; rollback oculta acciones nuevas. |
+| 9. Flutter Trabajos | Onboarding suite, requisitos, saldo, disponibles/activos; oportunidades reales solo con suite activa. | 2–7; UI, offline, actualización 1.0.8+10 y no reentrada de datos existentes. | Control intacto offline, mismo usuario/vehículo/históricos; rollback feature flag/UI. |
+| 10. Customer PWA | Flujo anónimo: nombre, WhatsApp, servicio, precio y seguimiento seguro desde la PWA. | 5,7; pruebas sesión/token opaco, spam, duplicados, WhatsApp no verificado y privacidad. | Sin login/OTP visible ni segundo teléfono; rollback despublica ruta. |
+| 11. Notificaciones | Outbox para conductores y adaptadores; seguimiento PWA como canal base del cliente, web push opcional. | 5–7; pruebas de pérdida/duplicado y ausencia de PII. | Ninguna notificación muta estado; WhatsApp automatizado no es requisito MVP; rollback pausa consumidor. |
+| 12. Tests | Suites unitarias, integración RPC/RLS, carga, seguridad, compatibilidad y rollback. | Todos los anteriores. | Cobertura de invariantes y `git diff --check`; rollback no aplica. |
+| 13. Staging/pilot | Datos sintéticos, reconciliación, operación de recargas y observabilidad. | 1–12; pruebas E2E y runbooks. | Métricas/alertas y aprobación owner; rollback feature flags. |
+| 14. Production rollout | Publicación gradual aprobada y monitoreada. | Pilot aprobado, backup/runbook. | Sin despliegue en esta tarea; rollback operativo preserva ledger/datos. |
+
+Cada bloque requiere revisión de rendimiento, seguridad, escalabilidad, mantenibilidad,
+compatibilidad offline y sincronización incremental antes de avanzar.

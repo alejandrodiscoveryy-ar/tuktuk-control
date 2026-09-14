@@ -1,6 +1,6 @@
 # PRD — TUKTUK Marketplace V1 / TUKTUK 2.0
 
-**Producto:** Ecosistema TUKTUK Marketplace
+**Producto:** Suite TUKTUK Control + TUKTUK Trabajos
 
 **Componentes:** TUKTUK Control Conductor, TUKTUK Cliente y Vrixora Admin
 
@@ -23,7 +23,7 @@ un marketplace multimodal de servicios prestados con categorías configurables
 de vehículos, sin eliminar, sustituir ni degradar ninguna capacidad actual de
 control económico y operativo.
 
-El Marketplace es una ampliación del ecosistema, no una reescritura de la
+TUKTUK Trabajos ("Marketplace" es únicamente terminología técnica interna) es una ampliación del ecosistema, no una reescritura de la
 aplicación existente. Los registros diarios, ingresos, gastos, kilometraje,
 batería, mantenimiento, estadísticas, Hive, respaldo/restauración local,
 sincronización incremental, Google Sign-In, licencias y soporte continúan con
@@ -63,9 +63,9 @@ gobernanza y aprobación del owner; esa fuente no se modifica en esta fase.
    compensatorios.
 4. Toda mutación crítica admite reintentos idempotentes.
 5. Los datos de contacto se exponen por capacidad y estado, no por conocer un ID.
-6. La licencia de TUKTUK Control y la billetera del Marketplace son conceptos
-   financieros distintos: la licencia aplica a la modalidad Solo Control; un
-   Marketplace activo incluye Control y la billetera cubre comisiones.
+6. La licencia de TUKTUK Control y la billetera de Trabajos son conceptos
+   distintos: Solo Control usa su prueba/licencia; una suite completa activa
+   incluye Control y Trabajos. No existe una licencia Marketplace separada.
 7. Marketplace requiere conexión para publicar, aceptar y cambiar estados. Una
    caché local nunca autoriza una operación crítica.
 8. Las listas de trabajos y eventos usan paginación por cursor, filtros e índices;
@@ -122,13 +122,14 @@ nunca recibe credenciales privilegiadas.
 
 En el MVP permite:
 
-- identificar al solicitante conforme al mecanismo de acceso que se cierre;
+- publicar sin registro, contraseña, OTP ni código de WhatsApp visibles; el
+  servidor puede usar una sesión anónima o identificador opaco interno;
 - cotizar y crear una solicitud;
 - editar el precio recomendado antes de publicar;
 - consultar estado y datos del conductor asignado;
 - recibir actualizaciones del trabajo conforme a su estado;
 - cancelar conforme a las reglas vigentes;
-- abrir llamada o WhatsApp después de la asignación.
+- abrir WhatsApp después de la asignación.
 
 ### 4.3. Vrixora Admin
 
@@ -181,7 +182,6 @@ nuevas publicaciones, pero no invalida trabajos históricos ni activos.
 ### 7.1. Campos comunes
 
 - nombre;
-- teléfono;
 - WhatsApp;
 - origen;
 - destino;
@@ -192,8 +192,8 @@ nuevas publicaciones, pero no invalida trabajos históricos ni activos.
 - precio recomendado y precio final propuesto;
 - moneda.
 
-Teléfono y WhatsApp se normalizan a formato internacional. Debe definirse cuál
-es obligatorio; no se debe suponer que ambos números son iguales. Origen,
+WhatsApp se normaliza a formato internacional y es el contacto operativo único;
+no se solicita un segundo teléfono genérico. Origen,
 destino y observaciones se limitan y validan para evitar contenido abusivo.
 
 ### 7.2. Carga
@@ -331,37 +331,38 @@ solo después de la asignación y puede ser consultada por Vrixora Admin; por s�
 sola no constituye verificación oficial. Múltiples fotografías de vehículo se
 incorporan posteriormente.
 
-La arquitectura no puede depender indefinidamente de que una URL externa de
-Google siga disponible. Antes de implementar se decidirá la estrategia segura
-para conservar o referenciar la imagen inicial, alojar una foto personalizada,
-actualizarla, controlar permisos y usar una imagen de respaldo cuando no exista.
-Esa decisión técnica —incluida la política de copia, retención y almacenamiento—
-queda explícitamente fuera de esta fase de documentación y no autoriza implementar
-almacenamiento ni subida de archivos.
+La arquitectura no depende indefinidamente de una URL externa de Google. En el
+MVP, la foto del conductor y la foto principal del vehículo se gestionan como
+`media_assets` en almacenamiento privado controlado por TUKTUK, con acceso
+autorizado mediante URLs firmadas de corta duración. La imagen de Google puede
+usarse como valor inicial y copiarse/importarse al almacenamiento controlado
+durante el onboarding o cuando el conductor la confirme. La política exacta de
+retención y eliminación sigue siendo una decisión de privacidad previa a la
+operación pública, pero no cambia este contrato técnico.
 
 ### 8.4. Habilitación Marketplace y estados del conductor
 
-El perfil Marketplace del conductor tiene estados independientes de la licencia
-de Solo Control: **incompleto**, **pendiente de verificación**, **habilitado**,
-**suspendido** e **inactivo** cuando corresponda por política de inactividad.
-Solo un conductor **habilitado**, con vehículo activo y saldo disponible suficiente,
+El perfil de Trabajos tiene estados independientes de la licencia de Solo
+Control: **incompleto**, **pendiente de depósito**, **activo** y **suspendido**.
+Solo un conductor **activo**, con vehículo activo y saldo disponible suficiente,
 puede aceptar trabajos.
 
-Como mínimo para solicitar habilitación, Marketplace requiere nombre/perfil, foto
-del conductor, vehículo activo, categoría, propulsión, capacidades, servicios
-habilitados, foto principal del vehículo, verificaciones aplicables, billetera o
-saldo activado y ausencia de suspensión. Los requisitos documentales y de
-verificación son configurables y podrán evolucionar sin cambiar el modelo base.
+Como mínimo para activar Trabajos requiere nombre/perfil válido, WhatsApp,
+foto del conductor, vehículo, categoría, propulsión, marca, modelo,
+matrícula/identificación cuando aplique, capacidades, servicios habilitados y
+foto principal del vehículo. El MVP no exige aprobación documental administrativa
+previa; Vrixora puede suspender posteriormente.
 
-Una recarga mínima inicial configurable activa la billetera Marketplace después de
-aprobar los requisitos. Es una condición de habilitación operativa; no es una cuota
-ni prueba por sí sola que habilite al conductor.
+El primer depósito mínimo es CUP 500 por defecto y configurable desde Vrixora.
+Se acredita íntegro al saldo; no es cuota ni pago de activación. La activación es
+automática cuando están completos requisitos y recarga confirmada, en cualquier
+orden; no existe un segundo botón ni aprobación administrativa de activación.
 
 Un conductor es elegible solo si, en el momento de consultar y nuevamente al
 aceptar:
 
 - su identidad y relación con el vehículo están activas;
-- su perfil Marketplace está habilitado;
+- su perfil de Trabajos está activo;
 - conductor y vehículo están disponibles;
 - el tipo de servicio está habilitado;
 - la categoría del vehículo cumple las reglas configurables del servicio;
@@ -432,7 +433,7 @@ Los conductores compatibles reciben una oportunidad con:
 - requisitos relevantes;
 - precio final;
 - expiración de la oportunidad;
-- ausencia explícita de teléfono y WhatsApp del cliente.
+- ausencia explícita de WhatsApp y otros contactos del cliente.
 
 La elegibilidad se calcula en servidor con filtros indexables. Para no multiplicar
 el almacenamiento por cada combinación trabajo–conductor, no se requiere crear
@@ -461,7 +462,7 @@ Dentro de una transacción corta, la operación debe:
 1. autenticar al actor y validar que controla la relación conductor–vehículo;
 2. bloquear o actualizar condicionalmente el trabajo solo si continúa publicado,
    no expiró y no tiene ganador;
-3. reevaluar compatibilidad, disponibilidad, estado habilitado de Marketplace y
+3. reevaluar compatibilidad, disponibilidad, estado activo de Trabajos y
    bloqueos;
 4. calcular la comisión esperada a partir del precio final congelado;
 5. bloquear la billetera en un orden consistente y comprobar saldo disponible
@@ -503,7 +504,7 @@ billetera, que es un concepto financiero distinto y sí existe en el MVP.
 | En camino | Conductor se dirige al origen | Recogida, Cancelado, Incidente |
 | Recogida | Llegó o inició la recogida/abordaje | En curso, Cancelado, Incidente |
 | En curso | Servicio en ejecución | Completado, Incidente |
-| Completado | Ejecución confirmada; pendiente de cierre financiero | Liquidado, Incidente |
+| Completado | El conductor finalizó; el servidor liquida la reserva sin confirmación obligatoria del cliente | Liquidado, Incidente |
 | Liquidado | Comisión asentada y trabajo cerrado | Incidente administrativo excepcional |
 | Cancelado por cliente | Terminal operativo | — |
 | Cancelado por conductor | Terminal operativo | — |
@@ -524,19 +525,19 @@ ordena eventos ni determina expiraciones.
 
 ## 13. Contacto y privacidad
 
-Antes de aceptar, ningún conductor recibe teléfono, WhatsApp ni otros datos que
+Antes de aceptar, ningún conductor recibe WhatsApp ni otros datos que
 permitan identificar directamente al cliente. RLS y la forma de las respuestas
 del servidor deben impedir obtenerlos incluso manipulando solicitudes.
 
 Después de la asignación:
 
-- el conductor asignado puede obtener teléfono y WhatsApp del cliente;
+- el conductor asignado puede obtener el WhatsApp del cliente;
 - el cliente obtiene los datos autorizados del conductor y vehículo: foto del
   conductor, nombre, valoración promedio y cantidad de valoraciones cuando haya
   información suficiente; foto principal del vehículo, categoría/tipo,
   marca/modelo cuando corresponda y matrícula o identificación conforme a la
   política de privacidad;
-- ambos pueden usar `tel:` y un enlace de WhatsApp con número internacional y
+- ambos pueden usar el enlace de WhatsApp autorizado con número internacional y
   texto codificado de forma segura.
 
 El acceso al contacto se entrega mediante una proyección/RPC específica que
@@ -568,30 +569,29 @@ mantienen para quienes comienzan en la modalidad **TUKTUK Control**. Después de
 período inicial, quien solo usa herramientas de gestión requiere una licencia
 periódica vigente conforme al PRD maestro.
 
-La modalidad **TUKTUK Trabajos / Marketplace** no exige esperar esos 30 días:
+La **suite completa (Control + Trabajos)** no exige esperar esos 30 días:
 un candidato puede iniciar la habilitación desde el onboarding. Cuando completa
-requisitos y activa el saldo prepago mínimo configurable, recibe TUKTUK Control
-completo y TUKTUK Trabajos/Marketplace mientras esa modalidad permanezca activa
-conforme a las reglas definidas. No paga adicionalmente la licencia periódica de
-Control durante dicho período.
+requisitos y tiene depósito confirmado, recibe TUKTUK Control completo y TUKTUK
+Trabajos. Conserva el mismo `profiles.id`, los mismos IDs de vehículo y todos los
+datos/ajustes/históricos existentes; solo completa campos nuevos o faltantes.
 
-Regla comercial: **Solo Control → licencia. Marketplace activo → Control incluido
+Regla comercial: **Solo Control → licencia. Suite completa activa → Control incluido
 + Trabajos + comisión del 10 %.** Conceptualmente, TUKTUK gana cuando el conductor
 gana; esta regla no sustituye las validaciones de perfil, saldo o reserva.
 
 ### 14.2. Activación con saldo prepago
 
-Pulsar “Quiero trabajar” no activa Marketplace. El usuario debe completar los
-requisitos de habilitación, ser aprobado y realizar una recarga mínima inicial
-configurable. La recarga no es cuota, comisión ni ingreso automático de TUKTUK:
-permanece como saldo prepago del conductor destinado a futuras comisiones. El
-importe mínimo, los canales y la evidencia de confirmación se definen por
-configuración/operación antes de producción.
+Pulsar “Quiero trabajar con TUKTUK” inicia ficha personal, ficha del vehículo y
+fotos. Tras una recarga confirmada por Vrixora se acredita el saldo; la suite se
+activa automáticamente al cumplirse todos los requisitos. El mínimo inicial es
+500 CUP por defecto y configurable desde Vrixora; aplica solo al primer depósito,
+no establece saldo mínimo permanente.
 
-Para favorecer la captación, un candidato habilitado puede ver oportunidades antes
-de recargar si la operación así lo decide, pero nunca puede aceptar si no puede
-reservar la comisión esperada. Esta visibilidad previa es una decisión de UX y
-operación que debe validarse durante la implementación.
+Las oportunidades reales de **Trabajos** se muestran cuando la suite está activa.
+Antes de activar, el onboarding puede mostrar información explicativa o ejemplos,
+pero no el listado vivo de oportunidades. Una vez activa la suite, cada aceptación
+se valida nuevamente y solo procede si el saldo disponible cubre la comisión
+completa del trabajo.
 
 ### 14.3. Saldos e insuficiencia
 
@@ -617,8 +617,8 @@ prepago del conductor. Los pagos digitales del cliente dentro de TUKTUK quedan
 fuera del MVP.
 
 1. Al aceptar, se reserva el 10 % esperado del precio final.
-2. Al completar y confirmar el cierre, la reserva permanece identificada hasta
-   la liquidación.
+2. Al marcar Completado, el servidor valida asignación, estado y reserva y la
+   liquida sin confirmación adicional obligatoria del cliente.
 3. Al liquidar, se crea un débito inmutable en `wallet_transactions` y la reserva
    cambia a consumida dentro de la misma transacción.
 4. En una cancelación válida, la reserva se libera. Si ya existió un asiento, se
@@ -630,25 +630,11 @@ reserva o doble comisión. Cada recarga y acción financiera usa una clave de
 idempotencia, referencia externa única cuando corresponda, actor, motivo y evento
 de auditoría.
 
-### 14.5. Inactividad y reactivación
+### 14.5. Inactividad
 
-La inactividad de Marketplace se mide por actividad Marketplace válida, no por el
-uso de TUKTUK Control. Política inicial configurable: hasta 90 días sin trabajos
-completados Marketplace continúa activo; alrededor de 90 días comienzan avisos;
-se programan avisos progresivos aproximadamente a 120, 150 y 175 días; y a los
-180 días continuados puede pasar a estado **inactivo**. Los plazos son valores
-iniciales configurables, no límites permanentes del producto.
-
-Un perfil inactivo no elimina trabajos, historial, saldo, perfil ni vehículo, y no
-confisca dinero. El usuario puede volver a Solo Control con su licencia o solicitar
-la reactivación Marketplace. Para reactivarse se revisan perfil, vehículo y
-verificaciones aplicables, se mantiene el saldo existente y se ofrece una ventana
-de reactivación; no se impone una segunda suscripción Marketplace.
-
-La política debe ser justa: no puede tratar de igual forma a quien recibió
-oportunidades compatibles y decidió no participar, y a quien no recibió ofertas
-compatibles. El algoritmo concreto considerará disponibilidad real de trabajos y
-ofertas recibidas, y queda pendiente antes de automatizar desactivaciones.
+No habrá desactivación automática por 180 días en el lanzamiento. Primero se
+medirá actividad y oportunidades compatibles. Nunca se confisca saldo ni se borra
+historia; una política futura requerirá aprobación separada.
 
 ## 15. Modelo de datos conceptual
 
@@ -659,15 +645,16 @@ validarse contra el esquema canónico de Vrixora antes de una migración.
 
 | Entidad | Propósito y campos conceptuales principales | Relaciones/garantías |
 |---|---|---|
-| `customers` | Identidad de solicitante, nombre y contactos normalizados; vínculo opcional a Auth/empresa | No duplica `profiles`; PII privada; deduplicación controlada |
+| `customers` | Identidad de solicitante, nombre y WhatsApp normalizado; vínculo opcional a Auth/empresa | No duplica `profiles`; PII privada; deduplicación controlada |
 | `service_requests` | Entrada del cliente, origen/destino, horario, servicio, detalles de carga/pasajeros, observaciones, foto privada | Pertenece a customer; conserva snapshot solicitado |
 | `jobs` | Trabajo publicable/operable, estado actual, precio recomendado/final, moneda, versión de precio, expiración y ganador | Uno por solicitud publicada; actualización condicional de estado |
 | `job_assignments` | Historial de intentos relevantes, ganador, conductor, vehículo, aceptación y finalización | Índice único para un ganador por job |
 | `job_events` | Historial append-only de transiciones y acciones | Orden por `(job_id, created_at, id)`; no editable por clientes |
-| `driver_availability` | Relación conductor–vehículo, disponible/ocupado, ventanas y futura zona | Un estado actual por relación; solapes controlados |
-| `driver_profiles` | Extensión de Marketplace del perfil autenticado: foto vigente, origen (`google`, personalizada o respaldo), estado `incompleto`/`pendiente_de_verificacion`/`habilitado`/`suspendido`/`inactivo`, habilitación y verificación | Relación 1:1 con `profiles`; no duplica identidad ni expone PII sin asignación |
+| `vehicles` | Proyección relacional canónica para Trabajos usando exactamente el `vehicle_id text` existente; propietario, categoría, propulsión, marca, modelo, año, matrícula/identificación, capacidades, servicios y foto principal | No sustituye `VehicleProfile`/`sync_entities`; el puente legacy actualiza solo campos legacy y nunca borra campos de Trabajos |
+| `driver_availability` | Relación conductor–vehículo, disponible/ocupado, ventanas y futura zona | Un estado actual por relación; solapes controlados; las capacidades físicas permanecen en `vehicles` |
+| `driver_profiles` | Extensión de Trabajos del perfil autenticado: foto vigente, estado, suspensión y requisitos de activación | Relación 1:1 con `profiles`; WhatsApp permanece canónico en `profiles.phone` y no se duplica |
 | `media_assets` | Referencia controlada a fotos de conductor y vehículo, propietario, tipo, estado, versión y metadatos mínimos | Acceso privado y proyecciones autorizadas; no depende indefinidamente de URL externa de Google |
-| `wallets` | Billetera por conductor/propietario y moneda, saldos cacheados/revisión | Única por owner y moneda; no editable desde frontend |
+| `wallets` | Billetera por conductor/usuario y moneda en el MVP, saldos cacheados/revisión | Una por `profiles.id` y moneda; no editable desde frontend; propiedad por organización queda para una evolución posterior |
 | `wallet_transactions` | Ledger inmutable: recarga, comisión, ajuste, reverso; importe firmado y referencia | Claves únicas de idempotencia y origen; nunca hard delete |
 | `commission_reservations` | Retención por job, importe, estado abierta/consumida/liberada y expiración | Una reserva canónica por job y wallet |
 | `topups` | Solicitud, validación y conciliación de recargas | Confirmación crea exactamente un crédito de ledger |
@@ -692,10 +679,13 @@ avatar y RLS por propietario. Debe ampliarse solo con datos generales que apliqu
 a cualquier rol. Capacidades de vehículo, estado de conducción, saldo y PII
 específica de clientes pertenecen a entidades separadas.
 
-Un mismo usuario autenticado puede ejercer más de un rol; no se crea un perfil
-duplicado por ser conductor y cliente. Un `customer` puede enlazar a `profiles.id`
-cuando exista autenticación. El acceso sin cuenta y la deduplicación por teléfono
-quedan pendientes de decisión.
+`profiles.phone` se preserva por compatibilidad y se trata en producto como
+WhatsApp; no se añade un teléfono genérico duplicado. Un mismo usuario autenticado
+puede ejercer más de un rol; no se crea un perfil duplicado por ser conductor y
+cliente. Un `customer` puede enlazar a `profiles.id` cuando exista autenticación.
+En el MVP, el cliente puede operar sin cuenta visible mediante una sesión anónima
+o identificador opaco interno; no hay contraseña ni OTP. La deduplicación y los
+controles de abuso no convierten el WhatsApp en una identidad autenticada.
 
 El avatar disponible desde Google puede inicializar la foto de conductor, pero no
 es el activo final ni una garantía de disponibilidad. El origen, la referencia
@@ -705,14 +695,17 @@ URL externa en dependencia permanente.
 
 #### `vehicles`
 
-Se preservan los IDs actuales. La app ya modela múltiples `VehicleProfile`, aunque
+Se preservan exactamente los IDs actuales, incluso si son texto: no se exige ni se
+convierte a UUID. La app ya modela múltiples `VehicleProfile`, aunque
 la interfaz usa un vehículo activo, y actualmente sincroniza vehículos como
 payloads `vehicle` en `sync_entities`; este repositorio todavía no define una
 tabla relacional `vehicles` en sus migraciones.
 
 Antes del Marketplace debe identificarse la tabla canónica compartida o diseñarse
-una migración idempotente desde `sync_entities`, sin copiar el mismo vehículo con
-un ID nuevo. El perfil canónico se amplía o relaciona con capacidades físicas y
+una proyección relacional queryable e idempotente desde `sync_entities`, sin
+destruirlo, sustituirlo ni copiar el vehículo con un ID nuevo. Trabajos nunca
+guarda jobs, wallet, asignaciones, reservas ni ledger en `sync_entities`.
+El perfil canónico se amplía o relaciona con capacidades físicas y
 servicios. Para Marketplace incluye categoría, propulsión, marca, modelo, año,
 matrícula/identificación, pasajeros, carga, volumen/dimensiones, carrocería y
 servicios habilitados, además de una referencia a su foto principal independiente
@@ -844,14 +837,14 @@ transacciones de base de datos abiertas durante llamadas de red.
 - **IDOR/BOLA:** RLS y validación de propiedad/asignación en servidor; no confiar
   en IDs enviados por la interfaz.
 - **Filtración de contacto:** proyecciones sin PII, RPC posterior a asignación,
-  push sin teléfonos y objetos privados para fotos.
+  push sin WhatsApp/contactos y objetos privados para fotos.
 - **Escalada de rol:** roles administrados por servidor; nunca `user_metadata` ni
   un valor que el cliente pueda escribir.
 - **Manipulación de precio/comisión:** precio final y regla se congelan al publicar;
   comisión se calcula en servidor.
 - **Eventos falsos o fuera de orden:** tabla append-only, transición validada y
   tiempo de servidor.
-- **Abuso de PWA:** validación, límites por identidad/IP/teléfono, CAPTCHA o
+- **Abuso de PWA:** validación, límites por sesión/IP/WhatsApp, CAPTCHA o
   mecanismo equivalente sujeto a decisión, expiración y monitoreo.
 
 ## 18. Idempotencia, auditoría y consistencia
@@ -931,8 +924,9 @@ no geoespaciales y ámbito operativo configurado.
 
 - cerrar este PRD, estados, límites y contratos;
 - validar el modelo contra el esquema canónico de Vrixora Admin;
-- cerrar decisiones pendientes de identidad, precio, importe mínimo de activación,
-  cancelación, multimedia e inactividad justa;
+- mantener como configuración previa al piloto las tarifas/precios iniciales,
+  canales/evidencia de recarga, retención de datos y criterios operativos que no
+  cambian la arquitectura;
 - preparar diagramas, amenazas, migraciones y plan de pruebas sin desplegar.
 
 ### Fase 1 — Marketplace MVP
@@ -942,7 +936,7 @@ no geoespaciales y ámbito operativo configurado.
 - precio recomendado editable y advertencia por precio bajo;
 - filtrado de conductores compatibles y notificaciones;
 - aceptación atómica sin pujas;
-- contacto por teléfono y WhatsApp después de asignar;
+- contacto por WhatsApp después de asignar;
 - notificaciones de estado al cliente;
 - valoración básica de cliente al conductor/servicio después de liquidar;
 - flujo hasta completado/liquidado;
@@ -991,7 +985,7 @@ no geoespaciales y ámbito operativo configurado.
    servidor.
 8. **Reservado** se simplifica dentro de **Aceptado** para el MVP; no es un estado
    durable visible.
-9. El contacto permanece oculto hasta asignar; después se usan `tel:` y WhatsApp.
+9. El contacto permanece oculto hasta asignar; después se usa WhatsApp como contacto operativo autorizado.
 10. No hay chat interno en el MVP.
 11. La comisión es 10 % del precio final y se reserva al aceptar.
 12. Wallet y comisión se implementan como ledger/reserva, no como saldo editable.
@@ -1018,24 +1012,23 @@ no geoespaciales y ámbito operativo configurado.
 22. Tras asignar, el cliente recibe una proyección autorizada con identidad visual,
     reputación disponible y datos permitidos del conductor/vehículo; antes de
     asignar no se expone información personal innecesaria del conductor.
-23. El sistema no dependerá indefinidamente de URL externas de Google para fotos;
-    la estrategia técnica segura de referencia, copia, actualización y respaldo
-    se decidirá antes de implementarse.
+23. Las fotos se gestionan como activos privados controlados por TUKTUK; Google
+    puede aportar el valor inicial, pero la plataforma lo copia/importa o reemplaza
+    en almacenamiento controlado y no depende de la URL externa de forma permanente.
 24. Marketplace admite categorías configurables de vehículos; las categorías
     iniciales no limitan rígidamente la elegibilidad, que se basa en capacidades y
     requisitos concretos del trabajo.
-25. El conductor puede iniciar Marketplace desde el primer onboarding sin esperar
-    ni agotar el período de Control; solo acepta cuando su perfil está habilitado y
-    puede reservar la comisión.
-26. La recarga mínima inicial configurable es saldo prepago, no cuota, comisión ni
-    ingreso automático de TUKTUK; el saldo queda destinado a futuras comisiones.
+25. El conductor puede iniciar TUKTUK Trabajos desde el primer onboarding sin
+    esperar Control; conserva perfil/vehículo/datos y acepta solo con suite activa
+    y saldo suficiente para reservar la comisión.
+26. El primer depósito es CUP 500 por defecto, configurable desde Vrixora, entra
+    íntegro como saldo y no crea un mínimo permanente ni es cuota/comisión.
 27. El cliente paga directamente al conductor en el MVP; TUKTUK no custodia ese
     pago y cobra su 10 % desde la billetera prepago al liquidar.
 28. La valoración básica de cliente a conductor/servicio, de una a cinco estrellas
     con comentario opcional y una sola vez por trabajo liquidado, pertenece al MVP.
-29. La inactividad Marketplace no elimina ni confisca datos o saldo; usa plazos
-    configurables y una política futura justa basada también en oportunidades
-    compatibles realmente recibidas.
+29. No hay desactivación automática por inactividad en el lanzamiento; nunca se
+    confisca saldo ni se borra historia.
 30. Las notificaciones al cliente reflejan eventos de servidor y cubren asignación,
     avance, completado, cancelación e incidente.
 
@@ -1043,25 +1036,15 @@ no geoespaciales y ámbito operativo configurado.
 
 | Decisión | Opciones/impacto | Debe cerrarse antes de |
 |---|---|---|
-| Identidad del cliente PWA | Cuenta con OTP/magic link, sesión invitada verificada u otro mecanismo | Diseño de Auth/RLS del MVP |
-| Campos de contacto obligatorios | Teléfono, WhatsApp o al menos uno; consentimiento y verificación | Formularios y política de privacidad |
-| Proveedor de mapas/distancia | Entrada manual, API externa o combinación | Motor de precio del MVP |
-| Configuración inicial de precio | Tarifas, moneda, mínimos, umbral de advertencia y redondeo | Pruebas de cotización |
-| Importe mínimo de activación | Valor configurable, moneda, canales y evidencia de la recarga inicial | Operación antes de producción |
-| Visibilidad antes de recargar | Permitir o no consultar oportunidades a candidatos habilitados sin saldo | Validación UX/operación del MVP |
-| Recargas del MVP | Flujo manual confirmado por Vrixora Admin, canales y evidencias | Operación con dinero real |
-| Cancelaciones | Ventanas, penalizaciones, liberación parcial/total y actor autorizado | Implementar estados/ledger |
-| Confirmación de completado | Conductor, cliente, ambos o cierre por plazo | Liquidación |
-| Titular de wallet | Conductor, propietario u organización en vehículos compartidos | Modelo relacional financiero |
-| Estrategia de fotos | Conservación/referencia de Google, almacenamiento personalizado, actualización, respaldo, retención y permisos | Diseño técnico de multimedia antes de implementar |
-| Privacidad y retención | Plazos para PII, fotos, ubicaciones, eventos y auditoría | Producción pública |
-| Ámbito operativo sin geolocalización | Municipio, zona declarada o publicación general | Distribución del MVP |
-| Integración contable Fase 2 | Ingreso bruto/neto y comisión como gasto separado | Automatización de registros |
-| SLA de incidentes | Estados, permisos, escalamiento y cierre mínimo del MVP | Piloto operativo |
-| Verificaciones Marketplace | Documentos/configuración específica por categoría, propulsión o servicio | Habilitación operativa |
-| Algoritmo de inactividad justa | Peso de oportunidades compatibles, disponibilidad real, avisos y ventana de reactivación | Antes de automatizar desactivaciones |
-| Mecanismo de notificación al cliente | Push, web, WhatsApp u otro canal con consentimiento y reintentos | Implementación del MVP |
+| Proveedor de mapas/distancia | Entrada manual, API externa o combinación detrás de un adaptador | Configuración/cotización antes del piloto |
+| Configuración inicial de precio | Tarifas, mínimos, umbral de advertencia y regla de redondeo | Pruebas de cotización antes del piloto |
+| Canales/evidencia de recarga | El flujo es manual y Vrixora confirma; falta definir qué comprobantes/canales se aceptan | Operación con dinero real |
+| Privacidad y retención | Plazos para PII, fotos, ubicaciones, notificaciones técnicas y auditoría | Producción pública |
+| SLA de incidentes | Tiempos, escalamiento y cierre operativo; el estado mínimo `incident` ya está definido | Piloto operativo |
+| Verificaciones posteriores | Criterios de suspensión/revisión posterior; no bloquean la activación inicial del MVP | Operación/piloto |
+| Política de inactividad futura | No automatizar en lanzamiento; medir actividad/oportunidades antes de proponerla | Post-piloto |
 | Privacidad de reseñas | Visibilidad de comentarios, moderación, retención y respuesta administrativa | Publicación de valoraciones |
+| Responsabilidades legales/operativas | Seguros, cargas prohibidas, condiciones del servicio y revisión local | Antes de operación pública |
 
 ## 25. Riesgos técnicos
 
@@ -1125,7 +1108,7 @@ en un entorno no productivo:
    permite editarlo con advertencia registrable cuando corresponda.
 5. Un conductor incompatible no recibe ni puede consultar/aceptar la oportunidad,
    incluso invocando el endpoint directamente.
-6. Una oportunidad nunca expone teléfono, WhatsApp ni foto privada antes de la
+6. Una oportunidad nunca expone WhatsApp, contacto ni foto privada antes de la
    asignación.
 7. Dos o más aceptaciones concurrentes producen exactamente un ganador y respuestas
    coherentes para los demás.
@@ -1138,7 +1121,7 @@ en un entorno no productivo:
 11. Cada transición acepta solo actores y estados permitidos y genera un evento
     append-only con tiempo de servidor.
 12. Después de asignar, solo cliente y conductor asignado obtienen los contactos
-    autorizados y pueden abrir `tel:`/WhatsApp.
+    autorizados y pueden abrir WhatsApp.
 13. RLS y grants impiden lectura cruzada entre clientes, conductores y organizaciones;
     ningún frontend contiene `service_role` ni secretos.
 14. Las funciones/RPC privilegiadas validan identidad, fijan `search_path`, tienen
@@ -1189,13 +1172,11 @@ en un entorno no productivo:
 32. La solución técnica de multimedia debe proteger acceso, actualización, respaldo
     y disponibilidad de fotos personalizadas o procedentes de Google antes de su
     despliegue, sin exponer activos privados ni depender de URLs externas caducables.
-33. Desde el onboarding, el usuario puede elegir Control o Quiero trabajar con
-    TUKTUK; la segunda ruta permite completar habilitación Marketplace sin esperar
-    30 días y solo habilita aceptación tras perfil, vehículo, fotos, verificaciones
-    y saldo prepago mínimo configurado.
-34. Un perfil Marketplace solo acepta trabajos en estado habilitado. Los estados
-    incompleto, pendiente de verificación, suspendido e inactivo impiden aceptar
-    sin borrar datos, historial o saldo.
+33. Desde el onboarding, “Quiero trabajar con TUKTUK” solicita ficha personal,
+    vehículo y fotos; Vrixora confirma la recarga y la suite se activa automática
+    cuando ambos grupos de requisitos estén completos, sin aprobación adicional.
+34. Solo el estado activo acepta; incompleto, pendiente de depósito y suspendido
+    lo impiden sin borrar datos, historial o saldo.
 35. Una recarga inicial permanece como saldo del conductor y no se contabiliza como
     cuota, comisión ni ingreso automático de TUKTUK; si el saldo disponible no
     cubre la reserva del 10 %, se bloquea solo la aceptación Marketplace y se
@@ -1216,9 +1197,13 @@ en un entorno no productivo:
 
 ## 28. Condición de salida de la Fase 0
 
-La Fase 0 termina cuando el owner aprueba este alcance, se cierran las decisiones
-que bloquean Auth, precio, billetera y cancelaciones, se valida el modelo contra
-el backend canónico de Vrixora Admin y se convierte el diseño en migraciones y
-planes de prueba revisables. La existencia de este documento no autoriza cambios
+La Fase 0 termina cuando el owner aprueba este alcance, se valida el modelo contra
+el backend canónico de Vrixora Admin y quedan cerrados los contratos técnicos que
+afectan compatibilidad, entitlement, wallet, trabajos, privacidad e idempotencia.
+Las tarifas concretas, proveedor de distancia, evidencia de recarga, retención y
+otros parámetros operativos pueden cerrarse antes del piloto sin bloquear el
+inicio de la implementación estructural de Fase 1.
+
+La existencia de este documento no autoriza cambios
 de código, Supabase, Edge Functions, Android, Web, producción, versiones, secretos,
 firma ni `google-services`.
