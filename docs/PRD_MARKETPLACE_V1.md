@@ -738,8 +738,9 @@ con la decisión contable que se cierre y sin contar dos veces el mismo importe.
 Se reutiliza la misma licencia por usuario y aplicación; no se crea una “licencia
 Marketplace” duplicada. La prueba de 30 días y las reglas de compra/renovación se
 mantienen para Solo Control. Un Marketplace habilitado incluye Control conforme a
-la modalidad comercial y la aceptación valida perfil Marketplace, vehículo y saldo
-en vez de exigir un segundo cobro de licencia. La tabla y RPC actuales son
+la modalidad comercial. `trial_free` exige trial activo y onboarding/perfil/vehículo
+válidos, sin saldo. `wallet_commission` exige depósito inicial confirmado, saldo
+suficiente y reserva de comisión, sin un segundo cobro de licencia. La tabla y RPC actuales son
 administradas por Vrixora Admin y deben verificarse en su esquema canónico antes
 de añadir relaciones.
 
@@ -873,8 +874,10 @@ Los eventos de dominio no reemplazan la auditoría de seguridad y viceversa. Los
 procesos de conciliación verifican periódicamente:
 
 - un ganador máximo por trabajo;
-- correspondencia entre trabajo aceptado y reserva;
-- correspondencia entre trabajo liquidado, reserva consumida y débito;
+- `trial_free`: assignment válido, `billing_mode=trial_free`, cero
+  `commission_reservation` y cero débito de comisión;
+- `wallet_commission`: assignment válido, reserva canónica, reserva consumida al
+  liquidar y exactamente un débito de comisión;
 - saldos cacheados contra ledger y reservas;
 - recargas confirmadas contra créditos únicos;
 - ausencia de integraciones de Fase 2 duplicadas.
@@ -1065,6 +1068,9 @@ no geoespaciales y ámbito operativo configurado.
 - Push puede llegar tarde o duplicado; la interfaz debe volver a consultar al
   servidor y tolerar la pérdida de la oportunidad.
 - Relojes de dispositivos incorrectos no pueden gobernar expiraciones ni eventos.
+- La carrera al iniciar el trial, el intento de reiniciar/repetir sus 30 días, la
+  frontera exacta de expiración, la transición `trial_free` → `wallet_commission`
+  y confundir prueba gratuita con deuda futura requieren pruebas transaccionales.
 - La futura creación de registros puede duplicar ingresos/kilómetros si no existe
   unicidad por `job_id` y una estrategia clara de reintentos.
 - Guardar detalles variables solo en JSON dificultaría índices y validación; los
