@@ -418,9 +418,8 @@ se muestra una advertencia y se registra su aceptación. La advertencia no impid
 publicar mientras el precio sea positivo y cumpla el mínimo técnico/configurado.
 No hay pujas ni contraofertas de conductores en el MVP.
 
-Todos los importes se representan de forma exacta mediante unidades monetarias
-menores enteras y código de moneda; nunca con punto flotante. El porcentaje de
-comisión se almacena en puntos básicos (`1000` = 10 %) y la regla de redondeo se
+Todos los importes se representan como `numeric(14,2)` y código de moneda. La tasa
+de comisión usa `numeric(8,6)`, donde `0.10` = 10 %, y la regla de redondeo se
 versiona junto con el precio.
 
 ## 10. Distribución de oportunidades y notificaciones
@@ -749,7 +748,7 @@ de añadir relaciones.
 - Identificadores expuestos o compartidos entre clientes son UUID/IDs opacos y
   estables; se preservan los IDs de entidades existentes.
 - Fechas usan `timestamptz` y tiempo del servidor.
-- Dinero usa unidad menor entera más moneda; porcentajes usan puntos básicos.
+- Importes usan `numeric(14,2)` y tasas `numeric(8,6)` (`0.10` = 10 %).
 - Campos consultados y restricciones son columnas tipadas; JSON se reserva para
   snapshots versionados o detalles variables, no para claves de relación.
 - Categoría y propulsión usan códigos de catálogos canónicos; los trabajos
@@ -945,7 +944,7 @@ no geoespaciales y ámbito operativo configurado.
 - notificaciones de estado al cliente;
 - valoración básica de cliente al conductor/servicio después de liquidar;
 - flujo hasta completado/liquidado;
-- wallet ledger, recarga mínima configurable, reserva y comisión del 10 %;
+- wallet ledger, recarga mínima configurable, reserva y comisión del 10 % en `wallet_commission`; `trial_free` no cobra;
 - prueba explícita de Trabajos, congelación de `billing_mode` y transición trial → wallet;
 - operación y conciliación mínima en Vrixora Admin.
 
@@ -1028,8 +1027,8 @@ no geoespaciales y ámbito operativo configurado.
     onboarding, sin esperar Control; durante ella acepta sin billetera.
 26. El primer depósito es CUP 500 por defecto, configurable desde Vrixora, entra
     íntegro como saldo y no crea un mínimo permanente ni es cuota/comisión.
-27. El cliente paga directamente al conductor en el MVP; TUKTUK no custodia ese
-    pago y cobra su 10 % desde la billetera prepago al liquidar.
+27. El cliente paga directamente al conductor; TUKTUK cobra 10 % desde la billetera
+    solo en `wallet_commission`; `trial_free` no genera comisión.
 28. La valoración básica de cliente a conductor/servicio, de una a cinco estrellas
     con comentario opcional y una sola vez por trabajo liquidado, pertenece al MVP.
 29. No hay desactivación automática por inactividad en el lanzamiento; nunca se
@@ -1183,13 +1182,10 @@ en un entorno no productivo:
     de servidor; reintentos, reinstalación o cambios de vehículo no la reinician.
 34. Durante trial, activo acepta sin depósito; vencida, una nueva aceptación exige
     depósito confirmado y saldo. Suspendido nunca acepta.
-35. Una recarga inicial permanece como saldo del conductor y no se contabiliza como
-    cuota, comisión ni ingreso automático de TUKTUK; si el saldo disponible no
-    cubre la reserva del 10 %, se bloquea solo la aceptación Marketplace y se
-    solicita recarga.
-36. El cliente paga directamente al conductor en el MVP; la liquidación genera un
-    único débito de comisión del 10 % desde la billetera, sin custodiar el pago del
-    servicio ni producir doble cobro de licencia.
+35. Una recarga inicial permanece como saldo; la insuficiencia bloquea nuevas
+    aceptaciones `wallet_commission`, no `trial_free`.
+36. `trial_free` termina con cero débito; `wallet_commission` genera exactamente
+    un débito de comisión del 10 % desde la billetera.
 37. Después de liquidar, el cliente puede registrar una única valoración de una a
     cinco estrellas y comentario opcional para ese conductor/servicio; la unicidad
     por trabajo, cliente y conductor impide duplicados y Vrixora Admin puede
