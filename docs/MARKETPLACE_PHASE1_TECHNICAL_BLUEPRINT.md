@@ -1,6 +1,6 @@
 # Blueprint técnico — Fase 1 de TUKTUK Trabajos
 
-**Estado:** diseño para revisión; no autoriza implementación, migraciones ni despliegue.
+**Estado:** arquitectura aprobada; implementación Fase 1 en curso, sin autorización de despliegue.
 
 ## Arquitectura y límites
 
@@ -48,9 +48,9 @@ usuario/proyecto; guarda botón/idempotencia, vehículo inicial y exactamente 30
 `wallets` es una por conductor/usuario y moneda en el MVP (CUP inicialmente), con saldo total,
 reservado y disponible cacheados/reconciliables. `wallet_transactions` es el
 ledger inmutable firmado. `commission_reservations` tiene una reserva canónica
-por job; `topups` representa solicitud, evidencia, confirmación y crédito único.
+por job únicamente en `wallet_commission`; `topups` representa solicitud, evidencia, confirmación y crédito único.
 `idempotency_operations`, `audit_events`, `media_assets` y `outbox_events`
-completan trazabilidad. Dinero: enteros de unidad menor; comisión: 1000 bp.
+completan trazabilidad. Dinero: `numeric(14,2)`; comisión: `numeric(8,6)`, donde `0.10` es 10 %.
 
 ## Compatibilidad y activación
 
@@ -66,7 +66,7 @@ ledger ni asignaciones.
 
 El entitlement se deriva, no se materializa como licencia falsa:
 `control_allowed = control_trial_valid OR control_license_valid OR suite_active`.
-`suite_active = perfil activo/no suspendido AND (trial_Trabajos_activo OR
+`suite_active = perfil activo/no suspendido/activated_at AND (trial_Trabajos_activo OR
 depósito_inicial_confirmado)`. Requisitos completos + inicio explícito del trial
 otorgan 30 días; después, topup confirmado permite nuevas aceptaciones. Requisitos MVP: perfil/nombre, WhatsApp, foto
 conductor, vehículo con categoría, propulsión, marca, modelo, identificación si
@@ -86,14 +86,14 @@ trial/depósito, vehículo/requisitos y compatibilidad. En `trial_free` crea
 assignment/event sin billetera ni reserva; en `wallet_commission` bloquea wallet,
 comprueba saldo y crea reserva. Ambos cambian a `accepted` en una transacción.
 Restricciones únicas e idempotencia impiden segundo ganador/reserva. Antes de
-`in_progress`, cancelar libera totalmente la reserva. Después, pasa a `incident`;
+`in_progress`, cancelar `wallet_commission` libera reserva; trial no tiene reserva. Después, pasa a `incident`;
 Vrixora resuelve con asientos compensatorios auditables. El conductor marca
 `in_progress` y `completed`; al completar, `trial_free` no consulta billetera ni
 reserva y nunca debita, incluso vencido. `wallet_commission` consume reserva +
 débito una vez. Cancelar trial no crea ledger; cancelar wallet libera reserva.
 
 `confirm_topup(topup_id, idempotency_key)` es exclusivo de capacidad Vrixora:
-bloquea topup pendiente, crea crédito único, audita y recalcula activación. La
+bloquea topup pendiente, crea crédito único y audita; el entitlement derivado lo refleja. La
 configuración remota aporta el mínimo inicial, no una constante Flutter.
 
 ## Privacidad, PWA, multimedia y notificaciones

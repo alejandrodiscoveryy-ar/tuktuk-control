@@ -8,7 +8,7 @@
 
 **Fecha:** 14 de septiembre de 2026
 
-**Estado:** Fase 0 — diseño y arquitectura; no implementado
+**Estado:** Fase 1 — implementación en curso; sin autorización de despliegue a producción
 
 **Rama de trabajo:** `feature/marketplace-v1`
 
@@ -44,8 +44,8 @@ gobernanza y aprobación del owner; esa fuente no se modifica en esta fase.
 - Asignar cada trabajo de forma atómica, auditable y segura al primer conductor
   elegible que lo confirme.
 - Proteger los datos de contacto del cliente hasta que exista una asignación.
-- Cobrar una comisión del 10 % mediante una billetera prepago basada en un libro
-  mayor trazable y operaciones transaccionales de servidor.
+- Cobrar una comisión del 10 % únicamente en `wallet_commission`, mediante una
+  billetera prepago y operaciones transaccionales de servidor; `trial_free` no cobra.
 - Mantener la experiencia actual de TUKTUK Control y sus funciones esenciales
   completamente disponibles sin conexión.
 - Usar 500–1.000 usuarios activos como supuesto técnico inicial de pruebas y
@@ -86,7 +86,7 @@ agotar ni esperar los 30 días de Control para iniciar la habilitación Marketpl
 Desde el onboarding inicial puede elegir conceptualmente **Gestionar mi vehículo /
 usar TUKTUK Control** o **Quiero trabajar con TUKTUK**. La segunda opción inicia
 de inmediato el perfil de conductor, configuración de vehículo, fotografías y
-requisitos, validación/habilitación, activación de saldo prepago y recepción de
+requisitos, inicio explícito de 30 días gratis, continuidad con saldo prepago y recepción de
 oportunidades. Esta elección no elimina la modalidad Control ni sus datos.
 
 Navegación prevista:
@@ -580,11 +580,10 @@ reciben sus 30 días al pulsar el botón. Un depósito temprano se acredita ínt
 no termina el trial; un trabajo aceptado en trial sigue gratis aunque termine
 después. No hay comisión retroactiva.
 
-Regla comercial: **Solo Control → licencia. Suite completa activa → Control incluido
-+ Trabajos + comisión del 10 %.** Conceptualmente, TUKTUK gana cuando el conductor
-gana; esta regla no sustituye las validaciones de perfil, saldo o reserva.
+Regla comercial: **Solo Control → licencia. `trial_free` → Control + Trabajos sin
+comisión. `wallet_commission` → Control + Trabajos + comisión del 10 %.**
 
-### 14.2. Activación con saldo prepago
+### 14.2. Prueba de Trabajos y continuidad con saldo prepago
 
 Pulsar “Comenzar 30 días gratis” tras completar ficha personal, vehículo y fotos
 inicia el trial con tiempo de servidor. Durante los 30 días las oportunidades son
@@ -594,9 +593,8 @@ configurable; aplica solo al primer depósito.
 
 Las oportunidades reales de **Trabajos** se muestran cuando la suite está activa.
 Antes de activar, el onboarding puede mostrar información explicativa o ejemplos,
-pero no el listado vivo de oportunidades. Una vez activa la suite, cada aceptación
-se valida nuevamente y solo procede si el saldo disponible cubre la comisión
-completa del trabajo.
+pero no el listado vivo de oportunidades. Durante `trial_free`, aceptar no exige
+saldo; después del trial, `wallet_commission` exige saldo disponible.
 
 ### 14.3. Saldos e insuficiencia
 
