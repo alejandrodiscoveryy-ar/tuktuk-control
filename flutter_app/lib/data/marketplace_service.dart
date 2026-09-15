@@ -716,6 +716,57 @@ class MarketplaceService {
       _one('prepare_my_marketplace_media_upload', params)
           .then(MarketplaceMediaAsset.fromMap);
 
+  Future<MarketplaceMediaAsset> uploadMedia({
+    required String assetKind,
+    required Uint8List bytes,
+    required String mimeType,
+    required String extension,
+    required String idempotencyKey,
+  }) async {
+    final prepared = await prepareMedia({
+      'target_asset_kind': assetKind,
+      'target_mime_type': mimeType,
+      'target_byte_size': bytes.length,
+      'target_extension': extension,
+      'target_sha256': sha256.convert(bytes).toString(),
+      'target_idempotency_key': idempotencyKey,
+    });
+
+    if (prepared.isAvailable) return prepared;
+
+    final bucket = prepared.storageBucket;
+    final path = prepared.storagePath;
+
+    if (prepared.id.isEmpty || bucket == null || path == null) {
+      throw const FormatException(
+        'El servidor no devolvió una ruta válida para la imagen.',
+      );
+    }
+
+    try {
+      await _client.storage.from(bucket).uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: false,
+            ),
+          );
+    } on StorageException {
+      // Si la subida anterior llegó a Storage pero el cliente perdió
+      // la respuesta, intentamos finalizar el mismo asset idempotente.
+      try {
+        final existing = await finalizeMedia(prepared.id);
+        if (existing.isAvailable) return existing;
+      } catch (_) {
+        // Conservamos el error original de Storage.
+      }
+      rethrow;
+    }
+
+    return finalizeMedia(prepared.id);
+  }
+
   Future<MarketplaceMediaAsset> finalizeMedia(String assetId) => _one(
         'finalize_my_marketplace_media_upload',
         {'target_asset_id': assetId},

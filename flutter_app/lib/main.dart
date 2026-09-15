@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
@@ -36,6 +40,7 @@ part 'data/supabase_license_service.dart';
 part 'data/supabase_sync_gateway.dart';
 part 'data/whatsapp_settings_service.dart';
 part 'data/marketplace_service.dart';
+part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'services/sync_coordinator.dart';

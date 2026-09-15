@@ -28,6 +28,7 @@ class MarketplaceOnboardingScreen extends StatefulWidget {
 class _MarketplaceOnboardingScreenState
     extends State<MarketplaceOnboardingScreen> {
   late final MarketplaceService _service;
+  late final ImagePicker _imagePicker;
 
   final _name = TextEditingController();
   final _phone = TextEditingController();
@@ -45,16 +46,27 @@ class _MarketplaceOnboardingScreenState
   String? _selectedPropulsion;
   final Set<String> _selectedServices = {};
 
+  Uint8List? _driverPhotoBytes;
+  String? _driverPhotoUploadKey;
+  String? _driverPhotoLabel;
+
+  Uint8List? _vehiclePhotoBytes;
+  String? _vehiclePhotoUploadKey;
+  String? _vehiclePhotoLabel;
+
   bool _loading = true;
   bool _saving = false;
+  bool _processingPhoto = false;
   String? _error;
 
-  bool get _canEdit => !_saving && !(_data?.driverSuspended ?? false);
+  bool get _canEdit =>
+      !_saving && !_processingPhoto && !(_data?.driverSuspended ?? false);
 
   @override
   void initState() {
     super.initState();
     _service = MarketplaceService(Supabase.instance.client);
+    _imagePicker = ImagePicker();
     unawaited(_load());
   }
 
@@ -169,6 +181,83 @@ class _MarketplaceOnboardingScreenState
       ..addAll(vehicle?.services ?? const []);
   }
 
+  Future<ImageSource?> _choosePhotoSource() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Elegir de la galería'),
+              onTap: () => Navigator.of(sheetContext).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPhoto(String assetKind) async {
+    if (!_canEdit) return;
+
+    final source = await _choosePhotoSource();
+    if (source == null || !mounted) return;
+
+    setState(() => _processingPhoto = true);
+
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
+      );
+
+      if (picked == null) return;
+
+      final sourceBytes = await picked.readAsBytes();
+
+      final normalized = normalizeMarketplaceImage(
+        sourceBytes: sourceBytes,
+        assetKind: assetKind,
+      );
+
+      if (!mounted) return;
+
+      final sizeKb = (normalized.bytes.length / 1024).ceil();
+      final label = '${normalized.width} × ${normalized.height} · $sizeKb KB';
+
+      setState(() {
+        if (assetKind == 'driver_photo') {
+          _driverPhotoBytes = normalized.bytes;
+          _driverPhotoUploadKey = _marketplaceUuidV4();
+          _driverPhotoLabel = label;
+        } else if (assetKind == 'vehicle_photo') {
+          _vehiclePhotoBytes = normalized.bytes;
+          _vehiclePhotoUploadKey = _marketplaceUuidV4();
+          _vehiclePhotoLabel = label;
+        }
+      });
+
+      toast(context, 'Foto optimizada: $label');
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          'No se pudo procesar la foto. Prueba con otra imagen.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processingPhoto = false);
+    }
+  }
+
   Future<void> _saveDriver() async {
     final data = _data;
     if (data == null || !_canEdit) return;
@@ -192,15 +281,36 @@ class _MarketplaceOnboardingScreenState
     setState(() => _saving = true);
 
     try {
+      var photoAssetId = data.driverPhotoAssetId;
+      final pendingPhoto = _driverPhotoBytes;
+
+      if (pendingPhoto != null) {
+        final uploadKey = _driverPhotoUploadKey ?? _marketplaceUuidV4();
+        _driverPhotoUploadKey = uploadKey;
+
+        final uploaded = await _service.uploadMedia(
+          assetKind: 'driver_photo',
+          bytes: pendingPhoto,
+          mimeType: 'image/jpeg',
+          extension: 'jpg',
+          idempotencyKey: uploadKey,
+        );
+
+        photoAssetId = uploaded.id;
+      }
+
       final updated = await _service.saveDriver({
         'target_display_name': name,
         'target_phone': phone,
-        'target_photo_asset_id': data.driverPhotoAssetId,
+        'target_photo_asset_id': photoAssetId,
       });
 
       if (!mounted) return;
 
       setState(() {
+        _driverPhotoBytes = null;
+        _driverPhotoUploadKey = null;
+        _driverPhotoLabel = null;
         _data = updated;
         _applyData(
           updated,
@@ -267,6 +377,24 @@ class _MarketplaceOnboardingScreenState
     try {
       final services = _selectedServices.toList()..sort();
 
+      var photoAssetId = vehicle.mainPhotoAssetId;
+      final pendingPhoto = _vehiclePhotoBytes;
+
+      if (pendingPhoto != null) {
+        final uploadKey = _vehiclePhotoUploadKey ?? _marketplaceUuidV4();
+        _vehiclePhotoUploadKey = uploadKey;
+
+        final uploaded = await _service.uploadMedia(
+          assetKind: 'vehicle_photo',
+          bytes: pendingPhoto,
+          mimeType: 'image/jpeg',
+          extension: 'jpg',
+          idempotencyKey: uploadKey,
+        );
+
+        photoAssetId = uploaded.id;
+      }
+
       final updated = await _service.saveVehicle({
         'target_vehicle_id': vehicle.id,
         'target_category_code': category,
@@ -284,13 +412,16 @@ class _MarketplaceOnboardingScreenState
         'target_cargo_height_cm': vehicle.cargoHeightCm,
         'target_body_type':
             _bodyType.text.trim().isEmpty ? null : _bodyType.text.trim(),
-        'target_main_photo_asset_id': vehicle.mainPhotoAssetId,
+        'target_main_photo_asset_id': photoAssetId,
         'target_service_codes': services,
       });
 
       if (!mounted) return;
 
       setState(() {
+        _vehiclePhotoBytes = null;
+        _vehiclePhotoUploadKey = null;
+        _vehiclePhotoLabel = null;
         _data = updated;
         _applyData(
           updated,
@@ -411,25 +542,63 @@ class _MarketplaceOnboardingScreenState
                 ),
               ),
               const SizedBox(height: 12),
+              if (_driverPhotoBytes != null) ...[
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: Image.memory(
+                      _driverPhotoBytes!,
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Row(
                 children: [
                   Icon(
-                    data.driverPhotoAssetId == null
+                    _driverPhotoBytes == null && data.driverPhotoAssetId == null
                         ? Icons.photo_camera_outlined
                         : Icons.check_circle_outline,
-                    color: data.driverPhotoAssetId == null
+                    color: _driverPhotoBytes == null &&
+                            data.driverPhotoAssetId == null
                         ? kTertiary
                         : appPrimaryColor(context),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      data.driverPhotoAssetId == null
-                          ? 'Foto del conductor pendiente'
-                          : 'Foto del conductor guardada',
+                      _driverPhotoBytes != null
+                          ? 'Foto lista para guardar · ${_driverPhotoLabel ?? ''}'
+                          : data.driverPhotoAssetId == null
+                              ? 'Foto del conductor pendiente'
+                              : 'Foto del conductor guardada',
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _canEdit ? () => _pickPhoto('driver_photo') : null,
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: Text(
+                    data.driverPhotoAssetId == null && _driverPhotoBytes == null
+                        ? 'Añadir foto'
+                        : 'Cambiar foto',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'La imagen se optimiza automáticamente a 720 × 720 antes de subirla.',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -486,6 +655,9 @@ class _MarketplaceOnboardingScreenState
                       onChanged: _canEdit
                           ? (value) {
                               setState(() {
+                                _vehiclePhotoBytes = null;
+                                _vehiclePhotoUploadKey = null;
+                                _vehiclePhotoLabel = null;
                                 _selectedVehicleId = value;
                                 _loadVehicleFields(_findVehicle(value));
                               });
@@ -645,27 +817,70 @@ class _MarketplaceOnboardingScreenState
                       .toList(),
                 ),
                 const SizedBox(height: 16),
+                if (_vehiclePhotoBytes != null) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: AspectRatio(
+                      aspectRatio: 4 / 3,
+                      child: Image.memory(
+                        _vehiclePhotoBytes!,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Icon(
-                      vehicle?.mainPhotoAssetId == null
+                      _vehiclePhotoBytes == null &&
+                              vehicle?.mainPhotoAssetId == null
                           ? Icons.directions_car_outlined
                           : Icons.check_circle_outline,
-                      color: vehicle?.mainPhotoAssetId == null
+                      color: _vehiclePhotoBytes == null &&
+                              vehicle?.mainPhotoAssetId == null
                           ? kTertiary
                           : appPrimaryColor(context),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        vehicle?.mainPhotoAssetId == null
-                            ? 'Foto principal del vehículo pendiente'
-                            : 'Foto principal del vehículo guardada',
+                        _vehiclePhotoBytes != null
+                            ? 'Foto lista para guardar · ${_vehiclePhotoLabel ?? ''}'
+                            : vehicle?.mainPhotoAssetId == null
+                                ? 'Foto principal del vehículo pendiente'
+                                : 'Foto principal del vehículo guardada',
                       ),
                     ),
                   ],
                 ),
-                if (vehicle?.mainPhotoAssetId == null) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _canEdit && vehicle != null
+                        ? () => _pickPhoto('vehicle_photo')
+                        : null,
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: Text(
+                      vehicle?.mainPhotoAssetId == null &&
+                              _vehiclePhotoBytes == null
+                          ? 'Añadir foto del vehículo'
+                          : 'Cambiar foto del vehículo',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Se conserva la proporción y se reduce hasta un máximo de 1280 × 960 antes de subirla.',
+                  style: TextStyle(
+                    color: appMutedColor(context),
+                    fontSize: 12,
+                  ),
+                ),
+                if (vehicle?.mainPhotoAssetId == null &&
+                    _vehiclePhotoBytes == null) ...[
                   const SizedBox(height: 8),
                   Text(
                     'La foto principal será obligatoria para activar Trabajos.',
