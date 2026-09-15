@@ -36,6 +36,7 @@ part 'data/supabase_license_service.dart';
 part 'data/supabase_sync_gateway.dart';
 part 'data/whatsapp_settings_service.dart';
 part 'data/marketplace_service.dart';
+part 'presentation/marketplace_shell.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';

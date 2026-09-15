@@ -581,14 +581,10 @@ class _AppShellState extends State<AppShell> {
         final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
           DashboardScreen(store: store),
-          RegisterScreen(
-            store: store,
-            onSaved: () => setState(() => index = 0),
-          ),
-          HistoryScreen(store: store),
+          MarketplaceRecordsScreen(store: store),
+          MarketplaceJobsScreen(store: store),
           StatsScreen(store: store),
-          const StoreScreen(),
-          LoginScreen(store: store),
+          MarketplaceMoreScreen(store: store),
         ];
         return Scaffold(
           extendBody: true,
@@ -657,14 +653,8 @@ class _AppShellState extends State<AppShell> {
                     _DesktopNavigationRail(
                       selectedIndex: index,
                       onDestinationSelected: (value) {
-                        if (value == 1 && store.isReadOnly) {
-                          toast(
-                            context,
-                            tr('Tu licencia no permite realizar cambios.'),
-                          );
-                          return;
-                        }
-                        if (value == 5) unawaited(store.loadReferrals());
+
+
                         setState(() => index = value);
                       },
                       profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -786,25 +776,21 @@ class _DesktopNavigationRail extends StatelessWidget {
               label: Text(tr('Inicio')),
             ),
             NavigationRailDestination(
-              icon: const Icon(Icons.add_circle_outline),
-              selectedIcon: const Icon(Icons.add_circle),
-              label: Text(tr('Nuevo')),
+              icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long_rounded),
+              label: Text(tr('Registros')),
             ),
             NavigationRailDestination(
-              icon: const Icon(Icons.history_outlined),
-              selectedIcon: const Icon(Icons.history),
-              label: Text(tr('Historial')),
+              icon: const Icon(Icons.work_outline_rounded),
+              selectedIcon: const Icon(Icons.work_rounded),
+              label: Text(tr('Trabajos')),
             ),
             NavigationRailDestination(
               icon: const Icon(Icons.insights_outlined),
               selectedIcon: const Icon(Icons.insights),
               label: Text(tr('Estads.')),
             ),
-            NavigationRailDestination(
-              icon: const Icon(Icons.storefront_outlined),
-              selectedIcon: const Icon(Icons.storefront),
-              label: Text(tr('Tienda')),
-            ),
+
             NavigationRailDestination(
               icon: profilePhotoUrl == null
                   ? const Icon(Icons.account_circle_outlined)
@@ -818,7 +804,7 @@ class _DesktopNavigationRail extends StatelessWidget {
                       photoUrl: profilePhotoUrl!,
                       selected: true,
                     ),
-              label: Text(tr('Usuario')),
+              label: Text(tr('Más')),
             ),
           ],
         ),
@@ -992,25 +978,21 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         label: tr('Inicio'),
                       ),
                       NavigationDestination(
-                        icon: const Icon(Icons.add_circle_outline),
-                        selectedIcon: const Icon(Icons.add_circle),
-                        label: tr('Nuevo'),
+                        icon: const Icon(Icons.receipt_long_outlined),
+                        selectedIcon: const Icon(Icons.receipt_long_rounded),
+                        label: tr('Registros'),
                       ),
                       NavigationDestination(
-                        icon: const Icon(Icons.history_outlined),
-                        selectedIcon: const Icon(Icons.history),
-                        label: tr('Historial'),
+                        icon: const Icon(Icons.work_outline_rounded),
+                        selectedIcon: const Icon(Icons.work_rounded),
+                        label: tr('Trabajos'),
                       ),
                       NavigationDestination(
                         icon: const Icon(Icons.insights_outlined),
                         selectedIcon: const Icon(Icons.insights),
                         label: tr('Estads.'),
                       ),
-                      NavigationDestination(
-                        icon: const Icon(Icons.storefront_outlined),
-                        selectedIcon: const Icon(Icons.storefront),
-                        label: tr('Tienda'),
-                      ),
+
                       NavigationDestination(
                         icon: profilePhotoUrl == null
                             ? const Icon(Icons.account_circle_outlined)
@@ -1024,7 +1006,7 @@ class _LiquidGlassNavigation extends StatelessWidget {
                                 photoUrl: profilePhotoUrl!,
                                 selected: true,
                               ),
-                        label: tr('Usuario'),
+                        label: tr('Más'),
                       ),
                     ],
                   ),
