@@ -209,6 +209,22 @@ class MarketplaceMoreScreen extends StatelessWidget {
         const SizedBox(height: 16),
         GlassCard(
           child: ListTile(
+            leading: const Icon(Icons.work_outline_rounded),
+            title: const Text('Quiero trabajar con TUKTUK'),
+            subtitle: const Text(
+              'Configura tu perfil de conductor y el vehículo que usarás para recibir solicitudes.',
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _openPage(
+              context,
+              title: 'Trabaja con TUKTUK',
+              child: MarketplaceOnboardingScreen(store: store),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        GlassCard(
+          child: ListTile(
             leading: const Icon(Icons.storefront_outlined),
             title: Text(tr('Tienda')),
             subtitle: Text(
