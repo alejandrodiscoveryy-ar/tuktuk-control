@@ -43,6 +43,7 @@ part 'data/marketplace_service.dart';
 part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
+part 'presentation/marketplace_jobs.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
