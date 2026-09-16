@@ -12,6 +12,11 @@ int? _marketplaceOptionalInt(String value) {
   return int.tryParse(clean);
 }
 
+String _marketplaceDateTimeLabel(DateTime? value) {
+  if (value == null) return '—';
+  return DateFormat('dd/MM/yyyy · HH:mm').format(value.toLocal());
+}
+
 class MarketplaceOnboardingScreen extends StatefulWidget {
   const MarketplaceOnboardingScreen({
     required this.store,
@@ -54,13 +59,43 @@ class _MarketplaceOnboardingScreenState
   String? _vehiclePhotoUploadKey;
   String? _vehiclePhotoLabel;
 
+  MarketplaceWorkAccess? _access;
+  bool _accessLoading = false;
+  bool _startingTrial = false;
+  String? _accessError;
+  String? _trialStartKey;
+
+  String? get _marketplacePreviewState {
+    if (!kIsWeb) return null;
+
+    final host = Uri.base.host;
+    if (host != '127.0.0.1' && host != 'localhost') return null;
+
+    final state = Uri.base.queryParameters['marketplacePreview'];
+
+    if (state == 'ready' ||
+        state == 'trial' ||
+        state == 'expired' ||
+        state == 'incomplete') {
+      return state;
+    }
+
+    return null;
+  }
+
+  bool get _localPreview => _marketplacePreviewState != null;
+
   bool _loading = true;
   bool _saving = false;
   bool _processingPhoto = false;
   String? _error;
 
   bool get _canEdit =>
-      !_saving && !_processingPhoto && !(_data?.driverSuspended ?? false);
+      !_localPreview &&
+      !_saving &&
+      !_processingPhoto &&
+      !_startingTrial &&
+      !(_data?.driverSuspended ?? false);
 
   @override
   void initState() {
@@ -102,7 +137,153 @@ class _MarketplaceOnboardingScreenState
     return catalog.any((item) => item.code == value) ? value : null;
   }
 
+  MarketplaceOnboarding _previewOnboarding() {
+    final complete = _marketplacePreviewState != 'incomplete';
+
+    return MarketplaceOnboarding.fromMap({
+      'server_time': DateTime.now().toUtc().toIso8601String(),
+      'display_name': 'Conductor de muestra',
+      'phone': '+5355555555',
+      'driver_profile_exists': true,
+      'driver_status': complete ? 'active' : 'pending',
+      'driver_photo_asset_id': complete ? 'preview-driver-photo' : null,
+      'driver_suspended': false,
+      'vehicles': [
+        {
+          'vehicle_id': 'preview-vehicle',
+          'name': 'TUKTUK de muestra',
+          'category_code': 'tricycle',
+          'propulsion_code': 'electric',
+          'brand': 'TUKTUK',
+          'model': 'Eléctrico',
+          'year': 2026,
+          'passenger_capacity': 8,
+          'cargo_capacity_kg': 250,
+          'body_type': 'Pasajeros y carga',
+          'main_photo_asset_id': complete ? 'preview-vehicle-photo' : null,
+          'marketplace_status': complete ? 'active' : 'onboarding',
+          'services': [
+            'passenger',
+            'cargo',
+            'courier',
+            'tourism',
+          ],
+          'onboarding_complete': complete,
+          'is_active': complete,
+          'is_available': complete,
+        },
+      ],
+      'vehicle_categories': [
+        {'code': 'car', 'name': 'Auto ligero', 'sort_order': 1},
+        {'code': 'tricycle', 'name': 'Triciclo', 'sort_order': 2},
+        {'code': 'motorcycle', 'name': 'Motocicleta', 'sort_order': 3},
+        {'code': 'van', 'name': 'Furgoneta', 'sort_order': 4},
+        {'code': 'truck', 'name': 'Camión', 'sort_order': 5},
+        {'code': 'other', 'name': 'Otro', 'sort_order': 6},
+      ],
+      'propulsion_types': [
+        {'code': 'electric', 'name': 'Eléctrico', 'sort_order': 1},
+        {'code': 'combustion', 'name': 'Combustión', 'sort_order': 2},
+        {'code': 'hybrid', 'name': 'Híbrido', 'sort_order': 3},
+      ],
+      'service_types': [
+        {'code': 'passenger', 'name': 'Pasajeros', 'sort_order': 1},
+        {'code': 'cargo', 'name': 'Carga', 'sort_order': 2},
+        {'code': 'courier', 'name': 'Mensajería', 'sort_order': 3},
+        {'code': 'tourism', 'name': 'Turismo', 'sort_order': 4},
+      ],
+      'assets': [],
+    });
+  }
+
+  MarketplaceWorkAccess _previewAccess() {
+    final state = _marketplacePreviewState ?? 'ready';
+    final now = DateTime.now().toUtc();
+
+    if (state == 'incomplete') {
+      return MarketplaceWorkAccess.fromMap({
+        'server_time': now.toIso8601String(),
+        'onboarding_complete': false,
+        'driver_active': false,
+        'vehicle_available': false,
+        'trial_active': false,
+        'initial_deposit_confirmed': false,
+        'suite_active': true,
+        'can_start_trial': false,
+        'can_accept_new_job': false,
+        'next_billing_mode': 'trial_free',
+      });
+    }
+
+    if (state == 'trial') {
+      return MarketplaceWorkAccess.fromMap({
+        'server_time': now.toIso8601String(),
+        'onboarding_complete': true,
+        'driver_active': true,
+        'vehicle_available': true,
+        'trial_active': true,
+        'trial_started_at':
+            now.subtract(const Duration(days: 5)).toIso8601String(),
+        'trial_ends_at': now.add(const Duration(days: 25)).toIso8601String(),
+        'initial_deposit_confirmed': false,
+        'suite_active': true,
+        'can_start_trial': false,
+        'can_accept_new_job': true,
+        'next_billing_mode': 'trial_free',
+      });
+    }
+
+    if (state == 'expired') {
+      return MarketplaceWorkAccess.fromMap({
+        'server_time': now.toIso8601String(),
+        'onboarding_complete': true,
+        'driver_active': true,
+        'vehicle_available': true,
+        'trial_active': false,
+        'trial_started_at':
+            now.subtract(const Duration(days: 40)).toIso8601String(),
+        'trial_ends_at':
+            now.subtract(const Duration(days: 10)).toIso8601String(),
+        'initial_deposit_confirmed': false,
+        'suite_active': true,
+        'can_start_trial': false,
+        'can_accept_new_job': false,
+        'next_billing_mode': 'wallet_commission',
+      });
+    }
+
+    return MarketplaceWorkAccess.fromMap({
+      'server_time': now.toIso8601String(),
+      'onboarding_complete': true,
+      'driver_active': true,
+      'vehicle_available': true,
+      'trial_active': false,
+      'initial_deposit_confirmed': false,
+      'suite_active': true,
+      'can_start_trial': true,
+      'can_accept_new_job': false,
+      'next_billing_mode': 'trial_free',
+    });
+  }
+
   Future<void> _load() async {
+    if (_localPreview) {
+      final data = _previewOnboarding();
+
+      if (!mounted) return;
+
+      setState(() {
+        _data = data;
+        _loading = false;
+        _error = null;
+        _applyData(data);
+        _access = _previewAccess();
+        _accessLoading = false;
+        _accessError = null;
+      });
+
+      return;
+    }
     if (widget.store.user == null) {
       if (!mounted) return;
       setState(() {
@@ -125,6 +306,8 @@ class _MarketplaceOnboardingScreenState
         _loading = false;
         _applyData(data);
       });
+
+      await _loadAccess();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -179,6 +362,141 @@ class _MarketplaceOnboardingScreenState
     _selectedServices
       ..clear()
       ..addAll(vehicle?.services ?? const []);
+  }
+
+  Future<void> _loadAccess({bool showSpinner = true}) async {
+    if (_localPreview) {
+      if (!mounted) return;
+
+      setState(() {
+        _access = _previewAccess();
+        _accessLoading = false;
+        _accessError = null;
+      });
+
+      return;
+    }
+
+    final vehicleId = _selectedVehicleId;
+
+    if (vehicleId == null) {
+      if (!mounted) return;
+      setState(() {
+        _access = null;
+        _accessLoading = false;
+        _accessError = null;
+      });
+      return;
+    }
+
+    if (showSpinner) {
+      setState(() {
+        _accessLoading = true;
+        _accessError = null;
+      });
+    }
+
+    try {
+      final access = await _service.access(vehicleId);
+
+      if (!mounted || _selectedVehicleId != vehicleId) return;
+
+      setState(() {
+        _access = access;
+        _accessLoading = false;
+        _accessError = null;
+      });
+    } catch (_) {
+      if (!mounted || _selectedVehicleId != vehicleId) return;
+
+      setState(() {
+        _access = null;
+        _accessLoading = false;
+        _accessError = 'No se pudo consultar el estado de Trabajos.';
+      });
+    }
+  }
+
+  Future<void> _startTrial() async {
+    if (_localPreview) {
+      toast(
+        context,
+        'Vista previa local: no se inició ningún periodo gratuito.',
+      );
+      return;
+    }
+
+    final vehicleId = _selectedVehicleId;
+    final access = _access;
+
+    if (vehicleId == null ||
+        access == null ||
+        !access.canStartTrial ||
+        _startingTrial) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Comenzar 30 días gratis'),
+            content: const Text(
+              'Los 30 días comienzan cuando confirmes. '
+              'La prueba no se inicia automáticamente y solo puede utilizarse una vez.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Ahora no'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Comenzar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) return;
+
+    setState(() => _startingTrial = true);
+
+    final key = _trialStartKey ?? _marketplaceUuidV4();
+    _trialStartKey = key;
+
+    try {
+      final trial = await _service.startTrial(
+        vehicleId,
+        key,
+      );
+
+      if (!mounted) return;
+
+      await _loadAccess(showSpinner: false);
+
+      if (!mounted) return;
+
+      setState(() => _trialStartKey = null);
+
+      final endsAt = trial.endsAt ?? _access?.trialEndsAt;
+
+      toast(
+        context,
+        endsAt == null
+            ? 'Tus 30 días gratis comenzaron.'
+            : 'Tus 30 días gratis comenzaron. Finalizan el ${_marketplaceDateTimeLabel(endsAt)}.',
+      );
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          'No se pudo confirmar el inicio de la prueba. Puedes intentarlo nuevamente.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _startingTrial = false);
+    }
   }
 
   Future<ImageSource?> _choosePhotoSource() {
@@ -318,6 +636,9 @@ class _MarketplaceOnboardingScreenState
         );
       });
 
+      await _loadAccess(showSpinner: false);
+
+      if (!mounted) return;
       toast(context, 'Perfil de conductor guardado.');
     } catch (_) {
       if (mounted) {
@@ -429,6 +750,9 @@ class _MarketplaceOnboardingScreenState
         );
       });
 
+      await _loadAccess(showSpinner: false);
+
+      if (!mounted) return;
       toast(context, 'Vehículo guardado.');
     } catch (_) {
       if (mounted) {
@@ -437,6 +761,168 @@ class _MarketplaceOnboardingScreenState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Widget _buildAccessCard(
+    BuildContext context,
+    MarketplaceVehicle? vehicle,
+  ) {
+    final access = _access;
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Activación de Trabajos',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (vehicle == null)
+            const Text(
+              'Selecciona y configura un vehículo para continuar.',
+            )
+          else if (_accessLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_accessError != null) ...[
+            Text(_accessError!),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _loadAccess,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ] else if (access == null)
+            const Text('No hay información de acceso disponible.')
+          else ...[
+            Row(
+              children: [
+                Icon(
+                  access.onboardingComplete
+                      ? Icons.check_circle_rounded
+                      : Icons.pending_outlined,
+                  color: access.onboardingComplete
+                      ? appPrimaryColor(context)
+                      : kTertiary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    access.onboardingComplete
+                        ? 'Perfil y vehículo listos'
+                        : 'Configuración incompleta',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (access.trialActive) ...[
+              Text(
+                '30 días gratis activos',
+                style: TextStyle(
+                  color: appPrimaryColor(context),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Inicio: ${_marketplaceDateTimeLabel(access.trialStartedAt)}',
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Finaliza: ${_marketplaceDateTimeLabel(access.trialEndsAt)}',
+              ),
+            ] else if (access.canStartTrial) ...[
+              const Text(
+                'Tu configuración ya permite comenzar el periodo gratuito.',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'La prueba empezará únicamente cuando pulses el botón. '
+                'Hasta entonces no corre ningún día.',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _startingTrial ? null : _startTrial,
+                  icon: const Icon(Icons.rocket_launch_outlined),
+                  label: Text(
+                    _startingTrial ? 'Activando...' : 'Comenzar 30 días gratis',
+                  ),
+                ),
+              ),
+            ] else if (access.trialStartedAt != null ||
+                access.trialEndsAt != null) ...[
+              const Text(
+                'Periodo gratuito utilizado',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Finalizó: ${_marketplaceDateTimeLabel(access.trialEndsAt)}',
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'El siguiente paso será verificar la billetera para continuar aceptando nuevos trabajos.',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  height: 1.35,
+                ),
+              ),
+            ] else if (!access.onboardingComplete)
+              const Text(
+                'Completa y guarda los datos obligatorios del conductor y del vehículo, incluida la foto principal.',
+              )
+            else if (!access.driverActive)
+              const Text(
+                'El perfil de conductor todavía no está activo para Trabajos.',
+              )
+            else if (!access.vehicleAvailable)
+              const Text(
+                'Este vehículo todavía no está disponible para Trabajos.',
+              )
+            else
+              const Text(
+                'La activación todavía no está disponible. Vuelve a consultar el estado.',
+              ),
+            if (access.canAcceptNewJob) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    Icons.work_history_outlined,
+                    color: appPrimaryColor(context),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Ya puedes aceptar nuevos trabajos.',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -661,6 +1147,8 @@ class _MarketplaceOnboardingScreenState
                                 _selectedVehicleId = value;
                                 _loadVehicleFields(_findVehicle(value));
                               });
+
+                              unawaited(_loadAccess());
                             }
                           : null,
                     ),
@@ -923,6 +1411,8 @@ class _MarketplaceOnboardingScreenState
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        _buildAccessCard(context, vehicle),
       ],
     );
   }
