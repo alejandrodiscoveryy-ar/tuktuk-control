@@ -46,6 +46,22 @@ String _marketplaceJobBillingLabel(MarketplaceJob job) {
   }
 }
 
+String? _marketplaceJobActionLabel(String? action) {
+  return switch (action) {
+    'start_en_route' => 'Salir hacia el cliente',
+    'mark_pickup' => 'Confirmar recogida',
+    'start_service' => 'Iniciar servicio',
+    'complete_service' => 'Completar servicio',
+    _ => null,
+  };
+}
+
+bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
+  return job.status == 'accepted' ||
+      job.status == 'en_route' ||
+      job.status == 'pickup';
+}
+
 class MarketplaceJobsScreen extends StatefulWidget {
   const MarketplaceJobsScreen({
     required this.store,
@@ -74,8 +90,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
   bool _loading = true;
   String? _error;
   String? _acceptingJobId;
+  String? _busyJobId;
 
   final Map<String, String> _acceptKeys = {};
+  final Map<String, String> _operationKeys = {};
+  final Map<String, MarketplaceCustomerContact> _contacts = {};
 
   @override
   void initState() {
@@ -129,16 +148,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
         }
       }
 
-      final jobs = vehicleId == null
-          ? const <MarketplaceAvailableJob>[]
-          : await _service.available(vehicleId);
-
       if (!mounted) return;
 
       setState(() {
         _onboarding = onboarding;
         _selectedVehicleId = vehicleId;
-        _available = jobs;
+        _available = const [];
         _loading = false;
       });
 
@@ -147,6 +162,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
         _loadScope('scheduled'),
         _loadScope('history'),
       ]);
+
+      if (!mounted) return;
+
+      await _loadAvailable();
     } catch (_) {
       if (!mounted) return;
 
@@ -158,6 +177,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
   }
 
   Future<void> _loadAvailable() async {
+    if (_active.isNotEmpty || _scheduled.isNotEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        _available = const [];
+        _error = null;
+      });
+      return;
+    }
+
     final vehicleId = _selectedVehicleId;
 
     if (vehicleId == null) {
@@ -292,10 +321,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 
       if (!mounted) return;
 
+      setState(() {
+        _available = const [];
+        _error = null;
+      });
+
       await Future.wait([
-        _loadAvailable(),
         _loadScope('active'),
         _loadScope('scheduled'),
+        _loadScope('history'),
       ]);
 
       if (!mounted) return;
@@ -314,6 +348,281 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
       }
     } finally {
       if (mounted) setState(() => _acceptingJobId = null);
+    }
+  }
+
+  String _operationKey(String jobId, String action) {
+    final mapKey = '$jobId:$action';
+    final existing = _operationKeys[mapKey];
+    if (existing != null) return existing;
+
+    final created = _marketplaceUuidV4();
+    _operationKeys[mapKey] = created;
+    return created;
+  }
+
+  Future<void> _refreshAfterJobMutation() async {
+    await Future.wait([
+      _loadScope('active'),
+      _loadScope('scheduled'),
+      _loadScope('history'),
+    ]);
+
+    if (!mounted) return;
+
+    await _loadAvailable();
+  }
+
+  Future<void> _advanceJob(MarketplaceJob job) async {
+    final action = job.nextAction;
+    final label = _marketplaceJobActionLabel(action);
+
+    if (action == null || label == null || _busyJobId != null) return;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(label),
+            content: Text(
+              action == 'complete_service'
+                  ? 'Confirma únicamente cuando el servicio haya terminado. '
+                      'TUKTUK actualizará el trabajo y aplicará el tratamiento '
+                      'económico que quedó fijado al aceptarlo.'
+                  : '¿Confirmas este cambio de estado del servicio?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Volver'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Confirmar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) return;
+
+    setState(() => _busyJobId = job.id);
+
+    final keyName = '${job.id}:$action';
+    final key = _operationKey(job.id, action);
+
+    try {
+      await _service.advance(
+        job.id,
+        action,
+        key,
+      );
+
+      _operationKeys.remove(keyName);
+
+      if (!mounted) return;
+
+      await _refreshAfterJobMutation();
+
+      if (!mounted) return;
+
+      toast(context, 'Estado del trabajo actualizado.');
+    } catch (_) {
+      if (!mounted) return;
+
+      toast(
+        context,
+        'No se pudo actualizar el trabajo. Actualiza la sección '
+        'y vuelve a intentarlo.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busyJobId = null);
+      }
+    }
+  }
+
+  Future<void> _cancelJob(MarketplaceJob job) async {
+    if (_busyJobId != null || !_marketplaceJobCanDriverCancel(job)) return;
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Cancelar trabajo'),
+            content: const Text(
+              '¿Seguro que necesitas cancelar este trabajo? '
+              'La cancelación quedará registrada en TUKTUK.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('No cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Sí, cancelar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) return;
+
+    setState(() => _busyJobId = job.id);
+
+    const reason = 'Cancelado por el conductor desde TUKTUK';
+    final keyName = '${job.id}:cancel';
+    final key = _operationKey(job.id, 'cancel');
+
+    try {
+      await _service.cancel(
+        job.id,
+        reason,
+        key,
+      );
+
+      _operationKeys.remove(keyName);
+
+      if (!mounted) return;
+
+      await _refreshAfterJobMutation();
+
+      if (!mounted) return;
+
+      toast(context, 'Trabajo cancelado.');
+    } catch (_) {
+      if (!mounted) return;
+
+      toast(
+        context,
+        'No se pudo cancelar el trabajo. Actualiza la sección '
+        'y vuelve a intentarlo.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busyJobId = null);
+      }
+    }
+  }
+
+  Future<void> _contactJob(MarketplaceJob job) async {
+    if (_busyJobId != null) return;
+
+    setState(() => _busyJobId = job.id);
+
+    try {
+      final contact = _contacts[job.id] ?? await _service.contact(job.id);
+
+      _contacts[job.id] = contact;
+
+      if (!mounted) return;
+
+      setState(() => _busyJobId = null);
+
+      await _showContactSheet(contact);
+    } catch (_) {
+      if (!mounted) return;
+
+      toast(
+        context,
+        'No se pudo consultar el contacto del cliente.',
+      );
+    } finally {
+      if (mounted && _busyJobId == job.id) {
+        setState(() => _busyJobId = null);
+      }
+    }
+  }
+
+  Future<void> _showContactSheet(
+    MarketplaceCustomerContact contact,
+  ) {
+    final name =
+        contact.name?.trim().isNotEmpty == true ? contact.name! : 'Cliente';
+    final phone = contact.phone?.trim();
+
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                phone?.isNotEmpty == true ? phone! : 'Teléfono no disponible',
+                style: const TextStyle(fontSize: 17),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Este contacto está disponible porque el trabajo '
+                'está asignado a tu cuenta.',
+                style: TextStyle(
+                  color: appMutedColor(sheetContext),
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              if (phone?.isNotEmpty == true) ...[
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        unawaited(
+                          Clipboard.setData(
+                            ClipboardData(text: phone!),
+                          ),
+                        );
+                        toast(context, 'Número copiado.');
+                      },
+                      icon: const Icon(Icons.copy_outlined),
+                      label: const Text('Copiar'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => unawaited(
+                        _openWhatsApp(phone!),
+                      ),
+                      icon: const Icon(Icons.chat_outlined),
+                      label: const Text('WhatsApp'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openWhatsApp(String phone) async {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.isEmpty) {
+      toast(context, 'El número del cliente no es válido.');
+      return;
+    }
+
+    final opened = await launchUrl(
+      Uri.parse('https://wa.me/$digits'),
+    );
+
+    if (!opened && mounted) {
+      toast(context, 'No se pudo abrir WhatsApp.');
     }
   }
 
@@ -607,7 +916,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
               ...jobs.map(
                 (job) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _AssignedJobCard(job: job),
+                  child: _AssignedJobCard(
+                    job: job,
+                    busy: _busyJobId == job.id,
+                    onContact:
+                        scope == 'history' ? null : () => _contactJob(job),
+                    onAdvance: scope == 'active' &&
+                            _marketplaceJobActionLabel(job.nextAction) != null
+                        ? () => _advanceJob(job)
+                        : null,
+                    onCancel: scope != 'history' &&
+                            _marketplaceJobCanDriverCancel(job)
+                        ? () => _cancelJob(job)
+                        : null,
+                  ),
                 ),
               ),
           ],
@@ -620,9 +942,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 class _AssignedJobCard extends StatelessWidget {
   const _AssignedJobCard({
     required this.job,
+    required this.busy,
+    this.onContact,
+    this.onAdvance,
+    this.onCancel,
   });
 
   final MarketplaceJob job;
+  final bool busy;
+  final VoidCallback? onContact;
+  final VoidCallback? onAdvance;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -764,6 +1094,43 @@ class _AssignedJobCard extends StatelessWidget {
                     'Incidencia: ${job.incidentReason}',
                   ),
                 ),
+              ],
+            ),
+          ],
+          if (onContact != null || onAdvance != null || onCancel != null) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (onContact != null)
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : onContact,
+                    icon: const Icon(Icons.person_outline_rounded),
+                    label: const Text('Cliente'),
+                  ),
+                if (onCancel != null)
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : onCancel,
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Cancelar'),
+                  ),
+                if (onAdvance != null)
+                  FilledButton.icon(
+                    onPressed: busy ? null : onAdvance,
+                    icon: busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.arrow_forward_rounded),
+                    label: Text(
+                      _marketplaceJobActionLabel(job.nextAction) ?? 'Continuar',
+                    ),
+                  ),
               ],
             ),
           ],
