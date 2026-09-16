@@ -355,11 +355,509 @@ class _MarketplaceCustomerRequestScreenState
                                     trailing: const Icon(
                                       Icons.chevron_right,
                                     ),
-                                    onTap: null,
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              MarketplaceCustomerTripFormScreen(
+                                            service: widget.service,
+                                            session: widget.session,
+                                            serviceOption: service,
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
                                 );
                               },
                             ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MarketplaceCustomerTripFormScreen extends StatefulWidget {
+  const MarketplaceCustomerTripFormScreen({
+    required this.service,
+    required this.session,
+    required this.serviceOption,
+    super.key,
+  });
+
+  final MarketplaceCustomerService service;
+  final MarketplaceCustomerSessionSnapshot session;
+  final MarketplaceCustomerServiceOption serviceOption;
+
+  @override
+  State<MarketplaceCustomerTripFormScreen> createState() =>
+      _MarketplaceCustomerTripFormScreenState();
+}
+
+class _MarketplaceCustomerTripFormScreenState
+    extends State<MarketplaceCustomerTripFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _originController = TextEditingController();
+  final _destinationController = TextEditingController();
+  final _passengerController = TextEditingController(text: '1');
+
+  final _cargoWeightController = TextEditingController();
+  final _cargoVolumeController = TextEditingController();
+
+  final _distanceController = TextEditingController();
+  final _stopCountController = TextEditingController(text: '0');
+  final _notesController = TextEditingController();
+
+  bool _urgent = false;
+  bool _loadHelp = false;
+  bool _unloadHelp = false;
+  bool _loading = false;
+
+  String? _error;
+  String? _requestIdempotencyKey;
+  String? _requestPayloadSignature;
+
+  bool get _needsPassengers =>
+      widget.serviceOption.code == 'passenger' ||
+      widget.serviceOption.code == 'tourism';
+
+  bool get _isCargo => widget.serviceOption.code == 'cargo';
+
+  @override
+  void dispose() {
+    _originController.dispose();
+    _destinationController.dispose();
+    _passengerController.dispose();
+    _cargoWeightController.dispose();
+    _cargoVolumeController.dispose();
+    _distanceController.dispose();
+    _stopCountController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  String? _requiredLocation(String? value) {
+    final text = value?.trim() ?? '';
+
+    if (text.isEmpty) {
+      return 'Este campo es obligatorio.';
+    }
+
+    if (text.length > 240) {
+      return 'Máximo 240 caracteres.';
+    }
+
+    return null;
+  }
+
+  int? _positiveInt(String value) {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  double? _positiveDouble(String value) {
+    final normalized = value.trim().replaceAll(',', '.');
+    final parsed = double.tryParse(normalized);
+    if (parsed == null || parsed <= 0) return null;
+    return parsed;
+  }
+
+  double? _optionalPositiveDouble(String value) {
+    if (value.trim().isEmpty) return null;
+    return _positiveDouble(value);
+  }
+
+  Future<void> _requestQuote() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final passengerCount =
+        _needsPassengers ? _positiveInt(_passengerController.text) : null;
+
+    if (_needsPassengers && passengerCount == null) {
+      setState(() {
+        _error = 'Indica una cantidad válida de pasajeros.';
+      });
+      return;
+    }
+
+    final cargoWeight = _optionalPositiveDouble(_cargoWeightController.text);
+    final cargoVolume = _optionalPositiveDouble(_cargoVolumeController.text);
+
+    if (_isCargo && cargoWeight == null && cargoVolume == null) {
+      setState(() {
+        _error = 'Para carga indica al menos el peso o el volumen aproximado.';
+      });
+      return;
+    }
+
+    final distance = _optionalPositiveDouble(_distanceController.text);
+
+    if (_distanceController.text.trim().isNotEmpty && distance == null) {
+      setState(() {
+        _error = 'La distancia debe ser mayor que cero.';
+      });
+      return;
+    }
+
+    final stopText = _stopCountController.text.trim();
+    final stopCount = stopText.isEmpty ? 0 : int.tryParse(stopText);
+
+    if (stopCount == null || stopCount < 0 || stopCount > 20) {
+      setState(() {
+        _error = 'Las paradas adicionales deben estar entre 0 y 20.';
+      });
+      return;
+    }
+
+    final notes = _notesController.text.trim();
+
+    if (notes.length > 1000) {
+      setState(() {
+        _error = 'Las notas no pueden superar 1000 caracteres.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final details = <String, dynamic>{
+        'distance_source': distance == null ? 'unavailable' : 'manual',
+        'stop_count': stopCount,
+        'urgent': _urgent,
+        'load_help': _isCargo && _loadHelp,
+        'unload_help': _isCargo && _unloadHelp,
+      };
+
+      if (distance != null) {
+        details['estimated_distance_km'] = distance;
+      }
+
+      final payloadSignature = jsonEncode({
+        'service_code': widget.serviceOption.code,
+        'origin_text': _originController.text.trim(),
+        'destination_text': _destinationController.text.trim(),
+        'passenger_count': passengerCount,
+        'cargo_weight_kg': cargoWeight,
+        'cargo_volume_m3': cargoVolume,
+        'notes': notes.isEmpty ? null : notes,
+        'details': details,
+      });
+
+      if (_requestPayloadSignature != payloadSignature ||
+          _requestIdempotencyKey == null) {
+        _requestPayloadSignature = payloadSignature;
+        _requestIdempotencyKey = _marketplaceUuid();
+      }
+
+      final draft = await widget.service.createRequest(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        serviceCode: widget.serviceOption.code,
+        originText: _originController.text.trim(),
+        destinationText: _destinationController.text.trim(),
+        passengerCount: passengerCount,
+        cargoWeightKg: cargoWeight,
+        cargoVolumeM3: cargoVolume,
+        notes: notes.isEmpty ? null : notes,
+        details: details,
+        idempotencyKey: _requestIdempotencyKey!,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MarketplaceCustomerQuoteScreen(
+            service: widget.service,
+            session: widget.session,
+            serviceOption: widget.serviceOption,
+            draft: draft,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _error =
+            'No pudimos calcular el precio. Revisa los datos e inténtalo otra vez.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.serviceOption.name),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '¿Qué necesitas?',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 24),
+                    TextFormField(
+                      controller: _originController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Origen',
+                        prefixIcon: Icon(Icons.trip_origin_rounded),
+                      ),
+                      validator: _requiredLocation,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _destinationController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Destino',
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                      ),
+                      validator: _requiredLocation,
+                    ),
+                    if (_needsPassengers) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passengerController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad de pasajeros',
+                          prefixIcon: Icon(Icons.groups_outlined),
+                        ),
+                      ),
+                    ],
+                    if (_isCargo) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _cargoWeightController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Peso aproximado (kg)',
+                          prefixIcon: Icon(Icons.scale_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _cargoVolumeController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Volumen aproximado (m³)',
+                          prefixIcon: Icon(Icons.inventory_2_outlined),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _distanceController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Distancia aproximada en km (opcional)',
+                        prefixIcon: Icon(Icons.route_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _stopCountController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Paradas adicionales',
+                        prefixIcon: Icon(Icons.add_location_alt_outlined),
+                      ),
+                    ),
+                    if (_isCargo) ...[
+                      const SizedBox(height: 12),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Necesito ayuda para cargar',
+                        ),
+                        value: _loadHelp,
+                        onChanged: (value) {
+                          setState(() {
+                            _loadHelp = value;
+                          });
+                        },
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Necesito ayuda para descargar',
+                        ),
+                        value: _unloadHelp,
+                        onChanged: (value) {
+                          setState(() {
+                            _unloadHelp = value;
+                          });
+                        },
+                      ),
+                    ],
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Servicio urgente'),
+                      value: _urgent,
+                      onChanged: (value) {
+                        setState(() {
+                          _urgent = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _notesController,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Notas (opcional)',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: kDanger),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: _loading ? null : _requestQuote,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: _loading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Ver precio recomendado',
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MarketplaceCustomerQuoteScreen extends StatelessWidget {
+  const MarketplaceCustomerQuoteScreen({
+    required this.service,
+    required this.session,
+    required this.serviceOption,
+    required this.draft,
+    super.key,
+  });
+
+  final MarketplaceCustomerService service;
+  final MarketplaceCustomerSessionSnapshot session;
+  final MarketplaceCustomerServiceOption serviceOption;
+  final MarketplaceCustomerRequestDraft draft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Precio recomendado'),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    serviceOption.name,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 24),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Precio recomendado',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '${draft.recommendedPrice.toStringAsFixed(0)} ${draft.currency}',
+                            style: Theme.of(context).textTheme.displaySmall,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Puedes aceptar este precio o ajustarlo antes de publicar.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: kMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Mínimo permitido: '
+                    '${draft.minimumPrice.toStringAsFixed(0)} '
+                    '${draft.currency}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: kMuted),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: null,
+                    child: const Text(
+                      'Continuar para publicar',
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
