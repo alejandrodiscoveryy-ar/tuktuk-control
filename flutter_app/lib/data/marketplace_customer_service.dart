@@ -266,25 +266,31 @@ class MarketplaceCustomerService {
 
   final SupabaseClient _client;
 
-  Future<Map<String, dynamic>> _one(
-    String rpc, [
+  Future<dynamic> _gateway(String operation,
+      [Map<String, dynamic>? params]) async {
+    final response = await _client.functions.invoke(
+      'marketplace-customer-gateway',
+      body: {
+        'operation': operation,
+        'params': params ?? const <String, dynamic>{}
+      },
+    );
+    final value = response.data;
+    if (value is Map && value['error'] != null) {
+      throw StateError(value['error'].toString());
+    }
+    return value is Map ? value['data'] : null;
+  }
+
+  Future<Map<String, dynamic>> _gatewayOne(
+    String operation, [
     Map<String, dynamic>? params,
   ]) async {
-    final value = await _client.rpc(
-      rpc,
-      params: params,
-    );
-
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
-
+    final value = await _gateway(operation, params);
+    if (value is Map) return Map<String, dynamic>.from(value);
     if (value is List && value.isNotEmpty && value.first is Map) {
-      return Map<String, dynamic>.from(
-        value.first as Map,
-      );
+      return Map<String, dynamic>.from(value.first as Map);
     }
-
     return <String, dynamic>{};
   }
 
@@ -294,8 +300,8 @@ class MarketplaceCustomerService {
     required String sessionToken,
     required String idempotencyKey,
   }) =>
-      _one(
-        'start_marketplace_customer_session_protected',
+      _gatewayOne(
+        'start_session',
         {
           'target_display_name': displayName,
           'target_whatsapp_phone': whatsappPhone,
@@ -309,8 +315,8 @@ class MarketplaceCustomerService {
     required String sessionToken,
     required String jobId,
   }) =>
-      _one(
-        'get_marketplace_customer_job_protected',
+      _gatewayOne(
+        'get_job',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
@@ -325,8 +331,8 @@ class MarketplaceCustomerService {
     required String reason,
     required String idempotencyKey,
   }) =>
-      _one(
-        'cancel_marketplace_customer_job_protected',
+      _gatewayOne(
+        'cancel',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
@@ -341,7 +347,7 @@ class MarketplaceCustomerService {
     required String sessionToken,
     required String jobId,
   }) async {
-    final value = await _client.rpc('get_marketplace_customer_rating', params: {
+    final value = await _gateway('get_rating', {
       'target_session_id': sessionId,
       'target_session_token': sessionToken,
       'target_job_id': jobId,
@@ -360,7 +366,7 @@ class MarketplaceCustomerService {
     required String idempotencyKey,
     String? comment,
   }) =>
-      _one('create_marketplace_customer_rating', {
+      _gatewayOne('create_rating', {
         'target_session_id': sessionId,
         'target_session_token': sessionToken,
         'target_job_id': jobId,
@@ -374,7 +380,7 @@ class MarketplaceCustomerService {
     required String sessionToken,
     required String jobId,
   }) =>
-      _one('get_marketplace_customer_job_media', {
+      _gatewayOne('media', {
         'target_session_id': sessionId,
         'target_session_token': sessionToken,
         'target_job_id': jobId,

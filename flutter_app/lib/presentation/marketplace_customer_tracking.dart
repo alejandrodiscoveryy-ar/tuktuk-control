@@ -26,6 +26,7 @@ class _MarketplaceCustomerTrackingScreenState
   MarketplaceCustomerJob? _job;
   MarketplaceCustomerJobMedia? _media;
   MarketplaceCustomerRating? _rating;
+  String? _mediaAssignmentSignature;
 
   bool _loading = true;
   bool _refreshing = false;
@@ -72,14 +73,26 @@ class _MarketplaceCustomerTrackingScreenState
         _error = null;
       });
 
-      if (job.hasAssignedDriver) {
+      final mediaSignature =
+          '${job.driverPhotoAssetId ?? ''}:${job.vehicleMainPhotoAssetId ?? ''}';
+      final mediaExpiresSoon = _media?.expiresAt == null ||
+          _media!.expiresAt!.isBefore(
+            DateTime.now().toUtc().add(const Duration(minutes: 2)),
+          );
+      if (job.hasAssignedDriver &&
+          (_mediaAssignmentSignature != mediaSignature || mediaExpiresSoon)) {
         try {
           final media = await widget.service.getJobMedia(
             sessionId: widget.session.sessionId,
             sessionToken: widget.session.token,
             jobId: widget.jobId,
           );
-          if (mounted) setState(() => _media = media);
+          if (mounted) {
+            setState(() {
+              _media = media;
+              _mediaAssignmentSignature = mediaSignature;
+            });
+          }
         } catch (_) {
           // Private media is optional UI enrichment; the server remains the
           // privacy boundary and the card retains its visual fallback.
@@ -585,6 +598,7 @@ class _MarketplaceCustomerRatingScreenState
   bool _sending = false;
   String? _error;
   String? _idempotencyKey;
+  String? _payloadSignature;
   @override
   void dispose() {
     _comment.dispose();
@@ -596,7 +610,16 @@ class _MarketplaceCustomerRatingScreenState
       setState(() => _error = 'Selecciona entre 1 y 5 estrellas.');
       return;
     }
-    _idempotencyKey ??= _marketplaceUuid();
+    final comment = _comment.text.trim();
+    final payloadSignature = jsonEncode({
+      'job_id': widget.jobId,
+      'stars': _stars,
+      'comment': comment,
+    });
+    if (_payloadSignature != payloadSignature || _idempotencyKey == null) {
+      _payloadSignature = payloadSignature;
+      _idempotencyKey = _marketplaceUuid();
+    }
     setState(() {
       _sending = true;
       _error = null;
@@ -607,7 +630,7 @@ class _MarketplaceCustomerRatingScreenState
           sessionToken: widget.session.token,
           jobId: widget.jobId,
           stars: _stars,
-          comment: _comment.text.trim().isEmpty ? null : _comment.text.trim(),
+          comment: comment.isEmpty ? null : comment,
           idempotencyKey: _idempotencyKey!);
       if (mounted) Navigator.of(context).pop(rating);
     } catch (_) {

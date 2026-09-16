@@ -78,22 +78,22 @@ void main() {
     expect(publication.expiresAt, isNotNull);
   });
 
-  test('customer request layer uses only narrow RPC contracts', () {
+  test('customer request layer uses only Edge gateway operations', () {
     final source = File(
       'lib/data/marketplace_customer_request.dart',
     ).readAsStringSync();
 
     expect(
       source,
-      contains('list_marketplace_customer_services'),
+      contains("'services'"),
     );
     expect(
       source,
-      contains('create_marketplace_customer_request_protected'),
+      contains("'create_request'"),
     );
     expect(
       source,
-      contains('publish_marketplace_customer_job_protected'),
+      contains("'publish'"),
     );
 
     expect(source, isNot(contains(".from('jobs')")));
@@ -106,5 +106,6 @@ void main() {
       isNot(contains(".from('marketplace_pricing_rules')")),
     );
     expect(source, isNot(contains('service_role')));
+    expect(source, isNot(contains(".rpc(")));
   });
 }

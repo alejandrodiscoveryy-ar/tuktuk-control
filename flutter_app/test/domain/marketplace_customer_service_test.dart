@@ -122,22 +122,22 @@ void main() {
     expect(first, isNot(second));
   });
 
-  test('customer gateway uses only narrow RPC contracts', () {
+  test('customer gateway uses the Edge contract without direct RPCs', () {
     final source = File(
       'lib/data/marketplace_customer_service.dart',
     ).readAsStringSync();
 
     expect(
       source,
-      contains('start_marketplace_customer_session_protected'),
+      contains("marketplace-customer-gateway"),
     );
     expect(
       source,
-      contains('get_marketplace_customer_job_protected'),
+      contains("'start_session'"),
     );
     expect(
       source,
-      contains('cancel_marketplace_customer_job_protected'),
+      contains("'get_job'"),
     );
 
     expect(source, isNot(contains(".from('jobs')")));
@@ -146,15 +146,27 @@ void main() {
       isNot(contains(".from('service_requests')")),
     );
     expect(source, isNot(contains('service_role')));
+    expect(source, isNot(contains(".rpc(")));
   });
 
   test('customer gateway includes narrow rating and private media contracts',
       () {
     final source =
         File('lib/data/marketplace_customer_service.dart').readAsStringSync();
-    expect(source, contains('create_marketplace_customer_rating'));
-    expect(source, contains('get_marketplace_customer_rating'));
-    expect(source, contains('get_marketplace_customer_job_media'));
+    expect(source, contains("'create_rating'"));
+    expect(source, contains("'get_rating'"));
+    expect(source, contains("'media'"));
     expect(source, isNot(contains(".from('marketplace_customer_ratings')")));
+  });
+
+  test('tracking refreshes private media only on assignment changes or expiry',
+      () {
+    final source = File(
+      'lib/presentation/marketplace_customer_tracking.dart',
+    ).readAsStringSync();
+    expect(source, contains('_mediaAssignmentSignature'));
+    expect(source, contains('mediaExpiresSoon'));
+    expect(source, contains("'stars': _stars"));
+    expect(source, contains('_payloadSignature != payloadSignature'));
   });
 }

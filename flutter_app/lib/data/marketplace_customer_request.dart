@@ -141,13 +141,10 @@ class MarketplaceCustomerPublication {
 
 extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
   Future<List<Map<String, dynamic>>> _customerMany(
-    String rpc, [
+    String operation, [
     Map<String, dynamic>? params,
   ]) async {
-    final value = await _client.rpc(
-      rpc,
-      params: params,
-    );
+    final value = await _gateway(operation, params);
 
     if (value is! List) {
       return const <Map<String, dynamic>>[];
@@ -161,7 +158,7 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
 
   Future<List<MarketplaceCustomerServiceOption>> listCustomerServices() async {
     final rows = await _customerMany(
-      'list_marketplace_customer_services',
+      'services',
     );
 
     return rows
@@ -187,8 +184,8 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
     String? notes,
     Map<String, dynamic> details = const <String, dynamic>{},
   }) =>
-      _one(
-        'create_marketplace_customer_request_protected',
+      _gatewayOne(
+        'create_request',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
@@ -217,8 +214,8 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
     required bool priceWarningAcknowledged,
     required String idempotencyKey,
   }) =>
-      _one(
-        'publish_marketplace_customer_job_protected',
+      _gatewayOne(
+        'publish',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
