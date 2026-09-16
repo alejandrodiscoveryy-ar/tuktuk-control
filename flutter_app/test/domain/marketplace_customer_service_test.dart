@@ -169,4 +169,38 @@ void main() {
     expect(source, contains("'stars': _stars"));
     expect(source, contains('_payloadSignature != payloadSignature'));
   });
+
+  test('Edge gateway maps every customer operation to a valid rate category',
+      () {
+    final source = File(
+      '../../vrixora-marketplace/supabase/functions/'
+      'marketplace-customer-gateway/index.ts',
+    ).readAsStringSync();
+
+    expect(source, contains('start_session: "session"'));
+    expect(source, contains('services: "read"'));
+    expect(source, contains('create_request: "request"'));
+    expect(source, contains('publish: "publish"'));
+    expect(source, contains('get_job: "read"'));
+    expect(source, contains('cancel: "cancel"'));
+    expect(source, contains('get_rating: "read"'));
+    expect(source, contains('create_rating: "rating"'));
+    expect(source, contains('media: "media"'));
+    expect(
+      source,
+      contains('target_operation: category'),
+    );
+  });
+
+  test('Edge media response uses the standard data envelope', () {
+    final source = File(
+      '../../vrixora-marketplace/supabase/functions/'
+      'marketplace-customer-gateway/index.ts',
+    ).readAsStringSync();
+
+    expect(source, contains('return json({ data: {'));
+    expect(source, contains('driver_photo_signed_url'));
+    expect(source, contains('vehicle_photo_signed_url'));
+    expect(source, contains('expires_at'));
+  });
 }
