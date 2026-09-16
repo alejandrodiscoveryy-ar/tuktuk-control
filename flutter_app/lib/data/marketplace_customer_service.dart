@@ -84,6 +84,22 @@ class MarketplaceCustomerJob {
 
   bool get hasAssignedDriver => driverDisplayName != null || vehicleId != null;
 
+  bool get customerCanCancel => const {
+        'requested',
+        'published',
+        'accepted',
+        'en_route',
+        'pickup',
+      }.contains(status);
+
+  bool get isTerminal => const {
+        'settled',
+        'cancelled_by_customer',
+        'cancelled_by_driver',
+        'expired',
+        'incident',
+      }.contains(status);
+
   factory MarketplaceCustomerJob.fromMap(Map map) => MarketplaceCustomerJob(
         id: _marketText(map['job_id'] ?? map['id']) ?? '',
         status: _marketText(map['status']) ?? 'unknown',
@@ -152,6 +168,7 @@ class MarketplaceCustomerSessionStore {
   static const _customerIdKey = 'marketplace_customer_customer_id';
   static const _tokenKey = 'marketplace_customer_session_token';
   static const _expiresAtKey = 'marketplace_customer_session_expires_at';
+  static const _activeJobIdKey = 'marketplace_customer_active_job_id';
 
   MarketplaceCustomerSessionSnapshot? read() {
     final sessionId = _marketText(_box.get(_sessionIdKey));
@@ -182,12 +199,23 @@ class MarketplaceCustomerSessionStore {
     });
   }
 
+  String? readActiveJobId() => _marketText(_box.get(_activeJobIdKey));
+
+  Future<void> saveActiveJobId(String jobId) async {
+    await _box.put(_activeJobIdKey, jobId);
+  }
+
+  Future<void> clearActiveJobId() async {
+    await _box.delete(_activeJobIdKey);
+  }
+
   Future<void> clear() async {
     await _box.deleteAll([
       _sessionIdKey,
       _customerIdKey,
       _tokenKey,
       _expiresAtKey,
+      _activeJobIdKey,
     ]);
   }
 }

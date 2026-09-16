@@ -61,6 +61,43 @@ void main() {
     expect(job.vehicleId, isNull);
   });
 
+  test('customer job follows customer cancellation state machine', () {
+    final published = MarketplaceCustomerJob.fromMap({
+      'job_id': 'job-published',
+      'status': 'published',
+      'final_price': 500,
+      'currency': 'CUP',
+    });
+
+    final pickup = MarketplaceCustomerJob.fromMap({
+      'job_id': 'job-pickup',
+      'status': 'pickup',
+      'final_price': 500,
+      'currency': 'CUP',
+    });
+
+    final inProgress = MarketplaceCustomerJob.fromMap({
+      'job_id': 'job-progress',
+      'status': 'in_progress',
+      'final_price': 500,
+      'currency': 'CUP',
+    });
+
+    final settled = MarketplaceCustomerJob.fromMap({
+      'job_id': 'job-settled',
+      'status': 'settled',
+      'final_price': 500,
+      'currency': 'CUP',
+    });
+
+    expect(published.customerCanCancel, isTrue);
+    expect(pickup.customerCanCancel, isTrue);
+    expect(inProgress.customerCanCancel, isFalse);
+    expect(settled.customerCanCancel, isFalse);
+    expect(settled.isTerminal, isTrue);
+    expect(published.isTerminal, isFalse);
+  });
+
   test('customer cancellation parses server response', () {
     final result = MarketplaceCustomerCancellation.fromMap({
       'job_id': 'job-3',
