@@ -188,7 +188,7 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
     Map<String, dynamic> details = const <String, dynamic>{},
   }) =>
       _one(
-        'create_marketplace_customer_request',
+        'create_marketplace_customer_request_protected',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
@@ -218,7 +218,7 @@ extension MarketplaceCustomerRequestApi on MarketplaceCustomerService {
     required String idempotencyKey,
   }) =>
       _one(
-        'publish_marketplace_customer_job',
+        'publish_marketplace_customer_job_protected',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,

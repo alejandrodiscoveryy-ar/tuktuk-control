@@ -145,6 +145,47 @@ class MarketplaceCustomerCancellation {
       );
 }
 
+class MarketplaceCustomerRating {
+  const MarketplaceCustomerRating({
+    required this.jobId,
+    required this.stars,
+    this.comment,
+    this.createdAt,
+  });
+
+  final String jobId;
+  final int stars;
+  final String? comment;
+  final DateTime? createdAt;
+
+  factory MarketplaceCustomerRating.fromMap(Map map) =>
+      MarketplaceCustomerRating(
+        jobId: _marketText(map['job_id']) ?? '',
+        stars: _marketNumber(map['stars']).round(),
+        comment: _marketText(map['comment']),
+        createdAt: _marketDate(map['created_at']),
+      );
+}
+
+class MarketplaceCustomerJobMedia {
+  const MarketplaceCustomerJobMedia({
+    this.driverPhotoSignedUrl,
+    this.vehiclePhotoSignedUrl,
+    this.expiresAt,
+  });
+
+  final String? driverPhotoSignedUrl;
+  final String? vehiclePhotoSignedUrl;
+  final DateTime? expiresAt;
+
+  factory MarketplaceCustomerJobMedia.fromMap(Map map) =>
+      MarketplaceCustomerJobMedia(
+        driverPhotoSignedUrl: _marketText(map['driver_photo_signed_url']),
+        vehiclePhotoSignedUrl: _marketText(map['vehicle_photo_signed_url']),
+        expiresAt: _marketDate(map['expires_at']),
+      );
+}
+
 class MarketplaceCustomerSessionSnapshot {
   const MarketplaceCustomerSessionSnapshot({
     required this.sessionId,
@@ -254,7 +295,7 @@ class MarketplaceCustomerService {
     required String idempotencyKey,
   }) =>
       _one(
-        'start_marketplace_customer_session',
+        'start_marketplace_customer_session_protected',
         {
           'target_display_name': displayName,
           'target_whatsapp_phone': whatsappPhone,
@@ -269,7 +310,7 @@ class MarketplaceCustomerService {
     required String jobId,
   }) =>
       _one(
-        'get_marketplace_customer_job',
+        'get_marketplace_customer_job_protected',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
@@ -285,7 +326,7 @@ class MarketplaceCustomerService {
     required String idempotencyKey,
   }) =>
       _one(
-        'cancel_marketplace_customer_job',
+        'cancel_marketplace_customer_job_protected',
         {
           'target_session_id': sessionId,
           'target_session_token': sessionToken,
@@ -294,4 +335,48 @@ class MarketplaceCustomerService {
           'target_idempotency_key': idempotencyKey,
         },
       ).then(MarketplaceCustomerCancellation.fromMap);
+
+  Future<MarketplaceCustomerRating?> getRating({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) async {
+    final value = await _client.rpc('get_marketplace_customer_rating', params: {
+      'target_session_id': sessionId,
+      'target_session_token': sessionToken,
+      'target_job_id': jobId,
+    });
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return MarketplaceCustomerRating.fromMap(value.first as Map);
+    }
+    return null;
+  }
+
+  Future<MarketplaceCustomerRating> createRating({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+    required int stars,
+    required String idempotencyKey,
+    String? comment,
+  }) =>
+      _one('create_marketplace_customer_rating', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+        'target_stars': stars,
+        'target_comment': comment,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceCustomerRating.fromMap);
+
+  Future<MarketplaceCustomerJobMedia> getJobMedia({
+    required String sessionId,
+    required String sessionToken,
+    required String jobId,
+  }) =>
+      _one('get_marketplace_customer_job_media', {
+        'target_session_id': sessionId,
+        'target_session_token': sessionToken,
+        'target_job_id': jobId,
+      }).then(MarketplaceCustomerJobMedia.fromMap);
 }

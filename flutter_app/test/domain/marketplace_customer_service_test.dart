@@ -129,15 +129,15 @@ void main() {
 
     expect(
       source,
-      contains('start_marketplace_customer_session'),
+      contains('start_marketplace_customer_session_protected'),
     );
     expect(
       source,
-      contains('get_marketplace_customer_job'),
+      contains('get_marketplace_customer_job_protected'),
     );
     expect(
       source,
-      contains('cancel_marketplace_customer_job'),
+      contains('cancel_marketplace_customer_job_protected'),
     );
 
     expect(source, isNot(contains(".from('jobs')")));
@@ -146,5 +146,15 @@ void main() {
       isNot(contains(".from('service_requests')")),
     );
     expect(source, isNot(contains('service_role')));
+  });
+
+  test('customer gateway includes narrow rating and private media contracts',
+      () {
+    final source =
+        File('lib/data/marketplace_customer_service.dart').readAsStringSync();
+    expect(source, contains('create_marketplace_customer_rating'));
+    expect(source, contains('get_marketplace_customer_rating'));
+    expect(source, contains('get_marketplace_customer_job_media'));
+    expect(source, isNot(contains(".from('marketplace_customer_ratings')")));
   });
 }

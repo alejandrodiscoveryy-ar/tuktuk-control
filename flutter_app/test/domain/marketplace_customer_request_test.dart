@@ -89,11 +89,11 @@ void main() {
     );
     expect(
       source,
-      contains('create_marketplace_customer_request'),
+      contains('create_marketplace_customer_request_protected'),
     );
     expect(
       source,
-      contains('publish_marketplace_customer_job'),
+      contains('publish_marketplace_customer_job_protected'),
     );
 
     expect(source, isNot(contains(".from('jobs')")));

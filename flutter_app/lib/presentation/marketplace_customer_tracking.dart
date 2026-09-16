@@ -24,6 +24,8 @@ class _MarketplaceCustomerTrackingScreenState
   Timer? _pollTimer;
 
   MarketplaceCustomerJob? _job;
+  MarketplaceCustomerJobMedia? _media;
+  MarketplaceCustomerRating? _rating;
 
   bool _loading = true;
   bool _refreshing = false;
@@ -69,6 +71,28 @@ class _MarketplaceCustomerTrackingScreenState
         _job = job;
         _error = null;
       });
+
+      if (job.hasAssignedDriver) {
+        try {
+          final media = await widget.service.getJobMedia(
+            sessionId: widget.session.sessionId,
+            sessionToken: widget.session.token,
+            jobId: widget.jobId,
+          );
+          if (mounted) setState(() => _media = media);
+        } catch (_) {
+          // Private media is optional UI enrichment; the server remains the
+          // privacy boundary and the card retains its visual fallback.
+        }
+      }
+      if (job.status == 'settled') {
+        final rating = await widget.service.getRating(
+          sessionId: widget.session.sessionId,
+          sessionToken: widget.session.token,
+          jobId: widget.jobId,
+        );
+        if (mounted) setState(() => _rating = rating);
+      }
 
       if (job.isTerminal) {
         _pollTimer?.cancel();
@@ -318,9 +342,14 @@ class _MarketplaceCustomerTrackingScreenState
             const SizedBox(height: 14),
             Row(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 24,
-                  child: Icon(Icons.person_outline),
+                  backgroundImage: _media?.driverPhotoSignedUrl == null
+                      ? null
+                      : NetworkImage(_media!.driverPhotoSignedUrl!),
+                  child: _media?.driverPhotoSignedUrl == null
+                      ? const Icon(Icons.person_outline)
+                      : null,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -332,6 +361,18 @@ class _MarketplaceCustomerTrackingScreenState
               ],
             ),
             const SizedBox(height: 18),
+            if (_media?.vehiclePhotoSignedUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  _media!.vehiclePhotoSignedUrl!,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Text(vehicleTitle),
             if (job.vehicleRegistration != null) ...[
               const SizedBox(height: 4),
@@ -463,6 +504,20 @@ class _MarketplaceCustomerTrackingScreenState
                             ],
                             if (job.isTerminal) ...[
                               const SizedBox(height: 24),
+                              if (job.status == 'settled')
+                                _rating == null
+                                    ? FilledButton.icon(
+                                        onPressed: () => _openRating(job),
+                                        icon: const Icon(Icons.star_outline),
+                                        label: const Text(
+                                            'Calificar transportista'),
+                                      )
+                                    : Text(
+                                        'Tu calificación: ${_rating!.stars} estrellas',
+                                        textAlign: TextAlign.center,
+                                      ),
+                              if (job.status == 'settled')
+                                const SizedBox(height: 12),
                               FilledButton(
                                 onPressed: _finish,
                                 child: const Padding(
@@ -494,4 +549,113 @@ class _MarketplaceCustomerTrackingScreenState
       ),
     );
   }
+
+  Future<void> _openRating(MarketplaceCustomerJob job) async {
+    final rating = await Navigator.of(context).push<MarketplaceCustomerRating>(
+      MaterialPageRoute(
+        builder: (_) => MarketplaceCustomerRatingScreen(
+          service: widget.service,
+          session: widget.session,
+          jobId: job.id,
+        ),
+      ),
+    );
+    if (rating != null && mounted) setState(() => _rating = rating);
+  }
+}
+
+class MarketplaceCustomerRatingScreen extends StatefulWidget {
+  const MarketplaceCustomerRatingScreen(
+      {required this.service,
+      required this.session,
+      required this.jobId,
+      super.key});
+  final MarketplaceCustomerService service;
+  final MarketplaceCustomerSessionSnapshot session;
+  final String jobId;
+  @override
+  State<MarketplaceCustomerRatingScreen> createState() =>
+      _MarketplaceCustomerRatingScreenState();
+}
+
+class _MarketplaceCustomerRatingScreenState
+    extends State<MarketplaceCustomerRatingScreen> {
+  final _comment = TextEditingController();
+  int _stars = 0;
+  bool _sending = false;
+  String? _error;
+  String? _idempotencyKey;
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_stars < 1 || _stars > 5) {
+      setState(() => _error = 'Selecciona entre 1 y 5 estrellas.');
+      return;
+    }
+    _idempotencyKey ??= _marketplaceUuid();
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      final rating = await widget.service.createRating(
+          sessionId: widget.session.sessionId,
+          sessionToken: widget.session.token,
+          jobId: widget.jobId,
+          stars: _stars,
+          comment: _comment.text.trim().isEmpty ? null : _comment.text.trim(),
+          idempotencyKey: _idempotencyKey!);
+      if (mounted) Navigator.of(context).pop(rating);
+    } catch (_) {
+      if (mounted)
+        setState(() =>
+            _error = 'No pudimos guardar tu calificación. Inténtalo otra vez.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+      appBar: AppBar(title: const Text('Calificar transportista')),
+      body: SafeArea(
+          child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('¿Cómo fue tu experiencia?'),
+                    const SizedBox(height: 16),
+                    Wrap(
+                        children: List.generate(
+                            5,
+                            (index) => IconButton(
+                                onPressed: _sending
+                                    ? null
+                                    : () => setState(() => _stars = index + 1),
+                                icon: Icon(
+                                    index < _stars
+                                        ? Icons.star_rounded
+                                        : Icons.star_outline_rounded,
+                                    color: kTertiary),
+                                tooltip: '${index + 1} estrellas'))),
+                    TextField(
+                        controller: _comment,
+                        maxLength: 1000,
+                        minLines: 3,
+                        maxLines: 5,
+                        decoration: const InputDecoration(
+                            labelText: 'Comentario (opcional)')),
+                    if (_error != null)
+                      Text(_error!, style: const TextStyle(color: kDanger)),
+                    const Spacer(),
+                    FilledButton(
+                        onPressed: _sending ? null : _submit,
+                        child: Text(
+                            _sending ? 'Enviando...' : 'Enviar calificación'))
+                  ]))));
 }
