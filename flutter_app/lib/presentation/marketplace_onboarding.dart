@@ -17,6 +17,20 @@ String _marketplaceDateTimeLabel(DateTime? value) {
   return DateFormat('dd/MM/yyyy · HH:mm').format(value.toLocal());
 }
 
+String _marketplaceMoneyLabel(
+  double value,
+  String currency,
+) {
+  final decimals = value == value.roundToDouble() ? 0 : 2;
+  return '${value.toStringAsFixed(decimals)} $currency';
+}
+
+String _marketplacePercentLabel(double rate) {
+  final percent = rate * 100;
+  final decimals = percent == percent.roundToDouble() ? 0 : 2;
+  return '${percent.toStringAsFixed(decimals)}%';
+}
+
 class MarketplaceOnboardingScreen extends StatefulWidget {
   const MarketplaceOnboardingScreen({
     required this.store,
@@ -64,6 +78,10 @@ class _MarketplaceOnboardingScreenState
   bool _startingTrial = false;
   String? _accessError;
   String? _trialStartKey;
+
+  MarketplaceWallet? _wallet;
+  bool _walletLoading = false;
+  String? _walletError;
 
   String? get _marketplacePreviewState {
     if (!kIsWeb) return null;
@@ -266,6 +284,23 @@ class _MarketplaceOnboardingScreenState
     });
   }
 
+  MarketplaceWallet _previewWallet() {
+    final state = _marketplacePreviewState;
+
+    return MarketplaceWallet.fromMap({
+      'currency': 'CUP',
+      'total_balance': state == 'trial' ? 150 : 0,
+      'reserved_balance': 0,
+      'available_balance': state == 'trial' ? 150 : 0,
+      'initial_deposit_confirmed': false,
+      'initial_deposit_confirmed_at': null,
+      'initial_deposit_amount': null,
+      'initial_minimum_snapshot': null,
+      'current_initial_minimum_deposit': 500,
+      'commission_rate': 0.10,
+    });
+  }
+
   Future<void> _load() async {
     if (_localPreview) {
       final data = _previewOnboarding();
@@ -308,6 +343,7 @@ class _MarketplaceOnboardingScreenState
       });
 
       await _loadAccess();
+      await _loadWallet();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -417,6 +453,47 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
+  Future<void> _loadWallet({bool showSpinner = true}) async {
+    if (_localPreview) {
+      if (!mounted) return;
+
+      setState(() {
+        _wallet = _previewWallet();
+        _walletLoading = false;
+        _walletError = null;
+      });
+
+      return;
+    }
+
+    if (showSpinner) {
+      setState(() {
+        _walletLoading = true;
+        _walletError = null;
+      });
+    }
+
+    try {
+      final wallet = await _service.wallet();
+
+      if (!mounted) return;
+
+      setState(() {
+        _wallet = wallet;
+        _walletLoading = false;
+        _walletError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _wallet = null;
+        _walletLoading = false;
+        _walletError = 'No se pudo consultar tu billetera Marketplace.';
+      });
+    }
+  }
+
   Future<void> _startTrial() async {
     if (_localPreview) {
       toast(
@@ -474,6 +551,7 @@ class _MarketplaceOnboardingScreenState
       if (!mounted) return;
 
       await _loadAccess(showSpinner: false);
+      await _loadWallet(showSpinner: false);
 
       if (!mounted) return;
 
@@ -920,6 +998,253 @@ class _MarketplaceOnboardingScreenState
               ),
             ],
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletCard(BuildContext context) {
+    final wallet = _wallet;
+    final access = _access;
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Billetera Marketplace',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Esta billetera se usa únicamente para las comisiones de Trabajos. '
+            'No afecta tu licencia ni el funcionamiento de TUKTUK Control.',
+            style: TextStyle(
+              color: appMutedColor(context),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_walletLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_walletError != null) ...[
+            Text(_walletError!),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _loadWallet,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ] else if (wallet == null)
+            const Text('No hay información de billetera disponible.')
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _walletValue(
+                    context,
+                    'Saldo total',
+                    _marketplaceMoneyLabel(
+                      wallet.totalBalance,
+                      wallet.currency,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _walletValue(
+                    context,
+                    'Disponible',
+                    _marketplaceMoneyLabel(
+                      wallet.availableBalance,
+                      wallet.currency,
+                    ),
+                    emphasize: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _walletValue(
+              context,
+              'Reservado para trabajos',
+              _marketplaceMoneyLabel(
+                wallet.reservedBalance,
+                wallet.currency,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.percent_rounded),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Comisión estándar: '
+                    '${_marketplacePercentLabel(wallet.commissionRate)}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (access?.trialActive == true) ...[
+              Text(
+                'Durante tus 30 días gratis no se reserva ni se descuenta '
+                'comisión. Puedes tener saldo en la billetera sin perder '
+                'el periodo gratuito.',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  height: 1.35,
+                ),
+              ),
+            ] else if (access?.canStartTrial == true) ...[
+              Text(
+                'Tu periodo gratuito todavía no ha comenzado. '
+                'No necesitas realizar el depósito inicial para empezar '
+                'los 30 días gratis.',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  height: 1.35,
+                ),
+              ),
+            ] else if (!wallet.initialDepositConfirmed &&
+                access?.trialEndsAt != null) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: kTertiary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Para aceptar nuevos trabajos después del periodo '
+                      'gratuito debe confirmarse un depósito inicial mínimo '
+                      'de ${_marketplaceMoneyLabel(
+                        wallet.currentInitialMinimumDeposit,
+                        wallet.currency,
+                      )}.',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Ese depósito queda íntegramente como saldo en tu '
+                'billetera. No es una cuota de activación.',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  height: 1.35,
+                ),
+              ),
+            ],
+            if (wallet.initialDepositConfirmed) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Icon(
+                    Icons.verified_rounded,
+                    color: appPrimaryColor(context),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Depósito inicial confirmado',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+              if (wallet.initialDepositAmount != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Importe confirmado: '
+                  '${_marketplaceMoneyLabel(
+                    wallet.initialDepositAmount!,
+                    wallet.currency,
+                  )}',
+                ),
+              ],
+              if (wallet.initialDepositConfirmedAt != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Confirmado: '
+                  '${_marketplaceDateTimeLabel(
+                    wallet.initialDepositConfirmedAt,
+                  )}',
+                ),
+              ],
+            ],
+            const SizedBox(height: 14),
+            Text(
+              'Al aceptar un trabajo fuera del periodo gratuito se '
+              'necesita saldo disponible suficiente para reservar la '
+              'comisión correspondiente.',
+              style: TextStyle(
+                color: appMutedColor(context),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _walletValue(
+    BuildContext context,
+    String label,
+    String value, {
+    bool emphasize = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: appMutedColor(context).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: appMutedColor(context),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: emphasize ? 18 : 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
@@ -1413,6 +1738,8 @@ class _MarketplaceOnboardingScreenState
         ),
         const SizedBox(height: 16),
         _buildAccessCard(context, vehicle),
+        const SizedBox(height: 16),
+        _buildWalletCard(context),
       ],
     );
   }
