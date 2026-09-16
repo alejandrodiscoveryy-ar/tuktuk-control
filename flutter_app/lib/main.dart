@@ -40,6 +40,7 @@ part 'data/supabase_license_service.dart';
 part 'data/supabase_sync_gateway.dart';
 part 'data/whatsapp_settings_service.dart';
 part 'data/marketplace_service.dart';
+part 'data/marketplace_customer_service.dart';
 part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
