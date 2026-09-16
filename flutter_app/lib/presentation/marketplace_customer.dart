@@ -778,7 +778,7 @@ class _MarketplaceCustomerTripFormScreenState
   }
 }
 
-class MarketplaceCustomerQuoteScreen extends StatelessWidget {
+class MarketplaceCustomerQuoteScreen extends StatefulWidget {
   const MarketplaceCustomerQuoteScreen({
     required this.service,
     required this.session,
@@ -793,10 +793,193 @@ class MarketplaceCustomerQuoteScreen extends StatelessWidget {
   final MarketplaceCustomerRequestDraft draft;
 
   @override
+  State<MarketplaceCustomerQuoteScreen> createState() =>
+      _MarketplaceCustomerQuoteScreenState();
+}
+
+class _MarketplaceCustomerQuoteScreenState
+    extends State<MarketplaceCustomerQuoteScreen> {
+  late final TextEditingController _priceController;
+
+  bool _warningAcknowledged = false;
+  bool _publishing = false;
+
+  String? _error;
+  String? _publishIdempotencyKey;
+  String? _publishPayloadSignature;
+
+  MarketplaceCustomerRequestDraft get draft => widget.draft;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _priceController = TextEditingController(
+      text: _priceInput(draft.recommendedPrice),
+    );
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  String _priceInput(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+
+    return value.toStringAsFixed(2);
+  }
+
+  double? _currentPrice() {
+    final text = _priceController.text.trim().replaceAll(',', '.');
+
+    final value = double.tryParse(text);
+
+    if (value == null || value <= 0) {
+      return null;
+    }
+
+    return (value * 100).round() / 100;
+  }
+
+  bool get _warningRequired {
+    final price = _currentPrice();
+
+    return price != null && draft.requiresWarningFor(price);
+  }
+
+  String _publicationError(Object error) {
+    final value = error.toString();
+
+    if (value.contains('PRICE_QUOTE_STALE')) {
+      return 'La tarifa cambió desde que calculamos el precio. '
+          'Regresa y vuelve a calcular la solicitud.';
+    }
+
+    if (value.contains('FINAL_PRICE_BELOW_MINIMUM')) {
+      return 'El precio está por debajo del mínimo permitido.';
+    }
+
+    if (value.contains(
+      'PRICE_WARNING_ACKNOWLEDGEMENT_REQUIRED',
+    )) {
+      return 'Debes confirmar la advertencia de precio bajo.';
+    }
+
+    if (value.contains('JOB_NOT_REQUESTED')) {
+      return 'Esta solicitud ya fue publicada o ya no puede publicarse.';
+    }
+
+    if (value.contains('SCHEDULED_TIME_EXPIRED')) {
+      return 'La hora programada ya venció. '
+          'Regresa y actualiza la solicitud.';
+    }
+
+    return 'No pudimos publicar la solicitud. '
+        'Revisa tu conexión e inténtalo otra vez.';
+  }
+
+  void _useRecommendedPrice() {
+    setState(() {
+      _priceController.text = _priceInput(draft.recommendedPrice);
+      _warningAcknowledged = false;
+      _error = null;
+    });
+  }
+
+  Future<void> _publish() async {
+    final price = _currentPrice();
+
+    if (price == null) {
+      setState(() {
+        _error = 'Escribe un precio válido.';
+      });
+      return;
+    }
+
+    if (draft.isBelowMinimum(price)) {
+      setState(() {
+        _error = 'El mínimo permitido es '
+            '${draft.minimumPrice.toStringAsFixed(0)} '
+            '${draft.currency}.';
+      });
+      return;
+    }
+
+    final warningRequired = draft.requiresWarningFor(price);
+
+    if (warningRequired && !_warningAcknowledged) {
+      setState(() {
+        _error = 'Confirma la advertencia antes de publicar.';
+      });
+      return;
+    }
+
+    final warningAck = warningRequired && _warningAcknowledged;
+
+    final payloadSignature = jsonEncode({
+      'job_id': draft.jobId,
+      'final_price': price,
+      'price_warning_acknowledged': warningAck,
+    });
+
+    if (_publishPayloadSignature != payloadSignature ||
+        _publishIdempotencyKey == null) {
+      _publishPayloadSignature = payloadSignature;
+      _publishIdempotencyKey = _marketplaceUuid();
+    }
+
+    setState(() {
+      _publishing = true;
+      _error = null;
+    });
+
+    try {
+      final publication = await widget.service.publishJob(
+        sessionId: widget.session.sessionId,
+        sessionToken: widget.session.token,
+        jobId: draft.jobId,
+        finalPrice: price,
+        priceWarningAcknowledged: warningAck,
+        idempotencyKey: _publishIdempotencyKey!,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => MarketplaceCustomerPublishedScreen(
+            publication: publication,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = _publicationError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _publishing = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final price = _currentPrice();
+    final belowMinimum = price != null && draft.isBelowMinimum(price);
+    final warningRequired = price != null && draft.requiresWarningFor(price);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Precio recomendado'),
+        title: const Text('Precio y publicación'),
       ),
       body: SafeArea(
         child: Center(
@@ -808,7 +991,7 @@ class MarketplaceCustomerQuoteScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    serviceOption.name,
+                    widget.serviceOption.name,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
@@ -823,12 +1006,14 @@ class MarketplaceCustomerQuoteScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '${draft.recommendedPrice.toStringAsFixed(0)} ${draft.currency}',
+                            '${draft.recommendedPrice.toStringAsFixed(0)} '
+                            '${draft.currency}',
                             style: Theme.of(context).textTheme.displaySmall,
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Puedes aceptar este precio o ajustarlo antes de publicar.',
+                            'Puedes aceptarlo, aumentarlo o reducirlo '
+                            'antes de publicar.',
                             textAlign: TextAlign.center,
                             style: Theme.of(context)
                                 .textTheme
@@ -840,20 +1025,208 @@ class MarketplaceCustomerQuoteScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) {
+                      setState(() {
+                        _warningAcknowledged = false;
+                        _error = null;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Tu precio',
+                      suffixText: draft.currency,
+                      prefixIcon: const Icon(Icons.payments_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _publishing ? null : _useRecommendedPrice,
+                    child: const Text(
+                      'Usar precio recomendado',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Text(
                     'Mínimo permitido: '
                     '${draft.minimumPrice.toStringAsFixed(0)} '
                     '${draft.currency}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: belowMinimum ? kDanger : kMuted,
+                        ),
+                  ),
+                  if (warningRequired && !belowMinimum) ...[
+                    const SizedBox(height: 20),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: kTertiary,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Este precio está por debajo '
+                                    'del nivel recomendado. '
+                                    'Puede reducir la probabilidad '
+                                    'de que un transportista acepte '
+                                    'la solicitud.',
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: const Text(
+                                'Entiendo y quiero publicar '
+                                'con este precio.',
+                              ),
+                              value: _warningAcknowledged,
+                              onChanged: _publishing
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        _warningAcknowledged = value ?? false;
+                                        _error = null;
+                                      });
+                                    },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: kDanger),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _publishing ? null : _publish,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                      ),
+                      child: _publishing
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              'Publicar solicitud',
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'El pago se realiza directamente al '
+                    'transportista. TUKTUK no cobra el viaje '
+                    'al cliente.',
+                    textAlign: TextAlign.center,
                     style: Theme.of(context)
                         .textTheme
-                        .bodyMedium
+                        .bodySmall
                         ?.copyWith(color: kMuted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MarketplaceCustomerPublishedScreen extends StatelessWidget {
+  const MarketplaceCustomerPublishedScreen({
+    required this.publication,
+    super.key,
+  });
+
+  final MarketplaceCustomerPublication publication;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 72,
+                    color: kPrimary,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Solicitud publicada',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Los transportistas que cumplan con '
+                    'los requisitos ya pueden recibir '
+                    'tu solicitud.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(color: kMuted),
+                  ),
+                  const SizedBox(height: 28),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          const Text('Precio publicado'),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${publication.finalPrice.toStringAsFixed(0)} '
+                            '${publication.currency}',
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: null,
-                    child: const Text(
-                      'Continuar para publicar',
+                    onPressed: () {
+                      Navigator.of(context).popUntil(
+                        (route) => route.isFirst,
+                      );
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Text('Volver a servicios'),
                     ),
                   ),
                 ],
