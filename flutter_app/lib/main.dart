@@ -46,6 +46,7 @@ part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
+part 'presentation/marketplace_customer.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
@@ -116,6 +117,16 @@ void main() async {
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
   );
+
+  if (_marketplaceCustomerEntry) {
+    runApp(
+      MarketplaceCustomerApp(
+        client: Supabase.instance.client,
+      ),
+    );
+    return;
+  }
+
   final pushNotifications = PushNotificationService();
   await pushNotifications.initialize(onMessageOpened: openPushMessageAction);
   final pushTokenCoordinator = PushTokenRegistrationCoordinator.supabase(
@@ -132,6 +143,16 @@ void main() async {
       ),
     ),
   );
+}
+
+bool get _marketplaceCustomerEntry {
+  if (!kIsWeb) return false;
+
+  final uri = Uri.base;
+
+  return uri.queryParameters['mode'] == 'customer' ||
+      uri.path.endsWith('/cliente') ||
+      uri.path.endsWith('/cliente/');
 }
 
 class ControlTukTukApp extends StatefulWidget {
