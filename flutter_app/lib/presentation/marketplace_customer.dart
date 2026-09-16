@@ -47,6 +47,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
   late final String _startIdempotencyKey;
 
   MarketplaceCustomerSessionSnapshot? _existingSession;
+  String? _activeJobId;
 
   bool _loading = false;
   String? _error;
@@ -64,6 +65,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     if (saved != null &&
         (expiresAt == null || expiresAt.isAfter(DateTime.now().toUtc()))) {
       _existingSession = saved;
+      _activeJobId = _sessionStore.readActiveJobId();
     } else if (saved != null) {
       _sessionStore.clear();
     }
@@ -153,11 +155,32 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
     }
   }
 
+  Future<void> _clearActiveJob() async {
+    await _sessionStore.clearActiveJobId();
+
+    if (!mounted) return;
+
+    setState(() {
+      _activeJobId = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final existingSession = _existingSession;
 
     if (existingSession != null) {
+      final activeJobId = _activeJobId;
+
+      if (activeJobId != null) {
+        return MarketplaceCustomerTrackingScreen(
+          service: _service,
+          session: existingSession,
+          jobId: activeJobId,
+          onDone: _clearActiveJob,
+        );
+      }
+
       return MarketplaceCustomerRequestScreen(
         service: _service,
         session: existingSession,
@@ -947,12 +970,19 @@ class _MarketplaceCustomerQuoteScreenState
         idempotencyKey: _publishIdempotencyKey!,
       );
 
+      final sessionStore = MarketplaceCustomerSessionStore(Hive.box(_metaBox));
+
+      await sessionStore.saveActiveJobId(publication.jobId);
+
       if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
-          builder: (_) => MarketplaceCustomerPublishedScreen(
-            publication: publication,
+          builder: (_) => MarketplaceCustomerTrackingScreen(
+            service: widget.service,
+            session: widget.session,
+            jobId: publication.jobId,
+            onDone: sessionStore.clearActiveJobId,
           ),
         ),
       );
@@ -1147,87 +1177,6 @@ class _MarketplaceCustomerQuoteScreenState
                         .textTheme
                         .bodySmall
                         ?.copyWith(color: kMuted),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class MarketplaceCustomerPublishedScreen extends StatelessWidget {
-  const MarketplaceCustomerPublishedScreen({
-    required this.publication,
-    super.key,
-  });
-
-  final MarketplaceCustomerPublication publication;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(
-                    Icons.check_circle_outline_rounded,
-                    size: 72,
-                    color: kPrimary,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Solicitud publicada',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Los transportistas que cumplan con '
-                    'los requisitos ya pueden recibir '
-                    'tu solicitud.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyLarge
-                        ?.copyWith(color: kMuted),
-                  ),
-                  const SizedBox(height: 28),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          const Text('Precio publicado'),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${publication.finalPrice.toStringAsFixed(0)} '
-                            '${publication.currency}',
-                            style: Theme.of(context).textTheme.headlineMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).popUntil(
-                        (route) => route.isFirst,
-                      );
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Text('Volver a servicios'),
-                    ),
                   ),
                 ],
               ),
