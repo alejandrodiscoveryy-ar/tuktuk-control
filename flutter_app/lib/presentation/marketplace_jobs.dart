@@ -15,6 +15,37 @@ String _marketplaceJobDateLabel(DateTime? value) {
   return DateFormat('dd/MM/yyyy · HH:mm').format(value.toLocal());
 }
 
+String _marketplaceJobStatusLabel(String status) {
+  return switch (status) {
+    'accepted' => 'Aceptado',
+    'en_route' => 'En camino',
+    'pickup' => 'En recogida',
+    'in_progress' => 'En curso',
+    'completed' => 'Completado · pendiente de liquidación',
+    'settled' => 'Liquidado',
+    'cancelled_by_customer' => 'Cancelado por cliente',
+    'cancelled_by_driver' => 'Cancelado por conductor',
+    'incident' => 'Incidencia',
+    _ => status,
+  };
+}
+
+String _marketplaceJobBillingLabel(MarketplaceJob job) {
+  switch (job.billingMode) {
+    case MarketplaceBillingMode.trialFree:
+      return 'Periodo gratuito · sin comisión';
+    case MarketplaceBillingMode.walletCommission:
+      final commission = job.commissionAmountSnapshot;
+      if (commission == null) return 'Comisión por billetera';
+      return 'Comisión: ${_marketplaceMoneyLabel(
+        commission,
+        job.currency,
+      )}';
+    case MarketplaceBillingMode.unknown:
+      return 'Facturación pendiente';
+  }
+}
+
 class MarketplaceJobsScreen extends StatefulWidget {
   const MarketplaceJobsScreen({
     required this.store,
@@ -33,6 +64,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
   MarketplaceOnboarding? _onboarding;
   String? _selectedVehicleId;
   List<MarketplaceAvailableJob> _available = const [];
+  List<MarketplaceJob> _active = const [];
+  List<MarketplaceJob> _scheduled = const [];
+  List<MarketplaceJob> _history = const [];
+
+  final Set<String> _loadingScopes = <String>{};
+  final Map<String, String> _scopeErrors = <String, String>{};
 
   bool _loading = true;
   String? _error;
@@ -104,6 +141,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
         _available = jobs;
         _loading = false;
       });
+
+      await Future.wait([
+        _loadScope('active'),
+        _loadScope('scheduled'),
+        _loadScope('history'),
+      ]);
     } catch (_) {
       if (!mounted) return;
 
@@ -139,6 +182,55 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
         _error = 'No se pudieron actualizar los trabajos disponibles.';
       });
     }
+  }
+
+  Future<void> _loadScope(String scope) async {
+    if (!mounted) return;
+
+    setState(() {
+      _loadingScopes.add(scope);
+      _scopeErrors.remove(scope);
+    });
+
+    try {
+      final jobs = await _service.jobs(scope);
+
+      if (!mounted) return;
+
+      setState(() {
+        switch (scope) {
+          case 'active':
+            _active = jobs;
+            break;
+          case 'scheduled':
+            _scheduled = jobs;
+            break;
+          case 'history':
+            _history = jobs;
+            break;
+        }
+
+        _loadingScopes.remove(scope);
+        _scopeErrors.remove(scope);
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _loadingScopes.remove(scope);
+        _scopeErrors[scope] =
+            'No se pudieron actualizar los trabajos de esta sección.';
+      });
+    }
+  }
+
+  List<MarketplaceJob> _jobsForScope(String scope) {
+    return switch (scope) {
+      'active' => _active,
+      'scheduled' => _scheduled,
+      'history' => _history,
+      _ => const <MarketplaceJob>[],
+    };
   }
 
   Future<void> _changeVehicle(String? vehicleId) async {
@@ -200,7 +292,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 
       if (!mounted) return;
 
-      await _loadAvailable();
+      await Future.wait([
+        _loadAvailable(),
+        _loadScope('active'),
+        _loadScope('scheduled'),
+      ]);
 
       if (!mounted) return;
 
@@ -242,26 +338,29 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
             child: TabBarView(
               children: [
                 _buildAvailableTab(context),
-                _MarketplaceJobsPlaceholder(
+                _buildAssignedTab(
+                  context,
+                  scope: 'active',
                   icon: Icons.route_outlined,
-                  title: tr('Trabajos activos'),
-                  message: tr(
-                    'Aquí podrás seguir los servicios que ya aceptaste.',
-                  ),
+                  emptyTitle: 'No tienes trabajos activos',
+                  emptyMessage:
+                      'Cuando aceptes un servicio para ahora aparecerá aquí.',
                 ),
-                _MarketplaceJobsPlaceholder(
+                _buildAssignedTab(
+                  context,
+                  scope: 'scheduled',
                   icon: Icons.event_outlined,
-                  title: tr('Trabajos programados'),
-                  message: tr(
-                    'Aquí aparecerán los servicios aceptados para más adelante.',
-                  ),
+                  emptyTitle: 'No tienes trabajos programados',
+                  emptyMessage:
+                      'Los servicios aceptados para una hora futura aparecerán aquí.',
                 ),
-                _MarketplaceJobsPlaceholder(
+                _buildAssignedTab(
+                  context,
+                  scope: 'history',
                   icon: Icons.history_rounded,
-                  title: tr('Historial de trabajos'),
-                  message: tr(
-                    'Aquí podrás consultar los servicios ya finalizados.',
-                  ),
+                  emptyTitle: 'Tu historial está vacío',
+                  emptyMessage:
+                      'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
                 ),
               ],
             ),
@@ -432,6 +531,246 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
       ),
     );
   }
+
+  Widget _buildAssignedTab(
+    BuildContext context, {
+    required String scope,
+    required IconData icon,
+    required String emptyTitle,
+    required String emptyMessage,
+  }) {
+    final jobs = _jobsForScope(scope);
+    final loading = _loadingScopes.contains(scope);
+    final error = _scopeErrors[scope];
+
+    return RefreshIndicator(
+      onRefresh: () => _loadScope(scope),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (loading && jobs.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 36),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else ...[
+            if (error != null) ...[
+              GlassCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline_rounded),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(error)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (jobs.isEmpty)
+              GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 22),
+                  child: Column(
+                    children: [
+                      Icon(
+                        icon,
+                        size: 42,
+                        color: appPrimaryColor(context),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        emptyTitle,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        emptyMessage,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: appMutedColor(context),
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...jobs.map(
+                (job) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _AssignedJobCard(job: job),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AssignedJobCard extends StatelessWidget {
+  const _AssignedJobCard({
+    required this.job,
+  });
+
+  final MarketplaceJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    final origin =
+        job.originText?.trim().isNotEmpty == true ? job.originText! : 'Origen';
+    final destination = job.destinationText?.trim().isNotEmpty == true
+        ? job.destinationText!
+        : 'Destino';
+
+    final lastEvent = job.completedAt ??
+        job.cancelledAt ??
+        job.acceptedAt ??
+        job.updatedAt ??
+        job.createdAt;
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  _marketplaceJobServiceLabel(job.serviceCode),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _marketplaceMoneyLabel(
+                  job.finalPrice,
+                  job.currency,
+                ),
+                style: TextStyle(
+                  color: appPrimaryColor(context),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: appMutedColor(context).withValues(alpha: 0.30),
+              ),
+            ),
+            child: Text(
+              _marketplaceJobStatusLabel(job.status),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.trip_origin_rounded, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(origin)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on_outlined, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(destination)),
+            ],
+          ),
+          if (job.scheduledFor != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.event_outlined, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Programado: ${_marketplaceJobDateLabel(job.scheduledFor)}',
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (job.passengerCount != null) ...[
+            const SizedBox(height: 8),
+            Text('${job.passengerCount} pasajero(s)'),
+          ],
+          if (job.cargoWeightKg != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Carga: ${job.cargoWeightKg!.toStringAsFixed(0)} kg',
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            _marketplaceJobBillingLabel(job),
+            style: TextStyle(
+              color: appMutedColor(context),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (lastEvent != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Actualizado: ${_marketplaceJobDateLabel(lastEvent)}',
+              style: TextStyle(
+                color: appMutedColor(context),
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (job.incidentReason?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: kTertiary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Incidencia: ${job.incidentReason}',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _AvailableJobCard extends StatelessWidget {
@@ -550,59 +889,6 @@ class _AvailableJobCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MarketplaceJobsPlaceholder extends StatelessWidget {
-  const _MarketplaceJobsPlaceholder({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        GlassCard(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Column(
-              children: [
-                Icon(
-                  icon,
-                  size: 44,
-                  color: appPrimaryColor(context),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: appMutedColor(context),
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
