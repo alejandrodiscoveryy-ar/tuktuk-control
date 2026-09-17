@@ -145,6 +145,11 @@ void main() {
       find.byType(MarketplaceCustomerQuoteScreen),
       findsOneWidget,
     );
+    expect(
+      find.text(
+          'Servicio programado: ${DateFormat('dd/MM/yyyy HH:mm').format(scheduled)}'),
+      findsOneWidget,
+    );
 
     mock.close();
   });

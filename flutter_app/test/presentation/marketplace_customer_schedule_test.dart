@@ -6,6 +6,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  test('expired pickup date opens the picker at a future time', () {
+    final now = DateTime(2026, 9, 17, 15);
+    final expired = DateTime(2026, 9, 16, 20);
+    final future = DateTime(2026, 9, 18, 10);
+    final fallback = now.add(const Duration(minutes: 30));
+
+    expect(marketplaceSchedulePickerInitialDate(now, expired), fallback);
+    expect(marketplaceSchedulePickerInitialDate(now, now), fallback);
+    expect(marketplaceSchedulePickerInitialDate(now, null), fallback);
+    expect(marketplaceSchedulePickerInitialDate(now, future), future);
+  });
+
   testWidgets('customer can schedule and clear pickup time', (tester) async {
     final client = SupabaseClient(
       'https://example.supabase.co',

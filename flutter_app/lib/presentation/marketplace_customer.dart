@@ -497,17 +497,16 @@ class _MarketplaceCustomerTripFormScreenState
 
   Future<void> _pickSchedule() async {
     final now = DateTime.now();
+    final initial = marketplaceSchedulePickerInitialDate(now, _scheduledFor);
 
     final date = await showDatePicker(
       context: context,
-      initialDate: _scheduledFor ?? now.add(const Duration(minutes: 30)),
+      initialDate: initial,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: now.add(const Duration(days: 90)),
     );
 
     if (!mounted || date == null) return;
-
-    final initial = _scheduledFor ?? now.add(const Duration(minutes: 30));
 
     final time = await showTimePicker(
       context: context,
@@ -655,6 +654,7 @@ class _MarketplaceCustomerTripFormScreenState
             session: widget.session,
             serviceOption: widget.serviceOption,
             draft: draft,
+            scheduledFor: _scheduledFor,
           ),
         ),
       );
@@ -881,6 +881,7 @@ class MarketplaceCustomerQuoteScreen extends StatefulWidget {
     required this.session,
     required this.serviceOption,
     required this.draft,
+    this.scheduledFor,
     super.key,
   });
 
@@ -888,6 +889,7 @@ class MarketplaceCustomerQuoteScreen extends StatefulWidget {
   final MarketplaceCustomerSessionSnapshot session;
   final MarketplaceCustomerServiceOption serviceOption;
   final MarketplaceCustomerRequestDraft draft;
+  final DateTime? scheduledFor;
 
   @override
   State<MarketplaceCustomerQuoteScreen> createState() =>
@@ -1099,6 +1101,13 @@ class _MarketplaceCustomerQuoteScreenState
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
+                  Text(
+                    widget.scheduledFor == null
+                        ? 'Solicitud inmediata'
+                        : 'Servicio programado: ${DateFormat('dd/MM/yyyy HH:mm').format(widget.scheduledFor!)}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -1260,6 +1269,17 @@ class _MarketplaceCustomerQuoteScreenState
       ),
     );
   }
+}
+
+DateTime marketplaceSchedulePickerInitialDate(
+  DateTime now,
+  DateTime? scheduledFor,
+) {
+  if (scheduledFor != null && scheduledFor.isAfter(now)) {
+    return scheduledFor;
+  }
+
+  return now.add(const Duration(minutes: 30));
 }
 
 String _marketplaceUuid() {
