@@ -434,6 +434,7 @@ class _MarketplaceCustomerTripFormScreenState
   final _stopCountController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
 
+  DateTime? _scheduledFor;
   bool _urgent = false;
   bool _loadHelp = false;
   bool _unloadHelp = false;
@@ -494,8 +495,56 @@ class _MarketplaceCustomerTripFormScreenState
     return _positiveDouble(value);
   }
 
+  Future<void> _pickSchedule() async {
+    final now = DateTime.now();
+    final initial = marketplaceSchedulePickerInitialDate(now, _scheduledFor);
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 90)),
+    );
+
+    if (!mounted || date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+
+    if (!mounted || time == null) return;
+
+    final selected = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+
+    if (!selected.isAfter(DateTime.now())) {
+      setState(() {
+        _error = 'Selecciona una fecha y hora futuras.';
+      });
+      return;
+    }
+
+    setState(() {
+      _scheduledFor = selected;
+      _error = null;
+    });
+  }
+
   Future<void> _requestQuote() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_scheduledFor != null && !_scheduledFor!.isAfter(DateTime.now())) {
+      setState(() {
+        _error = 'La fecha programada ya vencio. Selecciona otra.';
+      });
+      return;
+    }
 
     final passengerCount =
         _needsPassengers ? _positiveInt(_passengerController.text) : null;
@@ -567,6 +616,7 @@ class _MarketplaceCustomerTripFormScreenState
         'service_code': widget.serviceOption.code,
         'origin_text': _originController.text.trim(),
         'destination_text': _destinationController.text.trim(),
+        'scheduled_for': _scheduledFor?.toUtc().toIso8601String(),
         'passenger_count': passengerCount,
         'cargo_weight_kg': cargoWeight,
         'cargo_volume_m3': cargoVolume,
@@ -586,6 +636,7 @@ class _MarketplaceCustomerTripFormScreenState
         serviceCode: widget.serviceOption.code,
         originText: _originController.text.trim(),
         destinationText: _destinationController.text.trim(),
+        scheduledFor: _scheduledFor,
         passengerCount: passengerCount,
         cargoWeightKg: cargoWeight,
         cargoVolumeM3: cargoVolume,
@@ -603,6 +654,7 @@ class _MarketplaceCustomerTripFormScreenState
             session: widget.session,
             serviceOption: widget.serviceOption,
             draft: draft,
+            scheduledFor: _scheduledFor,
           ),
         ),
       );
@@ -663,6 +715,28 @@ class _MarketplaceCustomerTripFormScreenState
                       ),
                       validator: _requiredLocation,
                     ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: _loading ? null : _pickSchedule,
+                      icon: const Icon(Icons.event_outlined),
+                      label: Text(
+                        _scheduledFor == null
+                            ? 'Programar fecha y hora (opcional)'
+                            : 'Programado: ${DateFormat('dd/MM/yyyy HH:mm').format(_scheduledFor!)}',
+                      ),
+                    ),
+                    if (_scheduledFor != null)
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _scheduledFor = null;
+                                  _error = null;
+                                });
+                              },
+                        child: const Text('Solicitar ahora'),
+                      ),
                     if (_needsPassengers) ...[
                       const SizedBox(height: 16),
                       TextFormField(
@@ -807,6 +881,7 @@ class MarketplaceCustomerQuoteScreen extends StatefulWidget {
     required this.session,
     required this.serviceOption,
     required this.draft,
+    this.scheduledFor,
     super.key,
   });
 
@@ -814,6 +889,7 @@ class MarketplaceCustomerQuoteScreen extends StatefulWidget {
   final MarketplaceCustomerSessionSnapshot session;
   final MarketplaceCustomerServiceOption serviceOption;
   final MarketplaceCustomerRequestDraft draft;
+  final DateTime? scheduledFor;
 
   @override
   State<MarketplaceCustomerQuoteScreen> createState() =>
@@ -1025,6 +1101,13 @@ class _MarketplaceCustomerQuoteScreenState
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
+                  Text(
+                    widget.scheduledFor == null
+                        ? 'Solicitud inmediata'
+                        : 'Servicio programado: ${DateFormat('dd/MM/yyyy HH:mm').format(widget.scheduledFor!)}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -1186,6 +1269,17 @@ class _MarketplaceCustomerQuoteScreenState
       ),
     );
   }
+}
+
+DateTime marketplaceSchedulePickerInitialDate(
+  DateTime now,
+  DateTime? scheduledFor,
+) {
+  if (scheduledFor != null && scheduledFor.isAfter(now)) {
+    return scheduledFor;
+  }
+
+  return now.add(const Duration(minutes: 30));
 }
 
 String _marketplaceUuid() {
