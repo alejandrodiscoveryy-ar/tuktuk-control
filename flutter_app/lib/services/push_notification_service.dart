@@ -47,6 +47,12 @@ String? marketplaceJobIdFromUrl(Uri uri) => marketplaceJobIdFromPush({
     });
 
 @visibleForTesting
+int appShellIndexAfterAuthentication({
+  required int currentIndex,
+  required String? marketplaceJobId,
+}) => marketplaceJobId == null ? 0 : currentIndex;
+
+@visibleForTesting
 Uri? appUpdateUri(Map<String, dynamic> data) {
   if (data['kind']?.toString() != 'app_update') return null;
   final actionUrl = data['action_url']?.toString().trim();
@@ -239,6 +245,7 @@ class PushNotificationService {
       showWebForegroundNotification(
         title: title ?? tuktukNotificationChannelName,
         body: body ?? '',
+        marketplaceJobId: marketplaceJobIdFromPush(message.data),
       );
       return;
     }

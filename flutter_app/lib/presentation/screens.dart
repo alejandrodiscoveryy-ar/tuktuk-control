@@ -585,7 +585,10 @@ class _AppShellState extends State<AppShell> {
         }
         final authenticatedUserId = store.user?.id;
         if (_lastAuthenticatedUserId == null && authenticatedUserId != null) {
-          index = 0;
+          index = appShellIndexAfterAuthentication(
+            currentIndex: index,
+            marketplaceJobId: _marketplacePushJobId.value,
+          );
         }
         _lastAuthenticatedUserId = authenticatedUserId;
         final isSynchronized = store.user != null &&

@@ -18,13 +18,21 @@
 </head>
 <body>
   <script>
-    window.tuktukShowForegroundNotification = function (title, body) {
+    window.tuktukShowForegroundNotification = function (title, body, marketplaceJobId) {
       try {
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(title, {
+          const notification = new Notification(title, {
             body: body,
             icon: 'icons/Icon-192.png'
           });
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(marketplaceJobId || '')) {
+            notification.onclick = function () {
+              window.focus();
+              const target = new URL(window.location.href);
+              target.searchParams.set('marketplace_job_id', marketplaceJobId);
+              window.location.assign(target.toString());
+            };
+          }
         }
       } catch (_) {
         // Foreground browser notifications are optional.

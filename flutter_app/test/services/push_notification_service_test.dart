@@ -134,6 +134,20 @@ void main() {
   test('payload local inválido se ignora sin bloquear la aplicación', () {
     expect(decodePushMessageData('{invalid'), isEmpty);
   });
+
+  test('la restauración de sesión conserva Trabajos desde una oferta válida', () {
+    expect(
+      appShellIndexAfterAuthentication(
+        currentIndex: 2,
+        marketplaceJobId: 'e3ba1a2d-6a1a-4e53-9042-679d7e0f9d46',
+      ),
+      2,
+    );
+    expect(
+      appShellIndexAfterAuthentication(currentIndex: 2, marketplaceJobId: null),
+      0,
+    );
+  });
 }
 
 class _PermissionRejected implements Exception {
