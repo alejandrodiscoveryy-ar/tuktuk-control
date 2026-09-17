@@ -8,11 +8,14 @@ class MarketplaceRecordsScreen extends StatelessWidget {
 
   final RecordStore store;
 
+  static int initialTabIndexFor({required bool isReadOnly}) =>
+      isReadOnly ? 1 : 0;
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      initialIndex: store.isReadOnly ? 1 : 0,
+      initialIndex: initialTabIndexFor(isReadOnly: store.isReadOnly),
       child: Builder(
         builder: (tabContext) => Column(
           children: [

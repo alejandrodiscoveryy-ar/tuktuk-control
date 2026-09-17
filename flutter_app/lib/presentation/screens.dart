@@ -674,8 +674,6 @@ class _AppShellState extends State<AppShell> {
                     _DesktopNavigationRail(
                       selectedIndex: index,
                       onDestinationSelected: (value) {
-
-
                         setState(() => index = value);
                       },
                       profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -741,14 +739,6 @@ class _AppShellState extends State<AppShell> {
               : _LiquidGlassNavigation(
                   selectedIndex: index,
                   onDestinationSelected: (value) {
-                    if (value == 1 && store.isReadOnly) {
-                      toast(
-                        context,
-                        tr('Tu licencia no permite realizar cambios.'),
-                      );
-                      return;
-                    }
-                    if (value == 5) unawaited(store.loadReferrals());
                     setState(() => index = value);
                   },
                   profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -811,7 +801,6 @@ class _DesktopNavigationRail extends StatelessWidget {
               selectedIcon: const Icon(Icons.insights),
               label: Text(tr('Estads.')),
             ),
-
             NavigationRailDestination(
               icon: profilePhotoUrl == null
                   ? const Icon(Icons.account_circle_outlined)
@@ -1013,7 +1002,6 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         selectedIcon: const Icon(Icons.insights),
                         label: tr('Estads.'),
                       ),
-
                       NavigationDestination(
                         icon: profilePhotoUrl == null
                             ? const Icon(Icons.account_circle_outlined)
