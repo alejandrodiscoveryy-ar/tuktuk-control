@@ -541,10 +541,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _AppShellState extends State<AppShell> {
-  int index = 0;
+  int index = _marketplacePushJobId.value == null ? 0 : 2;
   String? _lastAuthenticatedUserId;
 
   RecordStore get store => widget.store;
+
+  @override
+  void initState() {
+    super.initState();
+    _marketplacePushJobId.addListener(_openMarketplacePush);
+  }
+
+  void _openMarketplacePush() {
+    if (_marketplacePushJobId.value == null || !mounted) return;
+    setState(() => index = 2);
+    _marketplacePushJobId.value = null;
+  }
+
+  @override
+  void dispose() {
+    _marketplacePushJobId.removeListener(_openMarketplacePush);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

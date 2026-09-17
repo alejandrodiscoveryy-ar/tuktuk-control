@@ -108,6 +108,29 @@ void main() {
     expect(restored, data);
   });
 
+  test('solo una oferta Marketplace con UUID válido abre Trabajos', () {
+    expect(
+      marketplaceJobIdFromPush(const {
+        'kind': 'marketplace_job_available',
+        'job_id': 'e3ba1a2d-6a1a-4e53-9042-679d7e0f9d46',
+      }),
+      'e3ba1a2d-6a1a-4e53-9042-679d7e0f9d46',
+    );
+    expect(
+      marketplaceJobIdFromUrl(Uri.parse(
+        'https://tuktuk.example/?marketplace_job_id=e3ba1a2d-6a1a-4e53-9042-679d7e0f9d46',
+      )),
+      'e3ba1a2d-6a1a-4e53-9042-679d7e0f9d46',
+    );
+    expect(
+      marketplaceJobIdFromPush(const {
+        'kind': 'marketplace_job_available',
+        'job_id': 'https://evil.example',
+      }),
+      isNull,
+    );
+  });
+
   test('payload local inválido se ignora sin bloquear la aplicación', () {
     expect(decodePushMessageData('{invalid'), isEmpty);
   });

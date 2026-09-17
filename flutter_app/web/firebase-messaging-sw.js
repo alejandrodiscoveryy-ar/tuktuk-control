@@ -23,3 +23,13 @@ messaging.onBackgroundMessage((payload) => {
     data: payload.data || {}
   });
 });
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  if (data.kind !== 'marketplace_job_available' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.job_id || '')) return;
+  const target = new URL(self.registration.scope);
+  target.searchParams.set('marketplace_job_id', data.job_id);
+  event.waitUntil(clients.openWindow(target.toString()));
+});

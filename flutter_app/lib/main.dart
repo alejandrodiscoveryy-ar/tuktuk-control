@@ -73,6 +73,7 @@ const _projectId = String.fromEnvironment(
   'PROJECT_ID',
   defaultValue: 'dfb41cea-a812-46f2-b511-7a60bd3d78af',
 );
+final _marketplacePushJobId = ValueNotifier<String?>(null);
 
 const kBg = Color(0xFF080D14);
 const kSurface = Color(0xFF111923);
@@ -129,7 +130,13 @@ void main() async {
   }
 
   final pushNotifications = PushNotificationService();
-  await pushNotifications.initialize(onMessageOpened: openPushMessageAction);
+  await pushNotifications.initialize(onMessageOpened: (data) async {
+    final jobId = marketplaceJobIdFromPush(data);
+    if (jobId != null) _marketplacePushJobId.value = jobId;
+    await openPushMessageAction(data);
+  });
+  final webPushJobId = kIsWeb ? marketplaceJobIdFromUrl(Uri.base) : null;
+  if (webPushJobId != null) _marketplacePushJobId.value = webPushJobId;
   final pushTokenCoordinator = PushTokenRegistrationCoordinator.supabase(
     client: Supabase.instance.client,
     cache: Hive.box(_metaBox),

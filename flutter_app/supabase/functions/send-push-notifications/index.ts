@@ -26,7 +26,7 @@ type OutboxRow = {
 type DeviceToken = { id: string; token: string; platform: "android" | "ios" | "web" };
 
 const PROJECT_ID = "dfb41cea-a812-46f2-b511-7a60bd3d78af";
-const ALLOWED_KINDS = ["daily_exchange_rate", "exchange_rate_update", "app_announcement", "app_update"];
+const ALLOWED_KINDS = ["daily_exchange_rate", "exchange_rate_update", "app_announcement", "app_update", "marketplace_job_available"];
 const AUTH_HEADER = "x-tuktuk-dispatch-secret";
 
 function findFirebaseServiceAccountRaw(): string {
