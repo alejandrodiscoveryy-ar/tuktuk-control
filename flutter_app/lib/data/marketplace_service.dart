@@ -315,12 +315,20 @@ class MarketplaceWallet {
     this.initialDepositConfirmedAt,
     this.initialDepositAmount,
     this.initialMinimumSnapshot,
+    this.realBalance,
+    this.promotionalBalance,
+    this.realAvailableBalance,
+    this.promotionalAvailableBalance,
   });
 
   final String currency;
   final double totalBalance;
   final double reservedBalance;
   final double availableBalance;
+  final double? realBalance;
+  final double? promotionalBalance;
+  final double? realAvailableBalance;
+  final double? promotionalAvailableBalance;
   final bool initialDepositConfirmed;
   final DateTime? initialDepositConfirmedAt;
   final double? initialDepositAmount;
@@ -333,6 +341,18 @@ class MarketplaceWallet {
         totalBalance: _marketNumber(map['total_balance']),
         reservedBalance: _marketNumber(map['reserved_balance']),
         availableBalance: _marketNumber(map['available_balance']),
+        realBalance: map['real_balance'] == null
+            ? null
+            : _marketNumber(map['real_balance']),
+        promotionalBalance: map['promotional_balance'] == null
+            ? null
+            : _marketNumber(map['promotional_balance']),
+        realAvailableBalance: map['real_available_balance'] == null
+            ? null
+            : _marketNumber(map['real_available_balance']),
+        promotionalAvailableBalance: map['promotional_available_balance'] == null
+            ? null
+            : _marketNumber(map['promotional_available_balance']),
         initialDepositConfirmed: _marketBool(map['initial_deposit_confirmed']),
         initialDepositConfirmedAt:
             _marketDate(map['initial_deposit_confirmed_at']),
@@ -709,6 +729,16 @@ class MarketplaceService {
   ) =>
       _one('save_my_marketplace_vehicle_onboarding', params)
           .then(MarketplaceOnboarding.fromMap);
+
+  /// Creates an isolated Marketplace draft. Does not write to Control/Hive.
+  Future<Map<String, dynamic>> createVehicle({
+    required String name,
+    required String idempotencyKey,
+  }) =>
+      _one('create_my_marketplace_vehicle', {
+        'target_vehicle_name': name,
+        'target_idempotency_key': idempotencyKey,
+      });
 
   Future<MarketplaceMediaAsset> prepareMedia(
     Map<String, dynamic> params,

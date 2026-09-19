@@ -103,6 +103,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
     unawaited(_load());
   }
 
+  // The wallet tab is recreated after activation so its totals are current.
+  int _managementRevision = 0;
+
+  void _onManagementChanged() {
+    if (!mounted) return;
+    setState(() => _managementRevision++);
+    unawaited(_load());
+  }
+
   MarketplaceVehicle? _vehicleById(String? id) {
     if (id == null) return null;
 
@@ -629,17 +638,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 6,
       child: Column(
         children: [
           const SizedBox(height: 8),
-          TabBar(
+          const TabBar(
             isScrollable: true,
             tabs: [
-              Tab(text: tr('Disponibles')),
-              Tab(text: tr('Activos')),
-              Tab(text: tr('Programados')),
-              Tab(text: tr('Historial')),
+              Tab(icon: Icon(Icons.notifications_none_outlined), text: 'Ofertas'),
+              Tab(icon: Icon(Icons.work_outline), text: 'Activos'),
+              Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
+              Tab(icon: Icon(Icons.history), text: 'Hist.'),
+              Tab(icon: Icon(Icons.verified_user_outlined), text: 'Activar'),
+              Tab(icon: Icon(Icons.account_balance_wallet_outlined), text: 'Saldo'),
             ],
           ),
           const SizedBox(height: 4),
@@ -670,6 +681,21 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
                   emptyTitle: 'Tu historial está vacío',
                   emptyMessage:
                       'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
+                ),
+                MarketplaceOnboardingScreen(
+                  key: ValueKey('activation-$_selectedVehicleId'),
+                  store: widget.store,
+                  managementSection: MarketplaceManagementSection.activation,
+                  initialVehicleId: _selectedVehicleId,
+                  onManagementChanged: _onManagementChanged,
+                ),
+                MarketplaceOnboardingScreen(
+                  key: ValueKey(
+                    'wallet-$_selectedVehicleId-$_managementRevision',
+                  ),
+                  store: widget.store,
+                  managementSection: MarketplaceManagementSection.wallet,
+                  initialVehicleId: _selectedVehicleId,
                 ),
               ],
             ),
