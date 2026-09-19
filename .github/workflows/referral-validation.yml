@@ -30,8 +30,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze --no-pub
-            - name: Obtener gateway para las pruebas
+           - run: flutter analyze --no-pub
+      - name: Obtener gateway para las pruebas
         run: |
           mkdir -p ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway
           curl -fLsS --retry 3 \
