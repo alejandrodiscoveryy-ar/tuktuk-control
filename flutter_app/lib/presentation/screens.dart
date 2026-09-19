@@ -605,6 +605,7 @@ class _AppShellState extends State<AppShell> {
           MarketplaceRecordsScreen(store: store),
           MarketplaceJobsScreen(store: store),
           StatsScreen(store: store),
+          const StoreScreen(),
           MarketplaceMoreScreen(store: store),
         ];
         return Scaffold(
@@ -800,6 +801,11 @@ class _DesktopNavigationRail extends StatelessWidget {
               icon: const Icon(Icons.insights_outlined),
               selectedIcon: const Icon(Icons.insights),
               label: Text(tr('Estads.')),
+            ),
+            NavigationRailDestination(
+              icon: const Icon(Icons.storefront_outlined),
+              selectedIcon: const Icon(Icons.storefront),
+              label: Text(tr('Tienda')),
             ),
             NavigationRailDestination(
               icon: profilePhotoUrl == null
@@ -1001,6 +1007,11 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         icon: const Icon(Icons.insights_outlined),
                         selectedIcon: const Icon(Icons.insights),
                         label: tr('Estads.'),
+                      ),
+                      NavigationDestination(
+                        icon: const Icon(Icons.storefront_outlined),
+                        selectedIcon: const Icon(Icons.storefront),
+                        label: tr('Tienda'),
                       ),
                       NavigationDestination(
                         icon: profilePhotoUrl == null
@@ -1533,6 +1544,7 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   final search = TextEditingController();
+  final Set<String> _maintenanceBusy = <String>{};
   _HistoryFilter filter = _HistoryFilter.earnings;
 
   @override
@@ -1658,7 +1670,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 isThreeLine: true,
                 trailing: widget.store.canWrite
-                    ? const Icon(Icons.chevron_right)
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Eliminar mantenimiento',
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: kDanger,
+                            ),
+                            onPressed: _maintenanceBusy.contains(record.id)
+                                ? null
+                                : () => _deleteMaintenance(record),
+                          ),
+                          const Icon(Icons.edit_outlined),
+                        ],
+                      )
                     : Icon(Icons.lock_outline, color: appMutedColor(context)),
                 onTap: widget.store.canWrite
                     ? () => Navigator.push(
@@ -1682,6 +1709,61 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ],
     );
+  }
+
+  Future<void> _deleteMaintenance(MaintenanceRecord record) async {
+    if (!widget.store.canWrite || _maintenanceBusy.contains(record.id)) {
+      return;
+    }
+
+    setState(() {
+      _maintenanceBusy.add(record.id);
+    });
+
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Eliminar mantenimiento'),
+          content: Text(
+            '¿Eliminar "${record.type}" del '
+            '${DateFormat('dd/MM/yyyy HH:mm').format(record.dateTime)}? '
+            'Se actualizarán los cálculos relacionados.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        ),
+      );
+
+      if (!mounted || confirmed != true) return;
+
+      final deleted = await _runLicensedWrite(
+        context,
+        () => widget.store.deleteMaintenance(record.id),
+      );
+
+      if (mounted && deleted) {
+        toast(context, 'Mantenimiento eliminado');
+      }
+    } catch (_) {
+      if (mounted) {
+        toast(context, 'No se pudo eliminar el mantenimiento.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _maintenanceBusy.remove(record.id);
+        });
+      }
+    }
   }
 
   Future<bool> confirmDelete(BuildContext context) async {
@@ -2142,14 +2224,7 @@ class LoginScreen extends StatelessWidget {
         const SizedBox(height: 18),
         VehicleSettingsPanel(store: store),
         const SizedBox(height: 18),
-        _SupportAndPaymentsCard(
-          supportAction: store.supportWhatsAppAction(),
-          paymentAction: store.paymentWhatsAppAction(),
-          onTap: (action) => _launchWhatsApp(context, action),
-        ),
-        const SizedBox(height: 18),
-        _ReferralCard(store: store),
-        const SizedBox(height: 18),
+
         AppPreferencesPanel(store: store),
       ],
     );
@@ -2502,7 +2577,11 @@ class _ReferralCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Gana 15 días gratis por cada referido.',
+                      store.referralProgram?.isWalletReward == true
+                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
+                          : store.referralProgram == null
+                              ? 'Consulta tus recompensas por invitar conductores.'
+                              : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2590,7 +2669,9 @@ class _ReferralCard extends StatelessWidget {
       ),
       const SizedBox(height: 4),
       Text(
-        'Gana ${program.rewardDays} días por cada referido',
+        program.isWalletReward
+            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
+            : 'Gana ${program.rewardDays} días por cada referido',
         style: TextStyle(
           color: appPrimaryColor(context),
           fontWeight: FontWeight.w800,
@@ -2650,20 +2731,26 @@ class _ReferralCard extends StatelessWidget {
             ),
             const _ReferralDivider(),
             _ReferralMetric(
-              label: 'Cumplieron',
-              value: '${program.qualifiedCount}',
+              label: program.isWalletReward ? 'Acreditados' : 'Cumplieron',
+              value: program.isWalletReward
+                  ? '${program.rewardedCount}'
+                  : '${program.qualifiedCount}',
             ),
             const _ReferralDivider(),
             _ReferralMetric(
-              label: 'Días obtenidos',
-              value: '${program.earnedDays}',
+              label: program.isWalletReward ? 'Días pendientes' : 'Días obtenidos',
+              value: program.isWalletReward
+                  ? '${program.earnedDays - program.appliedDays}'
+                  : '${program.earnedDays}',
             ),
           ],
         ),
       ),
       const SizedBox(height: 8),
       Text(
-        'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
+        program.isWalletReward
+            ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
+            : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
         style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
       const SizedBox(height: 18),
@@ -2786,20 +2873,37 @@ class _ReferralEntryTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${referralEntryStatusLabel(entry.status)}'
+                  '${entry.displayStatusLabel}'
                   '${createdAt == null ? '' : ' · ${DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal())}'}',
                   style: TextStyle(color: appMutedColor(context), fontSize: 12),
                 ),
               ],
             ),
           ),
-          if (entry.rewardDays > 0)
-            Text(
-              '+${entry.rewardDays} días',
-              style: TextStyle(
-                color: appPrimaryColor(context),
-                fontWeight: FontWeight.w900,
-              ),
+          if ((entry.rewardAmount ?? 0) > 0 || entry.rewardDays > 0)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if ((entry.rewardAmount ?? 0) > 0)
+                  Text(
+                    '+${entry.rewardAmount!.toStringAsFixed(0)} ${entry.rewardCurrency ?? 'CUP'}',
+                    style: TextStyle(
+                      color: appPrimaryColor(context),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                if (entry.rewardDays > 0)
+                  Text(
+                    entry.legacyRewardStatus != null
+                        ? '${entry.rewardDays} días ${entry.legacyDaysApplied ? 'aplicados' : 'pendientes'}'
+                        : '+${entry.rewardDays} días',
+                    style: TextStyle(
+                      color: appPrimaryColor(context),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
             ),
         ],
       ),
@@ -3139,6 +3243,8 @@ class MaintenanceFormScreen extends StatefulWidget {
 }
 
 class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
+  bool _saving = false;
+  late final String _recordId;
   DateTime date = DateTime.now();
   TimeOfDay time = TimeOfDay.now();
   late final TextEditingController odometer;
@@ -3151,6 +3257,8 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   void initState() {
     super.initState();
     final record = widget.record;
+    _recordId =
+        record?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     if (record != null) {
       date = record.dateTime;
       time = TimeOfDay.fromDateTime(record.dateTime);
@@ -3250,9 +3358,11 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: widget.store.canWrite ? save : null,
+          onPressed: widget.store.canWrite && !_saving ? save : null,
           icon: const Icon(Icons.save_outlined),
-          label: Text(tr('Guardar mantenimiento')),
+          label: Text(
+            _saving ? 'Guardando...' : tr('Guardar mantenimiento'),
+          ),
         ),
       ],
     );
@@ -3276,6 +3386,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   }
 
   Future<void> save() async {
+    if (_saving) return;
     final odo = double.tryParse(odometer.text.replaceAll(',', '.'));
     final parsedCost = _parseOptionalNumber(cost.text);
     if (odo == null || odo <= 0) {
@@ -3290,12 +3401,13 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
       toast(context, tr('El costo no es valido'));
       return;
     }
-    final saved = await _runLicensedWrite(
+    setState(() => _saving = true);
+    try {
+      final saved = await _runLicensedWrite(
       context,
       () => widget.store.saveMaintenance(
         MaintenanceRecord(
-          id: widget.record?.id ??
-              DateTime.now().microsecondsSinceEpoch.toString(),
+          id: _recordId,
           dateTime: DateTime(
             date.year,
             date.month,
@@ -3314,10 +3426,16 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         ),
       ),
     );
-    if (!saved) return;
-    if (!mounted) return;
-    toast(context, tr('Mantenimiento guardado'));
-    Navigator.pop(context);
-    if (widget.record == null) widget.onSaved?.call();
+      if (!saved || !mounted) return;
+      toast(context, tr('Mantenimiento guardado'));
+      Navigator.pop(context);
+      if (widget.record == null) widget.onSaved?.call();
+    } catch (_) {
+      if (mounted) {
+        toast(context, 'No se pudo guardar el mantenimiento.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }

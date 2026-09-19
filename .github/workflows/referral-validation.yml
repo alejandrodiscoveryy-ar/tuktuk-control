@@ -31,6 +31,12 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-pub
+      - name: Obtener gateway para las pruebas
+        run: |
+          mkdir -p ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway
+          curl -fLsS --retry 3 \
+            https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/28c4cfefc2ae38cfe84575c7aacc113c401d073f/supabase/functions/marketplace-customer-gateway/index.ts \
+            -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
       - run: flutter test --no-pub
       - name: Prepare fake Firebase configuration for compilation only
         run: cp test/fixtures/google-services.debug.json android/app/google-services.json

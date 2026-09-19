@@ -107,22 +107,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        GlassCard(
-          child: ListTile(
-            leading: const Icon(Icons.storefront_outlined),
-            title: Text(tr('Tienda')),
-            subtitle: Text(
-              tr('Productos y servicios para tu operación.'),
-            ),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => _openPage(
-              context,
-              title: tr('Tienda'),
-              child: const StoreScreen(),
-            ),
-          ),
-        ),
+
         const SizedBox(height: 12),
         GlassCard(
           child: ListTile(
@@ -136,7 +121,52 @@ class MarketplaceMoreScreen extends StatelessWidget {
             subtitle: Text(
               store.user == null
                   ? tr('Inicia sesión y administra tu cuenta.')
-                  : tr('Cuenta, sincronización, soporte y referidos.'),
+                  : tr('Cuenta y sincronización'),
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () {
+
+              _openPage(
+                context,
+                title: tr('Cuenta y sincronización'),
+                child: LoginScreen(store: store),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        GlassCard(
+          child: ListTile(
+            leading: const Icon(Icons.support_agent_rounded),
+            title: Text(tr('Soporte y pagos')),
+            subtitle: Text(tr('Pagos, soporte y licencias')),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _openPage(
+              context,
+              title: tr('Soporte y pagos'),
+              child: Builder(
+                builder: (pageContext) => ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _SupportAndPaymentsCard(
+                      supportAction: store.supportWhatsAppAction(),
+                      paymentAction: store.paymentWhatsAppAction(),
+                      onTap: (action) =>
+                          _launchWhatsApp(pageContext, action),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        GlassCard(
+          child: ListTile(
+            leading: const Icon(Icons.redeem_outlined),
+            title: Text(tr('Referidos')),
+            subtitle: Text(
+              tr('Invita a otros conductores y gana días adicionales.'),
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
@@ -145,8 +175,11 @@ class MarketplaceMoreScreen extends StatelessWidget {
               }
               _openPage(
                 context,
-                title: tr('Cuenta y sincronización'),
-                child: LoginScreen(store: store),
+                title: tr('Referidos'),
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [_ReferralCard(store: store)],
+                ),
               );
             },
           ),

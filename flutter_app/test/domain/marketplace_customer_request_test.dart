@@ -106,6 +106,6 @@ void main() {
       isNot(contains(".from('marketplace_pricing_rules')")),
     );
     expect(source, isNot(contains('service_role')));
-    expect(source, isNot(contains(".rpc(")));
+    expect(source, isNot(contains('.rpc(')));
   });
 }

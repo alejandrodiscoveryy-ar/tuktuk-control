@@ -944,12 +944,6 @@ class _MarketplaceCustomerQuoteScreenState
     return (value * 100).round() / 100;
   }
 
-  bool get _warningRequired {
-    final price = _currentPrice();
-
-    return price != null && draft.requiresWarningFor(price);
-  }
-
   String _publicationError(Object error) {
     final value = error.toString();
 

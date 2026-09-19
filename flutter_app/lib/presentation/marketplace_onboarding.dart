@@ -1,5 +1,8 @@
 part of '../main.dart';
 
+// Reuse the existing onboarding state and cards from the Trabajos section.
+enum MarketplaceManagementSection { activation, wallet }
+
 double? _marketplaceOptionalNumber(String value) {
   final clean = value.trim().replaceAll(',', '.');
   if (clean.isEmpty) return null;
@@ -34,10 +37,16 @@ String _marketplacePercentLabel(double rate) {
 class MarketplaceOnboardingScreen extends StatefulWidget {
   const MarketplaceOnboardingScreen({
     required this.store,
+    this.managementSection,
+    this.initialVehicleId,
+    this.onManagementChanged,
     super.key,
   });
 
   final RecordStore store;
+  final MarketplaceManagementSection? managementSection;
+  final String? initialVehicleId;
+  final VoidCallback? onManagementChanged;
 
   @override
   State<MarketplaceOnboardingScreen> createState() =>
@@ -51,6 +60,8 @@ class _MarketplaceOnboardingScreenState
 
   final _name = TextEditingController();
   final _phone = TextEditingController();
+  final _vehicleName = TextEditingController();
+  final _registration = TextEditingController();
   final _brand = TextEditingController();
   final _model = TextEditingController();
   final _year = TextEditingController();
@@ -73,11 +84,16 @@ class _MarketplaceOnboardingScreenState
   String? _vehiclePhotoUploadKey;
   String? _vehiclePhotoLabel;
 
+  // Reuse authenticated downloads across rebuilds and vehicle selection.
+  final Map<String, Future<Uint8List>> _savedPhotoFutures = {};
+
   MarketplaceWorkAccess? _access;
   bool _accessLoading = false;
   bool _startingTrial = false;
   String? _accessError;
   String? _trialStartKey;
+  String? _vehicleCreateKey;
+  String? _vehicleCreateName;
 
   MarketplaceWallet? _wallet;
   bool _walletLoading = false;
@@ -127,6 +143,8 @@ class _MarketplaceOnboardingScreenState
   void dispose() {
     _name.dispose();
     _phone.dispose();
+    _vehicleName.dispose();
+    _registration.dispose();
     _brand.dispose();
     _model.dispose();
     _year.dispose();
@@ -170,6 +188,7 @@ class _MarketplaceOnboardingScreenState
         {
           'vehicle_id': 'preview-vehicle',
           'name': 'TUKTUK de muestra',
+          'registration': '',
           'category_code': 'tricycle',
           'propulsion_code': 'electric',
           'brand': 'TUKTUK',
@@ -343,7 +362,9 @@ class _MarketplaceOnboardingScreenState
       });
 
       await _loadAccess();
-      await _loadWallet();
+      if (widget.managementSection == MarketplaceManagementSection.wallet) {
+        await _loadWallet();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -362,6 +383,7 @@ class _MarketplaceOnboardingScreenState
 
     final preferred = preferredVehicleId ??
         _selectedVehicleId ??
+        widget.initialVehicleId ??
         widget.store.activeVehicle?.id;
 
     MarketplaceVehicle? vehicle;
@@ -387,6 +409,8 @@ class _MarketplaceOnboardingScreenState
     _selectedCategory = vehicle?.categoryCode;
     _selectedPropulsion = vehicle?.propulsionCode;
 
+    _vehicleName.text = vehicle?.name ?? '';
+    _registration.text = vehicle?.registration ?? '';
     _brand.text = vehicle?.brand ?? '';
     _model.text = vehicle?.model ?? '';
     _year.text = vehicle?.year?.toString() ?? '';
@@ -565,6 +589,7 @@ class _MarketplaceOnboardingScreenState
             ? 'Tus 30 días gratis comenzaron.'
             : 'Tus 30 días gratis comenzaron. Finalizan el ${_marketplaceDateTimeLabel(endsAt)}.',
       );
+      widget.onManagementChanged?.call();
     } catch (_) {
       if (mounted) {
         toast(
@@ -654,6 +679,76 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
+  Future<Uint8List>? _savedMarketplacePhoto(String? assetId) {
+    final data = _data;
+    if (assetId == null || data == null) return null;
+
+    for (final asset in data.assets) {
+      if (asset.id != assetId) continue;
+      if (!asset.isAvailable ||
+          asset.storageBucket == null ||
+          asset.storagePath == null) {
+        return null;
+      }
+      return _savedPhotoFutures.putIfAbsent(
+        asset.id,
+        () => Supabase.instance.client.storage
+            .from(asset.storageBucket!)
+            .download(asset.storagePath!),
+      );
+    }
+    return null;
+  }
+
+  Widget _buildMarketplacePhotoPreview({
+    required Uint8List? pendingBytes,
+    required String? savedAssetId,
+    required bool vehicle,
+  }) {
+    Widget image(Uint8List bytes) => ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: vehicle
+              ? SizedBox(
+                  height: 255,
+                  width: double.infinity,
+                  child: Image.memory(
+                    bytes,
+                    fit: BoxFit.contain,
+                  ),
+                )
+              : Image.memory(
+                  bytes,
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
+                ),
+        );
+
+    // The new selection is shown immediately, before it is saved.
+    if (pendingBytes != null) return image(pendingBytes);
+
+    // Saved assets live in a private bucket: download with the user's session.
+    final savedPhoto = _savedMarketplacePhoto(savedAssetId);
+    if (savedPhoto == null) {
+      return const Text(
+          'No se pudo localizar la foto guardada. Puedes cambiarla.');
+    }
+    return FutureBuilder<Uint8List>(
+      future: savedPhoto,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) return image(snapshot.data!);
+        if (snapshot.hasError) {
+          return const Text(
+              'No se pudo mostrar la foto guardada. Puedes cambiarla.');
+        }
+        return const SizedBox(
+          height: 120,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      },
+    );
+  }
+
   Future<void> _saveDriver() async {
     final data = _data;
     if (data == null || !_canEdit) return;
@@ -727,6 +822,92 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
+  Future<void> _createVehicle() async {
+    if (!_canEdit || _data == null) return;
+
+    // Keep the same name/key when retrying after a lost network response.
+    String? name = _vehicleCreateName;
+    if (name == null) {
+      // Use a route-local value instead of disposing a controller during
+      // the dialog's closing animation.
+      String enteredName = '';
+      name = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Añadir vehículo'),
+          content: TextField(
+            onChanged: (value) => enteredName = value,
+            autofocus: true,
+            maxLength: 80,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Nombre para identificarlo',
+              hintText: 'Mi triciclo',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(enteredName.trim()),
+              child: const Text('Crear borrador'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (!mounted || name == null) return;
+    if (name.length < 2 || name.length > 80) {
+      toast(context, 'Escribe un nombre de 2 a 80 caracteres.');
+      return;
+    }
+
+    final key = _vehicleCreateKey ?? _marketplaceUuidV4();
+    _vehicleCreateKey = key;
+    _vehicleCreateName = name;
+    setState(() => _saving = true);
+    try {
+      final result = await _service.createVehicle(
+        name: name,
+        idempotencyKey: key,
+      );
+      final newVehicleId = _marketText(result['created_vehicle_id']);
+      if (newVehicleId == null) {
+        throw const FormatException(
+            'El servidor no devolvió el vehículo creado.');
+      }
+      final updated = MarketplaceOnboarding.fromMap(result);
+      if (!updated.vehicles.any((v) => v.id == newVehicleId)) {
+        throw const FormatException(
+            'No se encontró el vehículo en el onboarding.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _vehicleCreateKey = null;
+        _vehicleCreateName = null;
+        _vehiclePhotoBytes = null;
+        _vehiclePhotoUploadKey = null;
+        _vehiclePhotoLabel = null;
+        _data = updated;
+        _applyData(updated, preferredVehicleId: newVehicleId);
+      });
+      await _loadAccess(showSpinner: false);
+      if (mounted) {
+        toast(context, 'Vehículo creado. Completa los datos y añade su foto.');
+      }
+    } catch (_) {
+      if (mounted) {
+        toast(context,
+            'No se pudo confirmar el alta. Pulsa Añadir vehículo para reintentar sin duplicarlo.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _saveVehicle() async {
     final data = _data;
     final vehicle = _findVehicle(_selectedVehicleId);
@@ -743,6 +924,18 @@ class _MarketplaceOnboardingScreenState
 
     if (category == 'other' && _otherCategory.text.trim().isEmpty) {
       toast(context, 'Describe el tipo de vehículo.');
+      return;
+    }
+
+    final vehicleName = _vehicleName.text.trim();
+    final registration = _registration.text.trim();
+    if (vehicleName.length < 2 || vehicleName.length > 80) {
+      toast(context,
+          'El nombre del vehículo debe tener entre 2 y 80 caracteres.');
+      return;
+    }
+    if (registration.length > 32) {
+      toast(context, 'La chapa no puede superar 32 caracteres.');
       return;
     }
 
@@ -794,26 +987,40 @@ class _MarketplaceOnboardingScreenState
         photoAssetId = uploaded.id;
       }
 
-      final updated = await _service.saveVehicle({
-        'target_vehicle_id': vehicle.id,
-        'target_category_code': category,
-        'target_propulsion_code': propulsion,
-        'target_category_other_description':
-            category == 'other' ? _otherCategory.text.trim() : null,
-        'target_brand': _brand.text.trim().isEmpty ? null : _brand.text.trim(),
-        'target_model': _model.text.trim().isEmpty ? null : _model.text.trim(),
-        'target_year': year,
-        'target_passenger_capacity': passengers,
-        'target_cargo_capacity_kg': cargoKg,
-        'target_cargo_volume_m3': vehicle.cargoVolumeM3,
-        'target_cargo_length_cm': vehicle.cargoLengthCm,
-        'target_cargo_width_cm': vehicle.cargoWidthCm,
-        'target_cargo_height_cm': vehicle.cargoHeightCm,
-        'target_body_type':
-            _bodyType.text.trim().isEmpty ? null : _bodyType.text.trim(),
-        'target_main_photo_asset_id': photoAssetId,
-        'target_service_codes': services,
-      });
+      // One server-side transaction saves onboarding plus name/chapa and
+      // updates legacy synchronization when the selected vehicle has a sync row.
+      // The new RPC must be installed and audited BEFORE publishing this UI.
+      final response = await Supabase.instance.client.rpc(
+        'save_my_marketplace_vehicle_profile',
+        params: {
+          'target_vehicle_id': vehicle.id,
+          'target_category_code': category,
+          'target_propulsion_code': propulsion,
+          'target_category_other_description':
+              category == 'other' ? _otherCategory.text.trim() : null,
+          'target_brand':
+              _brand.text.trim().isEmpty ? null : _brand.text.trim(),
+          'target_model':
+              _model.text.trim().isEmpty ? null : _model.text.trim(),
+          'target_year': year,
+          'target_passenger_capacity': passengers,
+          'target_cargo_capacity_kg': cargoKg,
+          'target_cargo_volume_m3': vehicle.cargoVolumeM3,
+          'target_cargo_length_cm': vehicle.cargoLengthCm,
+          'target_cargo_width_cm': vehicle.cargoWidthCm,
+          'target_cargo_height_cm': vehicle.cargoHeightCm,
+          'target_body_type':
+              _bodyType.text.trim().isEmpty ? null : _bodyType.text.trim(),
+          'target_main_photo_asset_id': photoAssetId,
+          'target_service_codes': services,
+          'target_vehicle_name': vehicleName,
+          'target_registration': registration.isEmpty ? null : registration,
+        },
+      );
+      if (response is! Map) {
+        throw const FormatException('Respuesta de vehículo no válida.');
+      }
+      final updated = MarketplaceOnboarding.fromMap(response);
 
       if (!mounted) return;
 
@@ -1080,6 +1287,53 @@ class _MarketplaceOnboardingScreenState
                 ),
               ],
             ),
+            if (wallet.realBalance != null &&
+                wallet.promotionalBalance != null &&
+                wallet.realAvailableBalance != null &&
+                wallet.promotionalAvailableBalance != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _walletValue(
+                      context,
+                      'Saldo real',
+                      _marketplaceMoneyLabel(wallet.realBalance!, wallet.currency),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _walletValue(
+                      context,
+                      'Promocional',
+                      _marketplaceMoneyLabel(wallet.promotionalBalance!, wallet.currency),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _walletValue(
+                      context,
+                      'Real disponible',
+                      _marketplaceMoneyLabel(wallet.realAvailableBalance!, wallet.currency),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _walletValue(
+                      context,
+                      'Promo disponible',
+                      _marketplaceMoneyLabel(wallet.promotionalAvailableBalance!, wallet.currency),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text('El saldo promocional solo paga comisiones. No sustituye el depósito inicial real.'),
+            ],
             const SizedBox(height: 10),
             _walletValue(
               context,
@@ -1286,6 +1540,31 @@ class _MarketplaceOnboardingScreenState
 
     final vehicle = _findVehicle(_selectedVehicleId);
 
+    // Management views reuse the exact access/wallet cards and callbacks.
+    // The normal onboarding route contains registration fields only.
+    if (widget.managementSection != null) {
+      final vehicleLabel = vehicle?.name?.trim().isNotEmpty == true
+          ? vehicle!.name!
+          : vehicle?.id;
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (widget.managementSection ==
+              MarketplaceManagementSection.activation) ...[
+            if (vehicle != null) ...[
+              Text(
+                'Vehículo: $vehicleLabel',
+                style: TextStyle(color: appMutedColor(context)),
+              ),
+              const SizedBox(height: 12),
+            ],
+            _buildAccessCard(context, vehicle),
+          ] else
+            _buildWalletCard(context),
+        ],
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1334,39 +1613,62 @@ class _MarketplaceOnboardingScreenState
                 ),
               ),
               const SizedBox(height: 14),
-              TextField(
-                controller: _name,
-                enabled: _canEdit,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre y apellidos',
-                ),
+              // Keep the portrait beside the two fields on wider screens.
+              // On narrow phones, stack it to prevent clipped inputs.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compactDriverFields = Column(
+                    children: [
+                      TextField(
+                        controller: _name,
+                        enabled: _canEdit,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Nombre y apellidos',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _phone,
+                        enabled: _canEdit,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'WhatsApp / teléfono',
+                          hintText: '+5355555555',
+                        ),
+                      ),
+                    ],
+                  );
+                  final hasDriverPhoto = _driverPhotoBytes != null ||
+                      data.driverPhotoAssetId != null;
+                  if (!hasDriverPhoto) return compactDriverFields;
+
+                  final photo = _buildMarketplacePhotoPreview(
+                    pendingBytes: _driverPhotoBytes,
+                    savedAssetId: data.driverPhotoAssetId,
+                    vehicle: false,
+                  );
+                  if (constraints.maxWidth < 390) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        compactDriverFields,
+                        const SizedBox(height: 12),
+                        photo,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(child: compactDriverFields),
+                      const SizedBox(width: 14),
+                      SizedBox(width: 120, height: 120, child: photo),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _phone,
-                enabled: _canEdit,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'WhatsApp / teléfono',
-                  hintText: '+5355555555',
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (_driverPhotoBytes != null) ...[
-                Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.memory(
-                      _driverPhotoBytes!,
-                      width: 120,
-                      height: 120,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
               Row(
                 children: [
                   Icon(
@@ -1438,181 +1740,120 @@ class _MarketplaceOnboardingScreenState
                 ),
               ),
               const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _canEdit ? _createVehicle : null,
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('Añadir vehículo'),
+                ),
+              ),
+              const SizedBox(height: 12),
               if (data.vehicles.isEmpty)
                 const Text(
-                  'No encontramos vehículos sincronizados en tu cuenta. Primero debes tener un vehículo en TUKTUK Control.',
+                  'Todavía no tienes vehículos. Pulsa Añadir vehículo y luego completa sus datos y fotografías.',
                 )
               else ...[
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Vehículo',
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: _selectedVehicleId,
-                      items: data.vehicles
-                          .map(
-                            (item) => DropdownMenuItem(
-                              value: item.id,
-                              child: Text(
-                                item.name?.trim().isNotEmpty == true
-                                    ? item.name!
-                                    : item.id,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _canEdit
-                          ? (value) {
-                              setState(() {
-                                _vehiclePhotoBytes = null;
-                                _vehiclePhotoUploadKey = null;
-                                _vehiclePhotoLabel = null;
-                                _selectedVehicleId = value;
-                                _loadVehicleFields(_findVehicle(value));
-                              });
+                // TUKTUK_BALANCED_VEHICLE_LAYOUT_V4
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    const gap = 4.0;
+                    const horizontalGap = 10.0;
+                    const fieldHeight = 48.0;
+                    final showColumns = constraints.maxWidth >= 320;
 
-                              unawaited(_loadAccess());
-                            }
-                          : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Categoría',
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: _validCatalogValue(
-                        _selectedCategory,
-                        data.vehicleCategories,
-                      ),
-                      hint: const Text('Selecciona'),
-                      items: data.vehicleCategories
-                          .map(
-                            (item) => DropdownMenuItem(
-                              value: item.code,
-                              child: Text(item.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _canEdit
-                          ? (value) => setState(() => _selectedCategory = value)
-                          : null,
-                    ),
-                  ),
-                ),
-                if (_selectedCategory == 'other') ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _otherCategory,
-                    enabled: _canEdit,
-                    decoration: const InputDecoration(
-                      labelText: 'Describe el tipo de vehículo',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Propulsión',
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: _validCatalogValue(
-                        _selectedPropulsion,
-                        data.propulsionTypes,
-                      ),
-                      hint: const Text('Selecciona'),
-                      items: data.propulsionTypes
-                          .map(
-                            (item) => DropdownMenuItem(
-                              value: item.code,
-                              child: Text(item.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _canEdit
-                          ? (value) =>
-                              setState(() => _selectedPropulsion = value)
-                          : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _brand,
-                  enabled: _canEdit,
-                  decoration: const InputDecoration(labelText: 'Marca'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _model,
-                  enabled: _canEdit,
-                  decoration: const InputDecoration(labelText: 'Modelo'),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _year,
-                        enabled: _canEdit,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Año',
+                    InputDecoration fieldDecoration(
+                        String label, IconData icon) {
+                      return InputDecoration(
+                        labelText: label,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _passengers,
-                        enabled: _canEdit,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Pasajeros',
+                        constraints:
+                            const BoxConstraints(minHeight: fieldHeight),
+                        prefixIcon: Icon(icon, size: 19),
+                        prefixIconConstraints:
+                            const BoxConstraints(minWidth: 38, minHeight: 38),
+                      );
+                    }
+
+                    Widget field(Widget child) =>
+                        SizedBox(height: fieldHeight, child: child);
+
+                    Widget pair(Widget left, Widget right) {
+                      if (!showColumns) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            left,
+                            const SizedBox(height: gap),
+                            right,
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: left),
+                          const SizedBox(width: horizontalGap),
+                          Expanded(child: right),
+                        ],
+                      );
+                    }
+
+                    Widget selector({
+                      required String label,
+                      required IconData icon,
+                      required String? value,
+                      required List<DropdownMenuItem<String>> items,
+                      required ValueChanged<String?>? onChanged,
+                    }) {
+                      return field(
+                        InputDecorator(
+                          decoration: fieldDecoration(label, icon),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              isDense: true,
+                              value: value,
+                              hint: const Text('Selecciona'),
+                              items: items,
+                              onChanged: onChanged,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _cargoKg,
-                  enabled: _canEdit,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Carga máxima (kg)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _bodyType,
-                  enabled: _canEdit,
-                  decoration: const InputDecoration(
-                    labelText: 'Tipo de carrocería',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Servicios que puedes realizar',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: data.serviceTypes
-                      .map(
-                        (service) => FilterChip(
+                      );
+                    }
+
+                    Widget edit({
+                      required String label,
+                      required IconData icon,
+                      required TextEditingController controller,
+                      TextInputType? keyboardType,
+                      int? maxLength,
+                    }) {
+                      return field(
+                        TextField(
+                          controller: controller,
+                          enabled: _canEdit,
+                          keyboardType: keyboardType,
+                          maxLength: maxLength,
+                          decoration: fieldDecoration(label, icon).copyWith(
+                            counterText: maxLength == null ? null : '',
+                          ),
+                        ),
+                      );
+                    }
+
+                    final serviceChips = Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: data.serviceTypes.map((service) {
+                        return FilterChip(
                           label: Text(service.name),
+                          visualDensity: VisualDensity.compact,
                           selected: _selectedServices.contains(service.code),
                           onSelected: _canEdit
                               ? (selected) {
@@ -1625,22 +1866,228 @@ class _MarketplaceOnboardingScreenState
                                   });
                                 }
                               : null,
+                        );
+                      }).toList(),
+                    );
+
+                    final services = Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline,
                         ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 16),
-                if (_vehiclePhotoBytes != null) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: Image.memory(
-                        _vehiclePhotoBytes!,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.work_outline, size: 18),
+                              SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  'Servicios que puedes realizar',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          serviceChips,
+                        ],
+                      ),
+                    );
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        pair(
+                          selector(
+                            label: 'Vehículo',
+                            icon: Icons.directions_car_outlined,
+                            value: _selectedVehicleId,
+                            items: data.vehicles.map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item.id,
+                                child: Text(
+                                  item.name?.trim().isNotEmpty == true
+                                      ? item.name!
+                                      : item.id,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: _canEdit
+                                ? (value) {
+                                    setState(() {
+                                      _vehiclePhotoBytes = null;
+                                      _vehiclePhotoUploadKey = null;
+                                      _vehiclePhotoLabel = null;
+                                      _selectedVehicleId = value;
+                                      _loadVehicleFields(_findVehicle(value));
+                                    });
+                                    unawaited(_loadAccess());
+                                  }
+                                : null,
+                          ),
+                          selector(
+                            label: 'Categoría',
+                            icon: Icons.category_outlined,
+                            value: _validCatalogValue(
+                              _selectedCategory,
+                              data.vehicleCategories,
+                            ),
+                            items: data.vehicleCategories.map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item.code,
+                                child: Text(item.name),
+                              );
+                            }).toList(),
+                            onChanged: _canEdit
+                                ? (value) =>
+                                    setState(() => _selectedCategory = value)
+                                : null,
+                          ),
+                        ),
+                        if (_selectedCategory == 'other') ...[
+                          const SizedBox(height: gap),
+                          edit(
+                            label: 'Describe el tipo de vehículo',
+                            icon: Icons.edit_outlined,
+                            controller: _otherCategory,
+                          ),
+                        ],
+                        const SizedBox(height: gap),
+                        pair(
+                          edit(
+                            label: 'Nombre del vehículo',
+                            icon: Icons.edit_outlined,
+                            controller: _vehicleName,
+                            maxLength: 80,
+                          ),
+                          edit(
+                            label: 'Chapa (opcional)',
+                            icon: Icons.credit_card_outlined,
+                            controller: _registration,
+                            maxLength: 32,
+                          ),
+                        ),
+                        const SizedBox(height: gap),
+                        pair(
+                          selector(
+                            label: 'Propulsión',
+                            icon: Icons.bolt_outlined,
+                            value: _validCatalogValue(
+                              _selectedPropulsion,
+                              data.propulsionTypes,
+                            ),
+                            items: data.propulsionTypes.map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item.code,
+                                child: Text(item.name),
+                              );
+                            }).toList(),
+                            onChanged: _canEdit
+                                ? (value) =>
+                                    setState(() => _selectedPropulsion = value)
+                                : null,
+                          ),
+                          edit(
+                            label: 'Tipo de carrocería',
+                            icon: Icons.widgets_outlined,
+                            controller: _bodyType,
+                          ),
+                        ),
+                        const SizedBox(height: gap),
+                        pair(
+                          edit(
+                            label: 'Marca',
+                            icon: Icons.sell_outlined,
+                            controller: _brand,
+                          ),
+                          edit(
+                            label: 'Modelo',
+                            icon: Icons.info_outline,
+                            controller: _model,
+                          ),
+                        ),
+                        const SizedBox(height: gap),
+                        if (constraints.maxWidth >= 390)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: edit(
+                                  label: 'Año',
+                                  icon: Icons.calendar_today_outlined,
+                                  controller: _year,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: horizontalGap),
+                              Expanded(
+                                child: edit(
+                                  label: 'Pasajeros',
+                                  icon: Icons.people_outline,
+                                  controller: _passengers,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: horizontalGap),
+                              Expanded(
+                                child: edit(
+                                  label: 'Carga (kg)',
+                                  icon: Icons.scale_outlined,
+                                  controller: _cargoKg,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        else ...[
+                          pair(
+                            edit(
+                              label: 'Año',
+                              icon: Icons.calendar_today_outlined,
+                              controller: _year,
+                              keyboardType: TextInputType.number,
+                            ),
+                            edit(
+                              label: 'Pasajeros',
+                              icon: Icons.people_outline,
+                              controller: _passengers,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(height: gap),
+                          edit(
+                            label: 'Carga (kg)',
+                            icon: Icons.scale_outlined,
+                            controller: _cargoKg,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: gap),
+                        services,
+                        const SizedBox(height: 4),
+                      ],
+                    );
+                  },
+                ),
+                if (_vehiclePhotoBytes != null ||
+                    vehicle?.mainPhotoAssetId != null) ...[
+                  _buildMarketplacePhotoPreview(
+                    pendingBytes: _vehiclePhotoBytes,
+                    savedAssetId: vehicle?.mainPhotoAssetId,
+                    vehicle: true,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -1736,10 +2183,6 @@ class _MarketplaceOnboardingScreenState
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _buildAccessCard(context, vehicle),
-        const SizedBox(height: 16),
-        _buildWalletCard(context),
       ],
     );
   }

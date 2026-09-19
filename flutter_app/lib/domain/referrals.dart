@@ -1,11 +1,12 @@
 part of '../main.dart';
 
-enum ReferralQualificationMode { registration, firstPayment, unknown }
+enum ReferralQualificationMode { registration, firstPayment, firstValidJob, unknown }
 
 ReferralQualificationMode referralQualificationModeFromValue(Object? value) {
   return switch ('$value') {
     'registration' => ReferralQualificationMode.registration,
     'first_payment' => ReferralQualificationMode.firstPayment,
+    'first_valid_job' => ReferralQualificationMode.firstValidJob,
     _ => ReferralQualificationMode.unknown,
   };
 }
@@ -15,6 +16,8 @@ String referralQualificationLabel(ReferralQualificationMode mode) {
     ReferralQualificationMode.registration => 'Cuando tu invitado se registre',
     ReferralQualificationMode.firstPayment =>
       'Cuando tu invitado realice su primer pago',
+    ReferralQualificationMode.firstValidJob =>
+      'Cuando tu invitado finalice su primer trabajo válido',
     ReferralQualificationMode.unknown => 'Condición definida por la campaña',
   };
 }
@@ -34,6 +37,10 @@ class ReferralProgram {
     required this.appliedRewards,
     required this.earnedDays,
     required this.appliedDays,
+    this.rewardMode,
+    this.rewardAmount = 0,
+    this.rewardCurrency = 'CUP',
+    this.rewardedCount = 0,
   });
 
   final bool enabled;
@@ -49,6 +56,11 @@ class ReferralProgram {
   final int appliedRewards;
   final int earnedDays;
   final int appliedDays;
+  final String? rewardMode;
+  final num rewardAmount;
+  final String rewardCurrency;
+  final int rewardedCount;
+  bool get isWalletReward => rewardMode == 'marketplace_wallet_credit';
 
   String? get shareLink {
     final value = normalizeReferralCode(code);
@@ -86,7 +98,12 @@ class ReferralProgram {
       appliedRewards: count(map['applied_rewards']),
       earnedDays: count(map['earned_days']),
       appliedDays: count(map['applied_days']),
+      rewardMode: optionalText(map['reward_mode']),
+      rewardAmount: num.tryParse('${map['reward_amount'] ?? ''}') ?? 0,
+      rewardCurrency: optionalText(map['reward_currency']) ?? 'CUP',
+      rewardedCount: count(map['rewarded_count']),
     );
+
   }
 }
 
@@ -118,6 +135,10 @@ class ReferralEntry {
     required this.rewardDays,
     required this.createdAt,
     required this.qualifiedAt,
+    this.rewardAmount,
+    this.rewardCurrency,
+    this.legacyDaysApplied = false,
+    this.legacyRewardStatus,
   });
 
   final String relationshipId;
@@ -126,6 +147,16 @@ class ReferralEntry {
   final int rewardDays;
   final DateTime? createdAt;
   final DateTime? qualifiedAt;
+  final num? rewardAmount;
+  final String? rewardCurrency;
+  final bool legacyDaysApplied;
+  final String? legacyRewardStatus;
+
+  String get displayStatusLabel => switch (legacyRewardStatus) {
+    'earned' => 'Días históricos pendientes',
+    'applied' => 'Días históricos aplicados',
+    _ => referralEntryStatusLabel(status),
+  };
 
   factory ReferralEntry.fromMap(Map<dynamic, dynamic> map) {
     final reward = map['reward_days'];
@@ -139,6 +170,12 @@ class ReferralEntry {
           reward is num ? reward.toInt() : int.tryParse('${reward ?? ''}') ?? 0,
       createdAt: DateTime.tryParse('${map['created_at'] ?? ''}'),
       qualifiedAt: DateTime.tryParse('${map['qualified_at'] ?? ''}'),
+      rewardAmount: map['reward_amount'] is num
+          ? map['reward_amount'] as num
+          : num.tryParse('${map['reward_amount'] ?? ''}'),
+      rewardCurrency: map['reward_currency']?.toString(),
+      legacyDaysApplied: map['legacy_days_applied'] == true,
+      legacyRewardStatus: map['legacy_reward_status']?.toString(),
     );
   }
 }

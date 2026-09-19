@@ -29,7 +29,6 @@ typedef PushMessageOpenedCallback = FutureOr<void> Function(
 
 typedef ExternalUrlLauncher = Future<bool> Function(Uri uri);
 
-@visibleForTesting
 String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
   if (data['kind']?.toString() != 'marketplace_job_available') return null;
   final jobId = data['job_id']?.toString();
@@ -40,13 +39,11 @@ String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
       : null;
 }
 
-@visibleForTesting
 String? marketplaceJobIdFromUrl(Uri uri) => marketplaceJobIdFromPush({
       'kind': 'marketplace_job_available',
       'job_id': uri.queryParameters['marketplace_job_id'],
     });
 
-@visibleForTesting
 int appShellIndexAfterAuthentication({
   required int currentIndex,
   required String? marketplaceJobId,
