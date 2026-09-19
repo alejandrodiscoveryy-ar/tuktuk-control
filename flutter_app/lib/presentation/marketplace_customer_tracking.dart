@@ -634,9 +634,10 @@ class _MarketplaceCustomerRatingScreenState
           idempotencyKey: _idempotencyKey!);
       if (mounted) Navigator.of(context).pop(rating);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() =>
             _error = 'No pudimos guardar tu calificación. Inténtalo otra vez.');
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }

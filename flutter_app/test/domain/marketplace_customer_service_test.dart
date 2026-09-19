@@ -129,7 +129,7 @@ void main() {
 
     expect(
       source,
-      contains("marketplace-customer-gateway"),
+      contains('marketplace-customer-gateway'),
     );
     expect(
       source,
@@ -146,7 +146,7 @@ void main() {
       isNot(contains(".from('service_requests')")),
     );
     expect(source, isNot(contains('service_role')));
-    expect(source, isNot(contains(".rpc(")));
+    expect(source, isNot(contains('.rpc(')));
   });
 
   test('customer gateway includes narrow rating and private media contracts',
