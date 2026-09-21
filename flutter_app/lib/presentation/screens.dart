@@ -2869,12 +2869,8 @@ class _ReferralEntryTile extends StatelessWidget {
     final monthsState = entry.licenseStatus == 'applied'
         ? 'Meses aplicados'
         : 'Meses pendientes';
-    final compactV11 = entry.rewardMonths > 0 &&
-        (entry.rewardAmount ?? 0) > 0;
-    final detail = compactV11
-        ? [if (registered.isNotEmpty) registered, monthsState].join(' · ')
-        : [entry.displayStatusLabel, if (registered.isNotEmpty) registered]
-            .join(' · ');
+    final detail =
+        [if (registered.isNotEmpty) registered, monthsState].join(' · ');
     final imageUrl = entry.avatarUrl;
     final fallbackIcon = Icon(
       Icons.person_outline,
@@ -2931,46 +2927,29 @@ class _ReferralEntryTile extends StatelessWidget {
               ],
             ),
           ),
-          if ((entry.rewardAmount ?? 0) > 0 ||
-              entry.rewardDays > 0 ||
-              entry.rewardMonths > 0) ...[
-            const SizedBox(width: 6),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if ((entry.rewardAmount ?? 0) > 0)
-                  Text(
-                    '+${entry.rewardAmount!.toStringAsFixed(0)} ${entry.rewardCurrency ?? 'CUP'}',
-                    style: TextStyle(
-                      color: appPrimaryColor(context),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                if (entry.rewardMonths > 0)
-                  Text(
-                    '+${entry.rewardMonths} meses',
-                    style: TextStyle(
-                      color: appPrimaryColor(context),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
-                    ),
-                  ),
-                if (entry.rewardDays > 0 && !compactV11)
-                  Text(
-                    entry.legacyRewardStatus != null
-                        ? '${entry.rewardDays} días ${entry.legacyDaysApplied ? 'aplicados' : 'pendientes'}'
-                        : '+${entry.rewardDays} días',
-                    style: TextStyle(
-                      color: appPrimaryColor(context),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
-                    ),
-                  ),
-              ],
-            ),
-          ],
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '+100 CUP',
+                style: TextStyle(
+                  color: appPrimaryColor(context),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
+              Text(
+                '+3 meses',
+                style: TextStyle(
+                  color: appPrimaryColor(context),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
