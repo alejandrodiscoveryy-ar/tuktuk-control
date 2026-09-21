@@ -5,6 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+test('avatar URL from referral RPC is optional and HTTPS-only', () {
+    final withPhoto = ReferralEntry.fromMap({
+      'relationship_id': 'sample',
+      'name': 'Invitado',
+      'status': 'rewarded',
+      'reward_amount': 100,
+      'reward_months': 3,
+      'avatar_url': 'https://images.example.org/user.png',
+    });
+    expect(withPhoto.avatarUrl, 'https://images.example.org/user.png');
+    expect(ReferralEntry.fromMap({'avatar_url': 'javascript:alert(1)'}).avatarUrl,
+        isNull);
+    expect(ReferralEntry.fromMap({'avatar_url': ''}).avatarUrl, isNull);
+  });
+
+
   test('parsea el programa y sus métricas dinámicas', () {
     final program = ReferralProgram.fromMap({
       'enabled': true,
@@ -34,12 +50,154 @@ void main() {
       () {
     expect(
       referralQualificationLabel(ReferralQualificationMode.registration),
-      'Cuando tu invitado se registre',
+      'Cuando tu invitado se registre y vincule tu código',
     );
     expect(
       referralQualificationLabel(ReferralQualificationMode.firstPayment),
       'Cuando tu invitado realice su primer pago',
     );
+  });
+
+  test('interpreta el contrato registration_wallet_license con estados reales',
+      () {
+    final program = ReferralProgram.fromMap({
+      'enabled': true,
+      'reward_mode': 'registration_wallet_license',
+      'qualification_mode': 'registration_code_claim',
+      'reward_amount': 100,
+      'reward_currency': 'CUP',
+      'reward_months': 3,
+      'rewarded_count': 2,
+      'license_months_awarded': 6,
+      'license_months_applied': 3,
+      'license_months_pending': 3,
+    });
+    final entry = ReferralEntry.fromMap({
+      'relationship_id': 'relationship-1',
+      'status': 'rewarded',
+      'reward_amount': 100,
+      'reward_currency': 'CUP',
+      'reward_months': 3,
+      'license_status': 'pending_no_license',
+    });
+
+    expect(program.isRegistrationWalletLicense, isTrue);
+    expect(program.isWalletReward, isTrue);
+    expect(program.qualificationMode, ReferralQualificationMode.registration);
+    expect(program.rewardMonths, 3);
+    expect(program.licenseMonthsAwarded, 6);
+    expect(program.licenseMonthsApplied, 3);
+    expect(program.licenseMonthsPending, 3);
+    expect(entry.rewardAmount, 100);
+    expect(entry.rewardMonths, 3);
+    expect(entry.licenseStatusLabel, 'Meses pendientes · sin licencia');
+    expect(entry.displayStatusLabel, 'Crédito acreditado · meses pendientes');
+  });
+
+  test('resumen V11 suma los premios históricos visibles, no el contador remoto',
+      () {
+    final program = ReferralProgram.fromMap({
+      'reward_mode': 'registration_wallet_license',
+      'referred_count': 2,
+      'rewarded_count': 0,
+      'license_months_awarded': 0,
+    });
+    final referidos = [
+      ReferralEntry.fromMap({
+        'relationship_id': 'historico-1',
+        'status': 'rewarded',
+        'reward_amount': 100,
+        'reward_currency': 'CUP',
+        'reward_months': 3,
+        'license_status': 'pending_indefinite',
+      }),
+      ReferralEntry.fromMap({
+        'relationship_id': 'historico-2',
+        'status': 'rewarded',
+        'reward_amount': 100,
+        'reward_currency': 'CUP',
+        'license_months': 3,
+        'license_status': 'pending_indefinite',
+      }),
+      ReferralEntry.fromMap({
+        'relationship_id': 'sin-premio',
+        'status': 'registered',
+        'reward_amount': 0,
+        'reward_months': 0,
+      }),
+    ];
+    final summary = ReferralSummaryTotals.fromEntries(referidos);
+    expect(program.rewardedCount, 0); // El contrato remoto aún puede omitir el histórico.
+    expect(summary.creditedReferrals, 2);
+    expect(summary.creditedCup, 200);
+    expect(summary.earnedMonths, 6);
+  });
+
+  test('resumen V11 incluye nuevos y antiguos y no atribuye premios sin acreditar',
+      () {
+    final referidos = [
+      ReferralEntry.fromMap({
+        'status': 'rewarded',
+        'reward_amount': 100,
+        'reward_currency': 'CUP',
+        'reward_months': 3,
+      }),
+      ReferralEntry.fromMap({
+        'status': 'rewarded',
+        'reward_amount': 100,
+        'reward_currency': 'CUP',
+        'reward_months': 3,
+      }),
+      ReferralEntry.fromMap({
+        'status': 'registered',
+        'reward_amount': 100,
+        'reward_currency': 'CUP',
+        'reward_months': 3,
+      }),
+      ReferralEntry.fromMap({
+        'status': 'rewarded',
+        'reward_amount': null,
+        'reward_months': 0,
+      }),
+    ];
+    final summary = ReferralSummaryTotals.fromEntries(referidos);
+    expect(summary.creditedReferrals, 2);
+    expect(summary.creditedCup, 200);
+    expect(summary.earnedMonths, 6);
+  });
+
+  test('acepta alias license_months sin inventar un estado aplicado', () {
+    final program = ReferralProgram.fromMap({
+      'enabled': true,
+      'reward_mode': 'registration_wallet_license',
+      'license_months': 3,
+    });
+    final pending = ReferralEntry.fromMap({
+      'status': 'rewarded',
+      'license_months': 3,
+      'license_status': 'pending_ineligible_license',
+    });
+    final applied = ReferralEntry.fromMap({
+      'status': 'rewarded',
+      'license_months': 3,
+      'license_status': 'applied',
+    });
+
+    expect(program.rewardMonths, 3);
+    expect(pending.rewardMonths, 3);
+    expect(pending.displayStatusLabel, 'Crédito acreditado · meses pendientes');
+    expect(applied.displayStatusLabel, 'Crédito acreditado · meses aplicados');
+  });
+
+  test('mantiene los estados de premios históricos sin convertirlos', () {
+    final historical = ReferralEntry.fromMap({
+      'status': 'rewarded',
+      'reward_days': 15,
+      'legacy_reward_status': 'earned',
+    });
+    expect(historical.displayStatusLabel, 'Días históricos pendientes');
+    expect(historical.rewardMonths, 0);
+    expect(historical.rewardAmount, isNull);
   });
 
   test('traduce los estados remotos de referidos al español', () {

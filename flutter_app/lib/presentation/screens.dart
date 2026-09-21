@@ -2224,7 +2224,6 @@ class LoginScreen extends StatelessWidget {
         const SizedBox(height: 18),
         VehicleSettingsPanel(store: store),
         const SizedBox(height: 18),
-
         AppPreferencesPanel(store: store),
       ],
     );
@@ -2577,11 +2576,13 @@ class _ReferralCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      store.referralProgram?.isWalletReward == true
-                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
-                          : store.referralProgram == null
-                              ? 'Consulta tus recompensas por invitar conductores.'
-                              : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
+                      store.referralProgram?.isRegistrationWalletLicense == true
+                          ? 'Por cada referido registrado: ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} y ${store.referralProgram!.rewardMonths} meses de Control.'
+                          : store.referralProgram?.isWalletReward == true
+                              ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
+                              : store.referralProgram == null
+                                  ? 'Consulta tus recompensas por invitar conductores.'
+                                  : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2654,6 +2655,9 @@ class _ReferralCard extends StatelessWidget {
       ];
     }
 
+    // El RPC de programa puede omitir premios históricos; los totales V11
+    // deben coincidir con las recompensas que se muestran en "Mis referidos".
+    final totals = ReferralSummaryTotals.fromEntries(store.referrals);
     final link = program.shareLink;
     return [
       if (program.campaignName != null) ...[
@@ -2669,9 +2673,11 @@ class _ReferralCard extends StatelessWidget {
       ),
       const SizedBox(height: 4),
       Text(
-        program.isWalletReward
-            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
-            : 'Gana ${program.rewardDays} días por cada referido',
+        program.isRegistrationWalletLicense
+            ? 'Al registrarse tu invitado: ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales y ${program.rewardMonths} meses acumulables de Control'
+            : program.isWalletReward
+                ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
+                : 'Gana ${program.rewardDays} días por cada referido',
         style: TextStyle(
           color: appPrimaryColor(context),
           fontWeight: FontWeight.w800,
@@ -2731,26 +2737,40 @@ class _ReferralCard extends StatelessWidget {
             ),
             const _ReferralDivider(),
             _ReferralMetric(
-              label: program.isWalletReward ? 'Acreditados' : 'Cumplieron',
-              value: program.isWalletReward
-                  ? '${program.rewardedCount}'
-                  : '${program.qualifiedCount}',
+              label: program.isRegistrationWalletLicense
+                  ? 'Acreditado'
+                  : program.isWalletReward
+                      ? 'Acreditados'
+                      : 'Cumplieron',
+              value: program.isRegistrationWalletLicense
+                  ? '${totals.creditedCup.toStringAsFixed(0)} CUP'
+                  : program.isWalletReward
+                      ? '${program.rewardedCount}'
+                      : '${program.qualifiedCount}',
             ),
             const _ReferralDivider(),
             _ReferralMetric(
-              label: program.isWalletReward ? 'Días pendientes' : 'Días obtenidos',
-              value: program.isWalletReward
-                  ? '${program.earnedDays - program.appliedDays}'
-                  : '${program.earnedDays}',
+              label: program.isRegistrationWalletLicense
+                  ? 'Meses ganados'
+                  : program.isWalletReward
+                      ? 'Días pendientes'
+                      : 'Días obtenidos',
+              value: program.isRegistrationWalletLicense
+                  ? '${totals.earnedMonths}'
+                  : program.isWalletReward
+                      ? '${program.earnedDays - program.appliedDays}'
+                      : '${program.earnedDays}',
             ),
           ],
         ),
       ),
       const SizedBox(height: 8),
       Text(
-        program.isWalletReward
-            ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
-            : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
+        program.isRegistrationWalletLicense
+            ? 'Referidos acreditados: ${totals.creditedReferrals} · Saldo promocional otorgado: ${totals.creditedCup.toStringAsFixed(0)} ${program.rewardCurrency} · Meses aplicados: ${program.licenseMonthsApplied} · Meses pendientes: ${program.licenseMonthsPending}'
+            : program.isWalletReward
+                ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
+                : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
         style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
       const SizedBox(height: 18),
@@ -2843,9 +2863,27 @@ class _ReferralEntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final createdAt = entry.createdAt;
+    final registered = createdAt == null
+        ? ''
+        : DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal());
+    final monthsState = entry.licenseStatus == 'applied'
+        ? 'Meses aplicados'
+        : 'Meses pendientes';
+    final compactV11 = entry.rewardMonths > 0 &&
+        (entry.rewardAmount ?? 0) > 0;
+    final detail = compactV11
+        ? [if (registered.isNotEmpty) registered, monthsState].join(' · ')
+        : [entry.displayStatusLabel, if (registered.isNotEmpty) registered]
+            .join(' · ');
+    final imageUrl = entry.avatarUrl;
+    final fallbackIcon = Icon(
+      Icons.person_outline,
+      color: appPrimaryColor(context),
+    );
+
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(
               alpha:
@@ -2857,13 +2895,25 @@ class _ReferralEntryTile extends StatelessWidget {
       child: Row(
         children: [
           CircleAvatar(
+            radius: 18,
             backgroundColor: const Color(0x222DD4A3),
-            child: Icon(Icons.person_outline, color: appPrimaryColor(context)),
+            child: imageUrl == null
+                ? fallbackIcon
+                : ClipOval(
+                    child: Image.network(
+                      imageUrl,
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => fallbackIcon,
+                    ),
+                  ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   entry.name,
@@ -2873,16 +2923,21 @@ class _ReferralEntryTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${entry.displayStatusLabel}'
-                  '${createdAt == null ? '' : ' · ${DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal())}'}',
-                  style: TextStyle(color: appMutedColor(context), fontSize: 12),
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: appMutedColor(context), fontSize: 11),
                 ),
               ],
             ),
           ),
-          if ((entry.rewardAmount ?? 0) > 0 || entry.rewardDays > 0)
+          if ((entry.rewardAmount ?? 0) > 0 ||
+              entry.rewardDays > 0 ||
+              entry.rewardMonths > 0) ...[
+            const SizedBox(width: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 if ((entry.rewardAmount ?? 0) > 0)
                   Text(
@@ -2890,9 +2945,19 @@ class _ReferralEntryTile extends StatelessWidget {
                     style: TextStyle(
                       color: appPrimaryColor(context),
                       fontWeight: FontWeight.w900,
+                      fontSize: 12,
                     ),
                   ),
-                if (entry.rewardDays > 0)
+                if (entry.rewardMonths > 0)
+                  Text(
+                    '+${entry.rewardMonths} meses',
+                    style: TextStyle(
+                      color: appPrimaryColor(context),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                if (entry.rewardDays > 0 && !compactV11)
                   Text(
                     entry.legacyRewardStatus != null
                         ? '${entry.rewardDays} días ${entry.legacyDaysApplied ? 'aplicados' : 'pendientes'}'
@@ -2905,6 +2970,7 @@ class _ReferralEntryTile extends StatelessWidget {
                   ),
               ],
             ),
+          ],
         ],
       ),
     );
@@ -3257,8 +3323,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
   void initState() {
     super.initState();
     final record = widget.record;
-    _recordId =
-        record?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
+    _recordId = record?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
     if (record != null) {
       date = record.dateTime;
       time = TimeOfDay.fromDateTime(record.dateTime);
@@ -3404,28 +3469,29 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
     setState(() => _saving = true);
     try {
       final saved = await _runLicensedWrite(
-      context,
-      () => widget.store.saveMaintenance(
-        MaintenanceRecord(
-          id: _recordId,
-          dateTime: DateTime(
-            date.year,
-            date.month,
-            date.day,
-            time.hour,
-            time.minute,
+        context,
+        () => widget.store.saveMaintenance(
+          MaintenanceRecord(
+            id: _recordId,
+            dateTime: DateTime(
+              date.year,
+              date.month,
+              date.day,
+              time.hour,
+              time.minute,
+            ),
+            odometer: odo,
+            type: type.text.trim(),
+            description: description.text.trim(),
+            cost: parsedCost,
+            notes: notes.text.trim(),
+            createdAt: widget.record?.createdAt,
+            deviceId: widget.record?.deviceId ?? '',
+            schemaVersion:
+                widget.record?.schemaVersion ?? _databaseSchemaVersion,
           ),
-          odometer: odo,
-          type: type.text.trim(),
-          description: description.text.trim(),
-          cost: parsedCost,
-          notes: notes.text.trim(),
-          createdAt: widget.record?.createdAt,
-          deviceId: widget.record?.deviceId ?? '',
-          schemaVersion: widget.record?.schemaVersion ?? _databaseSchemaVersion,
         ),
-      ),
-    );
+      );
       if (!saved || !mounted) return;
       toast(context, tr('Mantenimiento guardado'));
       Navigator.pop(context);

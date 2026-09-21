@@ -1,10 +1,17 @@
 part of '../main.dart';
 
-enum ReferralQualificationMode { registration, firstPayment, firstValidJob, unknown }
+enum ReferralQualificationMode {
+  registration,
+  firstPayment,
+  firstValidJob,
+  unknown
+}
 
 ReferralQualificationMode referralQualificationModeFromValue(Object? value) {
   return switch ('$value') {
-    'registration' => ReferralQualificationMode.registration,
+    'registration' ||
+    'registration_code_claim' =>
+      ReferralQualificationMode.registration,
     'first_payment' => ReferralQualificationMode.firstPayment,
     'first_valid_job' => ReferralQualificationMode.firstValidJob,
     _ => ReferralQualificationMode.unknown,
@@ -13,7 +20,8 @@ ReferralQualificationMode referralQualificationModeFromValue(Object? value) {
 
 String referralQualificationLabel(ReferralQualificationMode mode) {
   return switch (mode) {
-    ReferralQualificationMode.registration => 'Cuando tu invitado se registre',
+    ReferralQualificationMode.registration =>
+      'Cuando tu invitado se registre y vincule tu código',
     ReferralQualificationMode.firstPayment =>
       'Cuando tu invitado realice su primer pago',
     ReferralQualificationMode.firstValidJob =>
@@ -41,6 +49,10 @@ class ReferralProgram {
     this.rewardAmount = 0,
     this.rewardCurrency = 'CUP',
     this.rewardedCount = 0,
+    this.rewardMonths = 0,
+    this.licenseMonthsAwarded = 0,
+    this.licenseMonthsPending = 0,
+    this.licenseMonthsApplied = 0,
   });
 
   final bool enabled;
@@ -60,7 +72,14 @@ class ReferralProgram {
   final num rewardAmount;
   final String rewardCurrency;
   final int rewardedCount;
-  bool get isWalletReward => rewardMode == 'marketplace_wallet_credit';
+  final int rewardMonths;
+  final int licenseMonthsAwarded;
+  final int licenseMonthsPending;
+  final int licenseMonthsApplied;
+  bool get isRegistrationWalletLicense =>
+      rewardMode == 'registration_wallet_license';
+  bool get isWalletReward =>
+      rewardMode == 'marketplace_wallet_credit' || isRegistrationWalletLicense;
 
   String? get shareLink {
     final value = normalizeReferralCode(code);
@@ -102,8 +121,11 @@ class ReferralProgram {
       rewardAmount: num.tryParse('${map['reward_amount'] ?? ''}') ?? 0,
       rewardCurrency: optionalText(map['reward_currency']) ?? 'CUP',
       rewardedCount: count(map['rewarded_count']),
+      rewardMonths: count(map['reward_months'] ?? map['license_months']),
+      licenseMonthsAwarded: count(map['license_months_awarded']),
+      licenseMonthsPending: count(map['license_months_pending']),
+      licenseMonthsApplied: count(map['license_months_applied']),
     );
-
   }
 }
 
@@ -127,6 +149,16 @@ String referralEntryStatusLabel(ReferralEntryStatus status) {
   };
 }
 
+// Use only valid HTTPS image URLs from the authenticated referral RPC.
+String? _safeReferralAvatarUrl(Object? value) {
+  final raw = value?.toString().trim();
+  if (raw == null || raw.isEmpty) return null;
+  final uri = Uri.tryParse(raw);
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty) return null;
+  return raw;
+}
+
 class ReferralEntry {
   const ReferralEntry({
     required this.relationshipId,
@@ -135,8 +167,11 @@ class ReferralEntry {
     required this.rewardDays,
     required this.createdAt,
     required this.qualifiedAt,
+    this.avatarUrl,
     this.rewardAmount,
     this.rewardCurrency,
+    this.rewardMonths = 0,
+    this.licenseStatus,
     this.legacyDaysApplied = false,
     this.legacyRewardStatus,
   });
@@ -147,16 +182,34 @@ class ReferralEntry {
   final int rewardDays;
   final DateTime? createdAt;
   final DateTime? qualifiedAt;
+  final String? avatarUrl;
   final num? rewardAmount;
   final String? rewardCurrency;
+  final int rewardMonths;
+  final String? licenseStatus;
   final bool legacyDaysApplied;
   final String? legacyRewardStatus;
 
-  String get displayStatusLabel => switch (legacyRewardStatus) {
-    'earned' => 'Días históricos pendientes',
-    'applied' => 'Días históricos aplicados',
-    _ => referralEntryStatusLabel(status),
-  };
+  String get displayStatusLabel {
+    if (legacyRewardStatus == 'earned') return 'Días históricos pendientes';
+    if (legacyRewardStatus == 'applied') return 'Días históricos aplicados';
+    if (status == ReferralEntryStatus.rewarded && rewardMonths > 0) {
+      return licenseStatus == 'applied'
+          ? 'Crédito acreditado · meses aplicados'
+          : 'Crédito acreditado · meses pendientes';
+    }
+    return referralEntryStatusLabel(status);
+  }
+
+  String? get licenseStatusLabel => switch (licenseStatus) {
+        'applied' => 'Meses aplicados',
+        'pending_no_license' => 'Meses pendientes · sin licencia',
+        'pending_ineligible_license' =>
+          'Meses pendientes · licencia no elegible',
+        'pending_indefinite' => 'Meses conservados · licencia indefinida',
+        null => null,
+        _ => 'Meses pendientes',
+      };
 
   factory ReferralEntry.fromMap(Map<dynamic, dynamic> map) {
     final reward = map['reward_days'];
@@ -170,12 +223,57 @@ class ReferralEntry {
           reward is num ? reward.toInt() : int.tryParse('${reward ?? ''}') ?? 0,
       createdAt: DateTime.tryParse('${map['created_at'] ?? ''}'),
       qualifiedAt: DateTime.tryParse('${map['qualified_at'] ?? ''}'),
+      avatarUrl: _safeReferralAvatarUrl(map['avatar_url']),
       rewardAmount: map['reward_amount'] is num
           ? map['reward_amount'] as num
           : num.tryParse('${map['reward_amount'] ?? ''}'),
       rewardCurrency: map['reward_currency']?.toString(),
+      rewardMonths: map['reward_months'] is num
+          ? (map['reward_months'] as num).toInt()
+          : int.tryParse(
+                '${map['reward_months'] ?? map['license_months'] ?? ''}',
+              ) ??
+              0,
+      licenseStatus: map['license_status']?.toString(),
       legacyDaysApplied: map['legacy_days_applied'] == true,
       legacyRewardStatus: map['legacy_reward_status']?.toString(),
+    );
+  }
+}
+
+/// Totales visibles del programa V11 a partir de los premios individuales.
+/// La lista de referidos incluye tanto premios nuevos como conciliaciones
+/// históricas; el resumen remoto antiguo puede omitir estas últimas.
+class ReferralSummaryTotals {
+  const ReferralSummaryTotals({
+    required this.creditedReferrals,
+    required this.creditedCup,
+    required this.earnedMonths,
+  });
+
+  final int creditedReferrals;
+  final num creditedCup;
+  final int earnedMonths;
+
+  factory ReferralSummaryTotals.fromEntries(Iterable<ReferralEntry> entries) {
+    var count = 0;
+    num cup = 0;
+    var months = 0;
+    for (final entry in entries) {
+      if (entry.status != ReferralEntryStatus.rewarded) continue;
+      final creditedAmount = entry.rewardCurrency == 'CUP'
+          ? (entry.rewardAmount ?? 0)
+          : 0;
+      if (creditedAmount > 0) {
+        count++;
+        cup += creditedAmount;
+      }
+      if (entry.rewardMonths > 0) months += entry.rewardMonths;
+    }
+    return ReferralSummaryTotals(
+      creditedReferrals: count,
+      creditedCup: cup,
+      earnedMonths: months,
     );
   }
 }

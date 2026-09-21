@@ -166,7 +166,11 @@ class MarketplaceMoreScreen extends StatelessWidget {
             leading: const Icon(Icons.redeem_outlined),
             title: Text(tr('Referidos')),
             subtitle: Text(
-              tr('Invita a otros conductores y gana días adicionales.'),
+              store.referralProgram?.isRegistrationWalletLicense == true
+                  ? 'Invita y gana saldo promocional y meses de Control.'
+                  : store.referralProgram?.isWalletReward == true
+                      ? 'Invita y gana saldo promocional.'
+                      : 'Invita a otros conductores y consulta tus premios.',
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
@@ -176,9 +180,16 @@ class MarketplaceMoreScreen extends StatelessWidget {
               _openPage(
                 context,
                 title: tr('Referidos'),
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [_ReferralCard(store: store)],
+                // A pushed MaterialPageRoute does not rebuild when the shell
+                // behind it receives a ChangeNotifier notification. Listen on
+                // this route as well, otherwise loading never leaves the
+                // spinner and newly credited rewards are not displayed.
+                child: AnimatedBuilder(
+                  animation: store,
+                  builder: (context, _) => ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [_ReferralCard(store: store)],
+                  ),
                 ),
               );
             },
