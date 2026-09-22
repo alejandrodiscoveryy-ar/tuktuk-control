@@ -155,11 +155,16 @@ void main() async {
 bool get _marketplaceCustomerEntry {
   if (!kIsWeb) return false;
 
-  final uri = Uri.base;
+  return isMarketplaceCustomerEntryUri(Uri.base);
+}
 
+@visibleForTesting
+bool isMarketplaceCustomerEntryUri(Uri uri) {
   return uri.queryParameters['mode'] == 'customer' ||
       uri.path.endsWith('/cliente') ||
-      uri.path.endsWith('/cliente/');
+      uri.path.endsWith('/cliente/') ||
+      uri.path == '/cliente/tuk' ||
+      uri.path == '/cliente/tuk/';
 }
 
 class ControlTukTukApp extends StatefulWidget {
