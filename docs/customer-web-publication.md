@@ -1,11 +1,11 @@
-# Publicación de TUKTUK Cliente en Cloudflare Pages
+# Publicación de TUKTUK Cliente mediante el Worker de Cloudflare
 
 ## Estado comprobado
 
-- La metadata local de Wrangler identifica el proyecto Pages `vrixora-digital-solutions`.
 - El 22 de septiembre de 2026, `https://www.vrixora.com/tuktuk/app/` respondió `200` a través de Cloudflare.
 - En esa misma comprobación, `https://www.vrixora.com/cliente/tuk/` respondió `404`; no hubo redirección.
-- No hay configuración versionada de Worker ni de Assets en este repositorio que permita atribuir la ruta actual a un Worker concreto. La configuración debe conservar Pages como fuente de los archivos estáticos, salvo que el owner confirme otra topología desde el panel de Cloudflare.
+- La evidencia operativa del proyecto identifica el Worker actual como `tuktuk-webapp` y asocia `www.vrixora.com/tuktuk/app/*` a ese Worker.
+- No hay configuración versionada del Worker ni de sus Assets en este repositorio. Los detalles remotos —binding de Assets, regla SPA, directorio de empaquetado y orden de rutas— siguen pendientes de verificación en la configuración de `tuktuk-webapp`; este documento no los inventa.
 
 ## Generación de paquetes
 
@@ -20,7 +20,7 @@ El build de prestadores conserva `build/web` y el `base href` `/tuktuk/app/`.
 El build de clientes queda en `build/customer-web` y usa `/cliente/tuk/`.
 No se deben intercambiar esos directorios al preparar una publicación.
 
-## Configuración de Pages requerida
+## Topología de Worker que se debe preparar
 
 Prepare un único directorio de publicación con estas dos raíces, sin mover
 la segunda bajo `/tuktuk`:
@@ -31,20 +31,28 @@ la segunda bajo `/tuktuk`:
 └── cliente/tuk/      # contenido de build/customer-web
 ```
 
-En el proyecto Pages `vrixora-digital-solutions`, publique ese directorio y
-configure una regla SPA específica:
+`tuktuk-webapp` debe conservar la ruta actual:
 
 ```text
-/cliente/tuk/*  /cliente/tuk/index.html  200
+www.vrixora.com/tuktuk/app/*
 ```
 
-Los archivos existentes deben prevalecer sobre ese fallback, para que
+Sin desplegar ni crear todavía la ruta, deberá prepararse una segunda asociación
+al mismo Worker:
+
+```text
+www.vrixora.com/cliente/tuk/*
+```
+
+El paquete de publicación podrá contener ambas raíces. La implementación remota
+debe servir los archivos existentes antes de cualquier fallback SPA, para que
 `flutter_bootstrap.js`, `main.dart.js`, `canvaskit/`, `assets/`,
 `manifest.json`, iconos y los service workers se sirvan directamente desde
 `/cliente/tuk/`.
 
 No cree ninguna regla de redirección hacia `/tuktuk/`. La ruta del cliente
-permanece fuera del App Link Android `/tuktuk`; este cambio no modifica
+debe servirse directamente y permanece fuera del App Link Android `/tuktuk`;
+este cambio no modifica
 `AndroidManifest.xml`.
 
 ## PWA y scopes
