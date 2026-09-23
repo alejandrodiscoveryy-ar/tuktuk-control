@@ -8,7 +8,11 @@ try {
   }
 
   # Keep this package distinct from the provider build in build/web.
-  flutter build web --release --base-href "/cliente/tuk/" --output build/customer-web
+  $mapboxArgs = @()
+  if ($env:MAPBOX_PUBLIC_TOKEN) {
+    $mapboxArgs += "--dart-define=MAPBOX_PUBLIC_TOKEN=$($env:MAPBOX_PUBLIC_TOKEN)"
+  }
+  flutter build web --release --base-href "/cliente/tuk/" --output build/customer-web @mapboxArgs
   if ($LASTEXITCODE -ne 0) {
     throw "La compilación web del cliente terminó con código $LASTEXITCODE."
   }

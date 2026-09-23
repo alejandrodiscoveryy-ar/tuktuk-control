@@ -181,7 +181,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
         );
       }
 
-      return MarketplaceCustomerRequestScreen(
+      return MarketplaceCustomerBookingFlow(
         service: _service,
         session: existingSession,
       );
@@ -205,7 +205,7 @@ class _MarketplaceCustomerShellState extends State<MarketplaceCustomerShell> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Solicita tu transporte',
+                      '¿Cómo quieres que te llamemos?',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
