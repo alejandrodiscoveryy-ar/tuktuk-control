@@ -77,3 +77,6 @@ backups/
 
 # Local development tools
 .tools/
+
+# Cloudflare Wrangler local state
+.wrangler/
