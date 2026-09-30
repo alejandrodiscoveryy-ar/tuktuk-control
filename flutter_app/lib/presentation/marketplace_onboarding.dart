@@ -25,7 +25,9 @@ String _marketplaceMoneyLabel(
   String currency,
 ) {
   final decimals = value == value.roundToDouble() ? 0 : 2;
-  return '${value.toStringAsFixed(decimals)} $currency';
+  final pattern = decimals == 0 ? '#,##0' : '#,##0.00';
+  final formatted = NumberFormat(pattern, 'es').format(value);
+  return '$formatted $currency';
 }
 
 String _marketplacePercentLabel(double rate) {
@@ -1298,7 +1300,8 @@ class _MarketplaceOnboardingScreenState
                     child: _walletValue(
                       context,
                       'Saldo real',
-                      _marketplaceMoneyLabel(wallet.realBalance!, wallet.currency),
+                      _marketplaceMoneyLabel(
+                          wallet.realBalance!, wallet.currency),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1306,7 +1309,8 @@ class _MarketplaceOnboardingScreenState
                     child: _walletValue(
                       context,
                       'Promocional',
-                      _marketplaceMoneyLabel(wallet.promotionalBalance!, wallet.currency),
+                      _marketplaceMoneyLabel(
+                          wallet.promotionalBalance!, wallet.currency),
                     ),
                   ),
                 ],
@@ -1318,7 +1322,8 @@ class _MarketplaceOnboardingScreenState
                     child: _walletValue(
                       context,
                       'Real disponible',
-                      _marketplaceMoneyLabel(wallet.realAvailableBalance!, wallet.currency),
+                      _marketplaceMoneyLabel(
+                          wallet.realAvailableBalance!, wallet.currency),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1326,13 +1331,15 @@ class _MarketplaceOnboardingScreenState
                     child: _walletValue(
                       context,
                       'Promo disponible',
-                      _marketplaceMoneyLabel(wallet.promotionalAvailableBalance!, wallet.currency),
+                      _marketplaceMoneyLabel(
+                          wallet.promotionalAvailableBalance!, wallet.currency),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              const Text('El saldo promocional solo paga comisiones. No sustituye el depósito inicial real.'),
+              const Text(
+                  'El saldo promocional solo paga comisiones. No sustituye el depósito inicial real.'),
             ],
             const SizedBox(height: 10),
             _walletValue(
@@ -2069,8 +2076,7 @@ class _MarketplaceOnboardingScreenState
                             label: 'Carga (kg)',
                             icon: Icons.scale_outlined,
                             controller: _cargoKg,
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
+                            keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
                           ),

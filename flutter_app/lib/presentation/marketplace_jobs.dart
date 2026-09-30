@@ -40,6 +40,7 @@ Color _marketplaceJobStatusColor(
     'pickup' => kTertiary,
     'in_progress' => appPrimaryColor(context),
     'completed' => Colors.green,
+    'settled' => Colors.green,
     'incident' => Colors.redAccent,
     _ => appMutedColor(context),
   };
@@ -52,6 +53,7 @@ IconData _marketplaceJobStatusIcon(String status) {
     'pickup' => Icons.person_pin_circle_rounded,
     'in_progress' => Icons.route_rounded,
     'completed' => Icons.task_alt_rounded,
+    'settled' => Icons.task_alt_rounded,
     'incident' => Icons.warning_amber_rounded,
     _ => Icons.work_outline_rounded,
   };
@@ -64,6 +66,7 @@ String _marketplaceJobStatusMessage(String status) {
     'pickup' => 'Estás en el punto de recogida',
     'in_progress' => 'Servicio en curso hacia el destino',
     'completed' => 'Servicio finalizado · pendiente de liquidación',
+    'settled' => 'Servicio completado y liquidado',
     'incident' => 'Hay una incidencia abierta en este servicio',
     _ => 'Estado actual del servicio',
   };
@@ -76,6 +79,7 @@ int _marketplaceJobProgressIndex(String status) {
     'pickup' => 2,
     'in_progress' => 3,
     'completed' => 4,
+    'settled' => 4,
     _ => 0,
   };
 }
@@ -124,8 +128,10 @@ class MarketplaceJobsScreen extends StatefulWidget {
   State<MarketplaceJobsScreen> createState() => _MarketplaceJobsScreenState();
 }
 
-class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
+class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
+    with SingleTickerProviderStateMixin {
   late final MarketplaceService _service;
+  late final TabController _tabController;
 
   MarketplaceOnboarding? _onboarding;
   String? _selectedVehicleId;
@@ -149,8 +155,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: 6,
+      vsync: this,
+    );
     _service = MarketplaceService(Supabase.instance.client);
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   // The wallet tab is recreated after activation so its totals are current.
@@ -223,6 +239,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
       ]);
 
       if (!mounted) return;
+
+      if (_active.isNotEmpty && _tabController.index == 0) {
+        _tabController.animateTo(1);
+      }
 
       await _loadAvailable();
     } catch (_) {
@@ -393,9 +413,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 
       if (!mounted) return;
 
+      if (_active.any((item) => item.id == job.id)) {
+        _tabController.animateTo(1);
+      } else if (_scheduled.any((item) => item.id == job.id)) {
+        _tabController.animateTo(2);
+      }
+
       toast(
         context,
-        'Trabajo aceptado. Ya aparece en tus trabajos activos.',
+        'Trabajo aceptado.',
       );
     } catch (_) {
       if (mounted) {
@@ -600,71 +626,221 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
     final name =
         contact.name?.trim().isNotEmpty == true ? contact.name! : 'Cliente';
     final phone = contact.phone?.trim();
+    final initial = name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase();
 
     return showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      builder: (sheetContext) {
+        final colors = Theme.of(sheetContext).colorScheme;
+
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 22),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+                bottom: Radius.circular(22),
+              ),
+              border: Border.all(
+                color: colors.outlineVariant.withValues(alpha: 0.60),
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 28,
+                  offset: Offset(0, -6),
+                  color: Color(0x55000000),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                phone?.isNotEmpty == true ? phone! : 'Teléfono no disponible',
-                style: const TextStyle(fontSize: 17),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Este contacto está disponible porque el trabajo '
-                'está asignado a tu cuenta.',
-                style: TextStyle(
-                  color: appMutedColor(sheetContext),
-                  fontSize: 12,
-                  height: 1.35,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
-              ),
-              if (phone?.isNotEmpty == true) ...[
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+                const SizedBox(height: 20),
+                Row(
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        unawaited(
-                          Clipboard.setData(
-                            ClipboardData(text: phone!),
-                          ),
-                        );
-                        toast(context, 'Número copiado.');
-                      },
-                      icon: const Icon(Icons.copy_outlined),
-                      label: const Text('Copiar'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: () => unawaited(
-                        _openWhatsApp(phone!),
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: appPrimaryColor(sheetContext)
+                            .withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: appPrimaryColor(sheetContext)
+                              .withValues(alpha: 0.45),
+                        ),
                       ),
-                      icon: const Icon(Icons.chat_outlined),
-                      label: const Text('WhatsApp'),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: appPrimaryColor(sheetContext),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Cliente del servicio',
+                            style: TextStyle(
+                              color: appMutedColor(sheetContext),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            phone?.isNotEmpty == true
+                                ? phone!
+                                : 'Teléfono no disponible',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
+                if (phone?.isNotEmpty == true) ...[
+                  const SizedBox(height: 22),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 56,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop();
+                              unawaited(_openWhatsApp(phone!));
+                            },
+                            icon: const FaIcon(
+                              FontAwesomeIcons.whatsapp,
+                              size: 22,
+                            ),
+                            label: const Text(
+                              'WhatsApp',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 56,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: colors.primaryContainer,
+                              foregroundColor: colors.onPrimaryContainer,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop();
+                              unawaited(_callPhone(phone!));
+                            },
+                            icon: const Icon(Icons.call_rounded),
+                            label: const Text(
+                              'Llamar',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      unawaited(
+                        Clipboard.setData(
+                          ClipboardData(text: phone!),
+                        ),
+                      );
+                      toast(context, 'Número copiado.');
+                    },
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: const Text('Copiar número'),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        colors.surfaceContainerHighest.withValues(alpha: 0.42),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        size: 17,
+                        color: appMutedColor(sheetContext),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'El contacto se muestra únicamente mientras '
+                          'el servicio está asignado a tu cuenta.',
+                          style: TextStyle(
+                            color: appMutedColor(sheetContext),
+                            fontSize: 11,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -678,6 +854,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 
     final opened = await launchUrl(
       Uri.parse('https://wa.me/$digits'),
+      mode: LaunchMode.externalApplication,
     );
 
     if (!opened && mounted) {
@@ -685,73 +862,95 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
     }
   }
 
+  Future<void> _callPhone(String phone) async {
+    final number = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+
+    if (number.isEmpty) {
+      toast(context, 'El número del cliente no es válido.');
+      return;
+    }
+
+    final opened = await launchUrl(
+      Uri(
+        scheme: 'tel',
+        path: number,
+      ),
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!opened && mounted) {
+      toast(context, 'No se pudo abrir el marcador.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 6,
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
-          const TabBar(
-            isScrollable: true,
-            tabs: [
-              Tab(icon: Icon(Icons.notifications_none_outlined), text: 'Ofertas'),
-              Tab(icon: Icon(Icons.work_outline), text: 'Activos'),
-              Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
-              Tab(icon: Icon(Icons.history), text: 'Hist.'),
-              Tab(icon: Icon(Icons.verified_user_outlined), text: 'Activar'),
-              Tab(icon: Icon(Icons.account_balance_wallet_outlined), text: 'Saldo'),
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabs: const [
+            Tab(icon: Icon(Icons.notifications_none_outlined), text: 'Ofertas'),
+            Tab(icon: Icon(Icons.work_outline), text: 'Activos'),
+            Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
+            Tab(icon: Icon(Icons.history), text: 'Hist.'),
+            Tab(icon: Icon(Icons.verified_user_outlined), text: 'Activar'),
+            Tab(
+                icon: Icon(Icons.account_balance_wallet_outlined),
+                text: 'Saldo'),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildAvailableTab(context),
+              _buildAssignedTab(
+                context,
+                scope: 'active',
+                icon: Icons.route_outlined,
+                emptyTitle: 'No tienes trabajos activos',
+                emptyMessage:
+                    'Cuando aceptes un servicio para ahora aparecerá aquí.',
+              ),
+              _buildAssignedTab(
+                context,
+                scope: 'scheduled',
+                icon: Icons.event_outlined,
+                emptyTitle: 'No tienes trabajos programados',
+                emptyMessage:
+                    'Los servicios aceptados para una hora futura aparecerán aquí.',
+              ),
+              _buildAssignedTab(
+                context,
+                scope: 'history',
+                icon: Icons.history_rounded,
+                emptyTitle: 'Tu historial está vacío',
+                emptyMessage:
+                    'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
+              ),
+              MarketplaceOnboardingScreen(
+                key: ValueKey('activation-$_selectedVehicleId'),
+                store: widget.store,
+                managementSection: MarketplaceManagementSection.activation,
+                initialVehicleId: _selectedVehicleId,
+                onManagementChanged: _onManagementChanged,
+              ),
+              MarketplaceOnboardingScreen(
+                key: ValueKey(
+                  'wallet-$_selectedVehicleId-$_managementRevision',
+                ),
+                store: widget.store,
+                managementSection: MarketplaceManagementSection.wallet,
+                initialVehicleId: _selectedVehicleId,
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _buildAvailableTab(context),
-                _buildAssignedTab(
-                  context,
-                  scope: 'active',
-                  icon: Icons.route_outlined,
-                  emptyTitle: 'No tienes trabajos activos',
-                  emptyMessage:
-                      'Cuando aceptes un servicio para ahora aparecerá aquí.',
-                ),
-                _buildAssignedTab(
-                  context,
-                  scope: 'scheduled',
-                  icon: Icons.event_outlined,
-                  emptyTitle: 'No tienes trabajos programados',
-                  emptyMessage:
-                      'Los servicios aceptados para una hora futura aparecerán aquí.',
-                ),
-                _buildAssignedTab(
-                  context,
-                  scope: 'history',
-                  icon: Icons.history_rounded,
-                  emptyTitle: 'Tu historial está vacío',
-                  emptyMessage:
-                      'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
-                ),
-                MarketplaceOnboardingScreen(
-                  key: ValueKey('activation-$_selectedVehicleId'),
-                  store: widget.store,
-                  managementSection: MarketplaceManagementSection.activation,
-                  initialVehicleId: _selectedVehicleId,
-                  onManagementChanged: _onManagementChanged,
-                ),
-                MarketplaceOnboardingScreen(
-                  key: ValueKey(
-                    'wallet-$_selectedVehicleId-$_managementRevision',
-                  ),
-                  store: widget.store,
-                  managementSection: MarketplaceManagementSection.wallet,
-                  initialVehicleId: _selectedVehicleId,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -802,52 +1001,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
     }
 
     final selectedVehicle = _vehicleById(_selectedVehicleId);
-
-    if (_active.isNotEmpty) {
-      return RefreshIndicator(
-        onRefresh: () => _loadScope('active'),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              'Servicio activo',
-              style: TextStyle(
-                color: appPrimaryColor(context),
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Todo el servicio se controla desde esta tarjeta.',
-              style: TextStyle(
-                color: appMutedColor(context),
-              ),
-            ),
-            const SizedBox(height: 14),
-            ..._active.map(
-              (job) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _AssignedJobCard(
-                  job: job,
-                  busy: _busyJobId == job.id,
-                  showMap: true,
-                  onContact: () => _contactJob(job),
-                  onAdvance:
-                      _marketplaceJobActionLabel(job.nextAction) != null
-                          ? () => _advanceJob(job)
-                          : null,
-                  onCancel: _marketplaceJobCanDriverCancel(job)
-                      ? () => _cancelJob(job)
-                      : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
 
     return RefreshIndicator(
       onRefresh: _loadAvailable,
@@ -1204,18 +1357,13 @@ class _AssignedJobCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: active
                               ? statusColor
-                              : appMutedColor(context)
-                                  .withValues(alpha: 0.15),
+                              : appMutedColor(context).withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          active
-                              ? Icons.check_rounded
-                              : Icons.circle_outlined,
+                          active ? Icons.check_rounded : Icons.circle_outlined,
                           size: 14,
-                          color: active
-                              ? Colors.white
-                              : appMutedColor(context),
+                          color: active ? Colors.white : appMutedColor(context),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1226,9 +1374,7 @@ class _AssignedJobCard extends StatelessWidget {
                           fontSize: 9,
                           fontWeight:
                               active ? FontWeight.w800 : FontWeight.w500,
-                          color: active
-                              ? statusColor
-                              : appMutedColor(context),
+                          color: active ? statusColor : appMutedColor(context),
                         ),
                       ),
                     ],
@@ -1347,8 +1493,7 @@ class _AssignedJobCard extends StatelessWidget {
                   label: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: Text(
-                      _marketplaceJobActionLabel(job.nextAction) ??
-                          'Continuar',
+                      _marketplaceJobActionLabel(job.nextAction) ?? 'Continuar',
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                       ),
@@ -1365,8 +1510,8 @@ class _AssignedJobCard extends StatelessWidget {
                   if (onContact != null)
                     OutlinedButton.icon(
                       onPressed: busy ? null : onContact,
-                      icon: const Icon(Icons.person_outline_rounded),
-                      label: const Text('Cliente'),
+                      icon: const Icon(Icons.contact_phone_rounded),
+                      label: const Text('Contactar cliente'),
                     ),
                   if (onCancel != null)
                     OutlinedButton.icon(

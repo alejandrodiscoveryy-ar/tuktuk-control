@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'services/push_notification_service.dart';
 import 'services/push_token_registration_coordinator.dart';
@@ -244,20 +245,19 @@ ThemeData buildAppTheme(Brightness brightness) {
   final outline = dark ? kOutline : kOutline;
   final inputOutline = dark ? const Color(0xFF263241) : const Color(0xFF263241);
   final semanticPrimary = dark ? kPrimary : const Color(0xFF2F80ED);
-  final scheme =
-      ColorScheme.fromSeed(
-        brightness: effectiveBrightness,
-        seedColor: kPrimary,
-        primary: semanticPrimary,
-        secondary: dark ? kSecondary : const Color(0xFF3B82F6),
-        surface: surface,
-      ).copyWith(
-        onSurface: text,
-        onSurfaceVariant: muted,
-        outline: outline,
-        outlineVariant: outline,
-        surfaceContainerHighest: surfaceHigh,
-      );
+  final scheme = ColorScheme.fromSeed(
+    brightness: effectiveBrightness,
+    seedColor: kPrimary,
+    primary: semanticPrimary,
+    secondary: dark ? kSecondary : const Color(0xFF3B82F6),
+    surface: surface,
+  ).copyWith(
+    onSurface: text,
+    onSurfaceVariant: muted,
+    outline: outline,
+    outlineVariant: outline,
+    surfaceContainerHighest: surfaceHigh,
+  );
   return ThemeData(
     useMaterial3: true,
     brightness: effectiveBrightness,
@@ -331,18 +331,16 @@ ThemeData buildAppTheme(Brightness brightness) {
       indicatorColor: semanticPrimary.withValues(alpha: .18),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
-          color: states.contains(WidgetState.selected)
-              ? semanticPrimary
-              : muted,
+          color:
+              states.contains(WidgetState.selected) ? semanticPrimary : muted,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
       ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? semanticPrimary
-              : muted,
+          color:
+              states.contains(WidgetState.selected) ? semanticPrimary : muted,
         ),
       ),
     ),

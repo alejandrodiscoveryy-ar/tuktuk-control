@@ -9,15 +9,18 @@ class MarketplaceDriverMap extends StatefulWidget {
   final MarketplaceJob job;
 
   @override
-  State<MarketplaceDriverMap> createState() =>
-      _MarketplaceDriverMapState();
+  State<MarketplaceDriverMap> createState() => _MarketplaceDriverMapState();
 }
 
 class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
   MarketplaceRoutePath? toPickup;
   MarketplaceRoutePath? toDestination;
   MarketplaceMapPoint? driver;
+
+  String? mapToken;
   String? message;
+
+  bool loading = true;
 
   @override
   void initState() {
@@ -30,13 +33,31 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
     final destination = widget.job.destinationPoint;
 
     if (pickup == null || destination == null) {
-      setState(
-        () => message = 'Este servicio no tiene coordenadas disponibles.',
-      );
+      setState(() {
+        loading = false;
+        message = 'Este servicio no tiene coordenadas disponibles.';
+      });
       return;
     }
 
+    final maps = MarketplaceMapService(
+      Supabase.instance.client,
+    );
+
     try {
+      final token = await maps.runtimePublicToken();
+
+      if (token == null || token.isEmpty) {
+        throw StateError('MAP_TOKEN_MISSING');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        mapToken = token;
+        loading = false;
+      });
+
       var permission = await Geolocator.checkPermission();
 
       if (permission == LocationPermission.denied) {
@@ -56,8 +77,6 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         lon: position.longitude,
       );
 
-      final maps = MarketplaceMapService(Supabase.instance.client);
-
       final routes = await Future.wait([
         maps.driverRouteForJob(
           jobId: widget.job.id,
@@ -76,24 +95,46 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         driver = current;
         toPickup = routes[0];
         toDestination = routes[1];
+        message = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
 
-      setState(
-        () => message = 'No pudimos cargar la ruta en este momento.',
-      );
+      setState(() {
+        loading = false;
+
+        if (error.toString().contains('LOCATION_DENIED')) {
+          message =
+              'Activa la ubicación para mostrar tu ruta hasta el cliente.';
+        } else {
+          message = 'No pudimos cargar la ruta en este momento.';
+        }
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const token = MarketplaceMapService.publicToken;
-
     final pickup = widget.job.originPoint;
     final destination = widget.job.destinationPoint;
 
-    if (token.isEmpty || pickup == null || destination == null) {
+    if (pickup == null || destination == null) {
+      return const Center(
+        child: Text('Mapa no disponible para este servicio.'),
+      );
+    }
+
+    if (loading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+        ),
+      );
+    }
+
+    final token = mapToken;
+
+    if (token == null || token.isEmpty) {
       return const Center(
         child: Text('Mapa no disponible para este servicio.'),
       );
@@ -167,18 +208,21 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             ],
           ),
           if (message != null)
-            Positioned.fill(
-              child: Center(
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: kSurfaceHigh,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    message!,
-                    textAlign: TextAlign.center,
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: kSurfaceHigh.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  message!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),

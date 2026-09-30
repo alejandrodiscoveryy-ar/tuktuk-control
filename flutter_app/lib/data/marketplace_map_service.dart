@@ -70,6 +70,36 @@ class MarketplaceMapService {
 
   static const publicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
 
+  Future<String?> runtimePublicToken() async {
+    final value = await _client.rpc(
+      'get_public_marketplace_map_capabilities_by_slug',
+      params: const {
+        'target_project_slug': 'tuktuk-control',
+      },
+    );
+
+    if (value is! Map) return null;
+
+    final capabilities = value['capabilities'];
+
+    if (capabilities is! List) return null;
+
+    for (final raw in capabilities) {
+      if (raw is! Map) continue;
+
+      if (raw['capability']?.toString() != 'map_visual') continue;
+      if (raw['enabled'] == false) continue;
+
+      final token = raw['public_token']?.toString().trim();
+
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    }
+
+    return null;
+  }
+
   Future<dynamic> _invoke(
       String operation, Map<String, dynamic> arguments) async {
     final response = await _client.functions.invoke(
