@@ -30,6 +30,56 @@ String _marketplaceJobStatusLabel(String status) {
   };
 }
 
+Color _marketplaceJobStatusColor(
+  BuildContext context,
+  String status,
+) {
+  return switch (status) {
+    'accepted' => Colors.blue,
+    'en_route' => Colors.orange,
+    'pickup' => kTertiary,
+    'in_progress' => appPrimaryColor(context),
+    'completed' => Colors.green,
+    'incident' => Colors.redAccent,
+    _ => appMutedColor(context),
+  };
+}
+
+IconData _marketplaceJobStatusIcon(String status) {
+  return switch (status) {
+    'accepted' => Icons.check_circle_outline_rounded,
+    'en_route' => Icons.navigation_rounded,
+    'pickup' => Icons.person_pin_circle_rounded,
+    'in_progress' => Icons.route_rounded,
+    'completed' => Icons.task_alt_rounded,
+    'incident' => Icons.warning_amber_rounded,
+    _ => Icons.work_outline_rounded,
+  };
+}
+
+String _marketplaceJobStatusMessage(String status) {
+  return switch (status) {
+    'accepted' => 'Servicio aceptado · prepárate para salir',
+    'en_route' => 'Vas camino al punto de recogida',
+    'pickup' => 'Estás en el punto de recogida',
+    'in_progress' => 'Servicio en curso hacia el destino',
+    'completed' => 'Servicio finalizado · pendiente de liquidación',
+    'incident' => 'Hay una incidencia abierta en este servicio',
+    _ => 'Estado actual del servicio',
+  };
+}
+
+int _marketplaceJobProgressIndex(String status) {
+  return switch (status) {
+    'accepted' => 0,
+    'en_route' => 1,
+    'pickup' => 2,
+    'in_progress' => 3,
+    'completed' => 4,
+    _ => 0,
+  };
+}
+
 String _marketplaceJobBillingLabel(MarketplaceJob job) {
   switch (job.billingMode) {
     case MarketplaceBillingMode.trialFree:
@@ -388,30 +438,30 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 
     if (action == null || label == null || _busyJobId != null) return;
 
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(label),
-            content: Text(
-              action == 'complete_service'
-                  ? 'Confirma únicamente cuando el servicio haya terminado. '
-                      'TUKTUK actualizará el trabajo y aplicará el tratamiento '
-                      'económico que quedó fijado al aceptarlo.'
-                  : '¿Confirmas este cambio de estado del servicio?',
+    var confirmed = true;
+
+    if (action == 'complete_service') {
+      confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Completar servicio'),
+              content: const Text(
+                'Confirma únicamente cuando el servicio haya terminado.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Volver'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Completar'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Volver'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Confirmar'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+          ) ??
+          false;
+    }
 
     if (!confirmed || !mounted) return;
 
@@ -753,6 +803,52 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
 
     final selectedVehicle = _vehicleById(_selectedVehicleId);
 
+    if (_active.isNotEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => _loadScope('active'),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'Servicio activo',
+              style: TextStyle(
+                color: appPrimaryColor(context),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Todo el servicio se controla desde esta tarjeta.',
+              style: TextStyle(
+                color: appMutedColor(context),
+              ),
+            ),
+            const SizedBox(height: 14),
+            ..._active.map(
+              (job) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _AssignedJobCard(
+                  job: job,
+                  busy: _busyJobId == job.id,
+                  showMap: true,
+                  onContact: () => _contactJob(job),
+                  onAdvance:
+                      _marketplaceJobActionLabel(job.nextAction) != null
+                          ? () => _advanceJob(job)
+                          : null,
+                  onCancel: _marketplaceJobCanDriverCancel(job)
+                      ? () => _cancelJob(job)
+                      : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: _loadAvailable,
       child: ListView(
@@ -945,6 +1041,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen> {
                   child: _AssignedJobCard(
                     job: job,
                     busy: _busyJobId == job.id,
+                    showMap: scope == 'active',
                     onContact:
                         scope == 'history' ? null : () => _contactJob(job),
                     onAdvance: scope == 'active' &&
@@ -969,6 +1066,7 @@ class _AssignedJobCard extends StatelessWidget {
   const _AssignedJobCard({
     required this.job,
     required this.busy,
+    required this.showMap,
     this.onContact,
     this.onAdvance,
     this.onCancel,
@@ -976,6 +1074,7 @@ class _AssignedJobCard extends StatelessWidget {
 
   final MarketplaceJob job;
   final bool busy;
+  final bool showMap;
   final VoidCallback? onContact;
   final VoidCallback? onAdvance;
   final VoidCallback? onCancel;
@@ -993,6 +1092,13 @@ class _AssignedJobCard extends StatelessWidget {
         job.acceptedAt ??
         job.updatedAt ??
         job.createdAt;
+
+    final statusColor = _marketplaceJobStatusColor(
+      context,
+      job.status,
+    );
+
+    final progressIndex = _marketplaceJobProgressIndex(job.status);
 
     return GlassCard(
       child: Column(
@@ -1026,25 +1132,112 @@ class _AssignedJobCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
+            width: double.infinity,
+            padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: appMutedColor(context).withValues(alpha: 0.30),
+                color: statusColor.withValues(alpha: 0.55),
               ),
             ),
-            child: Text(
-              _marketplaceJobStatusLabel(job.status),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _marketplaceJobStatusIcon(job.status),
+                    color: statusColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _marketplaceJobStatusLabel(job.status),
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _marketplaceJobStatusMessage(job.status),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
+          if (job.status != 'incident') ...[
+            const SizedBox(height: 14),
+            Row(
+              children: List.generate(4, (index) {
+                const labels = [
+                  'Aceptado',
+                  'En camino',
+                  'Recogida',
+                  'Servicio',
+                ];
+
+                final active = progressIndex >= index;
+
+                return Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: active
+                              ? statusColor
+                              : appMutedColor(context)
+                                  .withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          active
+                              ? Icons.check_rounded
+                              : Icons.circle_outlined,
+                          size: 14,
+                          color: active
+                              ? Colors.white
+                              : appMutedColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        labels[index],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight:
+                              active ? FontWeight.w800 : FontWeight.w500,
+                          color: active
+                              ? statusColor
+                              : appMutedColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ],
+          const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1062,6 +1255,16 @@ class _AssignedJobCard extends StatelessWidget {
               Expanded(child: Text(destination)),
             ],
           ),
+          if (showMap &&
+              job.status != 'completed' &&
+              job.originPoint != null &&
+              job.destinationPoint != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 265,
+              child: MarketplaceDriverMap(job: job),
+            ),
+          ],
           if (job.scheduledFor != null) ...[
             const SizedBox(height: 10),
             Row(
@@ -1124,41 +1327,56 @@ class _AssignedJobCard extends StatelessWidget {
             ),
           ],
           if (onContact != null || onAdvance != null || onCancel != null) ...[
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                if (onContact != null)
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : onContact,
-                    icon: const Icon(Icons.person_outline_rounded),
-                    label: const Text('Cliente'),
-                  ),
-                if (onCancel != null)
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : onCancel,
-                    icon: const Icon(Icons.cancel_outlined),
-                    label: const Text('Cancelar'),
-                  ),
-                if (onAdvance != null)
-                  FilledButton.icon(
-                    onPressed: busy ? null : onAdvance,
-                    icon: busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.arrow_forward_rounded),
-                    label: Text(
-                      _marketplaceJobActionLabel(job.nextAction) ?? 'Continuar',
+            const SizedBox(height: 18),
+            if (onAdvance != null)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: busy ? null : onAdvance,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(
+                          _marketplaceJobStatusIcon(job.status),
+                        ),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text(
+                      _marketplaceJobActionLabel(job.nextAction) ??
+                          'Continuar',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-              ],
-            ),
+                ),
+              ),
+            if (onContact != null || onCancel != null) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: [
+                  if (onContact != null)
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : onContact,
+                      icon: const Icon(Icons.person_outline_rounded),
+                      label: const Text('Cliente'),
+                    ),
+                  if (onCancel != null)
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : onCancel,
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text('Cancelar'),
+                    ),
+                ],
+              ),
+            ],
           ],
         ],
       ),

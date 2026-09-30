@@ -377,6 +377,10 @@ class MarketplaceAvailableJob {
     this.status,
     this.originText,
     this.destinationText,
+    this.originLat,
+    this.originLon,
+    this.destinationLat,
+    this.destinationLon,
     this.scheduledFor,
     this.passengerCount,
     this.cargoWeightKg,
@@ -395,6 +399,10 @@ class MarketplaceAvailableJob {
   final String serviceCode;
   final String? originText;
   final String? destinationText;
+  final double? originLat;
+  final double? originLon;
+  final double? destinationLat;
+  final double? destinationLon;
   final DateTime? scheduledFor;
   final int? passengerCount;
   final double? cargoWeightKg;
@@ -415,6 +423,18 @@ class MarketplaceAvailableJob {
         serviceCode: _marketText(map['service_code']) ?? '',
         originText: _marketText(map['origin_text']),
         destinationText: _marketText(map['destination_text']),
+        originLat: map['origin_lat'] == null
+            ? null
+            : _marketNumber(map['origin_lat']),
+        originLon: map['origin_lon'] == null
+            ? null
+            : _marketNumber(map['origin_lon']),
+        destinationLat: map['destination_lat'] == null
+            ? null
+            : _marketNumber(map['destination_lat']),
+        destinationLon: map['destination_lon'] == null
+            ? null
+            : _marketNumber(map['destination_lon']),
         scheduledFor: _marketDate(map['scheduled_for']),
         passengerCount: map['passenger_count'] == null
             ? null
@@ -453,6 +473,10 @@ class MarketplaceJob {
     this.serviceCode,
     this.originText,
     this.destinationText,
+    this.originLat,
+    this.originLon,
+    this.destinationLat,
+    this.destinationLon,
     this.scheduledFor,
     this.passengerCount,
     this.cargoWeightKg,
@@ -485,6 +509,10 @@ class MarketplaceJob {
   final String? serviceCode;
   final String? originText;
   final String? destinationText;
+  final double? originLat;
+  final double? originLon;
+  final double? destinationLat;
+  final double? destinationLon;
   final DateTime? scheduledFor;
   final int? passengerCount;
   final double? cargoWeightKg;
@@ -514,12 +542,42 @@ class MarketplaceJob {
   final DateTime? incidentResolvedAt;
   final String? nextAction;
 
+  MarketplaceMapPoint? get originPoint =>
+      originLat == null || originLon == null
+          ? null
+          : MarketplaceMapPoint(
+              label: originText ?? 'Recogida',
+              lat: originLat!,
+              lon: originLon!,
+            );
+
+  MarketplaceMapPoint? get destinationPoint =>
+      destinationLat == null || destinationLon == null
+          ? null
+          : MarketplaceMapPoint(
+              label: destinationText ?? 'Destino',
+              lat: destinationLat!,
+              lon: destinationLon!,
+            );
+
   factory MarketplaceJob.fromMap(Map map) => MarketplaceJob(
         id: _marketText(map['job_id'] ?? map['id']) ?? '',
         status: _marketText(map['status']) ?? 'unknown',
         serviceCode: _marketText(map['service_code']),
         originText: _marketText(map['origin_text']),
         destinationText: _marketText(map['destination_text']),
+        originLat: map['origin_lat'] == null
+            ? null
+            : _marketNumber(map['origin_lat']),
+        originLon: map['origin_lon'] == null
+            ? null
+            : _marketNumber(map['origin_lon']),
+        destinationLat: map['destination_lat'] == null
+            ? null
+            : _marketNumber(map['destination_lat']),
+        destinationLon: map['destination_lon'] == null
+            ? null
+            : _marketNumber(map['destination_lon']),
         scheduledFor: _marketDate(map['scheduled_for']),
         passengerCount: map['passenger_count'] == null
             ? null

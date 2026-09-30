@@ -18,6 +18,26 @@ class MarketplaceMapPoint {
       );
 }
 
+class MarketplaceRoutePath {
+  const MarketplaceRoutePath({
+    required this.distanceKm,
+    required this.durationSeconds,
+    required this.points,
+  });
+
+  final double distanceKm;
+  final int durationSeconds;
+  final List<MarketplaceMapPoint> points;
+
+  factory MarketplaceRoutePath.fromMap(Map value) => MarketplaceRoutePath(
+        distanceKm: (value['distance_km'] as num).toDouble(),
+        durationSeconds: (value['duration_seconds'] as num).round(),
+        points: (value['route_points'] as List)
+            .map((item) => MarketplaceMapPoint.fromMap(item as Map))
+            .toList(growable: false),
+      );
+}
+
 class MarketplaceRouteQuote {
   const MarketplaceRouteQuote({
     required this.distanceKm,
@@ -115,4 +135,17 @@ class MarketplaceMapService {
     return MarketplaceCustomerRequestDraft.fromMap(
         (result as List).first as Map);
   }
+
+  Future<MarketplaceRoutePath> driverRouteForJob({
+    required String jobId,
+    required String stage,
+    MarketplaceMapPoint? origin,
+  }) async =>
+      MarketplaceRoutePath.fromMap(
+        await _invoke('driver_route', {
+          'job_id': jobId,
+          'stage': stage,
+          if (origin != null) 'origin': origin.toMap(),
+        }) as Map,
+      );
 }
