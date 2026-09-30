@@ -503,12 +503,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final keyName = '${job.id}:$action';
     final key = _operationKey(job.id, action);
 
-    try {
-      await _service.advance(
+    try {      final updatedJob = await _service.advance(
         job.id,
         action,
         key,
       );
+
+      if (action == 'complete_service') {
+        await widget.store.ensureMarketplaceJobIncome(
+          jobId: updatedJob.id,
+          amount: updatedJob.finalPrice,
+          completedAt: updatedJob.completedAt ?? DateTime.now(),
+        );
+      }
 
       _operationKeys.remove(keyName);
 
