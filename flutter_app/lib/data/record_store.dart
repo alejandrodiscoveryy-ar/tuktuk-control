@@ -1232,6 +1232,45 @@ class RecordStore extends ChangeNotifier {
     await _maintenanceBox.put(record.id, record.toMap());
   }
 
+  Future<void> ensureMarketplaceJobIncome({
+    required String jobId,
+    required double amount,
+    DateTime? completedAt,
+  }) async {
+    if (jobId.trim().isEmpty || amount <= 0) return;
+
+    final incomeId = 'marketplace-job-${jobId.trim()}';
+
+    final existingRaw = _box.get(incomeId);
+    if (existingRaw != null) {
+      final existing = DailyRecord.fromMap(existingRaw as Map);
+      if (!existing.isDeleted) {
+        return;
+      }
+    }
+
+    final completed = completedAt ?? DateTime.now();
+
+    double odometer = 0;
+    for (final record in _allDailyRecords) {
+      if (record.isDeleted) continue;
+      if (record.odometer > odometer) {
+        odometer = record.odometer;
+      }
+    }
+
+    final record = DailyRecord(
+      id: incomeId,
+      date: completed,
+      earnings: amount,
+      odometer: odometer,
+      note: 'Trabajo TUKTUK',
+      deviceId: deviceId,
+      userId: activeUserId,
+    );
+
+    await save(record);
+  }
   Future<void> save(DailyRecord record) async {
     await _requireWriteAccess();
     final previousRaw = _box.get(record.id);
