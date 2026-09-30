@@ -5,6 +5,21 @@ $flutter = Join-Path $repo "flutter_app"
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
+$registrantRepo =
+    "flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
+
+function Restore-WebGeneratedAndroidResidue {
+    Set-Location $repo
+
+    git restore --source=HEAD --worktree -- $registrantRepo
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "STOP: no se pudo restaurar GeneratedPluginRegistrant."
+    }
+
+    Set-Location $flutter
+}
+
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "TUKTUK PRESTADOR - RELEASE OFICIAL" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
@@ -46,7 +61,7 @@ Set-Location $repo
 
 if (@(git status --porcelain).Count -ne 0) {
     git status --short
-    throw "STOP: sync_project_branding genero cambios no guardados en GitHub."
+    throw "STOP: identidad Web genero cambios no guardados en GitHub."
 }
 
 Set-Location $flutter
@@ -65,16 +80,18 @@ if ($LASTEXITCODE -ne 0) {
     throw "STOP: flutter test fallo."
 }
 
-$registrant =
-    "android\app\src\main\java\io\flutter\plugins\GeneratedPluginRegistrant.java"
+# Flutter puede regenerar este archivo Android incluso en trabajo Web.
+# Como esta entrega no modifica APK, siempre se restaura desde Git.
+Restore-WebGeneratedAndroidResidue
 
-$registrantBytes = $null
+Set-Location $repo
 
-if (Test-Path $registrant) {
-    $registrantBytes = [System.IO.File]::ReadAllBytes(
-        (Resolve-Path $registrant)
-    )
+if (@(git status --porcelain).Count -ne 0) {
+    git status --short
+    throw "STOP: las pruebas dejaron cambios inesperados."
 }
+
+Set-Location $flutter
 
 $buildDir =
     Join-Path $env:TEMP "tuktuk-provider-build-$stamp"
@@ -101,24 +118,17 @@ flutter build web `
     --output "$buildDir" `
     --no-tree-shake-icons
 
-$buildExit = $LASTEXITCODE
-
-if ($null -ne $registrantBytes) {
-    [System.IO.File]::WriteAllBytes(
-        (Resolve-Path $registrant),
-        $registrantBytes
-    )
-}
-
-if ($buildExit -ne 0) {
+if ($LASTEXITCODE -ne 0) {
     throw "STOP: build productivo fallo."
 }
+
+Restore-WebGeneratedAndroidResidue
 
 Set-Location $repo
 
 if (@(git status --porcelain).Count -ne 0) {
     git status --short
-    throw "STOP: el build modifico archivos controlados por Git."
+    throw "STOP: el build dejo cambios inesperados."
 }
 
 $localJs = Join-Path $buildDir "main.dart.js"

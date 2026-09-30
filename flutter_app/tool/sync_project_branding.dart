@@ -154,42 +154,28 @@ Future<void> _addWebMaskableResources(
   Directory root,
   _PublicProjectIdentity identity,
   Future<image.Image> Function() master,
-  HttpClient client,
+  HttpClient _,
   Map<File, Uint8List> outputs,
 ) async {
   final background = _manifestBackgroundColor(_file(root, 'web/manifest.json'));
+  final source = await master();
+
   outputs
-    ..[_file(root, 'web/icons/Icon-maskable-192.png')] = await _variant(
-      identity,
-      master,
-      client,
-      name: 'maskable-192.png',
+    ..[_file(root, 'web/icons/Icon-maskable-192.png')] = renderOpaqueWebIcon(
+      source,
       size: 192,
-      alpha: ProjectIconAlpha.opaque,
-      fallback: (source) => renderOpaqueWebIcon(
-        source,
-        size: 192,
-        contentScale: .72,
-        backgroundRed: background.$1,
-        backgroundGreen: background.$2,
-        backgroundBlue: background.$3,
-      ),
+      contentScale: .72,
+      backgroundRed: background.$1,
+      backgroundGreen: background.$2,
+      backgroundBlue: background.$3,
     )
-    ..[_file(root, 'web/icons/Icon-maskable-512.png')] = await _variant(
-      identity,
-      master,
-      client,
-      name: 'maskable-512.png',
+    ..[_file(root, 'web/icons/Icon-maskable-512.png')] = renderOpaqueWebIcon(
+      source,
       size: 512,
-      alpha: ProjectIconAlpha.opaque,
-      fallback: (source) => renderOpaqueWebIcon(
-        source,
-        size: 512,
-        contentScale: .72,
-        backgroundRed: background.$1,
-        backgroundGreen: background.$2,
-        backgroundBlue: background.$3,
-      ),
+      contentScale: .72,
+      backgroundRed: background.$1,
+      backgroundGreen: background.$2,
+      backgroundBlue: background.$3,
     );
 }
 
