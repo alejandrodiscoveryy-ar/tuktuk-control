@@ -1083,6 +1083,173 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   DateTime selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
 
+  MarketplaceWallet? _wallet;
+  bool _walletLoading = true;
+  String? _walletUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadWallet());
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.store.user?.id != _walletUserId) {
+      unawaited(_loadWallet());
+    }
+  }
+
+  Future<void> _loadWallet() async {
+    final userId = widget.store.user?.id;
+    _walletUserId = userId;
+
+    if (userId == null) {
+      if (!mounted) return;
+
+      setState(() {
+        _wallet = null;
+        _walletLoading = false;
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _walletLoading = true;
+      });
+    }
+
+    try {
+      final wallet =
+          await MarketplaceService(Supabase.instance.client).wallet();
+
+      if (!mounted || widget.store.user?.id != userId) return;
+
+      setState(() {
+        _wallet = wallet;
+        _walletLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || widget.store.user?.id != userId) return;
+
+      setState(() {
+        _wallet = null;
+        _walletLoading = false;
+      });
+    }
+  }
+
+  Widget _dashboardWalletCard(BuildContext context) {
+    final wallet = _wallet;
+
+    final reliableBreakdown = wallet != null &&
+        wallet.realAvailableBalance != null &&
+        wallet.promotionalAvailableBalance != null &&
+        ((wallet.realAvailableBalance! + wallet.promotionalAvailableBalance!) -
+                    wallet.availableBalance)
+                .abs() <=
+            0.01;
+
+    final mainValue = wallet == null
+        ? (_walletLoading ? 'Cargando...' : '—')
+        : _marketplaceMoneyLabel(
+            wallet.availableBalance,
+            wallet.currency,
+          );
+
+    String breakdownValue(double? value) {
+      if (_walletLoading) return '—';
+
+      if (!reliableBreakdown || value == null) {
+        return 'Sin desglose fiable';
+      }
+
+      return _marketplaceMoneyLabel(
+        value,
+        wallet.currency,
+      );
+    }
+
+    Widget detailRow(String label, String value) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Label('Saldo disponible'),
+              ),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: kTertiary.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: kTertiary,
+                  size: 19,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            mainValue,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          detailRow(
+            'Saldo recargado',
+            breakdownValue(wallet?.realAvailableBalance),
+          ),
+          detailRow(
+            'Ganado por referidos',
+            breakdownValue(wallet?.promotionalAvailableBalance),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final metrics = Metrics(
@@ -1095,6 +1262,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       currentOdometer: metrics.latestOdometer,
     );
     final comparison = metrics.comparisonFor(selectedMonth);
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1116,12 +1284,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: MetricCard(
-                  label: tr('Mes'),
-                  value: metrics.currentCycle.label,
-                  icon: Icons.route_outlined,
-                  color: kTertiary,
-                ),
+                child: _dashboardWalletCard(context),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1825,12 +1988,14 @@ class StatsScreen extends StatelessWidget {
                   width: width,
                   label: tr('Ingresos totales'),
                   value: money(metrics.totalEarnings),
+                  icon: Icons.account_balance_wallet_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Gastos totales'),
                   value: money(metrics.totalExpenses),
                   color: kDanger,
+                  icon: Icons.receipt_long_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
@@ -1839,20 +2004,24 @@ class StatsScreen extends StatelessWidget {
                   color: metrics.netEarnings >= 0
                       ? appPrimaryColor(context)
                       : kDanger,
+                  icon: Icons.trending_up_rounded,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Ingreso promedio por día trabajado'),
                   value: money(metrics.averageDailyEarnings),
+                  icon: Icons.calendar_today_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Eficiencia'),
                   value: '${numFmt(metrics.efficiency)} $activeCurrency/km',
+                  icon: Icons.speed_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Mejor día'),
+                  icon: Icons.emoji_events_outlined,
                   value: earningRecords.isEmpty
                       ? '-'
                       : money(earningRecords.first.earnings),
@@ -1866,12 +2035,14 @@ class StatsScreen extends StatelessWidget {
                 StatOverviewCard(
                   width: width,
                   label: tr('Mejor mes'),
+                  icon: Icons.calendar_month_outlined,
                   value: bestCycle == null ? '-' : money(bestCycle.earnings),
                   note: bestCycle?.label ?? tr('Sin datos mensuales'),
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Mantenimiento'),
+                  icon: Icons.build_outlined,
                   value: tr(maintenance.status),
                   note: maintenance.remainingKm < 0
                       ? '${tr('Vencido por')} ${numFmt(maintenance.remainingKm.abs())} km'

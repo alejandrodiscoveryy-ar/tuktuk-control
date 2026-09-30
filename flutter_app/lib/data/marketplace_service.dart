@@ -350,9 +350,10 @@ class MarketplaceWallet {
         realAvailableBalance: map['real_available_balance'] == null
             ? null
             : _marketNumber(map['real_available_balance']),
-        promotionalAvailableBalance: map['promotional_available_balance'] == null
-            ? null
-            : _marketNumber(map['promotional_available_balance']),
+        promotionalAvailableBalance:
+            map['promotional_available_balance'] == null
+                ? null
+                : _marketNumber(map['promotional_available_balance']),
         initialDepositConfirmed: _marketBool(map['initial_deposit_confirmed']),
         initialDepositConfirmedAt:
             _marketDate(map['initial_deposit_confirmed_at']),
@@ -423,12 +424,10 @@ class MarketplaceAvailableJob {
         serviceCode: _marketText(map['service_code']) ?? '',
         originText: _marketText(map['origin_text']),
         destinationText: _marketText(map['destination_text']),
-        originLat: map['origin_lat'] == null
-            ? null
-            : _marketNumber(map['origin_lat']),
-        originLon: map['origin_lon'] == null
-            ? null
-            : _marketNumber(map['origin_lon']),
+        originLat:
+            map['origin_lat'] == null ? null : _marketNumber(map['origin_lat']),
+        originLon:
+            map['origin_lon'] == null ? null : _marketNumber(map['origin_lon']),
         destinationLat: map['destination_lat'] == null
             ? null
             : _marketNumber(map['destination_lat']),
@@ -542,14 +541,13 @@ class MarketplaceJob {
   final DateTime? incidentResolvedAt;
   final String? nextAction;
 
-  MarketplaceMapPoint? get originPoint =>
-      originLat == null || originLon == null
-          ? null
-          : MarketplaceMapPoint(
-              label: originText ?? 'Recogida',
-              lat: originLat!,
-              lon: originLon!,
-            );
+  MarketplaceMapPoint? get originPoint => originLat == null || originLon == null
+      ? null
+      : MarketplaceMapPoint(
+          label: originText ?? 'Recogida',
+          lat: originLat!,
+          lon: originLon!,
+        );
 
   MarketplaceMapPoint? get destinationPoint =>
       destinationLat == null || destinationLon == null
@@ -566,12 +564,10 @@ class MarketplaceJob {
         serviceCode: _marketText(map['service_code']),
         originText: _marketText(map['origin_text']),
         destinationText: _marketText(map['destination_text']),
-        originLat: map['origin_lat'] == null
-            ? null
-            : _marketNumber(map['origin_lat']),
-        originLon: map['origin_lon'] == null
-            ? null
-            : _marketNumber(map['origin_lon']),
+        originLat:
+            map['origin_lat'] == null ? null : _marketNumber(map['origin_lat']),
+        originLon:
+            map['origin_lon'] == null ? null : _marketNumber(map['origin_lon']),
         destinationLat: map['destination_lat'] == null
             ? null
             : _marketNumber(map['destination_lat']),
@@ -620,6 +616,28 @@ class MarketplaceJob {
         incidentResolution: _marketText(map['incident_resolution']),
         incidentResolvedAt: _marketDate(map['incident_resolved_at']),
         nextAction: _marketText(map['next_driver_action']),
+      );
+}
+
+class MarketplaceJobCancellationDetail {
+  const MarketplaceJobCancellationDetail({
+    required this.jobId,
+    this.cancelledBy,
+    this.cancellationReason,
+    this.cancelledAt,
+  });
+
+  final String jobId;
+  final String? cancelledBy;
+  final String? cancellationReason;
+  final DateTime? cancelledAt;
+
+  factory MarketplaceJobCancellationDetail.fromMap(Map map) =>
+      MarketplaceJobCancellationDetail(
+        jobId: _marketText(map['job_id']) ?? '',
+        cancelledBy: _marketText(map['cancelled_by']),
+        cancellationReason: _marketText(map['cancellation_reason']),
+        cancelledAt: _marketDate(map['cancelled_at']),
       );
 }
 
@@ -894,6 +912,33 @@ class MarketplaceService {
         'list_my_marketplace_jobs',
         {'target_scope': scope},
       ).then((items) => items.map(MarketplaceJob.fromMap).toList());
+
+  Future<List<MarketplaceJobCancellationDetail>> cancellationDetails(
+    Iterable<String> jobIds,
+  ) {
+    final ids = jobIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .take(100)
+        .toList();
+
+    if (ids.isEmpty) {
+      return Future.value(
+        const <MarketplaceJobCancellationDetail>[],
+      );
+    }
+
+    return _list(
+      'list_my_marketplace_job_cancellations',
+      {'target_job_ids': ids},
+    ).then(
+      (items) => items
+          .map(MarketplaceJobCancellationDetail.fromMap)
+          .where((item) => item.jobId.isNotEmpty)
+          .toList(),
+    );
+  }
 
   Future<MarketplaceJob> accept(
     String jobId,

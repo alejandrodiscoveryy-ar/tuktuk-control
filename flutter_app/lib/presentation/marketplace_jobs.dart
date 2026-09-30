@@ -35,12 +35,14 @@ Color _marketplaceJobStatusColor(
   String status,
 ) {
   return switch (status) {
-    'accepted' => Colors.blue,
+    'accepted' => Colors.orange,
     'en_route' => Colors.orange,
-    'pickup' => kTertiary,
-    'in_progress' => appPrimaryColor(context),
+    'pickup' => Colors.orange,
+    'in_progress' => Colors.orange,
     'completed' => Colors.green,
     'settled' => Colors.green,
+    'cancelled_by_customer' => kDanger,
+    'cancelled_by_driver' => kDanger,
     'incident' => Colors.redAccent,
     _ => appMutedColor(context),
   };
@@ -54,6 +56,8 @@ IconData _marketplaceJobStatusIcon(String status) {
     'in_progress' => Icons.route_rounded,
     'completed' => Icons.task_alt_rounded,
     'settled' => Icons.task_alt_rounded,
+    'cancelled_by_customer' => Icons.cancel_outlined,
+    'cancelled_by_driver' => Icons.cancel_outlined,
     'incident' => Icons.warning_amber_rounded,
     _ => Icons.work_outline_rounded,
   };
@@ -67,6 +71,8 @@ String _marketplaceJobStatusMessage(String status) {
     'in_progress' => 'Servicio en curso hacia el destino',
     'completed' => 'Servicio finalizado · pendiente de liquidación',
     'settled' => 'Servicio completado y liquidado',
+    'cancelled_by_customer' => 'El cliente canceló este servicio',
+    'cancelled_by_driver' => 'El conductor canceló este servicio',
     'incident' => 'Hay una incidencia abierta en este servicio',
     _ => 'Estado actual del servicio',
   };
@@ -151,12 +157,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
   final Map<String, MarketplaceCustomerContact> _contacts = {};
+  final Map<String, MarketplaceJobCancellationDetail> _cancellationDetails = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 6,
+      length: 5,
       vsync: this,
     );
     _service = MarketplaceService(Supabase.instance.client);
@@ -240,10 +247,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       if (!mounted) return;
 
-      if (_active.isNotEmpty && _tabController.index == 0) {
-        _tabController.animateTo(1);
-      }
-
       await _loadAvailable();
     } catch (_) {
       if (!mounted) return;
@@ -303,6 +306,28 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     try {
       final jobs = await _service.jobs(scope);
 
+      List<MarketplaceJobCancellationDetail> cancellationDetails = const [];
+
+      if (scope == 'history') {
+        final cancelledIds = jobs
+            .where(
+              (job) =>
+                  job.status == 'cancelled_by_driver' ||
+                  job.status == 'cancelled_by_customer',
+            )
+            .map((job) => job.id)
+            .toList();
+
+        if (cancelledIds.isNotEmpty) {
+          try {
+            cancellationDetails =
+                await _service.cancellationDetails(cancelledIds);
+          } catch (_) {
+            cancellationDetails = const [];
+          }
+        }
+      }
+
       if (!mounted) return;
 
       setState(() {
@@ -310,17 +335,30 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           case 'active':
             _active = jobs;
             break;
+
           case 'scheduled':
             _scheduled = jobs;
             break;
+
           case 'history':
             _history = jobs;
+            _cancellationDetails
+              ..clear()
+              ..addEntries(
+                cancellationDetails.map(
+                  (detail) => MapEntry(detail.jobId, detail),
+                ),
+              );
             break;
         }
 
         _loadingScopes.remove(scope);
         _scopeErrors.remove(scope);
       });
+
+      if (scope == 'active' && jobs.isEmpty && mounted) {
+        await _loadAvailable();
+      }
     } catch (_) {
       if (!mounted) return;
 
@@ -358,32 +396,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (vehicleId == null || _acceptingJobId != null) return;
 
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Aceptar trabajo'),
-            content: Text(
-              '¿Quieres aceptar este trabajo por '
-              '${_marketplaceMoneyLabel(job.finalPrice, job.currency)}?\n\n'
-              'TUKTUK verificará nuevamente tu elegibilidad y asignará '
-              'el trabajo únicamente si sigue disponible.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Aceptar'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!confirmed || !mounted) return;
-
     setState(() => _acceptingJobId = job.id);
 
     final key = _acceptKeys[job.id] ?? _marketplaceUuidV4();
@@ -413,16 +425,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       if (!mounted) return;
 
-      if (_active.any((item) => item.id == job.id)) {
+      if (_scheduled.any((item) => item.id == job.id)) {
         _tabController.animateTo(1);
-      } else if (_scheduled.any((item) => item.id == job.id)) {
-        _tabController.animateTo(2);
       }
-
-      toast(
-        context,
-        'Trabajo aceptado.',
-      );
     } catch (_) {
       if (mounted) {
         toast(
@@ -432,7 +437,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         );
       }
     } finally {
-      if (mounted) setState(() => _acceptingJobId = null);
+      if (mounted) {
+        setState(() => _acceptingJobId = null);
+      }
     }
   }
 
@@ -508,10 +515,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       await _refreshAfterJobMutation();
-
-      if (!mounted) return;
-
-      toast(context, 'Estado del trabajo actualizado.');
     } catch (_) {
       if (!mounted) return;
 
@@ -530,40 +533,194 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _cancelJob(MarketplaceJob job) async {
     if (_busyJobId != null || !_marketplaceJobCanDriverCancel(job)) return;
 
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Cancelar trabajo'),
-            content: const Text(
-              '¿Seguro que necesitas cancelar este trabajo? '
-              'La cancelación quedará registrada en TUKTUK.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('No cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Sí, cancelar'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    const reasons = [
+      'Cliente no se presentó',
+      'Problema con el vehículo',
+      'No puedo realizar el servicio',
+      'Dirección o punto de recogida incorrecto',
+      'Acuerdo con el cliente',
+      'Otro',
+    ];
 
-    if (!confirmed || !mounted) return;
+    final otherController = TextEditingController();
+    String? selectedReason;
+    String? validationMessage;
+
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .72),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final isOther = selectedReason == 'Otro';
+
+            return SafeArea(
+              top: false,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  14,
+                  20,
+                  20 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                    bottom: Radius.circular(22),
+                  ),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Cancelar viaje',
+                        style: TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Selecciona el motivo. Quedará registrado '
+                        'en el historial del servicio.',
+                        style: TextStyle(
+                          color: appMutedColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Motivo de cancelación',
+                        ),
+                        items: reasons
+                            .map(
+                              (reason) => DropdownMenuItem(
+                                value: reason,
+                                child: Text(reason),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setSheetState(() {
+                            selectedReason = value;
+                            validationMessage = null;
+                          });
+                        },
+                      ),
+                      if (isOther) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: otherController,
+                          maxLines: 3,
+                          maxLength: 180,
+                          decoration: const InputDecoration(
+                            labelText: 'Explica el motivo',
+                            alignLabelWithHint: true,
+                          ),
+                          onChanged: (_) {
+                            if (validationMessage != null) {
+                              setSheetState(() {
+                                validationMessage = null;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                      if (validationMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          validationMessage!,
+                          style: const TextStyle(
+                            color: kDanger,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(sheetContext).pop(),
+                              child: const Text('Volver'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: kDanger,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () {
+                                final selected = selectedReason;
+
+                                if (selected == null) {
+                                  setSheetState(() {
+                                    validationMessage = 'Selecciona el motivo.';
+                                  });
+                                  return;
+                                }
+
+                                final resolved = selected == 'Otro'
+                                    ? otherController.text.trim()
+                                    : selected;
+
+                                if (resolved.isEmpty) {
+                                  setSheetState(() {
+                                    validationMessage =
+                                        'Escribe el motivo de cancelación.';
+                                  });
+                                  return;
+                                }
+
+                                Navigator.of(sheetContext).pop(resolved);
+                              },
+                              child: const Text('Cancelar viaje'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    otherController.dispose();
+
+    if (reason == null || reason.trim().isEmpty || !mounted) return;
 
     setState(() => _busyJobId = job.id);
 
-    const reason = 'Cancelado por el conductor desde TUKTUK';
     final keyName = '${job.id}:cancel';
     final key = _operationKey(job.id, 'cancel');
 
     try {
       await _service.cancel(
         job.id,
-        reason,
+        reason.trim(),
         key,
       );
 
@@ -572,10 +729,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       await _refreshAfterJobMutation();
-
-      if (!mounted) return;
-
-      toast(context, 'Trabajo cancelado.');
     } catch (_) {
       if (!mounted) return;
 
@@ -883,6 +1036,56 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
+  Widget _buildServiceTab(BuildContext context) {
+    if (_active.isNotEmpty) {
+      return _buildAssignedTab(
+        context,
+        scope: 'active',
+        icon: Icons.route_outlined,
+        emptyTitle: 'No tienes servicios activos',
+        emptyMessage: 'Las nuevas solicitudes aparecerán aquí.',
+      );
+    }
+
+    if (_scheduled.isNotEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          GlassCard(
+            child: Column(
+              children: [
+                Icon(
+                  Icons.event_available_outlined,
+                  size: 42,
+                  color: Colors.blue,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Tienes un servicio programado',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Consulta los detalles en Agenda.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: appMutedColor(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return _buildAvailableTab(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -892,14 +1095,26 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           controller: _tabController,
           isScrollable: true,
           tabs: const [
-            Tab(icon: Icon(Icons.notifications_none_outlined), text: 'Ofertas'),
-            Tab(icon: Icon(Icons.work_outline), text: 'Activos'),
-            Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
-            Tab(icon: Icon(Icons.history), text: 'Hist.'),
-            Tab(icon: Icon(Icons.verified_user_outlined), text: 'Activar'),
             Tab(
-                icon: Icon(Icons.account_balance_wallet_outlined),
-                text: 'Saldo'),
+              icon: Icon(Icons.route_outlined),
+              text: 'Servicio',
+            ),
+            Tab(
+              icon: Icon(Icons.event_outlined),
+              text: 'Agenda',
+            ),
+            Tab(
+              icon: Icon(Icons.history),
+              text: 'Hist.',
+            ),
+            Tab(
+              icon: Icon(Icons.verified_user_outlined),
+              text: 'Activar',
+            ),
+            Tab(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              text: 'Saldo',
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -907,15 +1122,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildAvailableTab(context),
-              _buildAssignedTab(
-                context,
-                scope: 'active',
-                icon: Icons.route_outlined,
-                emptyTitle: 'No tienes trabajos activos',
-                emptyMessage:
-                    'Cuando aceptes un servicio para ahora aparecerá aquí.',
-              ),
+              _buildServiceTab(context),
               _buildAssignedTab(
                 context,
                 scope: 'scheduled',
@@ -1193,6 +1400,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _AssignedJobCard(
                     job: job,
+                    scope: scope,
+                    cancellationDetail: _cancellationDetails[job.id],
                     busy: _busyJobId == job.id,
                     showMap: scope == 'active',
                     onContact:
@@ -1218,16 +1427,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 class _AssignedJobCard extends StatelessWidget {
   const _AssignedJobCard({
     required this.job,
+    required this.scope,
     required this.busy,
     required this.showMap,
+    this.cancellationDetail,
     this.onContact,
     this.onAdvance,
     this.onCancel,
   });
 
   final MarketplaceJob job;
+  final String scope;
   final bool busy;
   final bool showMap;
+  final MarketplaceJobCancellationDetail? cancellationDetail;
   final VoidCallback? onContact;
   final VoidCallback? onAdvance;
   final VoidCallback? onCancel;
@@ -1236,20 +1449,48 @@ class _AssignedJobCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final origin =
         job.originText?.trim().isNotEmpty == true ? job.originText! : 'Origen';
+
     final destination = job.destinationText?.trim().isNotEmpty == true
         ? job.destinationText!
         : 'Destino';
 
-    final lastEvent = job.completedAt ??
+    final cancelled = job.status == 'cancelled_by_driver' ||
+        job.status == 'cancelled_by_customer';
+
+    final completed = job.status == 'completed' || job.status == 'settled';
+
+    final executing = job.status == 'accepted' ||
+        job.status == 'en_route' ||
+        job.status == 'pickup' ||
+        job.status == 'in_progress';
+
+    final statusColor = scope == 'scheduled'
+        ? Colors.blue
+        : cancelled
+            ? kDanger
+            : completed
+                ? Colors.green
+                : executing
+                    ? Colors.orange
+                    : _marketplaceJobStatusColor(
+                        context,
+                        job.status,
+                      );
+
+    final statusLabel = cancelled
+        ? cancellationDetail?.cancelledBy == 'customer'
+            ? 'Cancelado por el cliente'
+            : cancellationDetail?.cancelledBy == 'driver'
+                ? 'Cancelado por el conductor'
+                : _marketplaceJobStatusLabel(job.status)
+        : _marketplaceJobStatusLabel(job.status);
+
+    final lastEvent = cancellationDetail?.cancelledAt ??
+        job.completedAt ??
         job.cancelledAt ??
         job.acceptedAt ??
         job.updatedAt ??
         job.createdAt;
-
-    final statusColor = _marketplaceJobStatusColor(
-      context,
-      job.status,
-    );
 
     final progressIndex = _marketplaceJobProgressIndex(job.status);
 
@@ -1288,10 +1529,11 @@ class _AssignedJobCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
+              color: statusColor.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: statusColor.withValues(alpha: 0.55),
+                color: statusColor.withValues(alpha: .60),
+                width: 1.2,
               ),
             ),
             child: Row(
@@ -1300,7 +1542,7 @@ class _AssignedJobCard extends StatelessWidget {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.18),
+                    color: statusColor.withValues(alpha: .18),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -1314,7 +1556,7 @@ class _AssignedJobCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _marketplaceJobStatusLabel(job.status),
+                        statusLabel,
                         style: TextStyle(
                           color: statusColor,
                           fontSize: 16,
@@ -1335,7 +1577,7 @@ class _AssignedJobCard extends StatelessWidget {
               ],
             ),
           ),
-          if (job.status != 'incident') ...[
+          if (scope != 'history' && job.status != 'incident') ...[
             const SizedBox(height: 14),
             Row(
               children: List.generate(4, (index) {
@@ -1357,7 +1599,7 @@ class _AssignedJobCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: active
                               ? statusColor
-                              : appMutedColor(context).withValues(alpha: 0.15),
+                              : appMutedColor(context).withValues(alpha: .15),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -1443,7 +1685,29 @@ class _AssignedJobCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          if (lastEvent != null) ...[
+          if (cancelled) ...[
+            const SizedBox(height: 10),
+            Text(
+              cancellationDetail?.cancellationReason?.trim().isNotEmpty == true
+                  ? 'Motivo: ${cancellationDetail!.cancellationReason}'
+                  : 'Motivo no disponible',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (cancellationDetail?.cancelledAt != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Fecha: ${_marketplaceJobDateLabel(
+                  cancellationDetail!.cancelledAt,
+                )}',
+                style: TextStyle(
+                  color: appMutedColor(context),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ] else if (lastEvent != null) ...[
             const SizedBox(height: 6),
             Text(
               'Actualizado: ${_marketplaceJobDateLabel(lastEvent)}',
@@ -1510,7 +1774,9 @@ class _AssignedJobCard extends StatelessWidget {
                   if (onContact != null)
                     OutlinedButton.icon(
                       onPressed: busy ? null : onContact,
-                      icon: const Icon(Icons.contact_phone_rounded),
+                      icon: const Icon(
+                        Icons.contact_phone_rounded,
+                      ),
                       label: const Text('Contactar cliente'),
                     ),
                   if (onCancel != null)
