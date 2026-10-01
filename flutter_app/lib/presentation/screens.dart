@@ -1241,7 +1241,7 @@ class _LiquidGlassNavigation extends StatelessWidget {
                                 photoUrl: profilePhotoUrl!,
                                 selected: true,
                               ),
-                        label: tr('M├ís'),
+                        label: tr('Más'),
                       ),
                     ],
                   ),

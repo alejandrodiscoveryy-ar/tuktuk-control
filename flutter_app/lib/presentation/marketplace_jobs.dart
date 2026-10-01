@@ -146,6 +146,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _error;
   String? _acceptingJobId;
   String? _busyJobId;
+  bool _updatingAvailability = false;
+  MarketplaceWorkAccess? _workAccess;
 
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
@@ -155,7 +157,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _service = MarketplaceService(Supabase.instance.client);
     unawaited(_load());
   }
@@ -183,6 +185,39 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     return null;
+  }
+
+  bool _vehicleReadyForWork(MarketplaceVehicle? vehicle) {
+    final access = _workAccess;
+
+    return vehicle != null &&
+        access != null &&
+        access.onboardingComplete &&
+        access.driverActive &&
+        access.suiteActive &&
+        vehicle.isActive &&
+        vehicle.marketplaceStatus == 'active';
+  }
+
+  Future<void> _loadWorkAccess(String? vehicleId) async {
+    if (vehicleId == null) {
+      if (!mounted) return;
+
+      setState(() => _workAccess = null);
+      return;
+    }
+
+    try {
+      final access = await _service.access(vehicleId);
+
+      if (!mounted || vehicleId != _selectedVehicleId) return;
+
+      setState(() => _workAccess = access);
+    } catch (_) {
+      if (!mounted || vehicleId != _selectedVehicleId) return;
+
+      setState(() => _workAccess = null);
+    }
   }
 
   Future<void> _load() async {
@@ -231,6 +266,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _loading = false;
       });
 
+      await _loadWorkAccess(vehicleId);
+
       await Future.wait([
         _loadScope('active'),
         _loadScope('scheduled'),
@@ -270,6 +307,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       setState(() => _available = const []);
+      _marketplaceAvailableJobCount.value = 0;
+      return;
+    }
+
+    final vehicle = _vehicleById(vehicleId);
+
+    if (!_vehicleReadyForWork(vehicle) || vehicle?.isAvailable != true) {
+      if (!mounted) return;
+
+      setState(() {
+        _available = const [];
+        _error = null;
+      });
+
       _marketplaceAvailableJobCount.value = 0;
       return;
     }
@@ -387,11 +438,96 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _selectedVehicleId = vehicleId;
       _available = const [];
       _error = null;
+      _workAccess = null;
     });
 
     _marketplaceAvailableJobCount.value = 0;
 
+    await _loadWorkAccess(vehicleId);
     await _loadAvailable();
+  }
+
+  Future<void> _setAcceptingJobs(bool acceptingJobs) async {
+    final vehicle = _vehicleById(_selectedVehicleId);
+
+    if (vehicle == null ||
+        !_vehicleReadyForWork(vehicle) ||
+        _updatingAvailability) {
+      return;
+    }
+
+    setState(() => _updatingAvailability = true);
+
+    try {
+      final updated = await _service.setAcceptingJobs(
+        vehicle.id,
+        acceptingJobs,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _onboarding = updated;
+        _error = null;
+
+        if (!acceptingJobs) {
+          _available = const [];
+        }
+      });
+
+      await _loadWorkAccess(vehicle.id);
+
+      if (!mounted) return;
+
+      if (acceptingJobs) {
+        toast(
+          context,
+          'Estás trabajando. Ya puedes recibir nuevas solicitudes.',
+        );
+
+        await _loadAvailable();
+      } else {
+        _marketplaceAvailableJobCount.value = 0;
+
+        toast(
+          context,
+          'Estás descansando. No recibirás nuevas solicitudes.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          acceptingJobs
+              ? 'No pudimos activar Trabajando. Inténtalo de nuevo.'
+              : 'No pudimos activar Descansando. Inténtalo de nuevo.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _updatingAvailability = false);
+      }
+    }
+  }
+
+  Future<void> _openActivation() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(title: const Text('Activación de Trabajos')),
+          body: MarketplaceOnboardingScreen(
+            store: widget.store,
+            managementSection: MarketplaceManagementSection.activation,
+            initialVehicleId: _selectedVehicleId,
+            onManagementChanged: _onManagementChanged,
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    await _load();
   }
 
   Future<void> _acceptJob(MarketplaceAvailableJob job) async {
@@ -455,15 +591,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   Future<void> _refreshAfterJobMutation() async {
-    await Future.wait([
-      _loadScope('active'),
-      _loadScope('scheduled'),
-      _loadScope('history'),
-    ]);
-
-    if (!mounted) return;
-
-    await _loadAvailable();
+    await _load();
   }
 
   Future<void> _advanceJob(MarketplaceJob job) async {
@@ -475,8 +603,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     var confirmed = true;
 
     if (action == 'complete_service') {
-      confirmed =
-          await showDialog<bool>(
+      confirmed = await showDialog<bool>(
             context: context,
             builder: (dialogContext) => AlertDialog(
               title: const Text('Completar servicio'),
@@ -772,9 +899,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   Future<void> _showContactSheet(MarketplaceCustomerContact contact) {
-    final name = contact.name?.trim().isNotEmpty == true
-        ? contact.name!
-        : 'Cliente';
+    final name =
+        contact.name?.trim().isNotEmpty == true ? contact.name! : 'Cliente';
     final phone = contact.phone?.trim();
     final initial = name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase();
 
@@ -1025,25 +1151,175 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
+  Widget _buildVehicleAvailabilityCard(BuildContext context) {
+    final onboarding = _onboarding;
+
+    if (onboarding == null || onboarding.vehicles.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final selectedVehicle = _vehicleById(_selectedVehicleId);
+
+    if (selectedVehicle == null) {
+      return const SizedBox.shrink();
+    }
+
+    final vehicleReady = _vehicleReadyForWork(selectedVehicle);
+    final acceptingJobs = selectedVehicle.acceptingJobs;
+
+    final vehicleName = selectedVehicle.name?.trim().isNotEmpty == true
+        ? selectedVehicle.name!.trim()
+        : selectedVehicle.id;
+
+    final statusColor =
+        acceptingJobs ? appPrimaryColor(context) : appMutedColor(context);
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: appPrimaryColor(context).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.directions_car_filled_rounded,
+                  color: appPrimaryColor(context),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Vehículo activo',
+                      style: TextStyle(
+                        color: appMutedColor(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      vehicleName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (vehicleReady)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      acceptingJobs ? 'Trabajando' : 'Descansando',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Switch.adaptive(
+                      value: acceptingJobs,
+                      onChanged: _updatingAvailability
+                          ? null
+                          : (value) {
+                              unawaited(_setAcceptingJobs(value));
+                            },
+                    ),
+                  ],
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: _openActivation,
+                  icon: const Icon(
+                    Icons.verified_user_outlined,
+                    size: 17,
+                  ),
+                  label: const Text('Activar'),
+                ),
+            ],
+          ),
+          if (onboarding.vehicles.length > 1) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedVehicleId,
+              isExpanded: true,
+              items: onboarding.vehicles
+                  .map(
+                    (vehicle) => DropdownMenuItem<String>(
+                      value: vehicle.id,
+                      child: Text(
+                        vehicle.name?.trim().isNotEmpty == true
+                            ? vehicle.name!
+                            : vehicle.id,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _acceptingJobId == null && !_updatingAvailability
+                  ? _changeVehicle
+                  : null,
+              decoration: InputDecoration(
+                labelText: 'Cambiar vehículo',
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ],
+          if (!vehicleReady) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Completa la activación para poder recibir solicitudes.',
+              style: TextStyle(
+                color: appMutedColor(context),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildServiceTab(BuildContext context) {
+    final Widget content;
+
     if (_active.isNotEmpty) {
-      return _buildAssignedTab(
+      content = _buildAssignedTab(
         context,
         scope: 'active',
         icon: Icons.route_outlined,
         emptyTitle: 'No tienes servicios activos',
         emptyMessage: 'Las nuevas solicitudes aparecerán aquí.',
       );
-    }
-
-    if (_scheduled.isNotEmpty) {
-      return ListView(
+    } else if (_scheduled.isNotEmpty) {
+      content = ListView(
         padding: const EdgeInsets.all(16),
         children: [
           GlassCard(
             child: Column(
               children: [
-                Icon(
+                const Icon(
                   Icons.event_available_outlined,
                   size: 42,
                   color: Colors.blue,
@@ -1052,22 +1328,42 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 const Text(
                   'Tienes un servicio programado',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Consulta los detalles en Agenda.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: appMutedColor(context)),
+                  style: TextStyle(
+                    color: appMutedColor(context),
+                  ),
                 ),
               ],
             ),
           ),
         ],
       );
+    } else {
+      content = _buildAvailableTab(context);
     }
 
-    return _buildAvailableTab(context);
+    final onboarding = _onboarding;
+    final showVehicleControl =
+        !_loading && onboarding != null && onboarding.vehicles.isNotEmpty;
+
+    return Column(
+      children: [
+        if (showVehicleControl)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _buildVehicleAvailabilityCard(context),
+          ),
+        Expanded(child: content),
+      ],
+    );
   }
 
   @override
@@ -1082,7 +1378,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             Tab(icon: Icon(Icons.route_outlined), text: 'Servicio'),
             Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
             Tab(icon: Icon(Icons.history), text: 'Hist.'),
-            Tab(icon: Icon(Icons.verified_user_outlined), text: 'Activar'),
             Tab(
               icon: Icon(Icons.account_balance_wallet_outlined),
               text: 'Saldo',
@@ -1110,13 +1405,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 emptyTitle: 'Tu historial está vacío',
                 emptyMessage:
                     'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
-              ),
-              MarketplaceOnboardingScreen(
-                key: ValueKey('activation-$_selectedVehicleId'),
-                store: widget.store,
-                managementSection: MarketplaceManagementSection.activation,
-                initialVehicleId: _selectedVehicleId,
-                onManagementChanged: _onManagementChanged,
               ),
               MarketplaceOnboardingScreen(
                 key: ValueKey(
@@ -1181,150 +1469,53 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     final selectedVehicle = _vehicleById(_selectedVehicleId);
 
-    final vehicleReady = selectedVehicle?.onboardingComplete == true;
-
-    final vehicleName = selectedVehicle == null
-        ? 'Sin vehículo'
-        : (selectedVehicle.name?.trim().isNotEmpty == true
-              ? selectedVehicle.name!.trim()
-              : selectedVehicle.id);
-
-    final vehicleStatusColor = vehicleReady
-        ? appPrimaryColor(context)
-        : Colors.amber;
+    final vehicleReady = _vehicleReadyForWork(selectedVehicle);
+    final acceptingJobs = selectedVehicle?.acceptingJobs == true;
 
     return RefreshIndicator(
-      onRefresh: _loadAvailable,
+      onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: appPrimaryColor(context).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        Icons.directions_car_filled_rounded,
-                        color: appPrimaryColor(context),
-                        size: 22,
-                      ),
+          if (vehicleReady && !acceptingJobs) ...[
+            const SizedBox(height: 12),
+            GlassCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: appMutedColor(context).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Vehículo activo',
-                            style: TextStyle(
-                              color: appMutedColor(context),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            vehicleName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (selectedVehicle != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: vehicleStatusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: vehicleStatusColor.withValues(alpha: 0.28),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              vehicleReady
-                                  ? Icons.check_circle_rounded
-                                  : Icons.warning_amber_rounded,
-                              size: 14,
-                              color: vehicleStatusColor,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              vehicleReady ? 'Listo' : 'Pendiente',
-                              style: TextStyle(
-                                color: vehicleStatusColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-                if (onboarding.vehicles.length > 1) ...[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedVehicleId,
-                    isExpanded: true,
-                    items: onboarding.vehicles
-                        .map(
-                          (vehicle) => DropdownMenuItem<String>(
-                            value: vehicle.id,
-                            child: Text(
-                              vehicle.name?.trim().isNotEmpty == true
-                                  ? vehicle.name!
-                                  : vehicle.id,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _acceptingJobId == null ? _changeVehicle : null,
-                    decoration: InputDecoration(
-                      labelText: 'Cambiar vehículo',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                    child: Icon(
+                      Icons.bedtime_outlined,
+                      color: appMutedColor(context),
+                      size: 20,
                     ),
                   ),
-                ] else if (!vehicleReady) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Este vehículo todavía tiene requisitos pendientes.',
-                    style: TextStyle(
-                      color: appMutedColor(context),
-                      fontSize: 12,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Estás descansando. Activa Trabajando cuando quieras '
+                        'recibir nuevas solicitudes.',
+                        style: TextStyle(
+                          color: appMutedColor(context),
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          if (_error != null) ...[
+          ] else if (_error != null) ...[
             const SizedBox(height: 12),
             GlassCard(
               child: Row(
@@ -1361,7 +1552,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             ),
           ],
           const SizedBox(height: 12),
-          if (_error == null && _available.isEmpty)
+          if (vehicleReady &&
+              acceptingJobs &&
+              _error == null &&
+              _available.isEmpty)
             GlassCard(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -1397,7 +1591,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 ),
               ),
             )
-          else if (_available.isNotEmpty)
+          else if (vehicleReady && acceptingJobs && _available.isNotEmpty)
             ..._available.map(
               (job) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -1489,16 +1683,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     cancellationDetail: _cancellationDetails[job.id],
                     busy: _busyJobId == job.id,
                     showMap: scope == 'active',
-                    onContact: scope == 'history'
-                        ? null
-                        : () => _contactJob(job),
-                    onAdvance:
-                        scope == 'active' &&
+                    onContact:
+                        scope == 'history' ? null : () => _contactJob(job),
+                    onAdvance: scope == 'active' &&
                             _marketplaceJobActionLabel(job.nextAction) != null
                         ? () => _advanceJob(job)
                         : null,
-                    onCancel:
-                        scope != 'history' &&
+                    onCancel: scope != 'history' &&
                             _marketplaceJobCanDriverCancel(job)
                         ? () => _cancelJob(job)
                         : null,
@@ -1535,22 +1726,19 @@ class _AssignedJobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final origin = job.originText?.trim().isNotEmpty == true
-        ? job.originText!
-        : 'Origen';
+    final origin =
+        job.originText?.trim().isNotEmpty == true ? job.originText! : 'Origen';
 
     final destination = job.destinationText?.trim().isNotEmpty == true
         ? job.destinationText!
         : 'Destino';
 
-    final cancelled =
-        job.status == 'cancelled_by_driver' ||
+    final cancelled = job.status == 'cancelled_by_driver' ||
         job.status == 'cancelled_by_customer';
 
     final completed = job.status == 'completed' || job.status == 'settled';
 
-    final executing =
-        job.status == 'accepted' ||
+    final executing = job.status == 'accepted' ||
         job.status == 'en_route' ||
         job.status == 'pickup' ||
         job.status == 'in_progress';
@@ -1558,23 +1746,22 @@ class _AssignedJobCard extends StatelessWidget {
     final statusColor = scope == 'scheduled'
         ? Colors.blue
         : cancelled
-        ? kDanger
-        : completed
-        ? Colors.green
-        : executing
-        ? Colors.orange
-        : _marketplaceJobStatusColor(context, job.status);
+            ? kDanger
+            : completed
+                ? Colors.green
+                : executing
+                    ? Colors.orange
+                    : _marketplaceJobStatusColor(context, job.status);
 
     final statusLabel = cancelled
         ? cancellationDetail?.cancelledBy == 'customer'
-              ? 'Cancelado por el cliente'
-              : cancellationDetail?.cancelledBy == 'driver'
-              ? 'Cancelado por el conductor'
-              : _marketplaceJobStatusLabel(job.status)
+            ? 'Cancelado por el cliente'
+            : cancellationDetail?.cancelledBy == 'driver'
+                ? 'Cancelado por el conductor'
+                : _marketplaceJobStatusLabel(job.status)
         : _marketplaceJobStatusLabel(job.status);
 
-    final lastEvent =
-        cancellationDetail?.cancelledAt ??
+    final lastEvent = cancellationDetail?.cancelledAt ??
         job.completedAt ??
         job.cancelledAt ??
         job.acceptedAt ??
@@ -1700,9 +1887,8 @@ class _AssignedJobCard extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 9,
-                          fontWeight: active
-                              ? FontWeight.w800
-                              : FontWeight.w500,
+                          fontWeight:
+                              active ? FontWeight.w800 : FontWeight.w500,
                           color: active ? statusColor : appMutedColor(context),
                         ),
                       ),
@@ -1870,9 +2056,8 @@ class _AvailableJobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final origin = job.originText?.trim().isNotEmpty == true
-        ? job.originText!
-        : 'Origen';
+    final origin =
+        job.originText?.trim().isNotEmpty == true ? job.originText! : 'Origen';
     final destination = job.destinationText?.trim().isNotEmpty == true
         ? job.destinationText!
         : 'Destino';

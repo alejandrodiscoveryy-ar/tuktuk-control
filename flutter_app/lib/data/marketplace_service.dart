@@ -97,6 +97,7 @@ class MarketplaceVehicle {
     required this.onboardingComplete,
     required this.isActive,
     required this.isAvailable,
+    this.acceptingJobs = true,
     this.name,
     this.registration,
     this.categoryCode,
@@ -138,6 +139,7 @@ class MarketplaceVehicle {
   final bool onboardingComplete;
   final bool isActive;
   final bool isAvailable;
+  final bool acceptingJobs;
 
   factory MarketplaceVehicle.fromMap(Map map) => MarketplaceVehicle(
     id: _marketText(map['vehicle_id'] ?? map['id']) ?? '',
@@ -174,6 +176,9 @@ class MarketplaceVehicle {
     onboardingComplete: _marketBool(map['onboarding_complete']),
     isActive: _marketBool(map['is_active']),
     isAvailable: _marketBool(map['is_available']),
+    acceptingJobs: map.containsKey('accepting_jobs')
+        ? _marketBool(map['accepting_jobs'])
+        : true,
   );
 }
 
@@ -794,7 +799,7 @@ class MarketplaceService {
   }
 
   Future<MarketplaceOnboarding> onboarding() =>
-      _one('get_my_marketplace_onboarding').then(MarketplaceOnboarding.fromMap);
+      _one('get_my_marketplace_onboarding_v2').then(MarketplaceOnboarding.fromMap);
 
   Future<MarketplaceOnboarding> saveDriver(Map<String, dynamic> params) => _one(
     'save_my_marketplace_driver_onboarding',
@@ -806,6 +811,17 @@ class MarketplaceService {
         'save_my_marketplace_vehicle_onboarding',
         params,
       ).then(MarketplaceOnboarding.fromMap);
+
+  Future<MarketplaceOnboarding> setAcceptingJobs(
+    String vehicleId,
+    bool acceptingJobs,
+  ) => _one(
+    'set_my_marketplace_accepting_jobs',
+    {
+      'target_vehicle_id': vehicleId,
+      'target_accepting_jobs': acceptingJobs,
+    },
+  ).then(MarketplaceOnboarding.fromMap);
 
   /// Creates an isolated Marketplace draft. Does not write to Control/Hive.
   Future<Map<String, dynamic>> createVehicle({
