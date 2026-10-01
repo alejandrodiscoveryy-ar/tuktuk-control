@@ -141,10 +141,10 @@ class _ProjectIdentityImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget fallback() => Image.asset(
-          fallbackAsset,
-          fit: BoxFit.contain,
-          semanticLabel: semanticLabel,
-        );
+      fallbackAsset,
+      fit: BoxFit.contain,
+      semanticLabel: semanticLabel,
+    );
     final url = remoteUrl;
     if (url == null) return fallback();
     return Image.network(
@@ -307,16 +307,8 @@ class AppBackground extends StatelessWidget {
           colors: blueAccent
               ? const [Color(0xFF0A1422), Color(0xFF080D14), Color(0xFF101827)]
               : dark
-                  ? const [
-                      Color(0xFF0B1718),
-                      Color(0xFF080D14),
-                      Color(0xFF101827)
-                    ]
-                  : const [
-                      Color(0xFFE8F0F8),
-                      Color(0xFFF3F7FB),
-                      Color(0xFFDDE8F4)
-                    ],
+              ? const [Color(0xFF0B1718), Color(0xFF080D14), Color(0xFF101827)]
+              : const [Color(0xFFE8F0F8), Color(0xFFF3F7FB), Color(0xFFDDE8F4)],
         ),
       ),
       child: child,
@@ -448,8 +440,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                                     height: 18,
                                                     child:
                                                         CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
+                                                          strokeWidth: 2,
+                                                        ),
                                                   )
                                                 : const Icon(
                                                     Icons.login_rounded,
@@ -591,14 +583,15 @@ class _AppShellState extends State<AppShell> {
           );
         }
         _lastAuthenticatedUserId = authenticatedUserId;
-        final isSynchronized = store.user != null &&
+        final isSynchronized =
+            store.user != null &&
             store.pendingSyncCount == 0 &&
             store.lastSyncAt != null;
         final syncColor = store.syncing
             ? kTertiary
             : isSynchronized
-                ? appPrimaryColor(context)
-                : kDanger;
+            ? appPrimaryColor(context)
+            : kDanger;
         final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
           DashboardScreen(store: store),
@@ -652,8 +645,9 @@ class _AppShellState extends State<AppShell> {
                 tooltip: tr('Sincronizar'),
                 color: syncColor,
                 disabledColor: syncColor,
-                onPressed:
-                    store.user == null || store.syncing ? null : store.syncNow,
+                onPressed: store.user == null || store.syncing
+                    ? null
+                    : store.syncNow,
                 icon: store.syncing
                     ? SizedBox(
                         width: 18,
@@ -1123,8 +1117,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     try {
-      final wallet =
-          await MarketplaceService(Supabase.instance.client).wallet();
+      final wallet = await MarketplaceService(
+        Supabase.instance.client,
+      ).wallet();
 
       if (!mounted || widget.store.user?.id != userId) return;
 
@@ -1145,7 +1140,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _dashboardWalletCard(BuildContext context) {
     final wallet = _wallet;
 
-    final reliableBreakdown = wallet != null &&
+    final reliableBreakdown =
+        wallet != null &&
         wallet.realAvailableBalance != null &&
         wallet.promotionalAvailableBalance != null &&
         ((wallet.realAvailableBalance! + wallet.promotionalAvailableBalance!) -
@@ -1155,10 +1151,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final mainValue = wallet == null
         ? (_walletLoading ? 'Cargando...' : '—')
-        : _marketplaceMoneyLabel(
-            wallet.availableBalance,
-            wallet.currency,
-          );
+        : _marketplaceMoneyLabel(wallet.availableBalance, wallet.currency);
 
     String breakdownValue(double? value) {
       if (_walletLoading) return '—';
@@ -1167,10 +1160,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return 'Sin desglose fiable';
       }
 
-      return _marketplaceMoneyLabel(
-        value,
-        wallet.currency,
-      );
+      return _marketplaceMoneyLabel(value, wallet.currency);
     }
 
     Widget detailRow(String label, String value) {
@@ -1211,9 +1201,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Label('Saldo disponible'),
-              ),
+              const Expanded(child: Label('Saldo disponible')),
               Container(
                 width: 34,
                 height: 34,
@@ -1232,15 +1220,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 10),
           Text(
             mainValue,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
-          detailRow(
-            'Recargado',
-            breakdownValue(wallet?.realAvailableBalance),
-          ),
+          detailRow('Recargado', breakdownValue(wallet?.realAvailableBalance)),
           detailRow(
             'Referido',
             breakdownValue(wallet?.promotionalAvailableBalance),
@@ -1283,9 +1265,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: _dashboardWalletCard(context),
-              ),
+              Expanded(child: _dashboardWalletCard(context)),
               const SizedBox(width: 12),
               Expanded(
                 child: MetricCard(
@@ -1505,19 +1485,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: FilledButton.icon(
                     onPressed: widget.store.canWrite
                         ? () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => Scaffold(
-                                  appBar: AppBar(
-                                    title: Text(tr('Nuevo mantenimiento')),
-                                  ),
-                                  body: MaintenanceFormScreen(
-                                    store: widget.store,
-                                    onSaved: widget.onSaved,
-                                  ),
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => Scaffold(
+                                appBar: AppBar(
+                                  title: Text(tr('Nuevo mantenimiento')),
+                                ),
+                                body: MaintenanceFormScreen(
+                                  store: widget.store,
+                                  onSaved: widget.onSaved,
                                 ),
                               ),
-                            )
+                            ),
+                          )
                         : null,
                     icon: const Icon(Icons.add_task_outlined),
                     label: Text(tr('Completar mantenimiento')),
@@ -1608,8 +1588,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               editing
                   ? tr('Guardar cambios')
                   : recordType == _NewRecordType.expense
-                      ? tr('Guardar gasto')
-                      : tr('Guardar ingreso'),
+                  ? tr('Guardar gasto')
+                  : tr('Guardar ingreso'),
             ),
           ),
         ],
@@ -1629,7 +1609,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> save() async {
-    final isExpense = (editingRecord && widget.record!.expense > 0) ||
+    final isExpense =
+        (editingRecord && widget.record!.expense > 0) ||
         (!editingRecord && recordType == _NewRecordType.expense);
     final earned = isExpense ? 0.0 : _parseOptionalNumber(earnings.text) ?? 0.0;
     final spent = isExpense ? _parseOptionalNumber(expense.text) ?? 0.0 : 0.0;
@@ -1694,7 +1675,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool get editingRecord => widget.record != null;
 }
 
-enum _HistoryFilter { earnings, expense, maintenance }
+enum _HistoryFilter { earnings, expense, marketplace, maintenance }
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({required this.store, super.key});
@@ -1721,26 +1702,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final term = search.text.trim().toLowerCase();
     final records = widget.store.records.where((record) {
       final matchesType =
-          (filter == _HistoryFilter.earnings && record.expense <= 0) ||
-              (filter == _HistoryFilter.expense && record.expense > 0);
-      final haystack = '${record.note} ${numFmt(record.odometer)} '
-              '${DateFormat('d MMM yyyy', activeLanguage).format(record.date)}'
-          .toLowerCase();
+          (filter == _HistoryFilter.earnings &&
+              record.expense <= 0 &&
+              !record.isMarketplaceJobIncome) ||
+          (filter == _HistoryFilter.expense && record.expense > 0) ||
+          (filter == _HistoryFilter.marketplace &&
+              record.isMarketplaceJobIncome);
+      final haystack =
+          '${record.note} ${numFmt(record.odometer)} '
+                  '${DateFormat('d MMM yyyy', activeLanguage).format(record.date)}'
+              .toLowerCase();
       return matchesType && (term.isEmpty || haystack.contains(term));
     }).toList();
-    final showMaintenance = filter == _HistoryFilter.expense ||
+    final showMaintenance =
+        filter == _HistoryFilter.expense ||
         filter == _HistoryFilter.maintenance;
     final maintenances = showMaintenance
         ? widget.store.maintenanceRecords.where((record) {
-            final haystack = '${record.type} ${record.description} '
-                    '${record.notes} ${numFmt(record.odometer)}'
-                .toLowerCase();
+            final haystack =
+                '${record.type} ${record.description} '
+                        '${record.notes} ${numFmt(record.odometer)}'
+                    .toLowerCase();
             return term.isEmpty || haystack.contains(term);
           }).toList()
         : <MaintenanceRecord>[];
     final filterOptions = [
       (_HistoryFilter.earnings, Icons.payments_outlined, tr('Ingreso')),
       (_HistoryFilter.expense, Icons.receipt_long_outlined, tr('Gasto')),
+      (_HistoryFilter.marketplace, Icons.route_outlined, tr('Trabajo')),
       (_HistoryFilter.maintenance, Icons.build_outlined, tr('Mant.')),
     ];
     return ListView(
@@ -1784,7 +1773,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ...records.map(
             (record) => Dismissible(
               key: ValueKey(record.id),
-              direction: widget.store.canWrite
+              direction: widget.store.canWrite && !record.isMarketplaceJobIncome
                   ? DismissDirection.endToStart
                   : DismissDirection.none,
               background: Container(
@@ -1802,20 +1791,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
               child: RecordTile(
                 record: record,
-                onTap: widget.store.canWrite
+                onTap: widget.store.canWrite && !record.isMarketplaceJobIncome
                     ? () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => Scaffold(
-                              appBar:
-                                  AppBar(title: Text(tr('Editar registro'))),
-                              body: RegisterScreen(
-                                store: widget.store,
-                                record: record,
-                              ),
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            appBar: AppBar(title: Text(tr('Editar registro'))),
+                            body: RegisterScreen(
+                              store: widget.store,
+                              record: record,
                             ),
                           ),
-                        )
+                        ),
+                      )
                     : null,
               ),
             ),
@@ -1825,8 +1813,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading:
-                    Icon(Icons.build_outlined, color: appPrimaryColor(context)),
+                leading: Icon(
+                  Icons.build_outlined,
+                  color: appPrimaryColor(context),
+                ),
                 title: Text(record.type),
                 subtitle: Text(
                   '${DateFormat('d MMM yyyy, HH:mm', activeLanguage).format(record.dateTime)} · ${numFmt(record.odometer)} km · ${money(record.cost ?? 0)}\n${record.description}',
@@ -1852,19 +1842,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     : Icon(Icons.lock_outline, color: appMutedColor(context)),
                 onTap: widget.store.canWrite
                     ? () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => Scaffold(
-                              appBar: AppBar(
-                                title: Text(tr('Editar mantenimiento')),
-                              ),
-                              body: MaintenanceFormScreen(
-                                store: widget.store,
-                                record: record,
-                              ),
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            appBar: AppBar(
+                              title: Text(tr('Editar mantenimiento')),
+                            ),
+                            body: MaintenanceFormScreen(
+                              store: widget.store,
+                              record: record,
                             ),
                           ),
-                        )
+                        ),
+                      )
                     : null,
               ),
             ),
@@ -1959,10 +1949,9 @@ class StatsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = Metrics(store.records, store.maintenanceRecords);
-    final earningRecords = store.records
-        .where((record) => record.earnings > 0)
-        .toList()
-      ..sort((a, b) => b.earnings.compareTo(a.earnings));
+    final earningRecords =
+        store.records.where((record) => record.earnings > 0).toList()
+          ..sort((a, b) => b.earnings.compareTo(a.earnings));
     final cycles = metrics.cycleSummaries;
     final bestCycle = cycles.isEmpty
         ? null
@@ -2068,10 +2057,10 @@ class StatsScreen extends StatelessWidget {
 }
 
 Uri buildRevolicoSearchUri(String term) => Uri.https(
-      'www.revolico.com',
-      '/search',
-      {'q': term.trim(), 'order': 'relevance'},
-    );
+  'www.revolico.com',
+  '/search',
+  {'q': term.trim(), 'order': 'relevance'},
+);
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
@@ -2088,21 +2077,13 @@ class _StoreScreenState extends State<StoreScreen> {
     _StoreCategory('Cargadores', 'cargador 72V', Icons.electrical_services),
     _StoreCategory('Neumáticos', 'neumático triciclo', Icons.tire_repair),
     _StoreCategory('Motores', 'motor eléctrico', Icons.electric_bolt),
-    _StoreCategory(
-      'Controladores',
-      'controlador moto eléctrica',
-      Icons.memory,
-    ),
+    _StoreCategory('Controladores', 'controlador moto eléctrica', Icons.memory),
     _StoreCategory(
       'Piezas eléctricas',
       'piezas eléctricas triciclo',
       Icons.cable,
     ),
-    _StoreCategory(
-      'Repuestos mecánicos',
-      'repuestos triciclo',
-      Icons.settings,
-    ),
+    _StoreCategory('Repuestos mecánicos', 'repuestos triciclo', Icons.settings),
     _StoreCategory(
       'Luces y accesorios',
       'luces accesorios triciclo',
@@ -2241,8 +2222,9 @@ class _StoreScreenState extends State<StoreScreen> {
     }
     final opened = await launchUrl(
       buildRevolicoSearchUri(term),
-      mode:
-          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      mode: kIsWeb
+          ? LaunchMode.platformDefault
+          : LaunchMode.externalApplication,
       webOnlyWindowName: '_blank',
     );
     if (!opened && mounted) {
@@ -2327,8 +2309,9 @@ class LoginScreen extends StatelessWidget {
                     backgroundColor: appPrimaryColor(
                       context,
                     ).withValues(alpha: .16),
-                    backgroundImage:
-                        photoUrl == null ? null : NetworkImage(photoUrl),
+                    backgroundImage: photoUrl == null
+                        ? null
+                        : NetworkImage(photoUrl),
                     child: photoUrl == null
                         ? Icon(
                             user == null ? Icons.person_outline : Icons.person,
@@ -2372,8 +2355,9 @@ class LoginScreen extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: tr('Personalizar perfil'),
-                    onPressed:
-                        store.canWrite ? () => _editProfileName(context) : null,
+                    onPressed: store.canWrite
+                        ? () => _editProfileName(context)
+                        : null,
                     icon: const Icon(Icons.edit_outlined),
                   ),
                 ],
@@ -2447,8 +2431,8 @@ class LoginScreen extends StatelessWidget {
         onPressed: store.syncing
             ? null
             : user == null
-                ? store.signIn
-                : store.syncNow,
+            ? store.signIn
+            : store.syncNow,
         icon: Icon(user == null ? Icons.login : Icons.cloud_sync_outlined),
         label: Text(
           user == null ? tr('Entrar con Google') : tr('Sincronizar ahora'),
@@ -2714,8 +2698,9 @@ class _ReferralCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color:
-                      dark ? const Color(0x332DD4A3) : const Color(0x292A9D83),
+                  color: dark
+                      ? const Color(0x332DD4A3)
+                      : const Color(0x292A9D83),
                   borderRadius: BorderRadius.circular(13),
                   border: Border.all(
                     color: dark
@@ -2750,10 +2735,10 @@ class _ReferralCard extends StatelessWidget {
                       store.referralProgram?.isRegistrationWalletLicense == true
                           ? 'Por cada referido registrado: ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} y ${store.referralProgram!.rewardMonths} meses de Control.'
                           : store.referralProgram?.isWalletReward == true
-                              ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
-                              : store.referralProgram == null
-                                  ? 'Consulta tus recompensas por invitar conductores.'
-                                  : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
+                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
+                          : store.referralProgram == null
+                          ? 'Consulta tus recompensas por invitar conductores.'
+                          : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2847,8 +2832,8 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Al registrarse tu invitado: ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales y ${program.rewardMonths} meses acumulables de Control'
             : program.isWalletReward
-                ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
-                : 'Gana ${program.rewardDays} días por cada referido',
+            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
+            : 'Gana ${program.rewardDays} días por cada referido',
         style: TextStyle(
           color: appPrimaryColor(context),
           fontWeight: FontWeight.w800,
@@ -2911,26 +2896,26 @@ class _ReferralCard extends StatelessWidget {
               label: program.isRegistrationWalletLicense
                   ? 'Acreditado'
                   : program.isWalletReward
-                      ? 'Acreditados'
-                      : 'Cumplieron',
+                  ? 'Acreditados'
+                  : 'Cumplieron',
               value: program.isRegistrationWalletLicense
                   ? '${totals.creditedCup.toStringAsFixed(0)} CUP'
                   : program.isWalletReward
-                      ? '${program.rewardedCount}'
-                      : '${program.qualifiedCount}',
+                  ? '${program.rewardedCount}'
+                  : '${program.qualifiedCount}',
             ),
             const _ReferralDivider(),
             _ReferralMetric(
               label: program.isRegistrationWalletLicense
                   ? 'Meses ganados'
                   : program.isWalletReward
-                      ? 'Días pendientes'
-                      : 'Días obtenidos',
+                  ? 'Días pendientes'
+                  : 'Días obtenidos',
               value: program.isRegistrationWalletLicense
                   ? '${totals.earnedMonths}'
                   : program.isWalletReward
-                      ? '${program.earnedDays - program.appliedDays}'
-                      : '${program.earnedDays}',
+                  ? '${program.earnedDays - program.appliedDays}'
+                  : '${program.earnedDays}',
             ),
           ],
         ),
@@ -2940,8 +2925,8 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Referidos acreditados: ${totals.creditedReferrals} · Saldo promocional otorgado: ${totals.creditedCup.toStringAsFixed(0)} ${program.rewardCurrency} · Meses aplicados: ${program.licenseMonthsApplied} · Meses pendientes: ${program.licenseMonthsPending}'
             : program.isWalletReward
-                ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
-                : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
+            ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
+            : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
         style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
       const SizedBox(height: 18),
@@ -2998,9 +2983,8 @@ class _ReferralValue extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(
-              alpha:
-                  Theme.of(context).brightness == Brightness.dark ? .42 : .92,
-            ),
+          alpha: Theme.of(context).brightness == Brightness.dark ? .42 : .92,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: appOutlineColor(context)),
       ),
@@ -3040,8 +3024,10 @@ class _ReferralEntryTile extends StatelessWidget {
     final monthsState = entry.licenseStatus == 'applied'
         ? 'Meses aplicados'
         : 'Meses pendientes';
-    final detail =
-        [if (registered.isNotEmpty) registered, monthsState].join(' · ');
+    final detail = [
+      if (registered.isNotEmpty) registered,
+      monthsState,
+    ].join(' · ');
     final imageUrl = entry.avatarUrl;
     final fallbackIcon = Icon(
       Icons.person_outline,
@@ -3053,9 +3039,8 @@ class _ReferralEntryTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(
-              alpha:
-                  Theme.of(context).brightness == Brightness.dark ? .35 : .88,
-            ),
+          alpha: Theme.of(context).brightness == Brightness.dark ? .35 : .88,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: appOutlineColor(context)),
       ),
@@ -3575,9 +3560,7 @@ class _MaintenanceFormScreenState extends State<MaintenanceFormScreen> {
         FilledButton.icon(
           onPressed: widget.store.canWrite && !_saving ? save : null,
           icon: const Icon(Icons.save_outlined),
-          label: Text(
-            _saving ? 'Guardando...' : tr('Guardar mantenimiento'),
-          ),
+          label: Text(_saving ? 'Guardando...' : tr('Guardar mantenimiento')),
         ),
       ],
     );

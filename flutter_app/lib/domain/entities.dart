@@ -45,8 +45,8 @@ class DailyRecord {
     this.vehicleId = '',
     this.syncStatus = SyncStatus.localOnly,
     this.schemaVersion = _databaseSchemaVersion,
-  })  : createdAt = createdAt ?? updatedAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? updatedAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   final String id;
   final DateTime date;
@@ -68,12 +68,15 @@ class DailyRecord {
 
   bool get isDeleted => deletedAt != null;
 
+  bool get isMarketplaceJobIncome => id.startsWith('marketplace-job-');
+
   factory DailyRecord.fromMap(Map<dynamic, dynamic> map) {
     final parsedUpdatedAt =
         DateTime.tryParse('${map['updatedAt']}') ?? DateTime.now();
     final legacyNote = '${map['note'] ?? ''}';
     final noteVoltage = _extractLegacyVoltage(legacyNote);
-    final voltage = _optionalNum(map['batteryVoltage']) ??
+    final voltage =
+        _optionalNum(map['batteryVoltage']) ??
         _optionalNum(map['batteryPercent']) ??
         noteVoltage.value ??
         (map['chargeTo80v'] == true ? 80.0 : null);
@@ -98,23 +101,23 @@ class DailyRecord {
   }
 
   Map<String, dynamic> toMap() => {
-        'schemaVersion': schemaVersion,
-        'id': id,
-        'date': DateFormat('yyyy-MM-dd').format(date),
-        'earnings': earnings,
-        'odometer': odometer,
-        'expense': expense,
-        'expenseCategory': expenseCategory,
-        'batteryVoltage': batteryVoltage,
-        'note': note,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        'deletedAt': deletedAt?.toIso8601String(),
-        'deviceId': deviceId,
-        'userId': userId,
-        'vehicleId': vehicleId,
-        'syncStatus': syncStatus.name,
-      };
+    'schemaVersion': schemaVersion,
+    'id': id,
+    'date': DateFormat('yyyy-MM-dd').format(date),
+    'earnings': earnings,
+    'odometer': odometer,
+    'expense': expense,
+    'expenseCategory': expenseCategory,
+    'batteryVoltage': batteryVoltage,
+    'note': note,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'deletedAt': deletedAt?.toIso8601String(),
+    'deviceId': deviceId,
+    'userId': userId,
+    'vehicleId': vehicleId,
+    'syncStatus': syncStatus.name,
+  };
 
   DailyRecord withSyncInfo({
     required String deviceId,
@@ -186,8 +189,8 @@ class MaintenanceRecord {
     this.vehicleId = '',
     this.syncStatus = SyncStatus.localOnly,
     this.schemaVersion = _databaseSchemaVersion,
-  })  : createdAt = createdAt ?? updatedAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? updatedAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   final String id;
   final DateTime dateTime;
@@ -230,22 +233,22 @@ class MaintenanceRecord {
   }
 
   Map<String, dynamic> toMap() => {
-        'schemaVersion': schemaVersion,
-        'id': id,
-        'dateTime': dateTime.toIso8601String(),
-        'odometer': odometer,
-        'type': type,
-        'description': description,
-        'cost': cost,
-        'notes': notes,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        'deletedAt': deletedAt?.toIso8601String(),
-        'deviceId': deviceId,
-        'userId': userId,
-        'vehicleId': vehicleId,
-        'syncStatus': syncStatus.name,
-      };
+    'schemaVersion': schemaVersion,
+    'id': id,
+    'dateTime': dateTime.toIso8601String(),
+    'odometer': odometer,
+    'type': type,
+    'description': description,
+    'cost': cost,
+    'notes': notes,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'deletedAt': deletedAt?.toIso8601String(),
+    'deviceId': deviceId,
+    'userId': userId,
+    'vehicleId': vehicleId,
+    'syncStatus': syncStatus.name,
+  };
 
   MaintenanceRecord withSyncInfo({
     required String deviceId,
@@ -323,18 +326,18 @@ class VehicleProfile {
   }
 
   Map<String, dynamic> toMap() => {
-        'schemaVersion': schemaVersion,
-        'id': id,
-        'userId': userId,
-        'name': name,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        'registration': registration,
-        'initialOdometer': initialOdometer,
-        'deviceId': deviceId,
-        'syncStatus': syncStatus.name,
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'schemaVersion': schemaVersion,
+    'id': id,
+    'userId': userId,
+    'name': name,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'registration': registration,
+    'initialOdometer': initialOdometer,
+    'deviceId': deviceId,
+    'syncStatus': syncStatus.name,
+    'deletedAt': deletedAt?.toIso8601String(),
+  };
 
   VehicleProfile withSyncInfo({
     required String deviceId,

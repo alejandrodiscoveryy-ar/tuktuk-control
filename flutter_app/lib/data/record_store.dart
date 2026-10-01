@@ -2,6 +2,33 @@ part of '../main.dart';
 
 enum ExchangeRateDirection { up, down, same }
 
+double marketplaceIncomeOdometerFromHistory({
+  required Iterable<DailyRecord> records,
+  double? distanceKm,
+}) {
+  DailyRecord? previous;
+
+  for (final record in records) {
+    if (record.isDeleted || record.odometer <= 0) continue;
+
+    if (previous == null) {
+      previous = record;
+      continue;
+    }
+
+    final dateOrder = record.date.compareTo(previous.date);
+    if (dateOrder > 0 ||
+        (dateOrder == 0 && record.updatedAt.isAfter(previous.updatedAt))) {
+      previous = record;
+    }
+  }
+
+  final previousOdometer = previous?.odometer ?? 0;
+  final tripDistance = distanceKm != null && distanceKm > 0 ? distanceKm : 0.0;
+
+  return previousOdometer + tripDistance;
+}
+
 ExchangeRateDirection exchangeRateDirectionFor(
   double? previousRate,
   double currentRate,
@@ -24,10 +51,7 @@ class RecordStore extends ChangeNotifier {
     PushTokenRegistrationCoordinator? pushTokenCoordinator,
     AppLinks? referralAppLinks,
   }) : _pushTokenCoordinator = pushTokenCoordinator {
-    _licenseService = SupabaseLicenseService(
-      client: _supabase,
-      cache: _meta,
-    );
+    _licenseService = SupabaseLicenseService(client: _supabase, cache: _meta);
     _whatsAppSettingsService = WhatsAppSettingsService(
       projectId: _projectId,
       cache: HiveWhatsAppSettingsCache(_meta),
@@ -48,8 +72,9 @@ class RecordStore extends ChangeNotifier {
     }
     _initialReferralCapture = kIsWeb
         ? _pendingReferralClaims.capture(Uri.base)
-        : (_referralLinkListener?.start() ?? Future<void>.value())
-            .then((_) => false);
+        : (_referralLinkListener?.start() ?? Future<void>.value()).then(
+            (_) => false,
+          );
     whatsAppSettings = _whatsAppSettingsService.cachedSettings();
     _supabaseGateway = SupabaseSyncGateway(
       client: _supabase,
@@ -321,7 +346,8 @@ class RecordStore extends ChangeNotifier {
     unawaited(_resumeReferralAttribution());
     final now = DateTime.now().toUtc();
     final lastRefresh = _lastBackgroundRefreshAt;
-    final forceExpiredLicenseValidation = user != null &&
+    final forceExpiredLicenseValidation =
+        user != null &&
         LicenseResumeRefreshPolicy.requiresImmediateValidation(license);
 
     if (forceExpiredLicenseValidation) {
@@ -462,7 +488,8 @@ class RecordStore extends ChangeNotifier {
     );
     if (_referralsDisposed || user?.id != userId) return;
     _referralRetryTimer?.cancel();
-    referralClaimNeedsRetry = result == PendingReferralClaimResult.failed ||
+    referralClaimNeedsRetry =
+        result == PendingReferralClaimResult.failed ||
         result == PendingReferralClaimResult.deferred;
     if (referralClaimNeedsRetry) {
       final due = _pendingReferralClaims.nextAttemptAt;
@@ -522,43 +549,43 @@ class RecordStore extends ChangeNotifier {
       _installReferrerAttemptedThisSession = false;
       _installReferrerFailures++;
       if (!_referralsDisposed) {
-        _installReferrerRetryTimer =
-            Timer(referralRetryDelay(_installReferrerFailures), () {
-          _installReferrerRetryTimer = null;
-          unawaited(_captureInstallReferrer());
-        });
+        _installReferrerRetryTimer = Timer(
+          referralRetryDelay(_installReferrerFailures),
+          () {
+            _installReferrerRetryTimer = null;
+            unawaited(_captureInstallReferrer());
+          },
+        );
       }
     }
   }
 
   WhatsAppContactAction? supportWhatsAppAction() => buildWhatsAppContactAction(
-        settings: whatsAppSettings,
-        channel: WhatsAppChannel.support,
-        variables: _whatsAppVariables(),
-      );
+    settings: whatsAppSettings,
+    channel: WhatsAppChannel.support,
+    variables: _whatsAppVariables(),
+  );
 
   WhatsAppContactAction? paymentWhatsAppAction({
     String? requestedPlan,
     String? contactReason,
-  }) =>
-      buildWhatsAppContactAction(
-        settings: whatsAppSettings,
-        channel: WhatsAppChannel.payment,
-        variables: _whatsAppVariables(
-          requestedPlan: requestedPlan,
-          contactReason: contactReason ?? _defaultPaymentContactReason,
-        ),
-      );
+  }) => buildWhatsAppContactAction(
+    settings: whatsAppSettings,
+    channel: WhatsAppChannel.payment,
+    variables: _whatsAppVariables(
+      requestedPlan: requestedPlan,
+      contactReason: contactReason ?? _defaultPaymentContactReason,
+    ),
+  );
 
   String get _defaultPaymentContactReason => switch (license.licenseStatus) {
-        LicenseStatus.trial || LicenseStatus.pending => 'pagar y activar',
-        LicenseStatus.expiring ||
-        LicenseStatus.expired ||
-        LicenseStatus.suspended ||
-        LicenseStatus.revoked =>
-          'renovar',
-        _ => 'pagar o renovar',
-      };
+    LicenseStatus.trial || LicenseStatus.pending => 'pagar y activar',
+    LicenseStatus.expiring ||
+    LicenseStatus.expired ||
+    LicenseStatus.suspended ||
+    LicenseStatus.revoked => 'renovar',
+    _ => 'pagar o renovar',
+  };
 
   Map<String, String?> _whatsAppVariables({
     String? requestedPlan,
@@ -612,9 +639,7 @@ class RecordStore extends ChangeNotifier {
         age.compareTo(_licenseValidationInterval) < 0;
   }
 
-  Future<LicenseSnapshot> _refreshLicenseIfNeeded({
-    bool force = false,
-  }) {
+  Future<LicenseSnapshot> _refreshLicenseIfNeeded({bool force = false}) {
     final currentUserId = user?.id;
     final inFlight = _licenseRefreshFuture;
 
@@ -661,8 +686,9 @@ class RecordStore extends ChangeNotifier {
 
   List<DailyRecord> get records => [..._records]..sort(_compareRecordsDesc);
 
-  List<MaintenanceRecord> get maintenanceRecords => [..._maintenanceRecords]
-    ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  List<MaintenanceRecord> get maintenanceRecords =>
+      [..._maintenanceRecords]
+        ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
   int get pendingSyncCount =>
       _syncQueue.pendingForUser(activeUserId, limit: 100000).length;
@@ -807,14 +833,14 @@ class RecordStore extends ChangeNotifier {
   }
 
   Map<String, dynamic> _settingsRollbackPayload() => {
-        'maintenanceIntervalKm': maintenanceIntervalKm,
-        'preferredCurrency': preferredCurrency,
-        'preferredLanguage': preferredLanguage,
-        'preferredTheme': preferredTheme,
-        'profileDisplayName:$activeUserId': profileDisplayName,
-        'settingsUpdatedAt':
-            '${_meta.get('settingsUpdatedAt') ?? DateTime.now().toIso8601String()}',
-      };
+    'maintenanceIntervalKm': maintenanceIntervalKm,
+    'preferredCurrency': preferredCurrency,
+    'preferredLanguage': preferredLanguage,
+    'preferredTheme': preferredTheme,
+    'profileDisplayName:$activeUserId': profileDisplayName,
+    'settingsUpdatedAt':
+        '${_meta.get('settingsUpdatedAt') ?? DateTime.now().toIso8601String()}',
+  };
 
   Future<void> _enqueueSettingsSync({
     Map<String, dynamic>? previousPayload,
@@ -832,43 +858,44 @@ class RecordStore extends ChangeNotifier {
   }
 
   String exportBackupJson() => const JsonEncoder.withIndent('  ').convert({
-        'schemaVersion': _databaseSchemaVersion,
-        'app': 'TukTuk Control',
-        'kind': 'database-backup',
-        'backupId':
-            'backup-$activeUserId-${DateTime.now().microsecondsSinceEpoch}',
-        'userId': activeUserId,
-        'ownerUserId': activeUserId,
-        'vehicleId': activeVehicleId,
-        'vehicle': activeVehicle?.toMap(),
-        'vehicles': vehicles.map((vehicle) => vehicle.toMap()).toList(),
-        'createdAt': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
-        'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
-        'records': _allDailyRecords
-            .where((record) => record.userId == activeUserId)
-            .map((record) => record.toMap())
-            .toList(),
-        'maintenanceRecords': _allMaintenanceRecords
-            .where((record) => record.userId == activeUserId)
-            .map((record) => record.toMap())
-            .toList(),
-      });
+    'schemaVersion': _databaseSchemaVersion,
+    'app': 'TukTuk Control',
+    'kind': 'database-backup',
+    'backupId': 'backup-$activeUserId-${DateTime.now().microsecondsSinceEpoch}',
+    'userId': activeUserId,
+    'ownerUserId': activeUserId,
+    'vehicleId': activeVehicleId,
+    'vehicle': activeVehicle?.toMap(),
+    'vehicles': vehicles.map((vehicle) => vehicle.toMap()).toList(),
+    'createdAt': DateTime.now().toIso8601String(),
+    'updatedAt': DateTime.now().toIso8601String(),
+    'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
+    'records': _allDailyRecords
+        .where((record) => record.userId == activeUserId)
+        .map((record) => record.toMap())
+        .toList(),
+    'maintenanceRecords': _allMaintenanceRecords
+        .where((record) => record.userId == activeUserId)
+        .map((record) => record.toMap())
+        .toList(),
+  });
 
   String exportBackupCsv() {
     const header =
         'fecha,ingreso,gasto,categoria_gasto,odometro,batteryVoltage,nota';
     String cell(Object? value) =>
         '"${'$value'.replaceAll('"', '""').replaceAll('\n', ' ')}"';
-    final rows = records.map((record) => [
-          DateFormat('yyyy-MM-dd').format(record.date),
-          record.earnings,
-          record.expense,
-          record.expenseCategory,
-          record.odometer,
-          record.batteryVoltage ?? '',
-          record.note,
-        ].map(cell).join(','));
+    final rows = records.map(
+      (record) => [
+        DateFormat('yyyy-MM-dd').format(record.date),
+        record.earnings,
+        record.expense,
+        record.expenseCategory,
+        record.odometer,
+        record.batteryVoltage ?? '',
+        record.note,
+      ].map(cell).join(','),
+    );
     return [header, ...rows].join('\r\n');
   }
 
@@ -1120,8 +1147,9 @@ class RecordStore extends ChangeNotifier {
     final legacy = (_meta.get('maintenanceRecords') as List?) ?? [];
     if (legacy.isEmpty) return;
     for (final raw in legacy) {
-      final record = MaintenanceRecord.fromMap(raw as Map)
-          .withSyncInfo(deviceId: deviceId);
+      final record = MaintenanceRecord.fromMap(
+        raw as Map,
+      ).withSyncInfo(deviceId: deviceId);
       await _maintenanceBox.put(record.id, record.toMap());
     }
     await _meta.delete('maintenanceRecords');
@@ -1135,20 +1163,20 @@ class RecordStore extends ChangeNotifier {
       final vehicle = VehicleProfile.fromMap(raw);
       if (vehicle.schemaVersion < _databaseSchemaVersion ||
           vehicle.deviceId.isEmpty) {
-        await _meta.put(
-          key,
-          vehicle.withSyncInfo(deviceId: deviceId).toMap(),
-        );
+        await _meta.put(key, vehicle.withSyncInfo(deviceId: deviceId).toMap());
       }
     }
     for (final record in _allDailyRecords) {
       final raw = _box.get(record.id);
-      final hasLegacyVoltage = raw is Map &&
+      final hasLegacyVoltage =
+          raw is Map &&
           (raw.containsKey('batteryPercent') ||
               raw.containsKey('chargeTo80v') ||
               (!raw.containsKey('batteryVoltage') &&
-                  RegExp(r'\bVoltaje\s*:', caseSensitive: false)
-                      .hasMatch('${raw['note'] ?? ''}')));
+                  RegExp(
+                    r'\bVoltaje\s*:',
+                    caseSensitive: false,
+                  ).hasMatch('${raw['note'] ?? ''}')));
       if (record.schemaVersion < _databaseSchemaVersion ||
           hasLegacyVoltage ||
           record.deviceId.isEmpty ||
@@ -1181,7 +1209,8 @@ class RecordStore extends ChangeNotifier {
   Future<void> _seedInitialEarningsIfEmpty() async {
     final currentSeedVersion = _meta.get('seedVersion');
     if (!OwnershipPolicy.shouldLoadHistoricalSeed(currentSeedVersion)) return;
-    final canReplaceSeed = _box.isEmpty ||
+    final canReplaceSeed =
+        _box.isEmpty ||
         (_box.values.isNotEmpty &&
             _box.values.every((raw) {
               final map = raw as Map;
@@ -1192,18 +1221,19 @@ class RecordStore extends ChangeNotifier {
     await _box.clear();
     for (var i = 0; i < _initialRecords.length; i++) {
       final item = _initialRecords[i];
-      final record = DailyRecord(
-        id: 'seed-${item.date.toIso8601String()}-${item.earnings}-${item.odometer}-$i',
-        date: item.date,
-        earnings: item.earnings,
-        odometer: item.odometer,
-        batteryVoltage: item.batteryVoltage,
-        note: item.earnings > 0 ? 'Carga inicial de ganancias' : '',
-      ).withSyncInfo(
-        deviceId: deviceId,
-        userId: localOwnerId,
-        vehicleId: activeVehicleId,
-      );
+      final record =
+          DailyRecord(
+            id: 'seed-${item.date.toIso8601String()}-${item.earnings}-${item.odometer}-$i',
+            date: item.date,
+            earnings: item.earnings,
+            odometer: item.odometer,
+            batteryVoltage: item.batteryVoltage,
+            note: item.earnings > 0 ? 'Carga inicial de ganancias' : '',
+          ).withSyncInfo(
+            deviceId: deviceId,
+            userId: localOwnerId,
+            vehicleId: activeVehicleId,
+          );
       await _box.put(record.id, record.toMap());
     }
     await _meta.put('seedVersion', _seedVersion);
@@ -1217,24 +1247,26 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     await _meta.put('maintenanceIntervalKm', _defaultMaintenanceIntervalKm);
-    final record = MaintenanceRecord(
-      id: 'maintenance-seed-2026-03-14',
-      dateTime: DateTime(2026, 3, 14, 9),
-      odometer: 526,
-      type: 'General',
-      description: 'Mantenimiento general registrado',
-      notes: 'Base para calcular el proximo mantenimiento cada 5,000 km.',
-    ).withSyncInfo(
-      deviceId: deviceId,
-      userId: localOwnerId,
-      vehicleId: activeVehicleId,
-    );
+    final record =
+        MaintenanceRecord(
+          id: 'maintenance-seed-2026-03-14',
+          dateTime: DateTime(2026, 3, 14, 9),
+          odometer: 526,
+          type: 'General',
+          description: 'Mantenimiento general registrado',
+          notes: 'Base para calcular el proximo mantenimiento cada 5,000 km.',
+        ).withSyncInfo(
+          deviceId: deviceId,
+          userId: localOwnerId,
+          vehicleId: activeVehicleId,
+        );
     await _maintenanceBox.put(record.id, record.toMap());
   }
 
   Future<void> ensureMarketplaceJobIncome({
     required String jobId,
     required double amount,
+    double? distanceKm,
     DateTime? completedAt,
   }) async {
     if (jobId.trim().isEmpty || amount <= 0) return;
@@ -1251,13 +1283,10 @@ class RecordStore extends ChangeNotifier {
 
     final completed = completedAt ?? DateTime.now();
 
-    double odometer = 0;
-    for (final record in _allDailyRecords) {
-      if (record.isDeleted) continue;
-      if (record.odometer > odometer) {
-        odometer = record.odometer;
-      }
-    }
+    final odometer = marketplaceIncomeOdometerFromHistory(
+      records: records,
+      distanceKm: distanceKm,
+    );
 
     final record = DailyRecord(
       id: incomeId,
@@ -1269,9 +1298,18 @@ class RecordStore extends ChangeNotifier {
       userId: activeUserId,
     );
 
-    await save(record);
+    await _saveDailyRecord(record);
   }
+
   Future<void> save(DailyRecord record) async {
+    if (record.isMarketplaceJobIncome) {
+      throw StateError('MARKETPLACE_JOB_INCOME_READ_ONLY');
+    }
+
+    await _saveDailyRecord(record);
+  }
+
+  Future<void> _saveDailyRecord(DailyRecord record) async {
     await _requireWriteAccess();
     final previousRaw = _box.get(record.id);
     final normalized = record.withSyncInfo(
@@ -1288,8 +1326,9 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
-      previousPayload:
-          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
+      previousPayload: previousRaw is Map
+          ? Map<String, dynamic>.from(previousRaw)
+          : null,
       rollbackOnLicenseRejection: true,
     );
     _load();
@@ -1297,6 +1336,10 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
+    if (id.startsWith('marketplace-job-')) {
+      throw StateError('MARKETPLACE_JOB_INCOME_READ_ONLY');
+    }
+
     await _requireWriteAccess();
     final raw = _box.get(id);
     if (raw != null) {
@@ -1340,8 +1383,9 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
-      previousPayload:
-          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
+      previousPayload: previousRaw is Map
+          ? Map<String, dynamic>.from(previousRaw)
+          : null,
       rollbackOnLicenseRejection: true,
     );
     _load();
@@ -1390,8 +1434,9 @@ class RecordStore extends ChangeNotifier {
     await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,
       redirectTo: kIsWeb ? webOAuthRedirect(Uri.base) : _supabaseMobileRedirect,
-      authScreenLaunchMode:
-          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      authScreenLaunchMode: kIsWeb
+          ? LaunchMode.platformDefault
+          : LaunchMode.externalApplication,
     );
   }
 
@@ -1429,8 +1474,8 @@ class RecordStore extends ChangeNotifier {
       syncMessage = !canWrite
           ? 'Tu licencia no permite realizar cambios. Modo solo lectura'
           : pendingSyncCount == 0
-              ? 'Datos sincronizados de forma segura'
-              : 'Cambios guardados localmente, pendientes de conexion';
+          ? 'Datos sincronizados de forma segura'
+          : 'Cambios guardados localmente, pendientes de conexion';
     });
   }
 
@@ -1513,8 +1558,9 @@ class RecordStore extends ChangeNotifier {
     _startAutomaticSync();
     try {
       await _processPendingReferralClaim(authenticatedUser.id);
-      await _pushTokenCoordinator
-          ?.handleAuthenticatedUser(authenticatedUser.id);
+      await _pushTokenCoordinator?.handleAuthenticatedUser(
+        authenticatedUser.id,
+      );
       await _ensureRemoteProfile();
       await _refreshLicenseIfNeeded(force: true);
 
@@ -1554,13 +1600,10 @@ class RecordStore extends ChangeNotifier {
       Duration(minutes: 2),
       Duration(minutes: 5),
     ];
-    _retrySyncTimer = Timer(
-      delays[_consecutiveSyncFailures - 1],
-      () {
-        _retrySyncTimer = null;
-        unawaited(syncNow());
-      },
-    );
+    _retrySyncTimer = Timer(delays[_consecutiveSyncFailures - 1], () {
+      _retrySyncTimer = null;
+      unawaited(syncNow());
+    });
   }
 
   void _startAutomaticSync() {
@@ -1593,17 +1636,14 @@ class RecordStore extends ChangeNotifier {
         )
         .subscribe();
 
-    _automaticSyncTimer = Timer.periodic(
-      _automaticSyncInterval,
-      (_) {
-        unawaited(loadReferrals(force: true));
-        unawaited(_resumeReferralAttribution());
-        unawaited(_refreshLicenseIfNeeded());
-        unawaited(refreshWhatsAppSettings());
-        unawaited(refreshExchangeRate());
-        unawaitedSync();
-      },
-    );
+    _automaticSyncTimer = Timer.periodic(_automaticSyncInterval, (_) {
+      unawaited(loadReferrals(force: true));
+      unawaited(_resumeReferralAttribution());
+      unawaited(_refreshLicenseIfNeeded());
+      unawaited(refreshWhatsAppSettings());
+      unawaited(refreshExchangeRate());
+      unawaitedSync();
+    });
   }
 
   void _stopAutomaticSync() {
@@ -1638,7 +1678,7 @@ class RecordStore extends ChangeNotifier {
       case SyncEntityType.settings:
         final settingsUpdatedAt =
             DateTime.tryParse('${_meta.get('settingsUpdatedAt')}') ??
-                operation.updatedAt;
+            operation.updatedAt;
         return {
           'id': operation.entityId,
           'userId': operation.userId,
@@ -1678,10 +1718,7 @@ class RecordStore extends ChangeNotifier {
       pageCount++;
     }
 
-    final pendingBatch = _syncQueue.pendingForUser(
-      currentUser.id,
-      limit: 500,
-    );
+    final pendingBatch = _syncQueue.pendingForUser(currentUser.id, limit: 500);
     if (!canWrite) {
       _load();
       return;
@@ -1759,7 +1796,8 @@ class RecordStore extends ChangeNotifier {
     final profile = {
       'id': currentUser.id,
       'email': currentUser.email,
-      'display_name': metadata['full_name'] ??
+      'display_name':
+          metadata['full_name'] ??
           metadata['name'] ??
           currentUser.email?.split('@').first,
       'avatar_url': metadata['avatar_url'] ?? metadata['picture'],
@@ -1795,7 +1833,11 @@ class RecordStore extends ChangeNotifier {
           final raw = _box.get(change.entityId);
           final local = raw is Map ? DailyRecord.fromMap(raw) : null;
           if (_remoteWins(
-              local?.updatedAt, local?.deviceId, local?.deletedAt, change)) {
+            local?.updatedAt,
+            local?.deviceId,
+            local?.deletedAt,
+            change,
+          )) {
             await _box.put(
               remote.id,
               remote
@@ -1817,7 +1859,11 @@ class RecordStore extends ChangeNotifier {
           final raw = _maintenanceBox.get(change.entityId);
           final local = raw is Map ? MaintenanceRecord.fromMap(raw) : null;
           if (_remoteWins(
-              local?.updatedAt, local?.deviceId, local?.deletedAt, change)) {
+            local?.updatedAt,
+            local?.deviceId,
+            local?.deletedAt,
+            change,
+          )) {
             await _maintenanceBox.put(
               remote.id,
               remote
@@ -1839,7 +1885,11 @@ class RecordStore extends ChangeNotifier {
           final raw = _meta.get('vehicle:${change.entityId}');
           final local = raw is Map ? VehicleProfile.fromMap(raw) : null;
           if (_remoteWins(
-              local?.updatedAt, local?.deviceId, local?.deletedAt, change)) {
+            local?.updatedAt,
+            local?.deviceId,
+            local?.deletedAt,
+            change,
+          )) {
             await _meta.put(
               'vehicle:${remote.id}',
               remote
@@ -1861,13 +1911,14 @@ class RecordStore extends ChangeNotifier {
           break;
         case SyncEntityType.settings:
           final payload = change.payload;
-          final localUpdatedAt =
-              DateTime.tryParse('${_meta.get('settingsUpdatedAt')}');
+          final localUpdatedAt = DateTime.tryParse(
+            '${_meta.get('settingsUpdatedAt')}',
+          );
           if (!_remoteWins(localUpdatedAt, deviceId, null, change)) break;
           await _meta.putAll({
             'maintenanceIntervalKm':
                 (payload['maintenanceIntervalKm'] as num?)?.toDouble() ??
-                    maintenanceIntervalKm,
+                maintenanceIntervalKm,
             'preferredCurrency':
                 '${payload['preferredCurrency'] ?? preferredCurrency}',
             'preferredLanguage':
@@ -1915,10 +1966,7 @@ class RecordStore extends ChangeNotifier {
           await _box.put(
             record.id,
             record
-                .withSyncInfo(
-                  deviceId: deviceId,
-                  syncStatus: SyncStatus.synced,
-                )
+                .withSyncInfo(deviceId: deviceId, syncStatus: SyncStatus.synced)
                 .toMap(),
           );
         }
@@ -1930,10 +1978,7 @@ class RecordStore extends ChangeNotifier {
           await _maintenanceBox.put(
             record.id,
             record
-                .withSyncInfo(
-                  deviceId: deviceId,
-                  syncStatus: SyncStatus.synced,
-                )
+                .withSyncInfo(deviceId: deviceId, syncStatus: SyncStatus.synced)
                 .toMap(),
           );
         }
@@ -1945,10 +1990,7 @@ class RecordStore extends ChangeNotifier {
           await _meta.put(
             'vehicle:${vehicle.id}',
             vehicle
-                .withSyncInfo(
-                  deviceId: deviceId,
-                  syncStatus: SyncStatus.synced,
-                )
+                .withSyncInfo(deviceId: deviceId, syncStatus: SyncStatus.synced)
                 .toMap(),
           );
         }
@@ -1976,8 +2018,9 @@ class RecordStore extends ChangeNotifier {
       if (remote['vehicles'] is! List && remote['vehicle'] is Map)
         remote['vehicle'] as Map,
     ];
-    final sourceVehicle =
-        rawVehicles.isEmpty ? null : VehicleProfile.fromMap(rawVehicles.first);
+    final sourceVehicle = rawVehicles.isEmpty
+        ? null
+        : VehicleProfile.fromMap(rawVehicles.first);
     final vehicle = VehicleProfile(
       id: targetVehicleId,
       userId: ownerId,
@@ -2022,8 +2065,9 @@ class RecordStore extends ChangeNotifier {
         deviceId: currentDeviceId,
       );
     }).toList();
-    final settings =
-        remote['settings'] is Map ? remote['settings'] as Map : remote;
+    final settings = remote['settings'] is Map
+        ? remote['settings'] as Map
+        : remote;
     final interval = settings['maintenanceIntervalKm'] == null
         ? maintenanceIntervalKm
         : (settings['maintenanceIntervalKm'] as num).toDouble();
@@ -2038,8 +2082,9 @@ class RecordStore extends ChangeNotifier {
   Future<void> _replaceWithPortableBackup(Map<String, dynamic> remote) async {
     final backup = _preparePortableBackup(remote);
     final recordsSnapshot = Map<dynamic, dynamic>.from(_box.toMap());
-    final maintenanceSnapshot =
-        Map<dynamic, dynamic>.from(_maintenanceBox.toMap());
+    final maintenanceSnapshot = Map<dynamic, dynamic>.from(
+      _maintenanceBox.toMap(),
+    );
     final metaSnapshot = Map<dynamic, dynamic>.from(_meta.toMap());
     final queueBox = Hive.box(_syncQueueBox);
     final queueSnapshot = Map<dynamic, dynamic>.from(queueBox.toMap());
@@ -2080,7 +2125,8 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _seedSyncQueueIfNeededAfterRestore(
-      _PortableBackup backup) async {
+    _PortableBackup backup,
+  ) async {
     await _syncQueue.enqueue(
       entityType: SyncEntityType.vehicle,
       entityId: backup.vehicle.id,
@@ -2164,15 +2210,12 @@ class RecordStore extends ChangeNotifier {
     final supabaseClaimed = _meta.get('supabaseClaimedUserId');
     final claimedUserId =
         supabaseClaimed is String && supabaseClaimed.isNotEmpty
-            ? supabaseClaimed
-            : legacyClaimed is String && legacyClaimed.isNotEmpty
-                ? legacyClaimed
-                : null;
+        ? supabaseClaimed
+        : legacyClaimed is String && legacyClaimed.isNotEmpty
+        ? legacyClaimed
+        : null;
 
-    if (!OwnershipPolicy.canClaimLocalData(
-      claimedUserId,
-      googleUser.id,
-    )) {
+    if (!OwnershipPolicy.canClaimLocalData(claimedUserId, googleUser.id)) {
       // Este dispositivo ya contiene datos de otra cuenta.
       // Se conservan intactos y la cuenta nueva usa exclusivamente
       // sus propios datos locales/remotos.
@@ -2221,12 +2264,9 @@ class RecordStore extends ChangeNotifier {
     }
     await _meta.put('claimedUserId', targetUserId);
     await _meta.put('supabaseClaimedUserId', targetUserId);
-    final hasOwnedData = _allDailyRecords.any(
-          (record) => record.userId == targetUserId,
-        ) ||
-        _allMaintenanceRecords.any(
-          (record) => record.userId == targetUserId,
-        );
+    final hasOwnedData =
+        _allDailyRecords.any((record) => record.userId == targetUserId) ||
+        _allMaintenanceRecords.any((record) => record.userId == targetUserId);
     if (hasOwnedData && activeVehicle == null) {
       await _meta.put('activeVehicleId:$targetUserId', targetVehicleId);
       await _meta.put(

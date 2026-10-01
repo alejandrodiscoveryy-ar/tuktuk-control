@@ -77,16 +77,16 @@ void main() {
             'onboarding_complete': true,
             'is_active': true,
             'is_available': true,
-          }
+          },
         ],
         'vehicle_categories': [
-          {'code': 'triciclo', 'name': 'Triciclo', 'sort_order': 1}
+          {'code': 'triciclo', 'name': 'Triciclo', 'sort_order': 1},
         ],
         'propulsion_types': [
-          {'code': 'electric', 'name': 'Eléctrico', 'sort_order': 1}
+          {'code': 'electric', 'name': 'Eléctrico', 'sort_order': 1},
         ],
         'service_types': [
-          {'code': 'passenger', 'name': 'Pasajeros', 'sort_order': 1}
+          {'code': 'passenger', 'name': 'Pasajeros', 'sort_order': 1},
         ],
         'assets': [
           {
@@ -95,7 +95,7 @@ void main() {
             'storage_bucket': 'marketplace-media',
             'storage_path': 'user/photo.jpg',
             'status': 'available',
-          }
+          },
         ],
       });
 
@@ -182,6 +182,7 @@ void main() {
         'billing_mode': 'trial_free',
         'commission_amount_snapshot': 0,
         'final_price': 900,
+        'distance_km': '8.6',
         'currency': 'CUP',
         'next_driver_action': 'start_en_route',
       });
@@ -189,6 +190,7 @@ void main() {
       expect(job.billingMode, MarketplaceBillingMode.trialFree);
       expect(job.nextAction, 'start_en_route');
       expect(job.vehicleId, 'vehicle-1');
+      expect(job.distanceKm, 8.6);
     });
 
     test('parsea trabajo asignado wallet_commission', () {
@@ -220,6 +222,76 @@ void main() {
       expect(job.status, 'incident');
       expect(job.incidentResolution, 'completed');
       expect(job.incidentResolvedAt, isNotNull);
+    });
+  });
+
+  group('Marketplace income history', () {
+    test('suma la distancia de la carrera al kilometraje anterior', () {
+      final previous = DailyRecord(
+        id: 'manual-previous',
+        date: DateTime(2026, 9, 30),
+        earnings: 500,
+        odometer: 12450,
+      );
+
+      final older = DailyRecord(
+        id: 'manual-older',
+        date: DateTime(2026, 9, 29),
+        earnings: 400,
+        odometer: 12420,
+      );
+
+      expect(
+        marketplaceIncomeOdometerFromHistory(
+          records: [older, previous],
+          distanceKm: 8.6,
+        ),
+        closeTo(12458.6, 0.0001),
+      );
+    });
+
+    test('sin distancia conserva el kilometraje anterior', () {
+      final previous = DailyRecord(
+        id: 'manual-previous',
+        date: DateTime(2026, 9, 30),
+        earnings: 500,
+        odometer: 12450,
+      );
+
+      expect(
+        marketplaceIncomeOdometerFromHistory(
+          records: [previous],
+          distanceKm: null,
+        ),
+        12450,
+      );
+    });
+
+    test('identifica el ingreso automatico como Trabajo TUKTUK', () {
+      final record = DailyRecord(
+        id: 'marketplace-job-job-123',
+        date: DateTime(2026, 9, 30),
+        earnings: 6000,
+        odometer: 12458.6,
+        note: 'Trabajo TUKTUK',
+      );
+
+      expect(record.isMarketplaceJobIncome, isTrue);
+    });
+
+    test('Trabajo aparece antes que Mant. en los filtros del historial', () {
+      final source = File('lib/presentation/screens.dart').readAsStringSync();
+
+      final workIndex = source.indexOf(
+        "(_HistoryFilter.marketplace, Icons.route_outlined, tr('Trabajo'))",
+      );
+      final maintenanceIndex = source.indexOf(
+        "(_HistoryFilter.maintenance, Icons.build_outlined, tr('Mant.'))",
+      );
+
+      expect(workIndex, greaterThanOrEqualTo(0));
+      expect(maintenanceIndex, greaterThan(workIndex));
+      expect(source.contains('!record.isMarketplaceJobIncome'), isTrue);
     });
   });
 
@@ -299,12 +371,15 @@ void main() {
 
     test('transmite idempotency key desde la capa superior', () {
       expect(
-          source.contains("'target_idempotency_key': idempotencyKey"), isTrue);
+        source.contains("'target_idempotency_key': idempotencyKey"),
+        isTrue,
+      );
       expect(
-          RegExp("target_idempotency_key': idempotencyKey")
-              .allMatches(source)
-              .length,
-          greaterThanOrEqualTo(4));
+        RegExp(
+          "target_idempotency_key': idempotencyKey",
+        ).allMatches(source).length,
+        greaterThanOrEqualTo(4),
+      );
     });
 
     test('incluye claim_referral_code', () {
