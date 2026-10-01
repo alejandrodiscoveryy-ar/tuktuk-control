@@ -1238,11 +1238,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           detailRow(
-            'Saldo recargado',
+            'Recargado',
             breakdownValue(wallet?.realAvailableBalance),
           ),
           detailRow(
-            'Ganado por referidos',
+            'Referido',
             breakdownValue(wallet?.promotionalAvailableBalance),
           ),
         ],
