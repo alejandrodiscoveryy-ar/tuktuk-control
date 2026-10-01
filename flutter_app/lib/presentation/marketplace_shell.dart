@@ -1,10 +1,7 @@
 part of '../main.dart';
 
 class MarketplaceRecordsScreen extends StatelessWidget {
-  const MarketplaceRecordsScreen({
-    required this.store,
-    super.key,
-  });
+  const MarketplaceRecordsScreen({required this.store, super.key});
 
   final RecordStore store;
 
@@ -52,11 +49,30 @@ class MarketplaceRecordsScreen extends StatelessWidget {
   }
 }
 
+class _MoreSectionIcon extends StatelessWidget {
+  const _MoreSectionIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 50,
+      height: 50,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withValues(alpha: .34)),
+      ),
+      child: Icon(icon, size: 30, color: color),
+    );
+  }
+}
+
 class MarketplaceMoreScreen extends StatelessWidget {
-  const MarketplaceMoreScreen({
-    required this.store,
-    super.key,
-  });
+  const MarketplaceMoreScreen({required this.store, super.key});
 
   final RecordStore store;
 
@@ -69,9 +85,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(title)),
-          body: AppBackground(
-            child: SafeArea(child: child),
-          ),
+          body: AppBackground(child: SafeArea(child: child)),
         ),
       ),
     );
@@ -86,36 +100,50 @@ class MarketplaceMoreScreen extends StatelessWidget {
       children: [
         Text(
           tr('Más'),
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w900,
-          ),
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 16),
         GlassCard(
           child: ListTile(
-            leading: const Icon(Icons.work_outline_rounded),
-            title: const Text('Quiero trabajar con TUKTUK'),
+            leading: const _MoreSectionIcon(
+              icon: Icons.work_outline_rounded,
+              color: Color(0xFF2DD4A3),
+            ),
+            title: const Text('Trabajar con nosotros'),
             subtitle: const Text(
               'Configura tu perfil de conductor y el vehículo que usarás para recibir solicitudes.',
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
-              title: 'Trabaja con TUKTUK',
+              title: 'Trabajar con nosotros',
               child: MarketplaceOnboardingScreen(store: store),
             ),
           ),
         ),
-
         const SizedBox(height: 12),
         GlassCard(
           child: ListTile(
             leading: profilePhoto == null
-                ? const Icon(Icons.account_circle_outlined)
-                : _UserNavigationAvatar(
-                    photoUrl: profilePhoto,
-                    selected: false,
+                ? const _MoreSectionIcon(
+                    icon: Icons.account_circle_outlined,
+                    color: Color(0xFF55A7FF),
+                  )
+                : Container(
+                    width: 50,
+                    height: 50,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF55A7FF).withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: const Color(0xFF55A7FF).withValues(alpha: .34),
+                      ),
+                    ),
+                    child: _UserNavigationAvatar(
+                      photoUrl: profilePhoto,
+                      selected: false,
+                    ),
                   ),
             title: Text(tr('Cuenta y sincronización')),
             subtitle: Text(
@@ -125,7 +153,6 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
-
               _openPage(
                 context,
                 title: tr('Cuenta y sincronización'),
@@ -137,7 +164,10 @@ class MarketplaceMoreScreen extends StatelessWidget {
         const SizedBox(height: 12),
         GlassCard(
           child: ListTile(
-            leading: const Icon(Icons.support_agent_rounded),
+            leading: const _MoreSectionIcon(
+              icon: Icons.support_agent_rounded,
+              color: Color(0xFFFFB547),
+            ),
             title: Text(tr('Soporte y pagos')),
             subtitle: Text(tr('Pagos, soporte y licencias')),
             trailing: const Icon(Icons.chevron_right_rounded),
@@ -151,8 +181,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
                     _SupportAndPaymentsCard(
                       supportAction: store.supportWhatsAppAction(),
                       paymentAction: store.paymentWhatsAppAction(),
-                      onTap: (action) =>
-                          _launchWhatsApp(pageContext, action),
+                      onTap: (action) => _launchWhatsApp(pageContext, action),
                     ),
                   ],
                 ),
@@ -163,14 +192,17 @@ class MarketplaceMoreScreen extends StatelessWidget {
         const SizedBox(height: 12),
         GlassCard(
           child: ListTile(
-            leading: const Icon(Icons.redeem_outlined),
+            leading: const _MoreSectionIcon(
+              icon: Icons.redeem_outlined,
+              color: Color(0xFF9A7BFF),
+            ),
             title: Text(tr('Referidos')),
             subtitle: Text(
               store.referralProgram?.isRegistrationWalletLicense == true
                   ? 'Invita y gana saldo promocional y meses de Control.'
                   : store.referralProgram?.isWalletReward == true
-                      ? 'Invita y gana saldo promocional.'
-                      : 'Invita a otros conductores y consulta tus premios.',
+                  ? 'Invita y gana saldo promocional.'
+                  : 'Invita a otros conductores y consulta tus premios.',
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {

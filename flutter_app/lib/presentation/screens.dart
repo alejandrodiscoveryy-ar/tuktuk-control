@@ -535,6 +535,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 class _AppShellState extends State<AppShell> {
   int index = _marketplacePushJobId.value == null ? 0 : 2;
   String? _lastAuthenticatedUserId;
+  String? _jobsAlertUserId;
 
   RecordStore get store => widget.store;
 
@@ -546,8 +547,61 @@ class _AppShellState extends State<AppShell> {
 
   void _openMarketplacePush() {
     if (_marketplacePushJobId.value == null || !mounted) return;
+
+    if (_marketplaceAvailableJobCount.value == 0) {
+      _marketplaceAvailableJobCount.value = 1;
+    }
+
     setState(() => index = 2);
     _marketplacePushJobId.value = null;
+  }
+
+  Future<void> _refreshMarketplaceJobAlert() async {
+    if (store.user == null) {
+      _marketplaceAvailableJobCount.value = 0;
+      return;
+    }
+
+    try {
+      final service = MarketplaceService(Supabase.instance.client);
+
+      final active = await service.jobs('active');
+      final scheduled = await service.jobs('scheduled');
+
+      if (!mounted) return;
+
+      if (active.isNotEmpty || scheduled.isNotEmpty) {
+        _marketplaceAvailableJobCount.value = 0;
+        return;
+      }
+
+      final onboarding = await service.onboarding();
+
+      String? vehicleId;
+      final preferredId = store.activeVehicle?.id;
+
+      if (preferredId != null &&
+          onboarding.vehicles.any((vehicle) => vehicle.id == preferredId)) {
+        vehicleId = preferredId;
+      } else if (onboarding.vehicles.isNotEmpty) {
+        vehicleId = onboarding.vehicles.first.id;
+      }
+
+      if (!mounted) return;
+
+      if (vehicleId == null) {
+        _marketplaceAvailableJobCount.value = 0;
+        return;
+      }
+
+      final available = await service.available(vehicleId);
+
+      if (!mounted) return;
+
+      _marketplaceAvailableJobCount.value = available.length;
+    } catch (_) {
+      // Una falla temporal de red no debe romper la navegacion.
+    }
   }
 
   @override
@@ -583,6 +637,26 @@ class _AppShellState extends State<AppShell> {
           );
         }
         _lastAuthenticatedUserId = authenticatedUserId;
+
+        if (authenticatedUserId != null &&
+            authenticatedUserId != _jobsAlertUserId) {
+          _jobsAlertUserId = authenticatedUserId;
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              unawaited(_refreshMarketplaceJobAlert());
+            }
+          });
+        } else if (authenticatedUserId == null && _jobsAlertUserId != null) {
+          _jobsAlertUserId = null;
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _marketplaceAvailableJobCount.value = 0;
+            }
+          });
+        }
+
         final isSynchronized =
             store.user != null &&
             store.pendingSyncCount == 0 &&
@@ -893,6 +967,153 @@ class _ReadOnlyLicenseBanner extends StatelessWidget {
   }
 }
 
+class _JobsNavigationIcon extends StatefulWidget {
+  const _JobsNavigationIcon({required this.selected});
+
+  final bool selected;
+
+  @override
+  State<_JobsNavigationIcon> createState() => _JobsNavigationIconState();
+}
+
+class _JobsNavigationIconState extends State<_JobsNavigationIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late int _lastAvailableCount;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _lastAvailableCount = _marketplaceAvailableJobCount.value;
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+
+    _marketplaceAvailableJobCount.addListener(_handleJobsChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_pulse(times: 3));
+      }
+    });
+  }
+
+  void _handleJobsChanged() {
+    final count = _marketplaceAvailableJobCount.value;
+
+    if (count > 0 && count != _lastAvailableCount) {
+      unawaited(_pulse(times: 2));
+    }
+
+    _lastAvailableCount = count;
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _pulse({required int times}) async {
+    if (_controller.isAnimating) return;
+
+    for (var i = 0; i < times; i++) {
+      if (!mounted) return;
+
+      await _controller.forward(from: 0);
+
+      if (!mounted) return;
+
+      await _controller.reverse();
+
+      if (i < times - 1) {
+        await Future<void>.delayed(const Duration(milliseconds: 70));
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _marketplaceAvailableJobCount.removeListener(_handleJobsChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAvailable = _marketplaceAvailableJobCount.value > 0;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final pulse = _controller.value;
+
+        return Transform.scale(
+          scale: 1 + (pulse * .12),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: pulse == 0
+                      ? const []
+                      : [
+                          BoxShadow(
+                            color: appPrimaryColor(
+                              context,
+                            ).withValues(alpha: .30 * pulse),
+                            blurRadius: 14,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                ),
+                child: Icon(
+                  widget.selected
+                      ? Icons.work_rounded
+                      : Icons.work_outline_rounded,
+                  size: 30,
+                ),
+              ),
+              if (hasAvailable)
+                Positioned(
+                  right: -4,
+                  top: -5,
+                  child: Container(
+                    width: 19,
+                    height: 19,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFB547),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF081019),
+                        width: 1.5,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x66FFB547), blurRadius: 8),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.notifications_active_rounded,
+                      size: 11,
+                      color: Color(0xFF201500),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _LiquidGlassNavigation extends StatelessWidget {
   const _LiquidGlassNavigation({
     required this.selectedIndex,
@@ -993,8 +1214,8 @@ class _LiquidGlassNavigation extends StatelessWidget {
                         label: tr('Registros'),
                       ),
                       NavigationDestination(
-                        icon: const Icon(Icons.work_outline_rounded),
-                        selectedIcon: const Icon(Icons.work_rounded),
+                        icon: const _JobsNavigationIcon(selected: false),
+                        selectedIcon: const _JobsNavigationIcon(selected: true),
                         label: tr('Trabajos'),
                       ),
                       NavigationDestination(
@@ -1020,7 +1241,7 @@ class _LiquidGlassNavigation extends StatelessWidget {
                                 photoUrl: profilePhotoUrl!,
                                 selected: true,
                               ),
-                        label: tr('Más'),
+                        label: tr('M├ís'),
                       ),
                     ],
                   ),

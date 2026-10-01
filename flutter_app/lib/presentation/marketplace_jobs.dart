@@ -1,5 +1,7 @@
 part of '../main.dart';
 
+final ValueNotifier<int> _marketplaceAvailableJobCount = ValueNotifier<int>(0);
+
 String _marketplaceJobServiceLabel(String? code) {
   return switch (code) {
     'passenger' => 'Pasajeros',
@@ -187,6 +189,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (widget.store.user == null) {
       if (!mounted) return;
 
+      _marketplaceAvailableJobCount.value = 0;
+
       setState(() {
         _loading = false;
         _error = 'Inicia sesión con Google para ver Trabajos.';
@@ -254,6 +258,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _available = const [];
         _error = null;
       });
+
+      _marketplaceAvailableJobCount.value = 0;
       return;
     }
 
@@ -261,7 +267,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (vehicleId == null) {
       if (!mounted) return;
+
       setState(() => _available = const []);
+      _marketplaceAvailableJobCount.value = 0;
       return;
     }
 
@@ -274,6 +282,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _available = jobs;
         _error = null;
       });
+
+      _marketplaceAvailableJobCount.value = jobs.length;
     } catch (_) {
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
@@ -377,6 +387,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _error = null;
     });
 
+    _marketplaceAvailableJobCount.value = 0;
+
     await _loadAvailable();
   }
 
@@ -401,6 +413,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _available = const [];
         _error = null;
       });
+
+      _marketplaceAvailableJobCount.value = 0;
 
       await Future.wait([
         _loadScope('active'),

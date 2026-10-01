@@ -20,10 +20,7 @@ String _marketplaceDateTimeLabel(DateTime? value) {
   return DateFormat('dd/MM/yyyy · HH:mm').format(value.toLocal());
 }
 
-String _marketplaceMoneyLabel(
-  double value,
-  String currency,
-) {
+String _marketplaceMoneyLabel(double value, String currency) {
   final decimals = value == value.roundToDouble() ? 0 : 2;
   final pattern = decimals == 0 ? '#,##0' : '#,##0.00';
   final formatted = NumberFormat(pattern, 'es').format(value);
@@ -201,12 +198,7 @@ class _MarketplaceOnboardingScreenState
           'body_type': 'Pasajeros y carga',
           'main_photo_asset_id': complete ? 'preview-vehicle-photo' : null,
           'marketplace_status': complete ? 'active' : 'onboarding',
-          'services': [
-            'passenger',
-            'cargo',
-            'courier',
-            'tourism',
-          ],
+          'services': ['passenger', 'cargo', 'courier', 'tourism'],
           'onboarding_complete': complete,
           'is_active': complete,
           'is_available': complete,
@@ -261,8 +253,9 @@ class _MarketplaceOnboardingScreenState
         'driver_active': true,
         'vehicle_available': true,
         'trial_active': true,
-        'trial_started_at':
-            now.subtract(const Duration(days: 5)).toIso8601String(),
+        'trial_started_at': now
+            .subtract(const Duration(days: 5))
+            .toIso8601String(),
         'trial_ends_at': now.add(const Duration(days: 25)).toIso8601String(),
         'initial_deposit_confirmed': false,
         'suite_active': true,
@@ -279,10 +272,12 @@ class _MarketplaceOnboardingScreenState
         'driver_active': true,
         'vehicle_available': true,
         'trial_active': false,
-        'trial_started_at':
-            now.subtract(const Duration(days: 40)).toIso8601String(),
-        'trial_ends_at':
-            now.subtract(const Duration(days: 10)).toIso8601String(),
+        'trial_started_at': now
+            .subtract(const Duration(days: 40))
+            .toIso8601String(),
+        'trial_ends_at': now
+            .subtract(const Duration(days: 10))
+            .toIso8601String(),
         'initial_deposit_confirmed': false,
         'suite_active': true,
         'can_start_trial': false,
@@ -376,14 +371,12 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
-  void _applyData(
-    MarketplaceOnboarding data, {
-    String? preferredVehicleId,
-  }) {
+  void _applyData(MarketplaceOnboarding data, {String? preferredVehicleId}) {
     _name.text = data.displayName ?? widget.store.profileDisplayName;
     _phone.text = data.phone ?? '';
 
-    final preferred = preferredVehicleId ??
+    final preferred =
+        preferredVehicleId ??
         _selectedVehicleId ??
         widget.initialVehicleId ??
         widget.store.activeVehicle?.id;
@@ -539,7 +532,8 @@ class _MarketplaceOnboardingScreenState
       return;
     }
 
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Comenzar 30 días gratis'),
@@ -569,10 +563,7 @@ class _MarketplaceOnboardingScreenState
     _trialStartKey = key;
 
     try {
-      final trial = await _service.startTrial(
-        vehicleId,
-        key,
-      );
+      final trial = await _service.startTrial(vehicleId, key);
 
       if (!mounted) return;
 
@@ -671,10 +662,7 @@ class _MarketplaceOnboardingScreenState
       toast(context, 'Foto optimizada: $label');
     } catch (_) {
       if (mounted) {
-        toast(
-          context,
-          'No se pudo procesar la foto. Prueba con otra imagen.',
-        );
+        toast(context, 'No se pudo procesar la foto. Prueba con otra imagen.');
       }
     } finally {
       if (mounted) setState(() => _processingPhoto = false);
@@ -708,23 +696,15 @@ class _MarketplaceOnboardingScreenState
     required bool vehicle,
   }) {
     Widget image(Uint8List bytes) => ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: vehicle
-              ? SizedBox(
-                  height: 255,
-                  width: double.infinity,
-                  child: Image.memory(
-                    bytes,
-                    fit: BoxFit.contain,
-                  ),
-                )
-              : Image.memory(
-                  bytes,
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
-                ),
-        );
+      borderRadius: BorderRadius.circular(18),
+      child: vehicle
+          ? SizedBox(
+              height: 255,
+              width: double.infinity,
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            )
+          : Image.memory(bytes, width: 120, height: 120, fit: BoxFit.cover),
+    );
 
     // The new selection is shown immediately, before it is saved.
     if (pendingBytes != null) return image(pendingBytes);
@@ -733,7 +713,8 @@ class _MarketplaceOnboardingScreenState
     final savedPhoto = _savedMarketplacePhoto(savedAssetId);
     if (savedPhoto == null) {
       return const Text(
-          'No se pudo localizar la foto guardada. Puedes cambiarla.');
+        'No se pudo localizar la foto guardada. Puedes cambiarla.',
+      );
     }
     return FutureBuilder<Uint8List>(
       future: savedPhoto,
@@ -741,7 +722,8 @@ class _MarketplaceOnboardingScreenState
         if (snapshot.hasData) return image(snapshot.data!);
         if (snapshot.hasError) {
           return const Text(
-              'No se pudo mostrar la foto guardada. Puedes cambiarla.');
+            'No se pudo mostrar la foto guardada. Puedes cambiarla.',
+          );
         }
         return const SizedBox(
           height: 120,
@@ -805,10 +787,7 @@ class _MarketplaceOnboardingScreenState
         _driverPhotoUploadKey = null;
         _driverPhotoLabel = null;
         _data = updated;
-        _applyData(
-          updated,
-          preferredVehicleId: _selectedVehicleId,
-        );
+        _applyData(updated, preferredVehicleId: _selectedVehicleId);
       });
 
       await _loadAccess(showSpinner: false);
@@ -879,12 +858,14 @@ class _MarketplaceOnboardingScreenState
       final newVehicleId = _marketText(result['created_vehicle_id']);
       if (newVehicleId == null) {
         throw const FormatException(
-            'El servidor no devolvió el vehículo creado.');
+          'El servidor no devolvió el vehículo creado.',
+        );
       }
       final updated = MarketplaceOnboarding.fromMap(result);
       if (!updated.vehicles.any((v) => v.id == newVehicleId)) {
         throw const FormatException(
-            'No se encontró el vehículo en el onboarding.');
+          'No se encontró el vehículo en el onboarding.',
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -902,8 +883,10 @@ class _MarketplaceOnboardingScreenState
       }
     } catch (_) {
       if (mounted) {
-        toast(context,
-            'No se pudo confirmar el alta. Pulsa Añadir vehículo para reintentar sin duplicarlo.');
+        toast(
+          context,
+          'No se pudo confirmar el alta. Pulsa Añadir vehículo para reintentar sin duplicarlo.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -932,8 +915,10 @@ class _MarketplaceOnboardingScreenState
     final vehicleName = _vehicleName.text.trim();
     final registration = _registration.text.trim();
     if (vehicleName.length < 2 || vehicleName.length > 80) {
-      toast(context,
-          'El nombre del vehículo debe tener entre 2 y 80 caracteres.');
+      toast(
+        context,
+        'El nombre del vehículo debe tener entre 2 y 80 caracteres.',
+      );
       return;
     }
     if (registration.length > 32) {
@@ -998,12 +983,15 @@ class _MarketplaceOnboardingScreenState
           'target_vehicle_id': vehicle.id,
           'target_category_code': category,
           'target_propulsion_code': propulsion,
-          'target_category_other_description':
-              category == 'other' ? _otherCategory.text.trim() : null,
-          'target_brand':
-              _brand.text.trim().isEmpty ? null : _brand.text.trim(),
-          'target_model':
-              _model.text.trim().isEmpty ? null : _model.text.trim(),
+          'target_category_other_description': category == 'other'
+              ? _otherCategory.text.trim()
+              : null,
+          'target_brand': _brand.text.trim().isEmpty
+              ? null
+              : _brand.text.trim(),
+          'target_model': _model.text.trim().isEmpty
+              ? null
+              : _model.text.trim(),
           'target_year': year,
           'target_passenger_capacity': passengers,
           'target_cargo_capacity_kg': cargoKg,
@@ -1011,8 +999,9 @@ class _MarketplaceOnboardingScreenState
           'target_cargo_length_cm': vehicle.cargoLengthCm,
           'target_cargo_width_cm': vehicle.cargoWidthCm,
           'target_cargo_height_cm': vehicle.cargoHeightCm,
-          'target_body_type':
-              _bodyType.text.trim().isEmpty ? null : _bodyType.text.trim(),
+          'target_body_type': _bodyType.text.trim().isEmpty
+              ? null
+              : _bodyType.text.trim(),
           'target_main_photo_asset_id': photoAssetId,
           'target_service_codes': services,
           'target_vehicle_name': vehicleName,
@@ -1031,10 +1020,7 @@ class _MarketplaceOnboardingScreenState
         _vehiclePhotoUploadKey = null;
         _vehiclePhotoLabel = null;
         _data = updated;
-        _applyData(
-          updated,
-          preferredVehicleId: vehicle.id,
-        );
+        _applyData(updated, preferredVehicleId: vehicle.id);
       });
 
       await _loadAccess(showSpinner: false);
@@ -1050,10 +1036,7 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
-  Widget _buildAccessCard(
-    BuildContext context,
-    MarketplaceVehicle? vehicle,
-  ) {
+  Widget _buildAccessCard(BuildContext context, MarketplaceVehicle? vehicle) {
     final access = _access;
 
     return GlassCard(
@@ -1062,16 +1045,11 @@ class _MarketplaceOnboardingScreenState
         children: [
           const Text(
             'Activación de Trabajos',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),
           if (vehicle == null)
-            const Text(
-              'Selecciona y configura un vehículo para continuar.',
-            )
+            const Text('Selecciona y configura un vehículo para continuar.')
           else if (_accessLoading)
             const Center(
               child: Padding(
@@ -1138,10 +1116,7 @@ class _MarketplaceOnboardingScreenState
               Text(
                 'La prueba empezará únicamente cuando pulses el botón. '
                 'Hasta entonces no corre ningún día.',
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -1167,10 +1142,7 @@ class _MarketplaceOnboardingScreenState
               const SizedBox(height: 6),
               Text(
                 'El siguiente paso será verificar la billetera para continuar aceptando nuevos trabajos.',
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
             ] else if (!access.onboardingComplete)
               const Text(
@@ -1227,10 +1199,7 @@ class _MarketplaceOnboardingScreenState
               Expanded(
                 child: Text(
                   'Billetera Marketplace',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
               ),
             ],
@@ -1239,10 +1208,7 @@ class _MarketplaceOnboardingScreenState
           Text(
             'Esta billetera se usa únicamente para las comisiones de Trabajos. '
             'No afecta tu licencia ni el funcionamiento de TUKTUK Control.',
-            style: TextStyle(
-              color: appMutedColor(context),
-              height: 1.35,
-            ),
+            style: TextStyle(color: appMutedColor(context), height: 1.35),
           ),
           const SizedBox(height: 14),
           if (_walletLoading)
@@ -1301,7 +1267,9 @@ class _MarketplaceOnboardingScreenState
                       context,
                       'Saldo real',
                       _marketplaceMoneyLabel(
-                          wallet.realBalance!, wallet.currency),
+                        wallet.realBalance!,
+                        wallet.currency,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1310,7 +1278,9 @@ class _MarketplaceOnboardingScreenState
                       context,
                       'Promocional',
                       _marketplaceMoneyLabel(
-                          wallet.promotionalBalance!, wallet.currency),
+                        wallet.promotionalBalance!,
+                        wallet.currency,
+                      ),
                     ),
                   ),
                 ],
@@ -1323,7 +1293,9 @@ class _MarketplaceOnboardingScreenState
                       context,
                       'Real disponible',
                       _marketplaceMoneyLabel(
-                          wallet.realAvailableBalance!, wallet.currency),
+                        wallet.realAvailableBalance!,
+                        wallet.currency,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1332,23 +1304,23 @@ class _MarketplaceOnboardingScreenState
                       context,
                       'Promo disponible',
                       _marketplaceMoneyLabel(
-                          wallet.promotionalAvailableBalance!, wallet.currency),
+                        wallet.promotionalAvailableBalance!,
+                        wallet.currency,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               const Text(
-                  'El saldo promocional solo paga comisiones. No sustituye el depósito inicial real.'),
+                'El saldo promocional solo paga comisiones. No sustituye el depósito inicial real.',
+              ),
             ],
             const SizedBox(height: 10),
             _walletValue(
               context,
               'Reservado para trabajos',
-              _marketplaceMoneyLabel(
-                wallet.reservedBalance,
-                wallet.currency,
-              ),
+              _marketplaceMoneyLabel(wallet.reservedBalance, wallet.currency),
             ),
             const SizedBox(height: 16),
             Row(
@@ -1370,42 +1342,28 @@ class _MarketplaceOnboardingScreenState
                 'Durante tus 30 días gratis no se reserva ni se descuenta '
                 'comisión. Puedes tener saldo en la billetera sin perder '
                 'el periodo gratuito.',
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
             ] else if (access?.canStartTrial == true) ...[
               Text(
                 'Tu periodo gratuito todavía no ha comenzado. '
                 'No necesitas realizar el depósito inicial para empezar '
                 'los 30 días gratis.',
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
             ] else if (!wallet.initialDepositConfirmed &&
                 access?.trialEndsAt != null) ...[
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: kTertiary,
-                  ),
+                  const Icon(Icons.info_outline_rounded, color: kTertiary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Para aceptar nuevos trabajos después del periodo '
                       'gratuito debe confirmarse un depósito inicial mínimo '
-                      'de ${_marketplaceMoneyLabel(
-                        wallet.currentInitialMinimumDeposit,
-                        wallet.currency,
-                      )}.',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      'de ${_marketplaceMoneyLabel(wallet.currentInitialMinimumDeposit, wallet.currency)}.',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                 ],
@@ -1414,20 +1372,14 @@ class _MarketplaceOnboardingScreenState
               Text(
                 'Ese depósito queda íntegramente como saldo en tu '
                 'billetera. No es una cuota de activación.',
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  height: 1.35,
-                ),
+                style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
             ],
             if (wallet.initialDepositConfirmed) ...[
               const SizedBox(height: 14),
               Row(
                 children: [
-                  Icon(
-                    Icons.verified_rounded,
-                    color: appPrimaryColor(context),
-                  ),
+                  Icon(Icons.verified_rounded, color: appPrimaryColor(context)),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
@@ -1441,19 +1393,14 @@ class _MarketplaceOnboardingScreenState
                 const SizedBox(height: 6),
                 Text(
                   'Importe confirmado: '
-                  '${_marketplaceMoneyLabel(
-                    wallet.initialDepositAmount!,
-                    wallet.currency,
-                  )}',
+                  '${_marketplaceMoneyLabel(wallet.initialDepositAmount!, wallet.currency)}',
                 ),
               ],
               if (wallet.initialDepositConfirmedAt != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   'Confirmado: '
-                  '${_marketplaceDateTimeLabel(
-                    wallet.initialDepositConfirmedAt,
-                  )}',
+                  '${_marketplaceDateTimeLabel(wallet.initialDepositConfirmedAt)}',
                 ),
               ],
             ],
@@ -1493,10 +1440,7 @@ class _MarketplaceOnboardingScreenState
         children: [
           Text(
             label,
-            style: TextStyle(
-              color: appMutedColor(context),
-              fontSize: 12,
-            ),
+            style: TextStyle(color: appMutedColor(context), fontSize: 12),
           ),
           const SizedBox(height: 5),
           Text(
@@ -1573,22 +1517,8 @@ class _MarketplaceOnboardingScreenState
     }
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
       children: [
-        Text(
-          'Trabaja con TUKTUK',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Completa tus datos y los del vehículo que utilizarás para recibir solicitudes.',
-          style: TextStyle(
-            color: appMutedColor(context),
-            height: 1.35,
-          ),
-        ),
         if (data.driverSuspended) ...[
           const SizedBox(height: 14),
           const GlassCard(
@@ -1614,10 +1544,7 @@ class _MarketplaceOnboardingScreenState
             children: [
               const Text(
                 'Datos del conductor',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 14),
               // Keep the portrait beside the two fields on wider screens.
@@ -1632,6 +1559,11 @@ class _MarketplaceOnboardingScreenState
                         textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
                           labelText: 'Nombre y apellidos',
+                          isDense: true,
+                          prefixIcon: Icon(
+                            Icons.person_outline_rounded,
+                            size: 22,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1642,11 +1574,14 @@ class _MarketplaceOnboardingScreenState
                         decoration: const InputDecoration(
                           labelText: 'WhatsApp / teléfono',
                           hintText: '+5355555555',
+                          isDense: true,
+                          prefixIcon: Icon(Icons.phone_outlined, size: 22),
                         ),
                       ),
                     ],
                   );
-                  final hasDriverPhoto = _driverPhotoBytes != null ||
+                  final hasDriverPhoto =
+                      _driverPhotoBytes != null ||
                       data.driverPhotoAssetId != null;
                   if (!hasDriverPhoto) return compactDriverFields;
 
@@ -1655,7 +1590,7 @@ class _MarketplaceOnboardingScreenState
                     savedAssetId: data.driverPhotoAssetId,
                     vehicle: false,
                   );
-                  if (constraints.maxWidth < 390) {
+                  if (constraints.maxWidth < 290) {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1669,8 +1604,8 @@ class _MarketplaceOnboardingScreenState
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(child: compactDriverFields),
-                      const SizedBox(width: 14),
-                      SizedBox(width: 120, height: 120, child: photo),
+                      const SizedBox(width: 8),
+                      SizedBox(width: 94, height: 104, child: photo),
                     ],
                   );
                 },
@@ -1682,7 +1617,8 @@ class _MarketplaceOnboardingScreenState
                     _driverPhotoBytes == null && data.driverPhotoAssetId == null
                         ? Icons.photo_camera_outlined
                         : Icons.check_circle_outline,
-                    color: _driverPhotoBytes == null &&
+                    color:
+                        _driverPhotoBytes == null &&
                             data.driverPhotoAssetId == null
                         ? kTertiary
                         : appPrimaryColor(context),
@@ -1693,8 +1629,8 @@ class _MarketplaceOnboardingScreenState
                       _driverPhotoBytes != null
                           ? 'Foto lista para guardar · ${_driverPhotoLabel ?? ''}'
                           : data.driverPhotoAssetId == null
-                              ? 'Foto del conductor pendiente'
-                              : 'Foto del conductor guardada',
+                          ? 'Foto del conductor pendiente'
+                          : 'Foto del conductor guardada',
                     ),
                   ),
                 ],
@@ -1715,10 +1651,7 @@ class _MarketplaceOnboardingScreenState
               const SizedBox(height: 6),
               Text(
                 'La imagen se optimiza automáticamente a 720 × 720 antes de subirla.',
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: appMutedColor(context), fontSize: 12),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -1726,9 +1659,7 @@ class _MarketplaceOnboardingScreenState
                 child: FilledButton.icon(
                   onPressed: _canEdit ? _saveDriver : null,
                   icon: const Icon(Icons.save_outlined),
-                  label: Text(
-                    _saving ? 'Guardando...' : 'Guardar conductor',
-                  ),
+                  label: Text(_saving ? 'Guardando...' : 'Guardar conductor'),
                 ),
               ),
             ],
@@ -1741,10 +1672,7 @@ class _MarketplaceOnboardingScreenState
             children: [
               const Text(
                 'Vehículo para Trabajos',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -1765,12 +1693,14 @@ class _MarketplaceOnboardingScreenState
                 LayoutBuilder(
                   builder: (context, constraints) {
                     const gap = 4.0;
-                    const horizontalGap = 10.0;
+                    const horizontalGap = 6.0;
                     const fieldHeight = 48.0;
-                    final showColumns = constraints.maxWidth >= 320;
+                    final showColumns = constraints.maxWidth >= 290;
 
                     InputDecoration fieldDecoration(
-                        String label, IconData icon) {
+                      String label,
+                      IconData icon,
+                    ) {
                       return InputDecoration(
                         labelText: label,
                         isDense: true,
@@ -1778,11 +1708,14 @@ class _MarketplaceOnboardingScreenState
                           horizontal: 10,
                           vertical: 8,
                         ),
-                        constraints:
-                            const BoxConstraints(minHeight: fieldHeight),
+                        constraints: const BoxConstraints(
+                          minHeight: fieldHeight,
+                        ),
                         prefixIcon: Icon(icon, size: 19),
-                        prefixIconConstraints:
-                            const BoxConstraints(minWidth: 38, minHeight: 38),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 38,
+                          minHeight: 38,
+                        ),
                       );
                     }
 
@@ -1954,7 +1887,7 @@ class _MarketplaceOnboardingScreenState
                             }).toList(),
                             onChanged: _canEdit
                                 ? (value) =>
-                                    setState(() => _selectedCategory = value)
+                                      setState(() => _selectedCategory = value)
                                 : null,
                           ),
                         ),
@@ -1997,8 +1930,9 @@ class _MarketplaceOnboardingScreenState
                               );
                             }).toList(),
                             onChanged: _canEdit
-                                ? (value) =>
-                                    setState(() => _selectedPropulsion = value)
+                                ? (value) => setState(
+                                    () => _selectedPropulsion = value,
+                                  )
                                 : null,
                           ),
                           edit(
@@ -2021,7 +1955,7 @@ class _MarketplaceOnboardingScreenState
                           ),
                         ),
                         const SizedBox(height: gap),
-                        if (constraints.maxWidth >= 390)
+                        if (constraints.maxWidth >= 290)
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -2050,8 +1984,8 @@ class _MarketplaceOnboardingScreenState
                                   controller: _cargoKg,
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
+                                        decimal: true,
+                                      ),
                                 ),
                               ),
                             ],
@@ -2104,7 +2038,8 @@ class _MarketplaceOnboardingScreenState
                               vehicle?.mainPhotoAssetId == null
                           ? Icons.directions_car_outlined
                           : Icons.check_circle_outline,
-                      color: _vehiclePhotoBytes == null &&
+                      color:
+                          _vehiclePhotoBytes == null &&
                               vehicle?.mainPhotoAssetId == null
                           ? kTertiary
                           : appPrimaryColor(context),
@@ -2115,8 +2050,8 @@ class _MarketplaceOnboardingScreenState
                         _vehiclePhotoBytes != null
                             ? 'Foto lista para guardar · ${_vehiclePhotoLabel ?? ''}'
                             : vehicle?.mainPhotoAssetId == null
-                                ? 'Foto principal del vehículo pendiente'
-                                : 'Foto principal del vehículo guardada',
+                            ? 'Foto principal del vehículo pendiente'
+                            : 'Foto principal del vehículo guardada',
                       ),
                     ),
                   ],
@@ -2140,10 +2075,7 @@ class _MarketplaceOnboardingScreenState
                 const SizedBox(height: 6),
                 Text(
                   'Se conserva la proporción y se reduce hasta un máximo de 1280 × 960 antes de subirla.',
-                  style: TextStyle(
-                    color: appMutedColor(context),
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: appMutedColor(context), fontSize: 12),
                 ),
                 if (vehicle?.mainPhotoAssetId == null &&
                     _vehiclePhotoBytes == null) ...[
@@ -2162,9 +2094,7 @@ class _MarketplaceOnboardingScreenState
                   child: FilledButton.icon(
                     onPressed: _canEdit ? _saveVehicle : null,
                     icon: const Icon(Icons.save_outlined),
-                    label: Text(
-                      _saving ? 'Guardando...' : 'Guardar vehículo',
-                    ),
+                    label: Text(_saving ? 'Guardando...' : 'Guardar vehículo'),
                   ),
                 ),
                 if (vehicle?.onboardingComplete == true) ...[
