@@ -245,7 +245,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       setState(() {
         _loading = false;
-        _error = 'No se pudieron cargar los trabajos disponibles.';
+        _error =
+            'No pudimos cargar los trabajos. Comprueba tu conexión e inténtalo de nuevo.';
       });
     }
   }
@@ -288,7 +289,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
       setState(() {
-        _error = 'No se pudieron actualizar los trabajos disponibles.';
+        _error =
+            'No pudimos actualizar los trabajos. Desliza hacia abajo para intentarlo de nuevo.';
       });
     }
   }
@@ -1179,6 +1181,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     final selectedVehicle = _vehicleById(_selectedVehicleId);
 
+    final vehicleReady = selectedVehicle?.onboardingComplete == true;
+
+    final vehicleName = selectedVehicle == null
+        ? 'Sin vehículo'
+        : (selectedVehicle.name?.trim().isNotEmpty == true
+              ? selectedVehicle.name!.trim()
+              : selectedVehicle.id);
+
+    final vehicleStatusColor = vehicleReady
+        ? appPrimaryColor(context)
+        : Colors.amber;
+
     return RefreshIndicator(
       onRefresh: _loadAvailable,
       child: ListView(
@@ -1189,35 +1203,118 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Vehículo para recibir solicitudes',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedVehicleId,
-                  isExpanded: true,
-                  items: onboarding.vehicles
-                      .map(
-                        (vehicle) => DropdownMenuItem<String>(
-                          value: vehicle.id,
-                          child: Text(
-                            vehicle.name?.trim().isNotEmpty == true
-                                ? vehicle.name!
-                                : vehicle.id,
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: appPrimaryColor(context).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.directions_car_filled_rounded,
+                        color: appPrimaryColor(context),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Vehículo activo',
+                            style: TextStyle(
+                              color: appMutedColor(context),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            vehicleName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (selectedVehicle != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: vehicleStatusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: vehicleStatusColor.withValues(alpha: 0.28),
                           ),
                         ),
-                      )
-                      .toList(),
-                  onChanged: _acceptingJobId == null ? _changeVehicle : null,
-                  decoration: const InputDecoration(labelText: 'Vehículo'),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              vehicleReady
+                                  ? Icons.check_circle_rounded
+                                  : Icons.warning_amber_rounded,
+                              size: 14,
+                              color: vehicleStatusColor,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              vehicleReady ? 'Listo' : 'Pendiente',
+                              style: TextStyle(
+                                color: vehicleStatusColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-                if (selectedVehicle != null) ...[
+                if (onboarding.vehicles.length > 1) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedVehicleId,
+                    isExpanded: true,
+                    items: onboarding.vehicles
+                        .map(
+                          (vehicle) => DropdownMenuItem<String>(
+                            value: vehicle.id,
+                            child: Text(
+                              vehicle.name?.trim().isNotEmpty == true
+                                  ? vehicle.name!
+                                  : vehicle.id,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _acceptingJobId == null ? _changeVehicle : null,
+                    decoration: InputDecoration(
+                      labelText: 'Cambiar vehículo',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ] else if (!vehicleReady) ...[
                   const SizedBox(height: 8),
                   Text(
-                    selectedVehicle.onboardingComplete
-                        ? 'Configuración Marketplace completa.'
-                        : 'Este vehículo todavía tiene requisitos pendientes.',
+                    'Este vehículo todavía tiene requisitos pendientes.',
                     style: TextStyle(
                       color: appMutedColor(context),
                       fontSize: 12,
@@ -1233,44 +1330,74 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline_rounded),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(_error!)),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.orange,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
-          const SizedBox(height: 14),
-          if (_available.isEmpty)
+          const SizedBox(height: 12),
+          if (_error == null && _available.isEmpty)
             GlassCard(
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 22),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 18,
+                  horizontal: 8,
+                ),
                 child: Column(
                   children: [
                     Icon(
                       Icons.work_outline_rounded,
-                      size: 42,
+                      size: 38,
                       color: appPrimaryColor(context),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     const Text(
-                      'No hay trabajos disponibles ahora',
+                      'No hay trabajos disponibles',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 5),
                     Text(
-                      'Desliza hacia abajo para actualizar.',
-                      style: TextStyle(color: appMutedColor(context)),
+                      'Cuando aparezca una nueva solicitud, la verás aquí.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: appMutedColor(context),
+                        height: 1.3,
+                      ),
                     ),
                   ],
                 ),
               ),
             )
-          else
+          else if (_available.isNotEmpty)
             ..._available.map(
               (job) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
