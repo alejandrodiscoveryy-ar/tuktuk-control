@@ -765,6 +765,94 @@ class MarketplaceReferralEntry {
   );
 }
 
+class MarketplaceDriverCustomerRating {
+  const MarketplaceDriverCustomerRating({
+    required this.jobId,
+    required this.stars,
+    this.createdAt,
+  });
+
+  final String jobId;
+  final int stars;
+  final DateTime? createdAt;
+
+  factory MarketplaceDriverCustomerRating.fromMap(Map map) =>
+      MarketplaceDriverCustomerRating(
+        jobId: _marketText(map['job_id']) ?? '',
+        stars: _marketInt(map['stars']),
+        createdAt: _marketDate(map['created_at']),
+      );
+}
+
+class MarketplaceDriverRatingEntry {
+  const MarketplaceDriverRatingEntry({
+    required this.jobId,
+    required this.isTest,
+    this.serviceCode,
+    this.serviceDate,
+    this.receivedStars,
+    this.givenStars,
+    this.receivedAt,
+    this.givenAt,
+  });
+
+  final String jobId;
+  final String? serviceCode;
+  final DateTime? serviceDate;
+  final int? receivedStars;
+  final int? givenStars;
+  final DateTime? receivedAt;
+  final DateTime? givenAt;
+  final bool isTest;
+
+  factory MarketplaceDriverRatingEntry.fromMap(Map map) =>
+      MarketplaceDriverRatingEntry(
+        jobId: _marketText(map['job_id']) ?? '',
+        serviceCode: _marketText(map['service_code']),
+        serviceDate: _marketDate(map['service_date']),
+        receivedStars: map['received_stars'] == null
+            ? null
+            : _marketInt(map['received_stars']),
+        givenStars: map['given_stars'] == null
+            ? null
+            : _marketInt(map['given_stars']),
+        receivedAt: _marketDate(map['received_at']),
+        givenAt: _marketDate(map['given_at']),
+        isTest: _marketBool(map['is_test']),
+      );
+}
+
+class MarketplaceDriverRatingSummary {
+  const MarketplaceDriverRatingSummary({
+    required this.ratingCount,
+    required this.rankedDriverCount,
+    required this.rankingEligible,
+    required this.minimumRatings,
+    this.averageStars,
+    this.rankPosition,
+  });
+
+  final double? averageStars;
+  final int ratingCount;
+  final int? rankPosition;
+  final int rankedDriverCount;
+  final bool rankingEligible;
+  final int minimumRatings;
+
+  factory MarketplaceDriverRatingSummary.fromMap(Map map) =>
+      MarketplaceDriverRatingSummary(
+        averageStars: map['average_stars'] == null
+            ? null
+            : _marketNumber(map['average_stars']),
+        ratingCount: _marketInt(map['rating_count']),
+        rankPosition: map['rank_position'] == null
+            ? null
+            : _marketInt(map['rank_position']),
+        rankedDriverCount: _marketInt(map['ranked_driver_count']),
+        rankingEligible: _marketBool(map['ranking_eligible']),
+        minimumRatings: _marketInt(map['minimum_ratings']),
+      );
+}
 /// Server-first Marketplace gateway. Jobs, wallet and trials never enter Hive/sync.
 class MarketplaceService {
   MarketplaceService(this._client);
@@ -963,6 +1051,30 @@ class MarketplaceService {
     'target_idempotency_key': idempotencyKey,
   }).then(MarketplaceJob.fromMap);
 
+  Future<MarketplaceDriverCustomerRating> rateCustomer({
+    required String jobId,
+    required int stars,
+    required String idempotencyKey,
+    String? internalNote,
+  }) => _one('create_my_marketplace_customer_rating', {
+    'target_job_id': jobId,
+    'target_stars': stars,
+    'target_internal_note': internalNote,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceDriverCustomerRating.fromMap);
+
+  Future<List<MarketplaceDriverRatingEntry>> ratings({
+    int limit = 100,
+  }) => _list(
+    'list_my_marketplace_ratings',
+    {'target_limit': limit},
+  ).then(
+    (items) => items.map(MarketplaceDriverRatingEntry.fromMap).toList(),
+  );
+
+  Future<MarketplaceDriverRatingSummary> ratingSummary() =>
+      _one('get_my_marketplace_rating_summary')
+          .then(MarketplaceDriverRatingSummary.fromMap);
   Future<MarketplaceJob> cancel(
     String jobId,
     String reason,

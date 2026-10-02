@@ -203,6 +203,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   List<MarketplaceJob> _active = const [];
   List<MarketplaceJob> _scheduled = const [];
   List<MarketplaceJob> _history = const [];
+  List<MarketplaceDriverRatingEntry> _ratings = const [];
+  MarketplaceDriverRatingSummary? _ratingSummary;
+  bool _loadingRatings = false;
+  bool _ratingsLoaded = false;
+  String? _ratingsError;
 
   final Set<String> _loadingScopes = <String>{};
   final Map<String, String> _scopeErrors = <String, String>{};
@@ -222,7 +227,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
+    _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
     WidgetsBinding.instance.addObserver(this);
     marketplaceJobRefreshRequests.addListener(_refreshAvailability);
@@ -235,10 +241,51 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
+    _tabController.removeListener(_onMarketplaceTabChanged);
     _tabController.dispose();
     super.dispose();
   }
 
+  void _onMarketplaceTabChanged() {
+    if (_tabController.index == 3 && !_tabController.indexIsChanging) {
+      unawaited(_loadRatings(force: true));
+    }
+  }
+
+  Future<void> _loadRatings({bool force = false}) async {
+    if (_loadingRatings || (_ratingsLoaded && !force)) return;
+
+    if (mounted) {
+      setState(() {
+        _loadingRatings = true;
+        _ratingsError = null;
+      });
+    }
+
+    try {
+      final ratings = await _service.ratings();
+      final summary = await _service.ratingSummary();
+
+      if (!mounted) return;
+
+      setState(() {
+        _ratings = ratings;
+        _ratingSummary = summary;
+        _ratingsLoaded = true;
+        _ratingsError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _ratingsError =
+            'No pudimos cargar tus evaluaciones. IntÃ©ntalo nuevamente.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loadingRatings = false);
+      }
+    }
+  }
   void _refreshAvailability() {
     if (marketplaceJobPushPending.value && !_marketplaceJobsVisible.value) {
       _marketplaceJobsNeedAttention.value = true;
@@ -728,6 +775,177 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     await _load();
   }
 
+  Future<void> _showCustomerRatingSurvey(String jobId) async {
+    final noteController = TextEditingController();
+    final idempotencyKey = _marketplaceUuidV4();
+
+    var stars = 0;
+    var sending = false;
+    String? error;
+
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: .72),
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (context, setSheetState) {
+              Future<void> submit() async {
+                if (stars < 1 || stars > 5) {
+                  setSheetState(
+                    () => error = 'Selecciona entre 1 y 5 estrellas.',
+                  );
+                  return;
+                }
+
+                setSheetState(() {
+                  sending = true;
+                  error = null;
+                });
+
+                try {
+                  final note = noteController.text.trim();
+
+                  await _service.rateCustomer(
+                    jobId: jobId,
+                    stars: stars,
+                    internalNote: note.isEmpty ? null : note,
+                    idempotencyKey: idempotencyKey,
+                  );
+
+                  if (sheetContext.mounted) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                } catch (_) {
+                  if (!sheetContext.mounted) return;
+
+                  setSheetState(() {
+                    sending = false;
+                    error =
+                        'No pudimos guardar la evaluaciÃ³n. IntÃ©ntalo nuevamente.';
+                  });
+                }
+              }
+
+              return SafeArea(
+                top: false,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    14,
+                    20,
+                    20 + MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
+                      bottom: Radius.circular(22),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'EvalÃºa al cliente',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Â¿CÃ³mo fue tu experiencia durante este servicio?',
+                          style: TextStyle(color: appMutedColor(context)),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(5, (index) {
+                            final value = index + 1;
+
+                            return IconButton(
+                              tooltip: '$value estrellas',
+                              onPressed: sending
+                                  ? null
+                                  : () {
+                                      setSheetState(() {
+                                        stars = value;
+                                        error = null;
+                                      });
+                                    },
+                              iconSize: 38,
+                              icon: Icon(
+                                value <= stars
+                                    ? Icons.star_rounded
+                                    : Icons.star_outline_rounded,
+                                color: kTertiary,
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: noteController,
+                          enabled: !sending,
+                          maxLength: 1000,
+                          minLines: 3,
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            labelText: 'Nota interna (opcional)',
+                            helperText:
+                                'Solo serÃ¡ visible para la gestiÃ³n de TUKTUK.',
+                            alignLabelWithHint: true,
+                          ),
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            error!,
+                            style: const TextStyle(
+                              color: kDanger,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: sending ? null : submit,
+                          icon: sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.star_rounded),
+                          label: const Text('Enviar evaluaciÃ³n'),
+                        ),
+                        TextButton(
+                          onPressed: sending
+                              ? null
+                              : () => Navigator.of(sheetContext).pop(),
+                          child: const Text('Ahora no'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      noteController.dispose();
+    }
+  }
   Future<void> _advanceJob(MarketplaceJob job) async {
     final action = job.nextAction;
     final label = _marketplaceJobActionLabel(action);
@@ -776,6 +994,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           distanceKm: job.distanceKm,
           completedAt: updatedJob.completedAt ?? DateTime.now(),
         );
+
+        if (mounted) {
+          await _showCustomerRatingSurvey(updatedJob.id);
+          _ratingsLoaded = false;
+        }
       }
 
       _operationKeys.remove(keyName);
@@ -1448,6 +1671,233 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  Widget _buildRatingStars(
+    int? stars, {
+    double size = 20,
+  }) {
+    if (stars == null) {
+      return Text(
+        'Pendiente',
+        style: TextStyle(
+          color: appMutedColor(context),
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    final safeStars = stars.clamp(1, 5);
+
+    return Semantics(
+      label: '$safeStars de 5 estrellas',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(
+          5,
+          (index) => Icon(
+            index < safeStars
+                ? Icons.star_rounded
+                : Icons.star_outline_rounded,
+            size: size,
+            color: kTertiary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRatingsTab(BuildContext context) {
+    if (!_ratingsLoaded && _loadingRatings) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (!_ratingsLoaded && _ratingsError == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final summary = _ratingSummary;
+    final averageStars = summary?.averageStars;
+    final rankText = summary == null
+        ? 'Ranking no disponible'
+        : summary.rankingEligible && summary.rankPosition != null
+            ? 'Ranking #${summary.rankPosition} de ${summary.rankedDriverCount}'
+            : 'Ranking disponible desde ${summary.minimumRatings} evaluaciones';
+
+    return RefreshIndicator(
+      onRefresh: () => _loadRatings(force: true),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_ratingsError != null)
+            GlassCard(
+              child: Column(
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 40),
+                  const SizedBox(height: 10),
+                  Text(
+                    _ratingsError!,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: () => _loadRatings(force: true),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Mi valoraciÃ³n',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (averageStars != null) ...[
+                    Row(
+                      children: [
+                        Text(
+                          averageStars.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _buildRatingStars(
+                          averageStars.round(),
+                          size: 25,
+                        ),
+                      ],
+                    ),
+                  ] else
+                    Text(
+                      'AÃºn no tienes evaluaciones',
+                      style: TextStyle(
+                        color: appMutedColor(context),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '${summary?.ratingCount ?? 0} evaluaciones',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    rankText,
+                    style: TextStyle(
+                      color: appMutedColor(context),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (_ratings.isEmpty)
+              GlassCard(
+                child: Column(
+                  children: [
+                    const Icon(Icons.star_outline_rounded, size: 42),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'TodavÃ­a no tienes evaluaciones por carrera',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._ratings.map(
+                (rating) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: GlassCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _marketplaceJobServiceLabel(
+                                  rating.serviceCode,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            if (rating.isTest)
+                              const Text(
+                                'Prueba',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (rating.serviceDate != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            _marketplaceJobDateLabel(rating.serviceDate),
+                            style: TextStyle(
+                              color: appMutedColor(context),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Cliente â†’ TÃº',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            _buildRatingStars(rating.receivedStars),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'TÃº â†’ Cliente',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            _buildRatingStars(rating.givenStars),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
   Widget _buildServiceTab(BuildContext context) {
     final Widget content;
 
@@ -1541,6 +1991,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
             Tab(icon: Icon(Icons.history), text: 'Hist.'),
             Tab(
+              icon: Icon(Icons.star_outline_rounded),
+              text: 'Evaluaciones',
+            ),
+            Tab(
               icon: Icon(Icons.account_balance_wallet_outlined),
               text: 'Saldo',
             ),
@@ -1568,6 +2022,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 emptyMessage:
                     'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
               ),
+              _buildRatingsTab(context),
               MarketplaceOnboardingScreen(
                 key: ValueKey(
                   'wallet-$_selectedVehicleId-$_managementRevision',
@@ -2035,6 +2490,20 @@ class _AssignedJobCard extends StatelessWidget {
               ),
             ),
           ],
+          if (onContact != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onContact,
+                icon: const Icon(Icons.contact_phone_rounded),
+                label: const Text(
+                  'Contactar cliente',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
           if (scope != 'history' && job.status != 'incident') ...[
             const SizedBox(height: 14),
             Row(
@@ -2175,29 +2644,19 @@ class _AssignedJobCard extends StatelessWidget {
               ],
             ),
           ],
-          if (onContact != null || onCancel != null) ...[
+          if (onCancel != null) ...[
             const SizedBox(height: 18),
-            if (onContact != null || onCancel != null) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  if (onContact != null)
-                    OutlinedButton.icon(
-                      onPressed: busy ? null : onContact,
-                      icon: const Icon(Icons.contact_phone_rounded),
-                      label: const Text('Contactar cliente'),
-                    ),
-                  if (onCancel != null)
-                    OutlinedButton.icon(
-                      onPressed: busy ? null : onCancel,
-                      icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('Cancelar'),
-                    ),
-                ],
-              ),
-            ],
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onCancel,
+                  icon: const Icon(Icons.cancel_outlined),
+                  label: const Text('Cancelar'),
+                ),
+              ],
+            ),
           ],
         ],
       ),
