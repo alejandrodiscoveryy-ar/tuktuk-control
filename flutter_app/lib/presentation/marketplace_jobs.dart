@@ -11,7 +11,10 @@ final ValueNotifier<bool> _marketplaceDriverProfileNeedsSetup =
 bool _marketplaceDriverNeedsSetup(MarketplaceOnboarding data) =>
     !data.driverSuspended &&
     data.driverStatus != 'suspended' &&
-    (!data.driverProfileExists || data.driverStatus != 'active');
+    (!data.driverProfileExists ||
+        data.displayName?.trim().isNotEmpty != true ||
+        !RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(data.phone?.trim() ?? '') ||
+        data.driverPhotoAssetId?.trim().isNotEmpty != true);
 
 void _updateMarketplaceDriverProfileNeedsSetup(MarketplaceOnboarding? data) {
   _marketplaceDriverProfileNeedsSetup.value =
