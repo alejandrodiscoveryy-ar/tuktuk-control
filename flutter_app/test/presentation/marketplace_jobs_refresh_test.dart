@@ -170,6 +170,8 @@ void main() {
       }),
     ];
     await open(tester);
+    expect(find.text('Vehículo activo'), findsNothing);
+    expect(find.text('Trabajando'), findsNothing);
     final action = find.text('Salir hacia el cliente');
     expect(action, findsOneWidget);
     expect(

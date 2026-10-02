@@ -1498,8 +1498,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     final onboarding = _onboarding;
-    final showVehicleControl =
-        !_loading && onboarding != null && onboarding.vehicles.isNotEmpty;
+    final showVehicleControl = !_loading &&
+        _active.isEmpty &&
+        onboarding != null &&
+        onboarding.vehicles.isNotEmpty;
 
     return Column(
       children: [
