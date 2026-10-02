@@ -278,7 +278,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
       setState(() {
         _ratingsError =
-            'No pudimos cargar tus evaluaciones. IntÃ©ntalo nuevamente.';
+            'No pudimos cargar tus evaluaciones. Inténtalo nuevamente.';
       });
     } finally {
       if (mounted) {
@@ -824,7 +824,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                   setSheetState(() {
                     sending = false;
                     error =
-                        'No pudimos guardar la evaluaciÃ³n. IntÃ©ntalo nuevamente.';
+                        'No pudimos guardar la evaluación. Inténtalo nuevamente.';
                   });
                 }
               }
@@ -852,7 +852,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const Text(
-                          'EvalÃºa al cliente',
+                          'Evalúa al cliente',
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
@@ -860,7 +860,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Â¿CÃ³mo fue tu experiencia durante este servicio?',
+                          '¿Cómo fue tu experiencia durante este servicio?',
                           style: TextStyle(color: appMutedColor(context)),
                         ),
                         const SizedBox(height: 18),
@@ -899,7 +899,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           decoration: const InputDecoration(
                             labelText: 'Nota interna (opcional)',
                             helperText:
-                                'Solo serÃ¡ visible para la gestiÃ³n de TUKTUK.',
+                                'Solo será visible para la gestión de TUKTUK.',
                             alignLabelWithHint: true,
                           ),
                         ),
@@ -925,7 +925,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                   ),
                                 )
                               : const Icon(Icons.star_rounded),
-                          label: const Text('Enviar evaluaciÃ³n'),
+                          label: const Text('Enviar evaluación'),
                         ),
                         TextButton(
                           onPressed: sending
@@ -1753,7 +1753,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Mi valoraciÃ³n',
+                    'Mi valoración',
                     style: TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.w900,
@@ -1779,7 +1779,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     ),
                   ] else
                     Text(
-                      'AÃºn no tienes evaluaciones',
+                      'Aún no tienes evaluaciones',
                       style: TextStyle(
                         color: appMutedColor(context),
                         fontWeight: FontWeight.w700,
@@ -1809,7 +1809,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     const Icon(Icons.star_outline_rounded, size: 42),
                     const SizedBox(height: 12),
                     const Text(
-                      'TodavÃ­a no tienes evaluaciones por carrera',
+                      'Todavía no tienes evaluaciones por carrera',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 17,
@@ -1865,7 +1865,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           children: [
                             const Expanded(
                               child: Text(
-                                'Cliente â†’ TÃº',
+                                'Cliente → Tú',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -1879,7 +1879,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           children: [
                             const Expanded(
                               child: Text(
-                                'TÃº â†’ Cliente',
+                                'Tú → Cliente',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                 ),

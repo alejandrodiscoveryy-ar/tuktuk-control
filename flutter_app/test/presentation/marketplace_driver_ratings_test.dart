@@ -33,7 +33,7 @@ class _RatingsService extends MarketplaceService {
         'vehicles': [
           {
             'vehicle_id': 'vehicle-test',
-            'name': 'VehÃ­culo de prueba',
+            'name': 'Vehículo de prueba',
             'marketplace_status': 'active',
             'onboarding_complete': true,
             'is_active': true,
@@ -163,12 +163,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(find.text('Mi valoraciÃ³n'), findsOneWidget);
+    expect(find.text('Mi valoración'), findsOneWidget);
     expect(find.text('4.8'), findsOneWidget);
     expect(find.text('37 evaluaciones'), findsOneWidget);
     expect(find.text('Ranking #4 de 12'), findsOneWidget);
-    expect(find.text('Cliente â†’ TÃº'), findsOneWidget);
-    expect(find.text('TÃº â†’ Cliente'), findsOneWidget);
+    expect(find.text('Cliente → Tú'), findsOneWidget);
+    expect(find.text('Tú → Cliente'), findsOneWidget);
     expect(find.textContaining('Nota interna'), findsNothing);
   });
 }
