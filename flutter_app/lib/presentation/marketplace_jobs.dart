@@ -1307,7 +1307,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       label: const Text('Activar'),
                     );
               final textScale = MediaQuery.textScalerOf(context).scale(1);
-              if (constraints.maxWidth < 480 * textScale) {
+              if (constraints.maxWidth < 340 * textScale) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [identity, const SizedBox(height: 12), control],
