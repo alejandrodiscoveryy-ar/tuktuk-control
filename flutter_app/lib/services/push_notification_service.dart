@@ -29,6 +29,16 @@ typedef PushMessageOpenedCallback = FutureOr<void> Function(
 
 typedef ExternalUrlLauncher = Future<bool> Function(Uri uri);
 
+// Receiving a push requests a refresh; opening it remains a separate action.
+final marketplaceJobRefreshRequests = ValueNotifier<int>(0);
+final marketplaceJobPushPending = ValueNotifier<bool>(false);
+
+void handleForegroundPushData(Map<String, dynamic> data) {
+  if (marketplaceJobIdFromPush(data) == null) return;
+  marketplaceJobPushPending.value = true;
+  marketplaceJobRefreshRequests.value++;
+}
+
 String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
   if (data['kind']?.toString() != 'marketplace_job_available') return null;
   final jobId = data['job_id']?.toString();
@@ -232,6 +242,7 @@ class PushNotificationService {
   }
 
   Future<void> _showForegroundMessage(RemoteMessage message) async {
+    handleForegroundPushData(message.data);
     final title =
         message.notification?.title ?? message.data['title']?.toString();
     final body = message.notification?.body ?? message.data['body']?.toString();

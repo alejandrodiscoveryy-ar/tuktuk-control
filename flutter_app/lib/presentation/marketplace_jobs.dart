@@ -1,5 +1,16 @@
 part of '../main.dart';
 
+String marketplaceAcceptErrorMessage(Object error) {
+  final code = error.toString().toUpperCase();
+  if (code.contains('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE')) {
+    return 'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.';
+  }
+  if (code.contains('INCOMPLETE') || code.contains('PROFILE_NOT_COMPLETE')) {
+    return 'Completa tu perfil de conductor y los requisitos del vehículo para aceptar trabajos.';
+  }
+  return 'No se pudo aceptar el trabajo. Puede que ya no esté disponible. Comprueba tu conexión y vuelve a intentarlo.';
+}
+
 final ValueNotifier<int> _marketplaceAvailableJobCount = ValueNotifier<int>(0);
 final ValueNotifier<bool> _marketplaceJobsNeedAttention = ValueNotifier<bool>(
   false,
@@ -22,6 +33,7 @@ void _updateMarketplaceDriverProfileNeedsSetup(MarketplaceOnboarding? data) {
 }
 
 void _setMarketplaceAvailableJobCount(int count) {
+  marketplaceJobPushPending.value = false;
   final safeCount = count < 0 ? 0 : count;
   final previous = _marketplaceAvailableJobCount.value;
 
@@ -165,16 +177,23 @@ bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
 }
 
 class MarketplaceJobsScreen extends StatefulWidget {
-  const MarketplaceJobsScreen({required this.store, super.key});
+  const MarketplaceJobsScreen({
+    required this.store,
+    this.service,
+    this.isVisible = true,
+    super.key,
+  });
 
   final RecordStore store;
+  final MarketplaceService? service;
+  final bool isVisible;
 
   @override
   State<MarketplaceJobsScreen> createState() => _MarketplaceJobsScreenState();
 }
 
 class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final MarketplaceService _service;
   late final TabController _tabController;
 
@@ -204,14 +223,32 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _service = MarketplaceService(Supabase.instance.client);
-    unawaited(_load());
+    _service = widget.service ?? MarketplaceService(Supabase.instance.client);
+    WidgetsBinding.instance.addObserver(this);
+    marketplaceJobRefreshRequests.addListener(_refreshAvailability);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_load());
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _refreshAvailability() {
+    if (marketplaceJobPushPending.value && !_marketplaceJobsVisible.value) {
+      _marketplaceJobsNeedAttention.value = true;
+    }
+    unawaited(_load(refreshHistory: false));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshAvailability();
   }
 
   // The wallet tab is recreated after activation so its totals are current.
@@ -266,10 +303,35 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
-  Future<void> _load() async {
+  Future<void>? _loadRequest;
+  bool _loadAgain = false;
+  bool _reloadHistory = false;
+
+  Future<void> _load({bool refreshHistory = true}) {
+    _reloadHistory = _reloadHistory || refreshHistory;
+    if (_loadRequest != null) {
+      _loadAgain = true;
+      return _loadRequest!;
+    }
+    return _loadRequest = _drainLoads().whenComplete(() {
+      _loadRequest = null;
+    });
+  }
+
+  Future<void> _drainLoads() async {
+    do {
+      _loadAgain = false;
+      final refreshHistory = _reloadHistory;
+      _reloadHistory = false;
+      await _fetchLoad(refreshHistory: refreshHistory);
+    } while (mounted && _loadAgain);
+  }
+
+  Future<void> _fetchLoad({required bool refreshHistory}) async {
     if (widget.store.user == null) {
       if (!mounted) return;
 
+      _updateMarketplaceDriverProfileNeedsSetup(null);
       _setMarketplaceAvailableJobCount(0);
 
       setState(() {
@@ -315,6 +377,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       });
 
       if (_marketplaceDriverNeedsSetup(onboarding)) {
+        _setMarketplaceAvailableJobCount(0);
         setState(() => _loading = false);
         return;
       }
@@ -323,11 +386,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       await Future.wait([
         _loadScope('active'),
         _loadScope('scheduled'),
-        _loadScope('history'),
+        if (refreshHistory) _loadScope('history'),
       ]);
 
       if (!mounted) return;
 
+      if (_scopeErrors.containsKey('active') ||
+          _scopeErrors.containsKey('scheduled')) {
+        throw StateError('Job availability could not be verified');
+      }
       await _loadAvailable();
       if (mounted) setState(() => _loading = false);
     } catch (_) {
@@ -335,13 +402,22 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       setState(() {
         _loading = false;
+        _available = const [];
         _error =
             'No pudimos cargar los trabajos. Comprueba tu conexión e inténtalo de nuevo.';
       });
+      _setMarketplaceAvailableJobCount(0);
     }
   }
 
-  Future<void> _loadAvailable() async {
+  Future<void>? _availableRequest;
+
+  Future<void> _loadAvailable() =>
+      _availableRequest ??= _fetchAvailable().whenComplete(() {
+        _availableRequest = null;
+      });
+
+  Future<void> _fetchAvailable() async {
     if (_active.isNotEmpty || _scheduled.isNotEmpty) {
       if (!mounted) return;
 
@@ -393,13 +469,22 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
       setState(() {
+        _available = const [];
         _error =
             'No pudimos actualizar los trabajos. Desliza hacia abajo para intentarlo de nuevo.';
       });
+      _setMarketplaceAvailableJobCount(0);
     }
   }
 
-  Future<void> _loadScope(String scope) async {
+  final Map<String, Future<void>> _scopeRequests = {};
+
+  Future<void> _loadScope(String scope) =>
+      _scopeRequests[scope] ??= _fetchScope(scope).whenComplete(() {
+        _scopeRequests.remove(scope);
+      });
+
+  Future<void> _fetchScope(String scope) async {
     if (!mounted) return;
 
     setState(() {
@@ -461,7 +546,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _scopeErrors.remove(scope);
       });
 
-      if (scope == 'active' && jobs.isEmpty && mounted) {
+      if (scope == 'active' && jobs.isEmpty && mounted && !_loading) {
         await _loadAvailable();
       }
     } catch (_) {
@@ -618,13 +703,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (_scheduled.any((item) => item.id == job.id)) {
         _tabController.animateTo(1);
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        toast(
-          context,
-          'No se pudo aceptar. Puede que el trabajo ya no esté disponible '
-          'o que tu cuenta necesite completar un requisito.',
-        );
+        toast(context, marketplaceAcceptErrorMessage(error));
       }
     } finally {
       if (mounted) {
@@ -1434,6 +1515,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Keep the refresh state alive without building maps or requesting location
+    // while the driver is using another section of the shell.
+    if (!widget.isVisible) return const SizedBox.shrink();
     if (_loading) return const Center(child: CircularProgressIndicator());
     final onboarding = _onboarding;
     if (onboarding == null) return _buildAvailableTab(context);
@@ -1926,6 +2010,29 @@ class _AssignedJobCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onAdvance != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: busy ? null : onAdvance,
+                icon: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(_marketplaceJobStatusIcon(job.status)),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Text(
+                    _marketplaceJobActionLabel(job.nextAction) ?? 'Continuar',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (scope != 'history' && job.status != 'incident') ...[
             const SizedBox(height: 14),
             Row(
@@ -2066,29 +2173,8 @@ class _AssignedJobCard extends StatelessWidget {
               ],
             ),
           ],
-          if (onContact != null || onAdvance != null || onCancel != null) ...[
+          if (onContact != null || onCancel != null) ...[
             const SizedBox(height: 18),
-            if (onAdvance != null)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: busy ? null : onAdvance,
-                  icon: busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(_marketplaceJobStatusIcon(job.status)),
-                  label: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Text(
-                      _marketplaceJobActionLabel(job.nextAction) ?? 'Continuar',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                ),
-              ),
             if (onContact != null || onCancel != null) ...[
               const SizedBox(height: 10),
               Wrap(

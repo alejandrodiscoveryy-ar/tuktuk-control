@@ -535,7 +535,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 class _AppShellState extends State<AppShell> {
   int index = _marketplacePushJobId.value == null ? 0 : 2;
   String? _lastAuthenticatedUserId;
-  String? _jobsAlertUserId;
 
   RecordStore get store => widget.store;
 
@@ -549,65 +548,9 @@ class _AppShellState extends State<AppShell> {
   void _openMarketplacePush() {
     if (_marketplacePushJobId.value == null || !mounted) return;
 
-    if (_marketplaceAvailableJobCount.value == 0) {
-      _setMarketplaceAvailableJobCount(1);
-    }
-
     _setMarketplaceJobsVisible(true);
     setState(() => index = 2);
     _marketplacePushJobId.value = null;
-  }
-
-  Future<void> _refreshMarketplaceJobAlert() async {
-    final userId = store.user?.id;
-    if (userId == null) {
-      _updateMarketplaceDriverProfileNeedsSetup(null);
-      _setMarketplaceAvailableJobCount(0);
-      return;
-    }
-
-    try {
-      final service = MarketplaceService(Supabase.instance.client);
-
-      final onboarding = await service.onboarding();
-      if (!mounted || store.user?.id != userId) return;
-      _updateMarketplaceDriverProfileNeedsSetup(onboarding);
-
-      final active = await service.jobs('active');
-      final scheduled = await service.jobs('scheduled');
-
-      if (!mounted || store.user?.id != userId) return;
-
-      if (active.isNotEmpty || scheduled.isNotEmpty) {
-        _setMarketplaceAvailableJobCount(0);
-        return;
-      }
-
-      String? vehicleId;
-      final preferredId = store.activeVehicle?.id;
-
-      if (preferredId != null &&
-          onboarding.vehicles.any((vehicle) => vehicle.id == preferredId)) {
-        vehicleId = preferredId;
-      } else if (onboarding.vehicles.isNotEmpty) {
-        vehicleId = onboarding.vehicles.first.id;
-      }
-
-      if (!mounted || store.user?.id != userId) return;
-
-      if (vehicleId == null) {
-        _setMarketplaceAvailableJobCount(0);
-        return;
-      }
-
-      final available = await service.available(vehicleId);
-
-      if (!mounted || store.user?.id != userId) return;
-
-      _setMarketplaceAvailableJobCount(available.length);
-    } catch (_) {
-      // Una falla temporal de red no debe romper la navegacion.
-    }
   }
 
   @override
@@ -644,26 +587,6 @@ class _AppShellState extends State<AppShell> {
         }
         _lastAuthenticatedUserId = authenticatedUserId;
 
-        if (authenticatedUserId != null &&
-            authenticatedUserId != _jobsAlertUserId) {
-          _jobsAlertUserId = authenticatedUserId;
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              unawaited(_refreshMarketplaceJobAlert());
-            }
-          });
-        } else if (authenticatedUserId == null && _jobsAlertUserId != null) {
-          _jobsAlertUserId = null;
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              _updateMarketplaceDriverProfileNeedsSetup(null);
-              _setMarketplaceAvailableJobCount(0);
-            }
-          });
-        }
-
         final isSynchronized =
             store.user != null &&
             store.pendingSyncCount == 0 &&
@@ -677,7 +600,11 @@ class _AppShellState extends State<AppShell> {
         final screens = [
           DashboardScreen(store: store),
           MarketplaceRecordsScreen(store: store),
-          MarketplaceJobsScreen(store: store),
+          MarketplaceJobsScreen(
+            store: store,
+            key: ValueKey(authenticatedUserId),
+            isVisible: index == 2,
+          ),
           StatsScreen(store: store),
           const StoreScreen(),
           MarketplaceMoreScreen(store: store),
@@ -765,7 +692,20 @@ class _AppShellState extends State<AppShell> {
                           children: [
                             if (store.isReadOnly)
                               _ReadOnlyLicenseBanner(store: store),
-                            Expanded(child: screens[index]),
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  Offstage(
+                                    offstage: index != 2,
+                                    child: TickerMode(
+                                      enabled: index == 2,
+                                      child: screens[2],
+                                    ),
+                                  ),
+                                  if (index != 2) screens[index],
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -992,7 +932,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
   bool get _shouldAnimate =>
       _marketplaceDriverProfileNeedsSetup.value ||
       (!widget.selected &&
-          _marketplaceAvailableJobCount.value > 0 &&
+          (_marketplaceAvailableJobCount.value > 0 || marketplaceJobPushPending.value) &&
           _marketplaceJobsNeedAttention.value &&
           !_marketplaceJobsVisible.value);
 
@@ -1005,6 +945,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
       duration: const Duration(milliseconds: 720),
     );
 
+    marketplaceJobPushPending.addListener(_handleAttentionChanged);
     _marketplaceAvailableJobCount.addListener(_handleAttentionChanged);
     _marketplaceJobsNeedAttention.addListener(_handleAttentionChanged);
     _marketplaceJobsVisible.addListener(_handleAttentionChanged);
@@ -1051,6 +992,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
 
   @override
   void dispose() {
+    marketplaceJobPushPending.removeListener(_handleAttentionChanged);
     _marketplaceAvailableJobCount.removeListener(_handleAttentionChanged);
     _marketplaceJobsNeedAttention.removeListener(_handleAttentionChanged);
     _marketplaceJobsVisible.removeListener(_handleAttentionChanged);
@@ -1116,7 +1058,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                       : Color.lerp(baseColor, attentionColor, pulse),
                 ),
               ),
-              if (hasAvailable)
+              if (hasAvailable || (!needsSetup && marketplaceJobPushPending.value))
                 Positioned(
                   right: -4,
                   top: -5,
@@ -1135,10 +1077,10 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                         BoxShadow(color: Color(0x66FFB547), blurRadius: 8),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.notifications_active_rounded,
+                    child: Icon(
+                      hasAvailable ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
                       size: 11,
-                      color: Color(0xFF201500),
+                      color: const Color(0xFF201500),
                     ),
                   ),
                 ),

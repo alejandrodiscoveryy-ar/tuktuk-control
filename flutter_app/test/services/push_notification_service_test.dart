@@ -2,6 +2,33 @@ import 'package:control_tuk_tuk/services/push_notification_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('foreground job push requests refresh even without notification text',
+      () {
+    marketplaceJobPushPending.value = false;
+    final revision = marketplaceJobRefreshRequests.value;
+    const data = {
+      'kind': 'marketplace_job_available',
+      'job_id': '12345678-1234-4123-8123-123456789012',
+    };
+    handleForegroundPushData(data);
+    expect(marketplaceJobPushPending.value, isTrue);
+    expect(marketplaceJobRefreshRequests.value, revision + 1);
+    handleForegroundPushData(data);
+    expect(marketplaceJobRefreshRequests.value, revision + 2);
+    marketplaceJobPushPending.value = false;
+  });
+
+  test('other or invalid pushes do not request job refresh', () {
+    marketplaceJobPushPending.value = false;
+    final revision = marketplaceJobRefreshRequests.value;
+    handleForegroundPushData({'kind': 'app_update'});
+    handleForegroundPushData({
+      'kind': 'marketplace_job_available',
+      'job_id': 'invalid',
+    });
+    expect(marketplaceJobPushPending.value, isFalse);
+    expect(marketplaceJobRefreshRequests.value, revision);
+  });
   test('permiso rechazado no interrumpe el inicio de la aplicación', () async {
     await expectLater(
       requestPushPermissionSafely(() async {
@@ -135,7 +162,8 @@ void main() {
     expect(decodePushMessageData('{invalid'), isEmpty);
   });
 
-  test('la restauración de sesión conserva Trabajos desde una oferta válida', () {
+  test('la restauración de sesión conserva Trabajos desde una oferta válida',
+      () {
     expect(
       appShellIndexAfterAuthentication(
         currentIndex: 2,
