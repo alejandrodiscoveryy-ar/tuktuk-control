@@ -1803,12 +1803,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             ),
             const SizedBox(height: 14),
             if (_ratings.isEmpty)
-              GlassCard(
+              const GlassCard(
                 child: Column(
                   children: [
-                    const Icon(Icons.star_outline_rounded, size: 42),
-                    const SizedBox(height: 12),
-                    const Text(
+                    Icon(Icons.star_outline_rounded, size: 42),
+                    SizedBox(height: 12),
+                    Text(
                       'Todavía no tienes evaluaciones por carrera',
                       textAlign: TextAlign.center,
                       style: TextStyle(
