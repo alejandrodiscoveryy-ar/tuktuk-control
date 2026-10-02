@@ -82,6 +82,14 @@ jobs:
       - name: Analyze source
         run: flutter analyze
 
+      - name: Obtener gateway para las pruebas
+        shell: bash
+        run: |
+          mkdir -p ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway
+          curl -fLsS --retry 3 \
+            https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/696285f68670fa96fb88f58236f1e15525cca014/supabase/functions/marketplace-customer-gateway/index.ts \
+            -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
+
       - name: Run tests
         run: flutter test
 
