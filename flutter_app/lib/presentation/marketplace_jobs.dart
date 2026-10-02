@@ -1,9 +1,22 @@
 part of '../main.dart';
 
 final ValueNotifier<int> _marketplaceAvailableJobCount = ValueNotifier<int>(0);
-final ValueNotifier<bool> _marketplaceJobsNeedAttention =
-    ValueNotifier<bool>(false);
+final ValueNotifier<bool> _marketplaceJobsNeedAttention = ValueNotifier<bool>(
+  false,
+);
 final ValueNotifier<bool> _marketplaceJobsVisible = ValueNotifier<bool>(false);
+final ValueNotifier<bool> _marketplaceDriverProfileNeedsSetup =
+    ValueNotifier<bool>(false);
+
+bool _marketplaceDriverNeedsSetup(MarketplaceOnboarding data) =>
+    !data.driverSuspended &&
+    data.driverStatus != 'suspended' &&
+    (!data.driverProfileExists || data.driverStatus != 'active');
+
+void _updateMarketplaceDriverProfileNeedsSetup(MarketplaceOnboarding? data) {
+  _marketplaceDriverProfileNeedsSetup.value =
+      data != null && _marketplaceDriverNeedsSetup(data);
+}
 
 void _setMarketplaceAvailableJobCount(int count) {
   final safeCount = count < 0 ? 0 : count;
@@ -269,7 +282,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     });
 
     try {
+      final userId = widget.store.user?.id;
       final onboarding = await _service.onboarding();
+      if (!mounted || widget.store.user?.id != userId) return;
+      _updateMarketplaceDriverProfileNeedsSetup(onboarding);
 
       String? vehicleId = _selectedVehicleId;
 
@@ -293,9 +309,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _onboarding = onboarding;
         _selectedVehicleId = vehicleId;
         _available = const [];
-        _loading = false;
       });
 
+      if (_marketplaceDriverNeedsSetup(onboarding)) {
+        setState(() => _loading = false);
+        return;
+      }
       await _loadWorkAccess(vehicleId);
 
       await Future.wait([
@@ -307,6 +326,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       await _loadAvailable();
+      if (mounted) setState(() => _loading = false);
     } catch (_) {
       if (!mounted) return;
 
@@ -1208,80 +1228,96 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: appPrimaryColor(context).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.directions_car_filled_rounded,
-                  color: appPrimaryColor(context),
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Vehículo activo',
-                      style: TextStyle(
-                        color: appMutedColor(context),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final identity = Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: appPrimaryColor(context).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      vehicleName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    child: Icon(
+                      Icons.directions_car_filled_rounded,
+                      color: appPrimaryColor(context),
+                      size: 22,
                     ),
-                  ],
-                ),
-              ),
-              if (vehicleReady)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      acceptingJobs ? 'Trabajando' : 'Descansando',
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(width: 3),
-                    Switch.adaptive(
-                      value: acceptingJobs,
-                      onChanged: _updatingAvailability
-                          ? null
-                          : (value) {
-                              unawaited(_setAcceptingJobs(value));
-                            },
-                    ),
-                  ],
-                )
-              else
-                OutlinedButton.icon(
-                  onPressed: _openActivation,
-                  icon: const Icon(
-                    Icons.verified_user_outlined,
-                    size: 17,
                   ),
-                  label: const Text('Activar'),
-                ),
-            ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Vehículo activo',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: appMutedColor(context),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          vehicleName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+              final control = vehicleReady
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          acceptingJobs ? 'Trabajando' : 'Descansando',
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        Switch.adaptive(
+                          value: acceptingJobs,
+                          onChanged: _updatingAvailability
+                              ? null
+                              : (value) {
+                                  unawaited(_setAcceptingJobs(value));
+                                },
+                        ),
+                      ],
+                    )
+                  : OutlinedButton.icon(
+                      onPressed: _openActivation,
+                      icon: const Icon(Icons.verified_user_outlined, size: 17),
+                      label: const Text('Activar'),
+                    );
+              final textScale = MediaQuery.textScalerOf(context).scale(1);
+              if (constraints.maxWidth < 480 * textScale) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [identity, const SizedBox(height: 12), control],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: identity),
+                  const SizedBox(width: 12),
+                  control,
+                ],
+              );
+            },
           ),
           if (onboarding.vehicles.length > 1) ...[
             const SizedBox(height: 12),
@@ -1320,10 +1356,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             const SizedBox(height: 8),
             Text(
               'Completa la activación para poder recibir solicitudes.',
-              style: TextStyle(
-                color: appMutedColor(context),
-                fontSize: 12,
-              ),
+              style: TextStyle(color: appMutedColor(context), fontSize: 12),
             ),
           ],
         ],
@@ -1398,6 +1431,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    final onboarding = _onboarding;
+    if (onboarding == null) return _buildAvailableTab(context);
+    if (_marketplaceDriverNeedsSetup(onboarding)) {
+      return MarketplaceOnboardingScreen(
+        store: widget.store,
+        driverOnly: true,
+        onManagementChanged: _onManagementChanged,
+      );
+    }
     return Column(
       children: [
         const SizedBox(height: 8),

@@ -559,7 +559,9 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _refreshMarketplaceJobAlert() async {
-    if (store.user == null) {
+    final userId = store.user?.id;
+    if (userId == null) {
+      _updateMarketplaceDriverProfileNeedsSetup(null);
       _setMarketplaceAvailableJobCount(0);
       return;
     }
@@ -567,17 +569,19 @@ class _AppShellState extends State<AppShell> {
     try {
       final service = MarketplaceService(Supabase.instance.client);
 
+      final onboarding = await service.onboarding();
+      if (!mounted || store.user?.id != userId) return;
+      _updateMarketplaceDriverProfileNeedsSetup(onboarding);
+
       final active = await service.jobs('active');
       final scheduled = await service.jobs('scheduled');
 
-      if (!mounted) return;
+      if (!mounted || store.user?.id != userId) return;
 
       if (active.isNotEmpty || scheduled.isNotEmpty) {
         _setMarketplaceAvailableJobCount(0);
         return;
       }
-
-      final onboarding = await service.onboarding();
 
       String? vehicleId;
       final preferredId = store.activeVehicle?.id;
@@ -589,7 +593,7 @@ class _AppShellState extends State<AppShell> {
         vehicleId = onboarding.vehicles.first.id;
       }
 
-      if (!mounted) return;
+      if (!mounted || store.user?.id != userId) return;
 
       if (vehicleId == null) {
         _setMarketplaceAvailableJobCount(0);
@@ -598,7 +602,7 @@ class _AppShellState extends State<AppShell> {
 
       final available = await service.available(vehicleId);
 
-      if (!mounted) return;
+      if (!mounted || store.user?.id != userId) return;
 
       _setMarketplaceAvailableJobCount(available.length);
     } catch (_) {
@@ -654,6 +658,7 @@ class _AppShellState extends State<AppShell> {
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
+              _updateMarketplaceDriverProfileNeedsSetup(null);
               _setMarketplaceAvailableJobCount(0);
             }
           });
@@ -985,10 +990,11 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
   late final AnimationController _controller;
 
   bool get _shouldAnimate =>
-      !widget.selected &&
-      _marketplaceAvailableJobCount.value > 0 &&
-      _marketplaceJobsNeedAttention.value &&
-      !_marketplaceJobsVisible.value;
+      _marketplaceDriverProfileNeedsSetup.value ||
+      (!widget.selected &&
+          _marketplaceAvailableJobCount.value > 0 &&
+          _marketplaceJobsNeedAttention.value &&
+          !_marketplaceJobsVisible.value);
 
   @override
   void initState() {
@@ -1002,6 +1008,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
     _marketplaceAvailableJobCount.addListener(_handleAttentionChanged);
     _marketplaceJobsNeedAttention.addListener(_handleAttentionChanged);
     _marketplaceJobsVisible.addListener(_handleAttentionChanged);
+    _marketplaceDriverProfileNeedsSetup.addListener(_handleAttentionChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncAnimation();
@@ -1047,13 +1054,15 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
     _marketplaceAvailableJobCount.removeListener(_handleAttentionChanged);
     _marketplaceJobsNeedAttention.removeListener(_handleAttentionChanged);
     _marketplaceJobsVisible.removeListener(_handleAttentionChanged);
+    _marketplaceDriverProfileNeedsSetup.removeListener(_handleAttentionChanged);
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasAvailable = _marketplaceAvailableJobCount.value > 0;
+    final needsSetup = _marketplaceDriverProfileNeedsSetup.value;
+    final hasAvailable = !needsSetup && _marketplaceAvailableJobCount.value > 0;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -1102,7 +1111,9 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                       ? Icons.work_rounded
                       : Icons.work_outline_rounded,
                   size: 30,
-                  color: Color.lerp(baseColor, attentionColor, pulse),
+                  color: needsSetup
+                      ? attentionColor
+                      : Color.lerp(baseColor, attentionColor, pulse),
                 ),
               ),
               if (hasAvailable)
@@ -1121,10 +1132,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                         width: 1.5,
                       ),
                       boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x66FFB547),
-                          blurRadius: 8,
-                        ),
+                        BoxShadow(color: Color(0x66FFB547), blurRadius: 8),
                       ],
                     ),
                     child: const Icon(
@@ -1141,6 +1149,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
     );
   }
 }
+
 class _LiquidGlassNavigation extends StatelessWidget {
   const _LiquidGlassNavigation({
     required this.selectedIndex,

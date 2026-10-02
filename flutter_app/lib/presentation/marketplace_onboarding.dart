@@ -36,6 +36,7 @@ String _marketplacePercentLabel(double rate) {
 class MarketplaceOnboardingScreen extends StatefulWidget {
   const MarketplaceOnboardingScreen({
     required this.store,
+    this.driverOnly = false,
     this.managementSection,
     this.initialVehicleId,
     this.onManagementChanged,
@@ -43,6 +44,7 @@ class MarketplaceOnboardingScreen extends StatefulWidget {
   });
 
   final RecordStore store;
+  final bool driverOnly;
   final MarketplaceManagementSection? managementSection;
   final String? initialVehicleId;
   final VoidCallback? onManagementChanged;
@@ -358,7 +360,7 @@ class _MarketplaceOnboardingScreenState
         _applyData(data);
       });
 
-      await _loadAccess();
+      if (!widget.driverOnly) await _loadAccess();
       if (widget.managementSection == MarketplaceManagementSection.wallet) {
         await _loadWallet();
       }
@@ -790,7 +792,9 @@ class _MarketplaceOnboardingScreenState
         _applyData(updated, preferredVehicleId: _selectedVehicleId);
       });
 
-      await _loadAccess(showSpinner: false);
+      _updateMarketplaceDriverProfileNeedsSetup(updated);
+      widget.onManagementChanged?.call();
+      if (!widget.driverOnly) await _loadAccess(showSpinner: false);
 
       if (!mounted) return;
       toast(context, 'Perfil de conductor guardado.');
@@ -1493,7 +1497,7 @@ class _MarketplaceOnboardingScreenState
 
     // Management views reuse the exact access/wallet cards and callbacks.
     // The normal onboarding route contains registration fields only.
-    if (widget.managementSection != null) {
+    if (!widget.driverOnly && widget.managementSection != null) {
       final vehicleLabel = vehicle?.name?.trim().isNotEmpty == true
           ? vehicle!.name!
           : vehicle?.id;
@@ -1665,8 +1669,8 @@ class _MarketplaceOnboardingScreenState
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        GlassCard(
+        if (!widget.driverOnly) const SizedBox(height: 16),
+        if (!widget.driverOnly) GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
