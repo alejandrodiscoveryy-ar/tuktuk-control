@@ -21,12 +21,12 @@ ReferralQualificationMode referralQualificationModeFromValue(Object? value) {
 String referralQualificationLabel(ReferralQualificationMode mode) {
   return switch (mode) {
     ReferralQualificationMode.registration =>
-      'Cuando tu invitado se registre y vincule tu código',
+      'Cuando tu invitado se registre y vincule tu cÃ³digo',
     ReferralQualificationMode.firstPayment =>
       'Cuando tu invitado realice su primer pago',
     ReferralQualificationMode.firstValidJob =>
-      'Cuando tu invitado finalice su primer trabajo válido',
-    ReferralQualificationMode.unknown => 'Condición definida por la campaña',
+      'Cuando tu invitado finalice su primer trabajo vÃ¡lido',
+    ReferralQualificationMode.unknown => 'CondiciÃ³n definida por la campaÃ±a',
   };
 }
 
@@ -143,9 +143,9 @@ ReferralEntryStatus referralEntryStatusFromValue(Object? value) {
 String referralEntryStatusLabel(ReferralEntryStatus status) {
   return switch (status) {
     ReferralEntryStatus.registered => 'Registrado',
-    ReferralEntryStatus.qualified => 'Cumplió la condición',
+    ReferralEntryStatus.qualified => 'CumpliÃ³ la condiciÃ³n',
     ReferralEntryStatus.rewarded => 'Recompensa aplicada',
-    ReferralEntryStatus.unknown => 'En revisión',
+    ReferralEntryStatus.unknown => 'En revisiÃ³n',
   };
 }
 
@@ -154,7 +154,9 @@ String? _safeReferralAvatarUrl(Object? value) {
   final raw = value?.toString().trim();
   if (raw == null || raw.isEmpty) return null;
   final uri = Uri.tryParse(raw);
-  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty ||
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
       uri.userInfo.isNotEmpty) return null;
   return raw;
 }
@@ -191,22 +193,22 @@ class ReferralEntry {
   final String? legacyRewardStatus;
 
   String get displayStatusLabel {
-    if (legacyRewardStatus == 'earned') return 'Días históricos pendientes';
-    if (legacyRewardStatus == 'applied') return 'Días históricos aplicados';
+    if (legacyRewardStatus == 'earned') return 'DÃ­as histÃ³ricos pendientes';
+    if (legacyRewardStatus == 'applied') return 'DÃ­as histÃ³ricos aplicados';
     if (status == ReferralEntryStatus.rewarded && rewardMonths > 0) {
       return licenseStatus == 'applied'
-          ? 'Crédito acreditado · meses aplicados'
-          : 'Crédito acreditado · meses pendientes';
+          ? 'CrÃ©dito acreditado Â· meses aplicados'
+          : 'CrÃ©dito acreditado Â· meses pendientes';
     }
     return referralEntryStatusLabel(status);
   }
 
   String? get licenseStatusLabel => switch (licenseStatus) {
         'applied' => 'Meses aplicados',
-        'pending_no_license' => 'Meses pendientes · sin licencia',
+        'pending_no_license' => 'Meses pendientes Â· sin licencia',
         'pending_ineligible_license' =>
-          'Meses pendientes · licencia no elegible',
-        'pending_indefinite' => 'Meses conservados · licencia indefinida',
+          'Meses pendientes Â· licencia no elegible',
+        'pending_indefinite' => 'Meses conservados Â· licencia indefinida',
         null => null,
         _ => 'Meses pendientes',
       };
@@ -243,7 +245,7 @@ class ReferralEntry {
 
 /// Totales visibles del programa V11 a partir de los premios individuales.
 /// La lista de referidos incluye tanto premios nuevos como conciliaciones
-/// históricas; el resumen remoto antiguo puede omitir estas últimas.
+/// histÃ³ricas; el resumen remoto antiguo puede omitir estas Ãºltimas.
 class ReferralSummaryTotals {
   const ReferralSummaryTotals({
     required this.creditedReferrals,
@@ -261,9 +263,8 @@ class ReferralSummaryTotals {
     var months = 0;
     for (final entry in entries) {
       if (entry.status != ReferralEntryStatus.rewarded) continue;
-      final creditedAmount = entry.rewardCurrency == 'CUP'
-          ? (entry.rewardAmount ?? 0)
-          : 0;
+      final creditedAmount =
+          entry.rewardCurrency == 'CUP' ? (entry.rewardAmount ?? 0) : 0;
       if (creditedAmount > 0) {
         count++;
         cup += creditedAmount;
@@ -426,12 +427,13 @@ Duration referralRetryDelay(int attempts) => Duration(
 String? referralRejection(Object error) {
   if (error is! PostgrestException) return null;
   return switch (error.message) {
-    'REFERRAL_CODE_NOT_FOUND' => 'El código de invitación no existe.',
+    'REFERRAL_CODE_NOT_FOUND' => 'El cÃ³digo de invitaciÃ³n no existe.',
     'SELF_REFERRAL_NOT_ALLOWED' =>
-      'No puedes usar tu propio código de invitación.',
+      'No puedes usar tu propio cÃ³digo de invitaciÃ³n.',
     'REFERRAL_RELATIONSHIP_LOCKED' =>
-      'Tu cuenta ya tiene una atribución fijada o no es elegible.',
-    'REFERRAL_PROGRAM_NOT_ACTIVE' => 'La campaña de referidos no está activa.',
+      'Tu cuenta ya tiene una atribuciÃ³n fijada o no es elegible.',
+    'REFERRAL_PROGRAM_NOT_ACTIVE' =>
+      'La campaÃ±a de referidos no estÃ¡ activa.',
     _ => null,
   };
 }
