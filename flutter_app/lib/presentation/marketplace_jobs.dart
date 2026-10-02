@@ -1,6 +1,36 @@
 part of '../main.dart';
 
 final ValueNotifier<int> _marketplaceAvailableJobCount = ValueNotifier<int>(0);
+final ValueNotifier<bool> _marketplaceJobsNeedAttention =
+    ValueNotifier<bool>(false);
+final ValueNotifier<bool> _marketplaceJobsVisible = ValueNotifier<bool>(false);
+
+void _setMarketplaceAvailableJobCount(int count) {
+  final safeCount = count < 0 ? 0 : count;
+  final previous = _marketplaceAvailableJobCount.value;
+
+  _marketplaceAvailableJobCount.value = safeCount;
+
+  if (safeCount == 0) {
+    _marketplaceJobsNeedAttention.value = false;
+    return;
+  }
+
+  if (safeCount > previous && !_marketplaceJobsVisible.value) {
+    _marketplaceJobsNeedAttention.value = true;
+  }
+}
+
+void _acknowledgeMarketplaceJobs() {
+  _marketplaceJobsNeedAttention.value = false;
+}
+
+void _setMarketplaceJobsVisible(bool visible) {
+  _marketplaceJobsVisible.value = visible;
+  if (visible) {
+    _acknowledgeMarketplaceJobs();
+  }
+}
 
 String _marketplaceJobServiceLabel(String? code) {
   return switch (code) {
@@ -224,7 +254,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (widget.store.user == null) {
       if (!mounted) return;
 
-      _marketplaceAvailableJobCount.value = 0;
+      _setMarketplaceAvailableJobCount(0);
 
       setState(() {
         _loading = false;
@@ -297,7 +327,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _error = null;
       });
 
-      _marketplaceAvailableJobCount.value = 0;
+      _setMarketplaceAvailableJobCount(0);
       return;
     }
 
@@ -307,7 +337,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       setState(() => _available = const []);
-      _marketplaceAvailableJobCount.value = 0;
+      _setMarketplaceAvailableJobCount(0);
       return;
     }
 
@@ -321,7 +351,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _error = null;
       });
 
-      _marketplaceAvailableJobCount.value = 0;
+      _setMarketplaceAvailableJobCount(0);
       return;
     }
 
@@ -335,7 +365,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _error = null;
       });
 
-      _marketplaceAvailableJobCount.value = jobs.length;
+      _setMarketplaceAvailableJobCount(jobs.length);
     } catch (_) {
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
@@ -441,7 +471,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _workAccess = null;
     });
 
-    _marketplaceAvailableJobCount.value = 0;
+    _setMarketplaceAvailableJobCount(0);
 
     await _loadWorkAccess(vehicleId);
     await _loadAvailable();
@@ -487,7 +517,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
         await _loadAvailable();
       } else {
-        _marketplaceAvailableJobCount.value = 0;
+        _setMarketplaceAvailableJobCount(0);
 
         toast(
           context,
@@ -552,7 +582,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _error = null;
       });
 
-      _marketplaceAvailableJobCount.value = 0;
+      _setMarketplaceAvailableJobCount(0);
 
       await Future.wait([
         _loadScope('active'),

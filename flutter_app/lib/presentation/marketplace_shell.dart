@@ -199,7 +199,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
             title: Text(tr('Referidos')),
             subtitle: Text(
               store.referralProgram?.isRegistrationWalletLicense == true
-                  ? 'Invita y gana saldo promocional y meses de Control.'
+                  ? 'Invita y gana saldo promocional por conductores referidos válidos.'
                   : store.referralProgram?.isWalletReward == true
                   ? 'Invita y gana saldo promocional.'
                   : 'Invita a otros conductores y consulta tus premios.',

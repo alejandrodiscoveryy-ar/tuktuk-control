@@ -542,6 +542,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _setMarketplaceJobsVisible(index == 2);
     _marketplacePushJobId.addListener(_openMarketplacePush);
   }
 
@@ -549,16 +550,17 @@ class _AppShellState extends State<AppShell> {
     if (_marketplacePushJobId.value == null || !mounted) return;
 
     if (_marketplaceAvailableJobCount.value == 0) {
-      _marketplaceAvailableJobCount.value = 1;
+      _setMarketplaceAvailableJobCount(1);
     }
 
+    _setMarketplaceJobsVisible(true);
     setState(() => index = 2);
     _marketplacePushJobId.value = null;
   }
 
   Future<void> _refreshMarketplaceJobAlert() async {
     if (store.user == null) {
-      _marketplaceAvailableJobCount.value = 0;
+      _setMarketplaceAvailableJobCount(0);
       return;
     }
 
@@ -571,7 +573,7 @@ class _AppShellState extends State<AppShell> {
       if (!mounted) return;
 
       if (active.isNotEmpty || scheduled.isNotEmpty) {
-        _marketplaceAvailableJobCount.value = 0;
+        _setMarketplaceAvailableJobCount(0);
         return;
       }
 
@@ -590,7 +592,7 @@ class _AppShellState extends State<AppShell> {
       if (!mounted) return;
 
       if (vehicleId == null) {
-        _marketplaceAvailableJobCount.value = 0;
+        _setMarketplaceAvailableJobCount(0);
         return;
       }
 
@@ -598,7 +600,7 @@ class _AppShellState extends State<AppShell> {
 
       if (!mounted) return;
 
-      _marketplaceAvailableJobCount.value = available.length;
+      _setMarketplaceAvailableJobCount(available.length);
     } catch (_) {
       // Una falla temporal de red no debe romper la navegacion.
     }
@@ -652,7 +654,7 @@ class _AppShellState extends State<AppShell> {
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
-              _marketplaceAvailableJobCount.value = 0;
+              _setMarketplaceAvailableJobCount(0);
             }
           });
         }
@@ -743,6 +745,7 @@ class _AppShellState extends State<AppShell> {
                     _DesktopNavigationRail(
                       selectedIndex: index,
                       onDestinationSelected: (value) {
+                        _setMarketplaceJobsVisible(value == 2);
                         setState(() => index = value);
                       },
                       profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -808,6 +811,7 @@ class _AppShellState extends State<AppShell> {
               : _LiquidGlassNavigation(
                   selectedIndex: index,
                   onDestinationSelected: (value) {
+                    _setMarketplaceJobsVisible(value == 2);
                     setState(() => index = value);
                   },
                   profilePhotoUrl: _googleProfilePhotoUrl(store.user),
@@ -979,63 +983,70 @@ class _JobsNavigationIcon extends StatefulWidget {
 class _JobsNavigationIconState extends State<_JobsNavigationIcon>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  late int _lastAvailableCount;
+
+  bool get _shouldAnimate =>
+      !widget.selected &&
+      _marketplaceAvailableJobCount.value > 0 &&
+      _marketplaceJobsNeedAttention.value &&
+      !_marketplaceJobsVisible.value;
 
   @override
   void initState() {
     super.initState();
 
-    _lastAvailableCount = _marketplaceAvailableJobCount.value;
-
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 720),
     );
 
-    _marketplaceAvailableJobCount.addListener(_handleJobsChanged);
+    _marketplaceAvailableJobCount.addListener(_handleAttentionChanged);
+    _marketplaceJobsNeedAttention.addListener(_handleAttentionChanged);
+    _marketplaceJobsVisible.addListener(_handleAttentionChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(_pulse(times: 3));
-      }
+      if (mounted) _syncAnimation();
     });
   }
 
-  void _handleJobsChanged() {
-    final count = _marketplaceAvailableJobCount.value;
+  @override
+  void didUpdateWidget(covariant _JobsNavigationIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    if (count > 0 && count != _lastAvailableCount) {
-      unawaited(_pulse(times: 2));
-    }
-
-    _lastAvailableCount = count;
-
-    if (mounted) {
-      setState(() {});
+    if (oldWidget.selected != widget.selected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncAnimation();
+      });
     }
   }
 
-  Future<void> _pulse({required int times}) async {
-    if (_controller.isAnimating) return;
+  void _handleAttentionChanged() {
+    if (!mounted) return;
+    _syncAnimation();
+    setState(() {});
+  }
 
-    for (var i = 0; i < times; i++) {
-      if (!mounted) return;
-
-      await _controller.forward(from: 0);
-
-      if (!mounted) return;
-
-      await _controller.reverse();
-
-      if (i < times - 1) {
-        await Future<void>.delayed(const Duration(milliseconds: 70));
+  void _syncAnimation() {
+    if (_shouldAnimate) {
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
       }
+      return;
+    }
+
+    if (_controller.isAnimating) {
+      _controller.stop();
+    }
+
+    if (_controller.value != 0) {
+      _controller.value = 0;
     }
   }
 
   @override
   void dispose() {
-    _marketplaceAvailableJobCount.removeListener(_handleJobsChanged);
+    _marketplaceAvailableJobCount.removeListener(_handleAttentionChanged);
+    _marketplaceJobsNeedAttention.removeListener(_handleAttentionChanged);
+    _marketplaceJobsVisible.removeListener(_handleAttentionChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -1047,7 +1058,13 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final pulse = _controller.value;
+        final pulse = _shouldAnimate ? _controller.value : 0.0;
+
+        final baseColor = widget.selected
+            ? appPrimaryColor(context)
+            : IconTheme.of(context).color ?? appMutedColor(context);
+
+        const attentionColor = Color(0xFFFFB547);
 
         return Transform.scale(
           scale: 1 + (pulse * .12),
@@ -1061,15 +1078,22 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
+                  color: _shouldAnimate
+                      ? Color.lerp(
+                          Colors.transparent,
+                          attentionColor.withValues(alpha: .20),
+                          pulse,
+                        )
+                      : Colors.transparent,
                   boxShadow: pulse == 0
                       ? const []
                       : [
                           BoxShadow(
-                            color: appPrimaryColor(
-                              context,
-                            ).withValues(alpha: .30 * pulse),
-                            blurRadius: 14,
-                            spreadRadius: 2,
+                            color: attentionColor.withValues(
+                              alpha: .38 * pulse,
+                            ),
+                            blurRadius: 16,
+                            spreadRadius: 2.5,
                           ),
                         ],
                 ),
@@ -1078,6 +1102,7 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                       ? Icons.work_rounded
                       : Icons.work_outline_rounded,
                   size: 30,
+                  color: Color.lerp(baseColor, attentionColor, pulse),
                 ),
               ),
               if (hasAvailable)
@@ -1089,14 +1114,17 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                     height: 19,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFB547),
+                      color: attentionColor,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: const Color(0xFF081019),
                         width: 1.5,
                       ),
                       boxShadow: const [
-                        BoxShadow(color: Color(0x66FFB547), blurRadius: 8),
+                        BoxShadow(
+                          color: Color(0x66FFB547),
+                          blurRadius: 8,
+                        ),
                       ],
                     ),
                     child: const Icon(
@@ -1113,7 +1141,6 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
     );
   }
 }
-
 class _LiquidGlassNavigation extends StatelessWidget {
   const _LiquidGlassNavigation({
     required this.selectedIndex,
@@ -2954,7 +2981,7 @@ class _ReferralCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       store.referralProgram?.isRegistrationWalletLicense == true
-                          ? 'Por cada referido registrado: ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} y ${store.referralProgram!.rewardMonths} meses de Control.'
+                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} promocionales cuando tu referido complete su perfil de conductor y active Trabajos.'
                           : store.referralProgram?.isWalletReward == true
                           ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
                           : store.referralProgram == null
@@ -3045,13 +3072,15 @@ class _ReferralCard extends StatelessWidget {
         const SizedBox(height: 5),
       ],
       Text(
-        referralQualificationLabel(program.qualificationMode),
+        program.isRegistrationWalletLicense
+            ? 'Cuando tu invitado complete su perfil de conductor y active Trabajos'
+            : referralQualificationLabel(program.qualificationMode),
         style: TextStyle(color: appMutedColor(context)),
       ),
       const SizedBox(height: 4),
       Text(
         program.isRegistrationWalletLicense
-            ? 'Al registrarse tu invitado: ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales y ${program.rewardMonths} meses acumulables de Control'
+            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales por cada conductor referido válido'
             : program.isWalletReward
             ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
             : 'Gana ${program.rewardDays} días por cada referido',
@@ -3128,12 +3157,12 @@ class _ReferralCard extends StatelessWidget {
             const _ReferralDivider(),
             _ReferralMetric(
               label: program.isRegistrationWalletLicense
-                  ? 'Meses ganados'
+                  ? 'Premiados'
                   : program.isWalletReward
                   ? 'Días pendientes'
                   : 'Días obtenidos',
               value: program.isRegistrationWalletLicense
-                  ? '${totals.earnedMonths}'
+                  ? '${totals.creditedReferrals}'
                   : program.isWalletReward
                   ? '${program.earnedDays - program.appliedDays}'
                   : '${program.earnedDays}',
@@ -3144,7 +3173,7 @@ class _ReferralCard extends StatelessWidget {
       const SizedBox(height: 8),
       Text(
         program.isRegistrationWalletLicense
-            ? 'Referidos acreditados: ${totals.creditedReferrals} · Saldo promocional otorgado: ${totals.creditedCup.toStringAsFixed(0)} ${program.rewardCurrency} · Meses aplicados: ${program.licenseMonthsApplied} · Meses pendientes: ${program.licenseMonthsPending}'
+            ? 'Referidos acreditados: ${totals.creditedReferrals} · Saldo promocional otorgado: ${totals.creditedCup.toStringAsFixed(0)} ${program.rewardCurrency}'
             : program.isWalletReward
             ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
             : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
@@ -3242,12 +3271,13 @@ class _ReferralEntryTile extends StatelessWidget {
     final registered = createdAt == null
         ? ''
         : DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal());
-    final monthsState = entry.licenseStatus == 'applied'
-        ? 'Meses aplicados'
-        : 'Meses pendientes';
+    final rewarded = entry.status == ReferralEntryStatus.rewarded;
+    final rewardState = rewarded
+        ? '100 CUP acreditados'
+        : 'Pendiente de validar conductor';
     final detail = [
       if (registered.isNotEmpty) registered,
-      monthsState,
+      rewardState,
     ].join(' · ');
     final imageUrl = entry.avatarUrl;
     final fallbackIcon = Icon(
@@ -3310,7 +3340,7 @@ class _ReferralEntryTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '+100 CUP',
+                rewarded ? '+100 CUP' : 'Pendiente',
                 style: TextStyle(
                   color: appPrimaryColor(context),
                   fontWeight: FontWeight.w900,
@@ -3318,7 +3348,9 @@ class _ReferralEntryTile extends StatelessWidget {
                 ),
               ),
               Text(
-                '+3 meses',
+                entry.rewardMonths > 0
+                    ? '+${entry.rewardMonths} meses · histórico'
+                    : (rewarded ? '' : 'Perfil válido'),
                 style: TextStyle(
                   color: appPrimaryColor(context),
                   fontWeight: FontWeight.w800,
