@@ -281,7 +281,7 @@ class MarketplaceCustomerService {
         throw StateError(value['error'].toString());
       }
       return value is Map ? value['data'] : null;
-    } on FunctionsHttpException catch (error) {
+    } on FunctionException catch (error) {
       final details = error.details;
       if (details is Map && details['error'] != null) {
         throw StateError(details['error'].toString());

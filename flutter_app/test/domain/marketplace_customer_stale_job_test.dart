@@ -14,7 +14,7 @@ void main() {
         'lib/presentation/marketplace_customer_tracking.dart',
       ).readAsStringSync();
 
-      expect(service, contains('on FunctionsHttpException catch (error)'));
+      expect(service, contains('on FunctionException catch (error)'));
       expect(service, contains("details['error']"));
       expect(tracking, contains("value.contains('ACCESS_DENIED')"));
       expect(tracking, contains('await widget.onDone();'));
