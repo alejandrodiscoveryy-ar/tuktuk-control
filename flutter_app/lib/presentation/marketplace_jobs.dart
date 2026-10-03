@@ -199,6 +199,9 @@ class MarketplaceOperationalLocationPolicy {
   static Duration heartbeatInterval({required bool activeService}) =>
       activeService ? activeHeartbeatInterval : availableHeartbeatInterval;
 
+  static Duration failureRetryDelay({required bool activeService}) =>
+      activeService ? const Duration(seconds: 60) : const Duration(minutes: 5);
+
   static double distanceThresholdMeters({required bool activeService}) =>
       activeService ? activeDistanceMeters : availableDistanceMeters;
 
@@ -441,15 +444,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _operationalLocationTimer = null;
   }
 
-  void _scheduleNextOperationalLocationSample() {
+  void _scheduleNextOperationalLocationSample({Duration? overrideDelay}) {
     _stopOperationalLocationSampling();
 
     if (!_canPublishOperationalLocation()) return;
 
     final activeService = _operationalActiveJob() != null;
-    final interval = MarketplaceOperationalLocationPolicy.sampleInterval(
-      activeService: activeService,
-    );
+    final interval =
+        overrideDelay ??
+        MarketplaceOperationalLocationPolicy.sampleInterval(
+          activeService: activeService,
+        );
 
     _operationalLocationTimer = Timer(
       interval,
@@ -535,6 +540,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     final activeService = _operationalActiveJob() != null;
     var shouldReschedule = true;
+    Duration? retryDelay;
 
     _operationalLocationInFlight = true;
 
@@ -625,13 +631,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _lastOperationalSentAt = nowUtc;
       }
     } catch (_) {
-      // La telemetría nunca bloquea Trabajos ni muestra errores técnicos.
-      shouldReschedule = false;
+      // Un fallo transitorio de GPS/red no debe detener el seguimiento.
+      // Reintentamos con backoff para no castigar batería ni datos móviles.
+      retryDelay = MarketplaceOperationalLocationPolicy.failureRetryDelay(
+        activeService: activeService,
+      );
     } finally {
       _operationalLocationInFlight = false;
 
       if (mounted && shouldReschedule && _canPublishOperationalLocation()) {
-        _scheduleNextOperationalLocationSample();
+        _scheduleNextOperationalLocationSample(overrideDelay: retryDelay);
       }
     }
   }

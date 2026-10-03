@@ -64,6 +64,21 @@ void main() {
       );
     });
 
+    test('usa backoff ante fallos transitorios sin agotar bateria', () {
+      expect(
+        MarketplaceOperationalLocationPolicy.failureRetryDelay(
+          activeService: false,
+        ),
+        const Duration(minutes: 5),
+      );
+      expect(
+        MarketplaceOperationalLocationPolicy.failureRetryDelay(
+          activeService: true,
+        ),
+        const Duration(seconds: 60),
+      );
+    });
+
     test('aumenta precision solo durante servicio activo', () {
       expect(
         MarketplaceOperationalLocationPolicy.sampleInterval(
