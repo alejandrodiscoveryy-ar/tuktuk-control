@@ -85,45 +85,44 @@ class MarketplaceCustomerJob {
   bool get hasAssignedDriver => driverDisplayName != null || vehicleId != null;
 
   bool get customerCanCancel => const {
-        'requested',
-        'published',
-        'accepted',
-        'en_route',
-        'pickup',
-      }.contains(status);
+    'requested',
+    'published',
+    'accepted',
+    'en_route',
+    'pickup',
+  }.contains(status);
 
   bool get isTerminal => const {
-        'settled',
-        'cancelled_by_customer',
-        'cancelled_by_driver',
-        'expired',
-        'incident',
-      }.contains(status);
+    'settled',
+    'cancelled_by_customer',
+    'cancelled_by_driver',
+    'expired',
+    'incident',
+  }.contains(status);
 
   factory MarketplaceCustomerJob.fromMap(Map map) => MarketplaceCustomerJob(
-        id: _marketText(map['job_id'] ?? map['id']) ?? '',
-        status: _marketText(map['status']) ?? 'unknown',
-        serviceCode: _marketText(map['service_code']),
-        originText: _marketText(map['origin_text']),
-        destinationText: _marketText(map['destination_text']),
-        scheduledFor: _marketDate(map['scheduled_for']),
-        finalPrice: _marketNumber(map['final_price']),
-        currency: _marketText(map['currency']) ?? 'CUP',
-        publishedAt: _marketDate(map['published_at']),
-        expiresAt: _marketDate(map['expires_at']),
-        createdAt: _marketDate(map['created_at']),
-        driverDisplayName: _marketText(map['driver_display_name']),
-        driverWhatsappPhone: _marketText(map['driver_whatsapp_phone']),
-        driverPhotoAssetId: _marketText(map['driver_photo_asset_id']),
-        vehicleId: _marketText(map['vehicle_id']),
-        vehicleName: _marketText(map['vehicle_name']),
-        vehicleCategoryCode: _marketText(map['vehicle_category_code']),
-        vehicleBrand: _marketText(map['vehicle_brand']),
-        vehicleModel: _marketText(map['vehicle_model']),
-        vehicleRegistration: _marketText(map['vehicle_registration']),
-        vehicleMainPhotoAssetId:
-            _marketText(map['vehicle_main_photo_asset_id']),
-      );
+    id: _marketText(map['job_id'] ?? map['id']) ?? '',
+    status: _marketText(map['status']) ?? 'unknown',
+    serviceCode: _marketText(map['service_code']),
+    originText: _marketText(map['origin_text']),
+    destinationText: _marketText(map['destination_text']),
+    scheduledFor: _marketDate(map['scheduled_for']),
+    finalPrice: _marketNumber(map['final_price']),
+    currency: _marketText(map['currency']) ?? 'CUP',
+    publishedAt: _marketDate(map['published_at']),
+    expiresAt: _marketDate(map['expires_at']),
+    createdAt: _marketDate(map['created_at']),
+    driverDisplayName: _marketText(map['driver_display_name']),
+    driverWhatsappPhone: _marketText(map['driver_whatsapp_phone']),
+    driverPhotoAssetId: _marketText(map['driver_photo_asset_id']),
+    vehicleId: _marketText(map['vehicle_id']),
+    vehicleName: _marketText(map['vehicle_name']),
+    vehicleCategoryCode: _marketText(map['vehicle_category_code']),
+    vehicleBrand: _marketText(map['vehicle_brand']),
+    vehicleModel: _marketText(map['vehicle_model']),
+    vehicleRegistration: _marketText(map['vehicle_registration']),
+    vehicleMainPhotoAssetId: _marketText(map['vehicle_main_photo_asset_id']),
+  );
 }
 
 class MarketplaceCustomerCancellation {
@@ -266,20 +265,33 @@ class MarketplaceCustomerService {
 
   final SupabaseClient _client;
 
-  Future<dynamic> _gateway(String operation,
-      [Map<String, dynamic>? params]) async {
-    final response = await _client.functions.invoke(
-      'marketplace-customer-gateway',
-      body: {
-        'operation': operation,
-        'params': params ?? const <String, dynamic>{}
-      },
-    );
-    final value = response.data;
-    if (value is Map && value['error'] != null) {
-      throw StateError(value['error'].toString());
+  Future<dynamic> _gateway(
+    String operation, [
+    Map<String, dynamic>? params,
+  ]) async {
+    try {
+      final response = await _client.functions.invoke(
+        'marketplace-customer-gateway',
+        body: {
+          'operation': operation,
+          'params': params ?? const <String, dynamic>{},
+        },
+      );
+      final value = response.data;
+      if (value is Map && value['error'] != null) {
+        throw StateError(value['error'].toString());
+      }
+      return value is Map ? value['data'] : null;
+    } on FunctionsHttpException catch (error) {
+      final details = error.details;
+      if (details is Map && details['error'] != null) {
+        throw StateError(details['error'].toString());
+      }
+      if (details is String && details.trim().isNotEmpty) {
+        throw StateError(details);
+      }
+      rethrow;
     }
-    return value is Map ? value['data'] : null;
   }
 
   Future<Map<String, dynamic>> _gatewayOne(
@@ -299,30 +311,22 @@ class MarketplaceCustomerService {
     required String whatsappPhone,
     required String sessionToken,
     required String idempotencyKey,
-  }) =>
-      _gatewayOne(
-        'start_session',
-        {
-          'target_display_name': displayName,
-          'target_whatsapp_phone': whatsappPhone,
-          'target_session_token': sessionToken,
-          'target_idempotency_key': idempotencyKey,
-        },
-      ).then(MarketplaceCustomerSession.fromMap);
+  }) => _gatewayOne('start_session', {
+    'target_display_name': displayName,
+    'target_whatsapp_phone': whatsappPhone,
+    'target_session_token': sessionToken,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceCustomerSession.fromMap);
 
   Future<MarketplaceCustomerJob> getJob({
     required String sessionId,
     required String sessionToken,
     required String jobId,
-  }) =>
-      _gatewayOne(
-        'get_job',
-        {
-          'target_session_id': sessionId,
-          'target_session_token': sessionToken,
-          'target_job_id': jobId,
-        },
-      ).then(MarketplaceCustomerJob.fromMap);
+  }) => _gatewayOne('get_job', {
+    'target_session_id': sessionId,
+    'target_session_token': sessionToken,
+    'target_job_id': jobId,
+  }).then(MarketplaceCustomerJob.fromMap);
 
   Future<MarketplaceCustomerCancellation> cancelJob({
     required String sessionId,
@@ -330,17 +334,13 @@ class MarketplaceCustomerService {
     required String jobId,
     required String reason,
     required String idempotencyKey,
-  }) =>
-      _gatewayOne(
-        'cancel',
-        {
-          'target_session_id': sessionId,
-          'target_session_token': sessionToken,
-          'target_job_id': jobId,
-          'target_reason': reason,
-          'target_idempotency_key': idempotencyKey,
-        },
-      ).then(MarketplaceCustomerCancellation.fromMap);
+  }) => _gatewayOne('cancel', {
+    'target_session_id': sessionId,
+    'target_session_token': sessionToken,
+    'target_job_id': jobId,
+    'target_reason': reason,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceCustomerCancellation.fromMap);
 
   Future<MarketplaceCustomerRating?> getRating({
     required String sessionId,
@@ -365,24 +365,22 @@ class MarketplaceCustomerService {
     required int stars,
     required String idempotencyKey,
     String? comment,
-  }) =>
-      _gatewayOne('create_rating', {
-        'target_session_id': sessionId,
-        'target_session_token': sessionToken,
-        'target_job_id': jobId,
-        'target_stars': stars,
-        'target_comment': comment,
-        'target_idempotency_key': idempotencyKey,
-      }).then(MarketplaceCustomerRating.fromMap);
+  }) => _gatewayOne('create_rating', {
+    'target_session_id': sessionId,
+    'target_session_token': sessionToken,
+    'target_job_id': jobId,
+    'target_stars': stars,
+    'target_comment': comment,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceCustomerRating.fromMap);
 
   Future<MarketplaceCustomerJobMedia> getJobMedia({
     required String sessionId,
     required String sessionToken,
     required String jobId,
-  }) =>
-      _gatewayOne('media', {
-        'target_session_id': sessionId,
-        'target_session_token': sessionToken,
-        'target_job_id': jobId,
-      }).then(MarketplaceCustomerJobMedia.fromMap);
+  }) => _gatewayOne('media', {
+    'target_session_id': sessionId,
+    'target_session_token': sessionToken,
+    'target_job_id': jobId,
+  }).then(MarketplaceCustomerJobMedia.fromMap);
 }
