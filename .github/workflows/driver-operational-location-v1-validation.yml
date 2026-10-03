@@ -1,0 +1,54 @@
+name: Driver operational location v1 validation
+
+on:
+  push:
+    branches:
+      - feat/driver-operational-location-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.4
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify no background location permission
+        shell: bash
+        run: |
+          if grep -q 'ACCESS_BACKGROUND_LOCATION' android/app/src/main/AndroidManifest.xml; then
+            echo "Background location permission is not allowed in V1"
+            exit 1
+          fi
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Obtener gateway para las pruebas
+        shell: bash
+        run: |
+          mkdir -p ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway
+          curl -fLsS --retry 3 \
+            https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/696285f68670fa96fb88f58236f1e15525cca014/supabase/functions/marketplace-customer-gateway/index.ts \
+            -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
+
+      - name: Run tests
+        run: flutter test

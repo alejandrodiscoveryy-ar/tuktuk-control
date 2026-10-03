@@ -176,6 +176,36 @@ bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
       job.status == 'pickup';
 }
 
+class MarketplaceOperationalLocationPolicy {
+  static const availableSampleInterval = Duration(minutes: 2);
+  static const availableHeartbeatInterval = Duration(minutes: 4);
+  static const activeSampleInterval = Duration(seconds: 30);
+  static const activeHeartbeatInterval = Duration(seconds: 75);
+
+  static const availableDistanceMeters = 200.0;
+  static const activeDistanceMeters = 50.0;
+
+  static bool isActiveServiceStatus(String status) {
+    return status == 'accepted' ||
+        status == 'en_route' ||
+        status == 'pickup' ||
+        status == 'in_progress' ||
+        status == 'incident';
+  }
+
+  static Duration sampleInterval({required bool activeService}) =>
+      activeService ? activeSampleInterval : availableSampleInterval;
+
+  static Duration heartbeatInterval({required bool activeService}) =>
+      activeService ? activeHeartbeatInterval : availableHeartbeatInterval;
+
+  static double distanceThresholdMeters({required bool activeService}) =>
+      activeService ? activeDistanceMeters : availableDistanceMeters;
+
+  static LocationAccuracy accuracy({required bool activeService}) =>
+      activeService ? LocationAccuracy.high : LocationAccuracy.medium;
+}
+
 class MarketplaceJobsScreen extends StatefulWidget {
   const MarketplaceJobsScreen({
     required this.store,
@@ -219,6 +249,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   bool _updatingAvailability = false;
   MarketplaceWorkAccess? _workAccess;
 
+  Timer? _operationalLocationTimer;
+  bool _operationalLocationInFlight = false;
+  AppLifecycleState _operationalLifecycleState = AppLifecycleState.resumed;
+  Position? _lastOperationalPosition;
+  DateTime? _lastOperationalSentAt;
+
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
   final Map<String, MarketplaceCustomerContact> _contacts = {};
@@ -230,6 +266,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
+    _operationalLifecycleState =
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     marketplaceJobRefreshRequests.addListener(_refreshAvailability);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -238,7 +276,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   @override
+  void didUpdateWidget(covariant MarketplaceJobsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (!oldWidget.isVisible && widget.isVisible) {
+      _syncOperationalLocationSampling(
+        immediate: true,
+        requestPermission: true,
+      );
+    }
+  }
+
+  @override
   void dispose() {
+    _operationalLocationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
@@ -286,6 +337,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       }
     }
   }
+
   void _refreshAvailability() {
     if (marketplaceJobPushPending.value && !_marketplaceJobsVisible.value) {
       _marketplaceJobsNeedAttention.value = true;
@@ -295,7 +347,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshAvailability();
+    _operationalLifecycleState = state;
+
+    if (state == AppLifecycleState.resumed) {
+      _refreshAvailability();
+      _syncOperationalLocationSampling(
+        immediate: true,
+        requestPermission: widget.isVisible,
+      );
+    } else {
+      _stopOperationalLocationSampling();
+    }
   }
 
   // The wallet tab is recreated after activation so its totals are current.
@@ -327,6 +389,263 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         access.suiteActive &&
         vehicle.isActive &&
         vehicle.marketplaceStatus == 'active';
+  }
+
+  MarketplaceJob? _operationalActiveJob() {
+    for (final job in _active) {
+      if (MarketplaceOperationalLocationPolicy.isActiveServiceStatus(
+        job.status,
+      )) {
+        return job;
+      }
+    }
+    return null;
+  }
+
+  MarketplaceVehicle? _operationalLocationVehicle() {
+    final activeJob = _operationalActiveJob();
+
+    if (activeJob?.vehicleId != null) {
+      final jobVehicle = _vehicleById(activeJob!.vehicleId);
+      if (jobVehicle != null) return jobVehicle;
+    }
+
+    return _vehicleById(_selectedVehicleId);
+  }
+
+  bool _canPublishOperationalLocation() {
+    if (widget.store.user == null ||
+        _operationalLifecycleState != AppLifecycleState.resumed) {
+      return false;
+    }
+
+    final onboarding = _onboarding;
+    final vehicle = _operationalLocationVehicle();
+    final activeJob = _operationalActiveJob();
+
+    if (onboarding == null ||
+        vehicle == null ||
+        !onboarding.driverProfileExists ||
+        onboarding.driverStatus != 'active' ||
+        onboarding.driverSuspended ||
+        !vehicle.isActive ||
+        vehicle.marketplaceStatus != 'active') {
+      return false;
+    }
+
+    return vehicle.acceptingJobs || activeJob != null;
+  }
+
+  void _stopOperationalLocationSampling() {
+    _operationalLocationTimer?.cancel();
+    _operationalLocationTimer = null;
+  }
+
+  void _scheduleNextOperationalLocationSample() {
+    _stopOperationalLocationSampling();
+
+    if (!_canPublishOperationalLocation()) return;
+
+    final activeService = _operationalActiveJob() != null;
+    final interval = MarketplaceOperationalLocationPolicy.sampleInterval(
+      activeService: activeService,
+    );
+
+    _operationalLocationTimer = Timer(
+      interval,
+      () => unawaited(_sampleOperationalLocation()),
+    );
+  }
+
+  void _syncOperationalLocationSampling({
+    bool immediate = false,
+    bool requestPermission = false,
+  }) {
+    if (!_canPublishOperationalLocation()) {
+      _stopOperationalLocationSampling();
+      return;
+    }
+
+    if (immediate && !_operationalLocationInFlight) {
+      _stopOperationalLocationSampling();
+      unawaited(
+        _sampleOperationalLocation(requestPermission: requestPermission),
+      );
+      return;
+    }
+
+    if (_operationalLocationTimer == null) {
+      _scheduleNextOperationalLocationSample();
+    }
+  }
+
+  double? _safeOperationalMetric(
+    double value, {
+    required double min,
+    required double max,
+  }) {
+    if (!value.isFinite || value < min || value > max) return null;
+    return value;
+  }
+
+  bool _cachedPositionUsable(Position position, DateTime nowUtc) {
+    final timestamp = position.timestamp.toUtc();
+    final age = nowUtc.difference(timestamp);
+
+    return !age.isNegative &&
+        age <= const Duration(seconds: 90) &&
+        position.accuracy.isFinite &&
+        position.accuracy >= 0 &&
+        position.accuracy <= 500;
+  }
+
+  Future<Position> _readOperationalPosition({
+    required bool activeService,
+  }) async {
+    final nowUtc = DateTime.now().toUtc();
+
+    if (!activeService) {
+      final cached = await Geolocator.getLastKnownPosition();
+      if (cached != null && _cachedPositionUsable(cached, nowUtc)) {
+        return cached;
+      }
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: LocationSettings(
+        accuracy: MarketplaceOperationalLocationPolicy.accuracy(
+          activeService: activeService,
+        ),
+        timeLimit: activeService
+            ? const Duration(seconds: 10)
+            : const Duration(seconds: 8),
+      ),
+    );
+  }
+
+  Future<void> _sampleOperationalLocation({
+    bool requestPermission = false,
+  }) async {
+    if (_operationalLocationInFlight || !_canPublishOperationalLocation()) {
+      return;
+    }
+
+    final vehicle = _operationalLocationVehicle();
+    if (vehicle == null) return;
+
+    final activeService = _operationalActiveJob() != null;
+    var shouldReschedule = true;
+
+    _operationalLocationInFlight = true;
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        shouldReschedule = false;
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied &&
+          requestPermission &&
+          widget.isVisible) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        shouldReschedule = false;
+        return;
+      }
+
+      final position = await _readOperationalPosition(
+        activeService: activeService,
+      );
+
+      if (!mounted || !_canPublishOperationalLocation()) return;
+
+      final latitude = position.latitude;
+      final longitude = position.longitude;
+
+      if (!latitude.isFinite ||
+          latitude < -90 ||
+          latitude > 90 ||
+          !longitude.isFinite ||
+          longitude < -180 ||
+          longitude > 180) {
+        return;
+      }
+
+      final nowUtc = DateTime.now().toUtc();
+      final lastPosition = _lastOperationalPosition;
+      final lastSentAt = _lastOperationalSentAt;
+
+      final distanceMeters = lastPosition == null
+          ? double.infinity
+          : Geolocator.distanceBetween(
+              lastPosition.latitude,
+              lastPosition.longitude,
+              latitude,
+              longitude,
+            );
+
+      final heartbeatDue =
+          lastSentAt == null ||
+          nowUtc.difference(lastSentAt) >=
+              MarketplaceOperationalLocationPolicy.heartbeatInterval(
+                activeService: activeService,
+              );
+
+      final movementDue =
+          distanceMeters >=
+          MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
+            activeService: activeService,
+          );
+
+      if (lastPosition == null || heartbeatDue || movementDue) {
+        await _service.updateDriverOperationalLocation(
+          vehicleId: vehicle.id,
+          latitude: latitude,
+          longitude: longitude,
+          accuracyM: _safeOperationalMetric(
+            position.accuracy,
+            min: 0,
+            max: 5000,
+          ),
+          headingDegrees: _safeOperationalMetric(
+            position.heading,
+            min: 0,
+            max: 359.999,
+          ),
+          speedMps: _safeOperationalMetric(position.speed, min: 0, max: 100),
+          capturedAt: position.timestamp,
+        );
+
+        _lastOperationalPosition = position;
+        _lastOperationalSentAt = nowUtc;
+      }
+    } catch (_) {
+      // La telemetría nunca bloquea Trabajos ni muestra errores técnicos.
+      shouldReschedule = false;
+    } finally {
+      _operationalLocationInFlight = false;
+
+      if (mounted && shouldReschedule && _canPublishOperationalLocation()) {
+        _scheduleNextOperationalLocationSample();
+      }
+    }
+  }
+
+  Future<void> _clearOperationalLocationBestEffort() async {
+    _stopOperationalLocationSampling();
+    _lastOperationalPosition = null;
+    _lastOperationalSentAt = null;
+
+    try {
+      await _service.clearDriverOperationalLocation();
+    } catch (_) {
+      // La privacidad visual también está protegida por frescura en backend.
+    }
   }
 
   Future<void> _loadWorkAccess(String? vehicleId) async {
@@ -378,6 +697,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (widget.store.user == null) {
       if (!mounted) return;
 
+      _stopOperationalLocationSampling();
       _updateMarketplaceDriverProfileNeedsSetup(null);
       _setMarketplaceAvailableJobCount(0);
 
@@ -424,6 +744,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       });
 
       if (_marketplaceDriverNeedsSetup(onboarding)) {
+        _stopOperationalLocationSampling();
         _setMarketplaceAvailableJobCount(0);
         setState(() => _loading = false);
         return;
@@ -443,7 +764,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         throw StateError('Job availability could not be verified');
       }
       await _loadAvailable();
-      if (mounted) setState(() => _loading = false);
+
+      if (mounted) {
+        setState(() => _loading = false);
+        _syncOperationalLocationSampling(
+          immediate: true,
+          requestPermission: widget.isVisible,
+        );
+      }
     } catch (_) {
       if (!mounted) return;
 
@@ -593,8 +921,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _scopeErrors.remove(scope);
       });
 
-      if (scope == 'active' && jobs.isEmpty && mounted && !_loading) {
-        await _loadAvailable();
+      if (scope == 'active') {
+        _syncOperationalLocationSampling(
+          immediate: true,
+          requestPermission: widget.isVisible,
+        );
+
+        if (jobs.isEmpty && mounted && !_loading) {
+          await _loadAvailable();
+        }
       }
     } catch (_) {
       if (!mounted) return;
@@ -630,6 +965,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     await _loadWorkAccess(vehicleId);
     await _loadAvailable();
+
+    _syncOperationalLocationSampling(
+      immediate: true,
+      requestPermission: widget.isVisible,
+    );
   }
 
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
@@ -665,6 +1005,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       if (acceptingJobs) {
+        _syncOperationalLocationSampling(
+          immediate: true,
+          requestPermission: true,
+        );
         toast(
           context,
           'Estás trabajando. Ya puedes recibir nuevas solicitudes.',
@@ -674,10 +1018,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       } else {
         _setMarketplaceAvailableJobCount(0);
 
-        toast(
-          context,
-          'Estás descansando. No recibirás nuevas solicitudes.',
-        );
+        if (_operationalActiveJob() == null) {
+          unawaited(_clearOperationalLocationBestEffort());
+        } else {
+          _syncOperationalLocationSampling(
+            immediate: true,
+            requestPermission: widget.isVisible,
+          );
+        }
+
+        toast(context, 'Estás descansando. No recibirás nuevas solicitudes.');
       }
     } catch (_) {
       if (mounted) {
@@ -946,6 +1296,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       noteController.dispose();
     }
   }
+
   Future<void> _advanceJob(MarketplaceJob job) async {
     final action = job.nextAction;
     final label = _marketplaceJobActionLabel(action);
@@ -955,7 +1306,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     var confirmed = true;
 
     if (action == 'complete_service') {
-      confirmed = await showDialog<bool>(
+      confirmed =
+          await showDialog<bool>(
             context: context,
             builder: (dialogContext) => AlertDialog(
               title: const Text('Completar servicio'),
@@ -1256,8 +1608,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   Future<void> _showContactSheet(MarketplaceCustomerContact contact) {
-    final name =
-        contact.name?.trim().isNotEmpty == true ? contact.name! : 'Cliente';
+    final name = contact.name?.trim().isNotEmpty == true
+        ? contact.name!
+        : 'Cliente';
     final phone = contact.phone?.trim();
     final initial = name.isEmpty ? 'C' : name.substring(0, 1).toUpperCase();
 
@@ -1528,8 +1881,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         ? selectedVehicle.name!.trim()
         : selectedVehicle.id;
 
-    final statusColor =
-        acceptingJobs ? appPrimaryColor(context) : appMutedColor(context);
+    final statusColor = acceptingJobs
+        ? appPrimaryColor(context)
+        : appMutedColor(context);
 
     return GlassCard(
       child: Column(
@@ -1671,10 +2025,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
-  Widget _buildRatingStars(
-    int? stars, {
-    double size = 20,
-  }) {
+  Widget _buildRatingStars(int? stars, {double size = 20}) {
     if (stars == null) {
       return Text(
         'Pendiente',
@@ -1694,9 +2045,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         children: List.generate(
           5,
           (index) => Icon(
-            index < safeStars
-                ? Icons.star_rounded
-                : Icons.star_outline_rounded,
+            index < safeStars ? Icons.star_rounded : Icons.star_outline_rounded,
             size: size,
             color: kTertiary,
           ),
@@ -1719,8 +2068,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final rankText = summary == null
         ? 'Ranking no disponible'
         : summary.rankingEligible && summary.rankPosition != null
-            ? 'Ranking #${summary.rankPosition} de ${summary.rankedDriverCount}'
-            : 'Ranking disponible desde ${summary.minimumRatings} evaluaciones';
+        ? 'Ranking #${summary.rankPosition} de ${summary.rankedDriverCount}'
+        : 'Ranking disponible desde ${summary.minimumRatings} evaluaciones';
 
     return RefreshIndicator(
       onRefresh: () => _loadRatings(force: true),
@@ -1734,10 +2083,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 children: [
                   const Icon(Icons.cloud_off_outlined, size: 40),
                   const SizedBox(height: 10),
-                  Text(
-                    _ratingsError!,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(_ratingsError!, textAlign: TextAlign.center),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: () => _loadRatings(force: true),
@@ -1754,10 +2100,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 children: [
                   const Text(
                     'Mi valoración',
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 14),
                   if (averageStars != null) ...[
@@ -1771,10 +2114,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           ),
                         ),
                         const SizedBox(width: 12),
-                        _buildRatingStars(
-                          averageStars.round(),
-                          size: 25,
-                        ),
+                        _buildRatingStars(averageStars.round(), size: 25),
                       ],
                     ),
                   ] else
@@ -1831,9 +2171,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           children: [
                             Expanded(
                               child: Text(
-                                _marketplaceJobServiceLabel(
-                                  rating.serviceCode,
-                                ),
+                                _marketplaceJobServiceLabel(rating.serviceCode),
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
@@ -1866,9 +2204,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             const Expanded(
                               child: Text(
                                 'Cliente → Tú',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                                style: TextStyle(fontWeight: FontWeight.w800),
                               ),
                             ),
                             _buildRatingStars(rating.receivedStars),
@@ -1880,9 +2216,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             const Expanded(
                               child: Text(
                                 'Tú → Cliente',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                                style: TextStyle(fontWeight: FontWeight.w800),
                               ),
                             ),
                             _buildRatingStars(rating.givenStars),
@@ -1898,6 +2232,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       ),
     );
   }
+
   Widget _buildServiceTab(BuildContext context) {
     final Widget content;
 
@@ -1925,18 +2260,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 const Text(
                   'Tienes un servicio programado',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Consulta los detalles en Agenda.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: appMutedColor(context),
-                  ),
+                  style: TextStyle(color: appMutedColor(context)),
                 ),
               ],
             ),
@@ -1948,7 +2278,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     final onboarding = _onboarding;
-    final showVehicleControl = !_loading &&
+    final showVehicleControl =
+        !_loading &&
         _active.isEmpty &&
         onboarding != null &&
         onboarding.vehicles.isNotEmpty;
@@ -1967,8 +2298,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Keep the refresh state alive without building maps or requesting location
-    // while the driver is using another section of the shell.
+    // La UI de Trabajos permanece viva al cambiar de sección. Si el conductor
+    // ya autorizó ubicación, el muestreo operativo puede continuar únicamente
+    // mientras la app esté en primer plano; nunca se solicita permiso oculto.
     if (!widget.isVisible) return const SizedBox.shrink();
     if (_loading) return const Center(child: CircularProgressIndicator());
     final onboarding = _onboarding;
@@ -1990,10 +2322,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             Tab(icon: Icon(Icons.route_outlined), text: 'Servicio'),
             Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
             Tab(icon: Icon(Icons.history), text: 'Hist.'),
-            Tab(
-              icon: Icon(Icons.star_outline_rounded),
-              text: 'Evaluaciones',
-            ),
+            Tab(icon: Icon(Icons.star_outline_rounded), text: 'Evaluaciones'),
             Tab(
               icon: Icon(Icons.account_balance_wallet_outlined),
               text: 'Saldo',
@@ -2300,13 +2629,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     cancellationDetail: _cancellationDetails[job.id],
                     busy: _busyJobId == job.id,
                     showMap: scope == 'active',
-                    onContact:
-                        scope == 'history' ? null : () => _contactJob(job),
-                    onAdvance: scope == 'active' &&
+                    onContact: scope == 'history'
+                        ? null
+                        : () => _contactJob(job),
+                    onAdvance:
+                        scope == 'active' &&
                             _marketplaceJobActionLabel(job.nextAction) != null
                         ? () => _advanceJob(job)
                         : null,
-                    onCancel: scope != 'history' &&
+                    onCancel:
+                        scope != 'history' &&
                             _marketplaceJobCanDriverCancel(job)
                         ? () => _cancelJob(job)
                         : null,
@@ -2343,19 +2675,22 @@ class _AssignedJobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final origin =
-        job.originText?.trim().isNotEmpty == true ? job.originText! : 'Origen';
+    final origin = job.originText?.trim().isNotEmpty == true
+        ? job.originText!
+        : 'Origen';
 
     final destination = job.destinationText?.trim().isNotEmpty == true
         ? job.destinationText!
         : 'Destino';
 
-    final cancelled = job.status == 'cancelled_by_driver' ||
+    final cancelled =
+        job.status == 'cancelled_by_driver' ||
         job.status == 'cancelled_by_customer';
 
     final completed = job.status == 'completed' || job.status == 'settled';
 
-    final executing = job.status == 'accepted' ||
+    final executing =
+        job.status == 'accepted' ||
         job.status == 'en_route' ||
         job.status == 'pickup' ||
         job.status == 'in_progress';
@@ -2363,22 +2698,23 @@ class _AssignedJobCard extends StatelessWidget {
     final statusColor = scope == 'scheduled'
         ? Colors.blue
         : cancelled
-            ? kDanger
-            : completed
-                ? Colors.green
-                : executing
-                    ? Colors.orange
-                    : _marketplaceJobStatusColor(context, job.status);
+        ? kDanger
+        : completed
+        ? Colors.green
+        : executing
+        ? Colors.orange
+        : _marketplaceJobStatusColor(context, job.status);
 
     final statusLabel = cancelled
         ? cancellationDetail?.cancelledBy == 'customer'
-            ? 'Cancelado por el cliente'
-            : cancellationDetail?.cancelledBy == 'driver'
-                ? 'Cancelado por el conductor'
-                : _marketplaceJobStatusLabel(job.status)
+              ? 'Cancelado por el cliente'
+              : cancellationDetail?.cancelledBy == 'driver'
+              ? 'Cancelado por el conductor'
+              : _marketplaceJobStatusLabel(job.status)
         : _marketplaceJobStatusLabel(job.status);
 
-    final lastEvent = cancellationDetail?.cancelledAt ??
+    final lastEvent =
+        cancellationDetail?.cancelledAt ??
         job.completedAt ??
         job.cancelledAt ??
         job.acceptedAt ??
@@ -2541,8 +2877,9 @@ class _AssignedJobCard extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 9,
-                          fontWeight:
-                              active ? FontWeight.w800 : FontWeight.w500,
+                          fontWeight: active
+                              ? FontWeight.w800
+                              : FontWeight.w500,
                           color: active ? statusColor : appMutedColor(context),
                         ),
                       ),
@@ -2679,8 +3016,9 @@ class _AvailableJobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final origin =
-        job.originText?.trim().isNotEmpty == true ? job.originText! : 'Origen';
+    final origin = job.originText?.trim().isNotEmpty == true
+        ? job.originText!
+        : 'Origen';
     final destination = job.destinationText?.trim().isNotEmpty == true
         ? job.destinationText!
         : 'Destino';

@@ -853,6 +853,7 @@ class MarketplaceDriverRatingSummary {
         minimumRatings: _marketInt(map['minimum_ratings']),
       );
 }
+
 /// Server-first Marketplace gateway. Jobs, wallet and trials never enter Hive/sync.
 class MarketplaceService {
   MarketplaceService(this._client);
@@ -886,8 +887,9 @@ class MarketplaceService {
         : const [];
   }
 
-  Future<MarketplaceOnboarding> onboarding() =>
-      _one('get_my_marketplace_onboarding_v2').then(MarketplaceOnboarding.fromMap);
+  Future<MarketplaceOnboarding> onboarding() => _one(
+    'get_my_marketplace_onboarding_v2',
+  ).then(MarketplaceOnboarding.fromMap);
 
   Future<MarketplaceOnboarding> saveDriver(Map<String, dynamic> params) => _one(
     'save_my_marketplace_driver_onboarding',
@@ -903,13 +905,37 @@ class MarketplaceService {
   Future<MarketplaceOnboarding> setAcceptingJobs(
     String vehicleId,
     bool acceptingJobs,
-  ) => _one(
-    'set_my_marketplace_accepting_jobs',
-    {
-      'target_vehicle_id': vehicleId,
-      'target_accepting_jobs': acceptingJobs,
-    },
-  ).then(MarketplaceOnboarding.fromMap);
+  ) => _one('set_my_marketplace_accepting_jobs', {
+    'target_vehicle_id': vehicleId,
+    'target_accepting_jobs': acceptingJobs,
+  }).then(MarketplaceOnboarding.fromMap);
+
+  Future<void> updateDriverOperationalLocation({
+    required String vehicleId,
+    required double latitude,
+    required double longitude,
+    double? accuracyM,
+    double? headingDegrees,
+    double? speedMps,
+    required DateTime capturedAt,
+  }) async {
+    await _client.rpc(
+      'update_my_marketplace_driver_location',
+      params: {
+        'target_vehicle_id': vehicleId,
+        'target_latitude': latitude,
+        'target_longitude': longitude,
+        'target_accuracy_m': accuracyM,
+        'target_heading_degrees': headingDegrees,
+        'target_speed_mps': speedMps,
+        'target_captured_at': capturedAt.toUtc().toIso8601String(),
+      },
+    );
+  }
+
+  Future<void> clearDriverOperationalLocation() async {
+    await _client.rpc('clear_my_marketplace_driver_location');
+  }
 
   /// Creates an isolated Marketplace draft. Does not write to Control/Hive.
   Future<Map<String, dynamic>> createVehicle({
@@ -1063,18 +1089,14 @@ class MarketplaceService {
     'target_idempotency_key': idempotencyKey,
   }).then(MarketplaceDriverCustomerRating.fromMap);
 
-  Future<List<MarketplaceDriverRatingEntry>> ratings({
-    int limit = 100,
-  }) => _list(
-    'list_my_marketplace_ratings',
-    {'target_limit': limit},
-  ).then(
-    (items) => items.map(MarketplaceDriverRatingEntry.fromMap).toList(),
-  );
+  Future<List<MarketplaceDriverRatingEntry>> ratings({int limit = 100}) =>
+      _list('list_my_marketplace_ratings', {'target_limit': limit}).then(
+        (items) => items.map(MarketplaceDriverRatingEntry.fromMap).toList(),
+      );
 
-  Future<MarketplaceDriverRatingSummary> ratingSummary() =>
-      _one('get_my_marketplace_rating_summary')
-          .then(MarketplaceDriverRatingSummary.fromMap);
+  Future<MarketplaceDriverRatingSummary> ratingSummary() => _one(
+    'get_my_marketplace_rating_summary',
+  ).then(MarketplaceDriverRatingSummary.fromMap);
   Future<MarketplaceJob> cancel(
     String jobId,
     String reason,
