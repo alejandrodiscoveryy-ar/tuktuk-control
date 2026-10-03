@@ -42,7 +42,10 @@ class _MarketplaceCustomerTrackingScreenState
 
     _refresh();
 
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _refresh(),
+    );
   }
 
   @override
@@ -72,8 +75,7 @@ class _MarketplaceCustomerTrackingScreenState
 
       final mediaSignature =
           '${job.driverPhotoAssetId ?? ''}:${job.vehicleMainPhotoAssetId ?? ''}';
-      final mediaExpiresSoon =
-          _media?.expiresAt == null ||
+      final mediaExpiresSoon = _media?.expiresAt == null ||
           _media!.expiresAt!.isBefore(
             DateTime.now().toUtc().add(const Duration(minutes: 2)),
           );
@@ -118,7 +120,9 @@ class _MarketplaceCustomerTrackingScreenState
         await widget.onDone();
 
         if (mounted) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          Navigator.of(context).popUntil(
+            (route) => route.isFirst,
+          );
         }
         return;
       }
@@ -138,37 +142,37 @@ class _MarketplaceCustomerTrackingScreenState
   }
 
   String _statusTitle(String status) => switch (status) {
-    'requested' => 'Preparando solicitud',
-    'published' => 'Buscando transportista',
-    'accepted' => 'Transportista asignado',
-    'en_route' => 'El transportista va hacia ti',
-    'pickup' => 'Transportista en el punto de recogida',
-    'in_progress' => 'Servicio en curso',
-    'completed' => 'Servicio completado',
-    'settled' => 'Servicio finalizado',
-    'cancelled_by_customer' => 'Solicitud cancelada',
-    'cancelled_by_driver' => 'Cancelada por el transportista',
-    'expired' => 'La solicitud expiró',
-    'incident' => 'Servicio en revisión',
-    _ => 'Estado del servicio',
-  };
+        'requested' => 'Preparando solicitud',
+        'published' => 'Buscando transportista',
+        'accepted' => 'Transportista asignado',
+        'en_route' => 'El transportista va hacia ti',
+        'pickup' => 'Transportista en el punto de recogida',
+        'in_progress' => 'Servicio en curso',
+        'completed' => 'Servicio completado',
+        'settled' => 'Servicio finalizado',
+        'cancelled_by_customer' => 'Solicitud cancelada',
+        'cancelled_by_driver' => 'Cancelada por el transportista',
+        'expired' => 'La solicitud expiró',
+        'incident' => 'Servicio en revisión',
+        _ => 'Estado del servicio',
+      };
 
   String _statusDescription(String status) => switch (status) {
-    'published' =>
-      'Tu solicitud está visible para los transportistas compatibles.',
-    'accepted' =>
-      'Un transportista aceptó tu solicitud. Ya puedes ver sus datos.',
-    'en_route' => 'Tu transportista se dirige al punto de recogida.',
-    'pickup' => 'El transportista indicó que llegó al punto de recogida.',
-    'in_progress' => 'El servicio ya comenzó.',
-    'completed' => 'El transportista marcó el servicio como completado.',
-    'settled' => 'El servicio quedó cerrado correctamente.',
-    'cancelled_by_customer' => 'Cancelaste esta solicitud.',
-    'cancelled_by_driver' => 'El transportista canceló el servicio.',
-    'expired' => 'Ningún transportista aceptó antes del vencimiento.',
-    'incident' => 'El servicio requiere revisión.',
-    _ => 'El estado se actualizará automáticamente.',
-  };
+        'published' =>
+          'Tu solicitud está visible para los transportistas compatibles.',
+        'accepted' =>
+          'Un transportista aceptó tu solicitud. Ya puedes ver sus datos.',
+        'en_route' => 'Tu transportista se dirige al punto de recogida.',
+        'pickup' => 'El transportista indicó que llegó al punto de recogida.',
+        'in_progress' => 'El servicio ya comenzó.',
+        'completed' => 'El transportista marcó el servicio como completado.',
+        'settled' => 'El servicio quedó cerrado correctamente.',
+        'cancelled_by_customer' => 'Cancelaste esta solicitud.',
+        'cancelled_by_driver' => 'El transportista canceló el servicio.',
+        'expired' => 'Ningún transportista aceptó antes del vencimiento.',
+        'incident' => 'El servicio requiere revisión.',
+        _ => 'El estado se actualizará automáticamente.',
+      };
 
   Future<String?> _askCancellationReason() async {
     final controller = TextEditingController();
@@ -222,7 +226,10 @@ class _MarketplaceCustomerTrackingScreenState
       return;
     }
 
-    final payloadSignature = jsonEncode({'job_id': job.id, 'reason': reason});
+    final payloadSignature = jsonEncode({
+      'job_id': job.id,
+      'reason': reason,
+    });
 
     if (_cancelPayloadSignature != payloadSignature ||
         _cancelIdempotencyKey == null) {
@@ -251,7 +258,9 @@ class _MarketplaceCustomerTrackingScreenState
       final value = error.toString();
 
       setState(() {
-        _error = value.contains('CUSTOMER_CANCELLATION_REQUIRES_SUPPORT')
+        _error = value.contains(
+          'CUSTOMER_CANCELLATION_REQUIRES_SUPPORT',
+        )
             ? 'Este servicio ya no puede cancelarse directamente.'
             : 'No pudimos cancelar la solicitud. Inténtalo otra vez.';
       });
@@ -274,7 +283,11 @@ class _MarketplaceCustomerTrackingScreenState
 
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No pudimos abrir WhatsApp.')),
+        const SnackBar(
+          content: Text(
+            'No pudimos abrir WhatsApp.',
+          ),
+        ),
       );
     }
   }
@@ -284,10 +297,15 @@ class _MarketplaceCustomerTrackingScreenState
 
     if (!mounted) return;
 
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).popUntil(
+      (route) => route.isFirst,
+    );
   }
 
-  Widget _routeCard(BuildContext context, MarketplaceCustomerJob job) {
+  Widget _routeCard(
+    BuildContext context,
+    MarketplaceCustomerJob job,
+  ) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -322,8 +340,14 @@ class _MarketplaceCustomerTrackingScreenState
     );
   }
 
-  Widget _driverCard(BuildContext context, MarketplaceCustomerJob job) {
-    final vehicleParts = <String?>[job.vehicleBrand, job.vehicleModel]
+  Widget _driverCard(
+    BuildContext context,
+    MarketplaceCustomerJob job,
+  ) {
+    final vehicleParts = <String?>[
+      job.vehicleBrand,
+      job.vehicleModel,
+    ]
         .whereType<String>()
         .where((value) => value.trim().isNotEmpty)
         .toList(growable: false);
@@ -381,17 +405,22 @@ class _MarketplaceCustomerTrackingScreenState
               const SizedBox(height: 4),
               Text(
                 'Matrícula: ${job.vehicleRegistration}',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: kMuted),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: kMuted),
               ),
             ],
             if (job.driverWhatsappPhone != null) ...[
               const SizedBox(height: 18),
               OutlinedButton.icon(
-                onPressed: () => _openWhatsApp(job.driverWhatsappPhone!),
+                onPressed: () => _openWhatsApp(
+                  job.driverWhatsappPhone!,
+                ),
                 icon: const Icon(Icons.chat_outlined),
-                label: const Text('Contactar por WhatsApp'),
+                label: const Text(
+                  'Contactar por WhatsApp',
+                ),
               ),
             ],
           ],
@@ -423,110 +452,124 @@ class _MarketplaceCustomerTrackingScreenState
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640),
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : job == null
-                  ? Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _error ?? 'No pudimos cargar el servicio.',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          FilledButton(
-                            onPressed: _refresh,
-                            child: const Text('Reintentar'),
-                          ),
-                        ],
-                      ),
+                  ? const Center(
+                      child: CircularProgressIndicator(),
                     )
-                  : ListView(
-                      padding: const EdgeInsets.all(24),
-                      children: [
-                        Text(
-                          _statusTitle(job.status),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _statusDescription(job.status),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyLarge?.copyWith(color: kMuted),
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 12),
-                          Text(_error!, style: const TextStyle(color: kDanger)),
-                        ],
-                        const SizedBox(height: 24),
-                        _routeCard(context, job),
-                        const SizedBox(height: 16),
-                        if (job.hasAssignedDriver)
-                          _driverCard(context, job)
-                        else if (!job.isTerminal)
-                          const Card(
-                            child: Padding(
-                              padding: EdgeInsets.all(18),
-                              child: Text(
-                                'Aún estamos buscando un '
-                                'transportista disponible.',
+                  : job == null
+                      ? Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _error ?? 'No pudimos cargar el servicio.',
+                                textAlign: TextAlign.center,
                               ),
-                            ),
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: _refresh,
+                                child: const Text('Reintentar'),
+                              ),
+                            ],
                           ),
-                        if (job.customerCanCancel) ...[
-                          const SizedBox(height: 24),
-                          OutlinedButton.icon(
-                            onPressed: _cancelling ? null : _cancelJob,
-                            icon: const Icon(Icons.close_rounded),
-                            label: Text(
-                              _cancelling
-                                  ? 'Cancelando...'
-                                  : 'Cancelar solicitud',
+                        )
+                      : ListView(
+                          padding: const EdgeInsets.all(24),
+                          children: [
+                            Text(
+                              _statusTitle(job.status),
+                              style: Theme.of(context).textTheme.headlineSmall,
                             ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: kDanger,
+                            const SizedBox(height: 8),
+                            Text(
+                              _statusDescription(job.status),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(color: kMuted),
                             ),
-                          ),
-                        ],
-                        if (job.isTerminal) ...[
-                          const SizedBox(height: 24),
-                          if (job.status == 'settled')
-                            _rating == null
-                                ? FilledButton.icon(
-                                    onPressed: () => _openRating(job),
-                                    icon: const Icon(Icons.star_outline),
-                                    label: const Text(
-                                      'Calificar transportista',
-                                    ),
-                                  )
-                                : Text(
-                                    'Tu calificación: ${_rating!.stars} estrellas',
-                                    textAlign: TextAlign.center,
+                            if (_error != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                _error!,
+                                style: const TextStyle(
+                                  color: kDanger,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 24),
+                            _routeCard(context, job),
+                            const SizedBox(height: 16),
+                            if (job.hasAssignedDriver)
+                              _driverCard(context, job)
+                            else if (!job.isTerminal)
+                              const Card(
+                                child: Padding(
+                                  padding: EdgeInsets.all(18),
+                                  child: Text(
+                                    'Aún estamos buscando un '
+                                    'transportista disponible.',
                                   ),
-                          if (job.status == 'settled')
-                            const SizedBox(height: 12),
-                          FilledButton(
-                            onPressed: _finish,
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 14),
-                              child: Text('Volver a servicios'),
-                            ),
-                          ),
-                        ] else ...[
-                          const SizedBox(height: 24),
-                          Text(
-                            'Esta pantalla se actualiza '
-                            'automáticamente.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(color: kMuted),
-                          ),
-                        ],
-                      ],
-                    ),
+                                ),
+                              ),
+                            if (job.customerCanCancel) ...[
+                              const SizedBox(height: 24),
+                              OutlinedButton.icon(
+                                onPressed: _cancelling ? null : _cancelJob,
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                ),
+                                label: Text(
+                                  _cancelling
+                                      ? 'Cancelando...'
+                                      : 'Cancelar solicitud',
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: kDanger,
+                                ),
+                              ),
+                            ],
+                            if (job.isTerminal) ...[
+                              const SizedBox(height: 24),
+                              if (job.status == 'settled')
+                                _rating == null
+                                    ? FilledButton.icon(
+                                        onPressed: () => _openRating(job),
+                                        icon: const Icon(Icons.star_outline),
+                                        label: const Text(
+                                            'Calificar transportista'),
+                                      )
+                                    : Text(
+                                        'Tu calificación: ${_rating!.stars} estrellas',
+                                        textAlign: TextAlign.center,
+                                      ),
+                              if (job.status == 'settled')
+                                const SizedBox(height: 12),
+                              FilledButton(
+                                onPressed: _finish,
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  child: Text(
+                                    'Volver a servicios',
+                                  ),
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 24),
+                              Text(
+                                'Esta pantalla se actualiza '
+                                'automáticamente.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: kMuted),
+                              ),
+                            ],
+                          ],
+                        ),
             ),
           ),
         ),
@@ -549,12 +592,11 @@ class _MarketplaceCustomerTrackingScreenState
 }
 
 class MarketplaceCustomerRatingScreen extends StatefulWidget {
-  const MarketplaceCustomerRatingScreen({
-    required this.service,
-    required this.session,
-    required this.jobId,
-    super.key,
-  });
+  const MarketplaceCustomerRatingScreen(
+      {required this.service,
+      required this.session,
+      required this.jobId,
+      super.key});
   final MarketplaceCustomerService service;
   final MarketplaceCustomerSessionSnapshot session;
   final String jobId;
@@ -598,20 +640,17 @@ class _MarketplaceCustomerRatingScreenState
     });
     try {
       final rating = await widget.service.createRating(
-        sessionId: widget.session.sessionId,
-        sessionToken: widget.session.token,
-        jobId: widget.jobId,
-        stars: _stars,
-        comment: comment.isEmpty ? null : comment,
-        idempotencyKey: _idempotencyKey!,
-      );
+          sessionId: widget.session.sessionId,
+          sessionToken: widget.session.token,
+          jobId: widget.jobId,
+          stars: _stars,
+          comment: comment.isEmpty ? null : comment,
+          idempotencyKey: _idempotencyKey!);
       if (mounted) Navigator.of(context).pop(rating);
     } catch (_) {
       if (mounted) {
-        setState(
-          () => _error =
-              'No pudimos guardar tu calificación. Inténtalo otra vez.',
-        );
+        setState(() =>
+            _error = 'No pudimos guardar tu calificación. Inténtalo otra vez.');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -620,51 +659,41 @@ class _MarketplaceCustomerRatingScreenState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Calificar transportista')),
-    body: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('¿Cómo fue tu experiencia?'),
-            const SizedBox(height: 16),
-            Wrap(
-              children: List.generate(
-                5,
-                (index) => IconButton(
-                  onPressed: _sending
-                      ? null
-                      : () => setState(() => _stars = index + 1),
-                  icon: Icon(
-                    index < _stars
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: kTertiary,
-                  ),
-                  tooltip: '${index + 1} estrellas',
-                ),
-              ),
-            ),
-            TextField(
-              controller: _comment,
-              maxLength: 1000,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: 'Comentario (opcional)',
-              ),
-            ),
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: kDanger)),
-            const Spacer(),
-            FilledButton(
-              onPressed: _sending ? null : _submit,
-              child: Text(_sending ? 'Enviando...' : 'Enviar calificación'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+      appBar: AppBar(title: const Text('Calificar transportista')),
+      body: SafeArea(
+          child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('¿Cómo fue tu experiencia?'),
+                    const SizedBox(height: 16),
+                    Wrap(
+                        children: List.generate(
+                            5,
+                            (index) => IconButton(
+                                onPressed: _sending
+                                    ? null
+                                    : () => setState(() => _stars = index + 1),
+                                icon: Icon(
+                                    index < _stars
+                                        ? Icons.star_rounded
+                                        : Icons.star_outline_rounded,
+                                    color: kTertiary),
+                                tooltip: '${index + 1} estrellas'))),
+                    TextField(
+                        controller: _comment,
+                        maxLength: 1000,
+                        minLines: 3,
+                        maxLines: 5,
+                        decoration: const InputDecoration(
+                            labelText: 'Comentario (opcional)')),
+                    if (_error != null)
+                      Text(_error!, style: const TextStyle(color: kDanger)),
+                    const Spacer(),
+                    FilledButton(
+                        onPressed: _sending ? null : _submit,
+                        child: Text(
+                            _sending ? 'Enviando...' : 'Enviar calificación'))
+                  ]))));
 }
