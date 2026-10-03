@@ -1,0 +1,24 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test(
+    'stale active customer job is recovered without a false network error',
+    () {
+      final service = File(
+        'lib/data/marketplace_customer_service.dart',
+      ).readAsStringSync();
+
+      final tracking = File(
+        'lib/presentation/marketplace_customer_tracking.dart',
+      ).readAsStringSync();
+
+      expect(service, contains('on FunctionsHttpException catch (error)'));
+      expect(service, contains("details['error']"));
+      expect(tracking, contains("value.contains('ACCESS_DENIED')"));
+      expect(tracking, contains('await widget.onDone();'));
+      expect(tracking, contains('Navigator.of(context).popUntil('));
+    },
+  );
+}

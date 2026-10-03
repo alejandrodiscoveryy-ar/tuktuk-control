@@ -110,8 +110,22 @@ class _MarketplaceCustomerTrackingScreenState
       if (job.isTerminal) {
         _pollTimer?.cancel();
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
+
+      final value = error.toString();
+
+      if (value.contains('ACCESS_DENIED')) {
+        _pollTimer?.cancel();
+        await widget.onDone();
+
+        if (mounted) {
+          Navigator.of(context).popUntil(
+            (route) => route.isFirst,
+          );
+        }
+        return;
+      }
 
       setState(() {
         _error = 'No pudimos actualizar el estado. Revisa tu conexión.';

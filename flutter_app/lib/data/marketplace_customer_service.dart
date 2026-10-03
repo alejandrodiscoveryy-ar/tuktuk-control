@@ -268,18 +268,29 @@ class MarketplaceCustomerService {
 
   Future<dynamic> _gateway(String operation,
       [Map<String, dynamic>? params]) async {
-    final response = await _client.functions.invoke(
-      'marketplace-customer-gateway',
-      body: {
-        'operation': operation,
-        'params': params ?? const <String, dynamic>{}
-      },
-    );
-    final value = response.data;
-    if (value is Map && value['error'] != null) {
-      throw StateError(value['error'].toString());
+    try {
+      final response = await _client.functions.invoke(
+        'marketplace-customer-gateway',
+        body: {
+          'operation': operation,
+          'params': params ?? const <String, dynamic>{}
+        },
+      );
+      final value = response.data;
+      if (value is Map && value['error'] != null) {
+        throw StateError(value['error'].toString());
+      }
+      return value is Map ? value['data'] : null;
+    } on FunctionsHttpException catch (error) {
+      final details = error.details;
+      if (details is Map && details['error'] != null) {
+        throw StateError(details['error'].toString());
+      }
+      if (details is String && details.trim().isNotEmpty) {
+        throw StateError(details);
+      }
+      rethrow;
     }
-    return value is Map ? value['data'] : null;
   }
 
   Future<Map<String, dynamic>> _gatewayOne(
