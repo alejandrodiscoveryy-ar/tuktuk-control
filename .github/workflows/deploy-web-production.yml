@@ -78,6 +78,15 @@ jobs:
         working-directory: flutter_app
         run: flutter analyze --no-fatal-infos
 
+      - name: Prepare gateway fixture for tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p vrixora-marketplace/supabase/functions/marketplace-customer-gateway
+          curl -fLsS --retry 3 \
+            https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/696285f68670fa96fb88f58236f1e15525cca014/supabase/functions/marketplace-customer-gateway/index.ts \
+            -o vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
+
       - name: Test
         working-directory: flutter_app
         run: flutter test
