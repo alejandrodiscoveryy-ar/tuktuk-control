@@ -1890,105 +1890,159 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         ? selectedVehicle.name!.trim()
         : selectedVehicle.id;
 
-    final statusColor = acceptingJobs
-        ? appPrimaryColor(context)
-        : appMutedColor(context);
+    final restingColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF95A4B8)
+        : const Color(0xFF56677C);
+    final statusColor = acceptingJobs ? appPrimaryColor(context) : restingColor;
+    final statusTitle = acceptingJobs ? 'En servicio' : 'Descansando';
+    final statusMessage = acceptingJobs
+        ? 'Recibiendo nuevas solicitudes'
+        : 'No recibirás nuevos trabajos';
+    final statusIcon = acceptingJobs
+        ? Icons.wifi_tethering_rounded
+        : Icons.pause_rounded;
 
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final identity = Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: appPrimaryColor(context).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: appPrimaryColor(context).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.directions_car_filled_rounded,
+                  color: appPrimaryColor(context),
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Vehículo activo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: appMutedColor(context),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.directions_car_filled_rounded,
-                      color: appPrimaryColor(context),
-                      size: 22,
+                    const SizedBox(height: 2),
+                    Text(
+                      vehicleName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (vehicleReady) ...[
+                const SizedBox(width: 10),
+                Semantics(
+                  label: acceptingJobs
+                      ? 'Desactivar disponibilidad'
+                      : 'Activar disponibilidad',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.09),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Switch.adaptive(
+                      key: const ValueKey('marketplace-availability-switch'),
+                      value: acceptingJobs,
+                      onChanged: _updatingAvailability
+                          ? null
+                          : (value) {
+                              unawaited(_setAcceptingJobs(value));
+                            },
                     ),
                   ),
-                  const SizedBox(width: 12),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (vehicleReady)
+            AnimatedContainer(
+              key: const ValueKey('marketplace-availability-status'),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: statusColor.withValues(alpha: 0.26)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.14),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(statusIcon, size: 18, color: statusColor),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Vehículo activo',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: appMutedColor(context),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: Text(
+                            statusTitle,
+                            key: ValueKey(statusTitle),
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          vehicleName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
+                          statusMessage,
+                          style: TextStyle(
+                            color: appMutedColor(context),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   ),
                 ],
-              );
-              final control = vehicleReady
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          acceptingJobs ? 'Trabajando' : 'Descansando',
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        Switch.adaptive(
-                          value: acceptingJobs,
-                          onChanged: _updatingAvailability
-                              ? null
-                              : (value) {
-                                  unawaited(_setAcceptingJobs(value));
-                                },
-                        ),
-                      ],
-                    )
-                  : OutlinedButton.icon(
-                      onPressed: _openActivation,
-                      icon: const Icon(Icons.verified_user_outlined, size: 17),
-                      label: const Text('Activar'),
-                    );
-              final textScale = MediaQuery.textScalerOf(context).scale(1);
-              if (constraints.maxWidth < 340 * textScale) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [identity, const SizedBox(height: 12), control],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(child: identity),
-                  const SizedBox(width: 12),
-                  control,
-                ],
-              );
-            },
-          ),
+              ),
+            )
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: _openActivation,
+                icon: const Icon(Icons.verified_user_outlined, size: 17),
+                label: const Text('Activar'),
+              ),
+            ),
           if (onboarding.vehicles.length > 1) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
