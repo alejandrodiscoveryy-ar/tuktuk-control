@@ -2512,16 +2512,29 @@ class LoginScreen extends StatelessWidget {
                     backgroundColor: appPrimaryColor(
                       context,
                     ).withValues(alpha: .16),
-                    backgroundImage: photoUrl == null
-                        ? null
-                        : NetworkImage(photoUrl),
                     child: photoUrl == null
                         ? Icon(
                             user == null ? Icons.person_outline : Icons.person,
                             color: appPrimaryColor(context),
                             size: 34,
                           )
-                        : null,
+                        : ClipOval(
+                            child: SizedBox.square(
+                              dimension: 68,
+                              child: Image.network(
+                                photoUrl,
+                                fit: BoxFit.cover,
+                                webHtmlElementStrategy:
+                                    WebHtmlElementStrategy.fallback,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(
+                                      Icons.person,
+                                      color: appPrimaryColor(context),
+                                      size: 34,
+                                    ),
+                              ),
+                            ),
+                          ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
