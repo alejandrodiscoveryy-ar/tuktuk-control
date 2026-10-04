@@ -932,7 +932,8 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
   bool get _shouldAnimate =>
       _marketplaceDriverProfileNeedsSetup.value ||
       (!widget.selected &&
-          (_marketplaceAvailableJobCount.value > 0 || marketplaceJobPushPending.value) &&
+          (_marketplaceAvailableJobCount.value > 0 ||
+              marketplaceJobPushPending.value) &&
           _marketplaceJobsNeedAttention.value &&
           !_marketplaceJobsVisible.value);
 
@@ -1058,7 +1059,8 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                       : Color.lerp(baseColor, attentionColor, pulse),
                 ),
               ),
-              if (hasAvailable || (!needsSetup && marketplaceJobPushPending.value))
+              if (hasAvailable ||
+                  (!needsSetup && marketplaceJobPushPending.value))
                 Positioned(
                   right: -4,
                   top: -5,
@@ -1078,7 +1080,9 @@ class _JobsNavigationIconState extends State<_JobsNavigationIcon>
                       ],
                     ),
                     child: Icon(
-                      hasAvailable ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+                      hasAvailable
+                          ? Icons.notifications_active_rounded
+                          : Icons.notifications_none_rounded,
                       size: 11,
                       color: const Color(0xFF201500),
                     ),
@@ -2934,7 +2938,7 @@ class _ReferralCard extends StatelessWidget {
                       store.referralProgram?.isRegistrationWalletLicense == true
                           ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} promocionales cuando tu referido complete su perfil de conductor y active Trabajos.'
                           : store.referralProgram?.isWalletReward == true
-                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional por un referido válido.'
+                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido.'
                           : store.referralProgram == null
                           ? 'Consulta tus recompensas por invitar conductores.'
                           : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
@@ -3033,7 +3037,7 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales por cada conductor referido válido'
             : program.isWalletReward
-            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido válido'
+            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido'
             : 'Gana ${program.rewardDays} días por cada referido',
         style: TextStyle(
           color: appPrimaryColor(context),
@@ -3097,12 +3101,12 @@ class _ReferralCard extends StatelessWidget {
               label: program.isRegistrationWalletLicense
                   ? 'Acreditado'
                   : program.isWalletReward
-                  ? 'Acreditados'
+                  ? 'Cualificados'
                   : 'Cumplieron',
               value: program.isRegistrationWalletLicense
                   ? '${totals.creditedCup.toStringAsFixed(0)} CUP'
                   : program.isWalletReward
-                  ? '${program.rewardedCount}'
+                  ? '${program.qualifiedCount}'
                   : '${program.qualifiedCount}',
             ),
             const _ReferralDivider(),
@@ -3110,12 +3114,12 @@ class _ReferralCard extends StatelessWidget {
               label: program.isRegistrationWalletLicense
                   ? 'Premiados'
                   : program.isWalletReward
-                  ? 'Días pendientes'
+                  ? 'Premiados'
                   : 'Días obtenidos',
               value: program.isRegistrationWalletLicense
                   ? '${totals.creditedReferrals}'
                   : program.isWalletReward
-                  ? '${program.earnedDays - program.appliedDays}'
+                  ? '${program.rewardedCount}'
                   : '${program.earnedDays}',
             ),
           ],
@@ -3126,7 +3130,7 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Referidos acreditados: ${totals.creditedReferrals} · Saldo promocional otorgado: ${totals.creditedCup.toStringAsFixed(0)} ${program.rewardCurrency}'
             : program.isWalletReward
-            ? 'Premios de saldo acreditados: ${program.rewardedCount} · Días antiguos pendientes: ${program.earnedDays - program.appliedDays} · Días antiguos aplicados: ${program.appliedDays}'
+            ? 'Referidos premiados: ${program.rewardedCount} · Recompensa vigente: ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} por primer trabajo válido'
             : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
         style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
@@ -3152,7 +3156,9 @@ class _ReferralCard extends StatelessWidget {
           style: TextStyle(color: appMutedColor(context)),
         )
       else
-        ...store.referrals.map(_ReferralEntryTile.new),
+        ...store.referrals.map(
+          (entry) => _ReferralEntryTile(entry: entry, program: program),
+        ),
     ];
   }
 
@@ -3212,9 +3218,10 @@ class _ReferralValue extends StatelessWidget {
 }
 
 class _ReferralEntryTile extends StatelessWidget {
-  const _ReferralEntryTile(this.entry);
+  const _ReferralEntryTile({required this.entry, required this.program});
 
   final ReferralEntry entry;
+  final ReferralProgram program;
 
   @override
   Widget build(BuildContext context) {
@@ -3223,9 +3230,17 @@ class _ReferralEntryTile extends StatelessWidget {
         ? ''
         : DateFormat('d MMM yyyy', activeLanguage).format(createdAt.toLocal());
     final rewarded = entry.status == ReferralEntryStatus.rewarded;
+    final entryRewardAmount = entry.rewardAmount;
+    final rewardAmount = entryRewardAmount != null && entryRewardAmount > 0
+        ? entryRewardAmount
+        : program.rewardAmount;
+    final rewardCurrency = entry.rewardCurrency ?? program.rewardCurrency;
+    final rewardLabel = rewardAmount > 0
+        ? '${rewardAmount.toStringAsFixed(0)} $rewardCurrency'
+        : 'Recompensa';
     final rewardState = rewarded
-        ? '100 CUP acreditados'
-        : 'Pendiente de validar conductor';
+        ? '$rewardLabel acreditados'
+        : 'Pendiente del primer trabajo válido';
     final detail = [
       if (registered.isNotEmpty) registered,
       rewardState,
@@ -3291,7 +3306,7 @@ class _ReferralEntryTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                rewarded ? '+100 CUP' : 'Pendiente',
+                rewarded ? '+$rewardLabel' : 'Pendiente',
                 style: TextStyle(
                   color: appPrimaryColor(context),
                   fontWeight: FontWeight.w900,
@@ -3301,7 +3316,9 @@ class _ReferralEntryTile extends StatelessWidget {
               Text(
                 entry.rewardMonths > 0
                     ? '+${entry.rewardMonths} meses · histórico'
-                    : (rewarded ? '' : 'Perfil válido'),
+                    : (rewarded
+                          ? 'Saldo promocional'
+                          : 'Primer trabajo válido'),
                 style: TextStyle(
                   color: appPrimaryColor(context),
                   fontWeight: FontWeight.w800,

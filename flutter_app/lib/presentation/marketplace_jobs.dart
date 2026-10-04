@@ -154,7 +154,7 @@ int _marketplaceJobProgressIndex(String status) {
 String _marketplaceJobBillingLabel(MarketplaceJob job) {
   switch (job.billingMode) {
     case MarketplaceBillingMode.trialFree:
-      return 'Periodo gratuito · sin comisión';
+      return 'Promoción inicial · sin comisión';
     case MarketplaceBillingMode.walletCommission:
       final commission = job.commissionAmountSnapshot;
       if (commission == null) return 'Comisión por billetera';

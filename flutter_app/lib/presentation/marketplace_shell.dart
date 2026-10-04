@@ -201,7 +201,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
               store.referralProgram?.isRegistrationWalletLicense == true
                   ? 'Invita y gana saldo promocional por conductores referidos válidos.'
                   : store.referralProgram?.isWalletReward == true
-                  ? 'Invita y gana saldo promocional.'
+                  ? 'Invita y gana saldo promocional cuando tus referidos completen su primer trabajo válido.'
                   : 'Invita a otros conductores y consulta tus premios.',
             ),
             trailing: const Icon(Icons.chevron_right_rounded),

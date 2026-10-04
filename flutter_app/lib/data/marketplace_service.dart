@@ -1012,14 +1012,6 @@ class MarketplaceService {
     {'target_vehicle_id': vehicleId},
   ).then(MarketplaceWorkAccess.fromMap);
 
-  Future<MarketplaceTrial> startTrial(
-    String vehicleId,
-    String idempotencyKey,
-  ) => _one('start_my_marketplace_work_trial', {
-    'target_vehicle_id': vehicleId,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceTrial.fromMap);
-
   Future<MarketplaceWallet> wallet() =>
       _one('get_my_marketplace_wallet').then(MarketplaceWallet.fromMap);
 

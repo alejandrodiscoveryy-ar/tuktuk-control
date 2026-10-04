@@ -90,9 +90,9 @@ class _MarketplaceOnboardingScreenState
 
   MarketplaceWorkAccess? _access;
   bool _accessLoading = false;
-  bool _startingTrial = false;
+
   String? _accessError;
-  String? _trialStartKey;
+
   String? _vehicleCreateKey;
   String? _vehicleCreateName;
 
@@ -129,7 +129,6 @@ class _MarketplaceOnboardingScreenState
       !_localPreview &&
       !_saving &&
       !_processingPhoto &&
-      !_startingTrial &&
       !(_data?.driverSuspended ?? false);
 
   @override
@@ -255,9 +254,8 @@ class _MarketplaceOnboardingScreenState
         'driver_active': true,
         'vehicle_available': true,
         'trial_active': true,
-        'trial_started_at': now
-            .subtract(const Duration(days: 5))
-            .toIso8601String(),
+        'trial_started_at':
+            now.subtract(const Duration(days: 5)).toIso8601String(),
         'trial_ends_at': now.add(const Duration(days: 25)).toIso8601String(),
         'initial_deposit_confirmed': false,
         'suite_active': true,
@@ -274,12 +272,10 @@ class _MarketplaceOnboardingScreenState
         'driver_active': true,
         'vehicle_available': true,
         'trial_active': false,
-        'trial_started_at': now
-            .subtract(const Duration(days: 40))
-            .toIso8601String(),
-        'trial_ends_at': now
-            .subtract(const Duration(days: 10))
-            .toIso8601String(),
+        'trial_started_at':
+            now.subtract(const Duration(days: 40)).toIso8601String(),
+        'trial_ends_at':
+            now.subtract(const Duration(days: 10)).toIso8601String(),
         'initial_deposit_confirmed': false,
         'suite_active': true,
         'can_start_trial': false,
@@ -293,11 +289,13 @@ class _MarketplaceOnboardingScreenState
       'onboarding_complete': true,
       'driver_active': true,
       'vehicle_available': true,
-      'trial_active': false,
+      'trial_active': true,
+      'trial_started_at': now.toIso8601String(),
+      'trial_ends_at': now.add(const Duration(days: 30)).toIso8601String(),
       'initial_deposit_confirmed': false,
       'suite_active': true,
-      'can_start_trial': true,
-      'can_accept_new_job': false,
+      'can_start_trial': false,
+      'can_accept_new_job': true,
       'next_billing_mode': 'trial_free',
     });
   }
@@ -377,8 +375,7 @@ class _MarketplaceOnboardingScreenState
     _name.text = data.displayName ?? widget.store.profileDisplayName;
     _phone.text = data.phone ?? '';
 
-    final preferred =
-        preferredVehicleId ??
+    final preferred = preferredVehicleId ??
         _selectedVehicleId ??
         widget.initialVehicleId ??
         widget.store.activeVehicle?.id;
@@ -515,88 +512,6 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
-  Future<void> _startTrial() async {
-    if (_localPreview) {
-      toast(
-        context,
-        'Vista previa local: no se inició ningún periodo gratuito.',
-      );
-      return;
-    }
-
-    final vehicleId = _selectedVehicleId;
-    final access = _access;
-
-    if (vehicleId == null ||
-        access == null ||
-        !access.canStartTrial ||
-        _startingTrial) {
-      return;
-    }
-
-    final confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Comenzar 30 días gratis'),
-            content: const Text(
-              'Los 30 días comienzan cuando confirmes. '
-              'La prueba no se inicia automáticamente y solo puede utilizarse una vez.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Ahora no'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Comenzar'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!confirmed || !mounted) return;
-
-    setState(() => _startingTrial = true);
-
-    final key = _trialStartKey ?? _marketplaceUuidV4();
-    _trialStartKey = key;
-
-    try {
-      final trial = await _service.startTrial(vehicleId, key);
-
-      if (!mounted) return;
-
-      await _loadAccess(showSpinner: false);
-      await _loadWallet(showSpinner: false);
-
-      if (!mounted) return;
-
-      setState(() => _trialStartKey = null);
-
-      final endsAt = trial.endsAt ?? _access?.trialEndsAt;
-
-      toast(
-        context,
-        endsAt == null
-            ? 'Tus 30 días gratis comenzaron.'
-            : 'Tus 30 días gratis comenzaron. Finalizan el ${_marketplaceDateTimeLabel(endsAt)}.',
-      );
-      widget.onManagementChanged?.call();
-    } catch (_) {
-      if (mounted) {
-        toast(
-          context,
-          'No se pudo confirmar el inicio de la prueba. Puedes intentarlo nuevamente.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _startingTrial = false);
-    }
-  }
-
   Future<ImageSource?> _choosePhotoSource() {
     return showModalBottomSheet<ImageSource>(
       context: context,
@@ -698,15 +613,15 @@ class _MarketplaceOnboardingScreenState
     required bool vehicle,
   }) {
     Widget image(Uint8List bytes) => ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: vehicle
-          ? SizedBox(
-              height: 255,
-              width: double.infinity,
-              child: Image.memory(bytes, fit: BoxFit.contain),
-            )
-          : Image.memory(bytes, width: 120, height: 120, fit: BoxFit.cover),
-    );
+          borderRadius: BorderRadius.circular(18),
+          child: vehicle
+              ? SizedBox(
+                  height: 255,
+                  width: double.infinity,
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                )
+              : Image.memory(bytes, width: 120, height: 120, fit: BoxFit.cover),
+        );
 
     // The new selection is shown immediately, before it is saved.
     if (pendingBytes != null) return image(pendingBytes);
@@ -987,15 +902,12 @@ class _MarketplaceOnboardingScreenState
           'target_vehicle_id': vehicle.id,
           'target_category_code': category,
           'target_propulsion_code': propulsion,
-          'target_category_other_description': category == 'other'
-              ? _otherCategory.text.trim()
-              : null,
-          'target_brand': _brand.text.trim().isEmpty
-              ? null
-              : _brand.text.trim(),
-          'target_model': _model.text.trim().isEmpty
-              ? null
-              : _model.text.trim(),
+          'target_category_other_description':
+              category == 'other' ? _otherCategory.text.trim() : null,
+          'target_brand':
+              _brand.text.trim().isEmpty ? null : _brand.text.trim(),
+          'target_model':
+              _model.text.trim().isEmpty ? null : _model.text.trim(),
           'target_year': year,
           'target_passenger_capacity': passengers,
           'target_cargo_capacity_kg': cargoKg,
@@ -1003,9 +915,8 @@ class _MarketplaceOnboardingScreenState
           'target_cargo_length_cm': vehicle.cargoLengthCm,
           'target_cargo_width_cm': vehicle.cargoWidthCm,
           'target_cargo_height_cm': vehicle.cargoHeightCm,
-          'target_body_type': _bodyType.text.trim().isEmpty
-              ? null
-              : _bodyType.text.trim(),
+          'target_body_type':
+              _bodyType.text.trim().isEmpty ? null : _bodyType.text.trim(),
           'target_main_photo_asset_id': photoAssetId,
           'target_service_codes': services,
           'target_vehicle_name': vehicleName,
@@ -1098,7 +1009,7 @@ class _MarketplaceOnboardingScreenState
             const SizedBox(height: 12),
             if (access.trialActive) ...[
               Text(
-                '30 días gratis activos',
+                'Promoción inicial activa',
                 style: TextStyle(
                   color: appPrimaryColor(context),
                   fontSize: 17,
@@ -1113,32 +1024,15 @@ class _MarketplaceOnboardingScreenState
               Text(
                 'Finaliza: ${_marketplaceDateTimeLabel(access.trialEndsAt)}',
               ),
-            ] else if (access.canStartTrial) ...[
-              const Text(
-                'Tu configuración ya permite comenzar el periodo gratuito.',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
               const SizedBox(height: 6),
               Text(
-                'La prueba empezará únicamente cuando pulses el botón. '
-                'Hasta entonces no corre ningún día.',
+                'Durante esta promoción no se cobra comisión por los trabajos aceptados.',
                 style: TextStyle(color: appMutedColor(context), height: 1.35),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _startingTrial ? null : _startTrial,
-                  icon: const Icon(Icons.rocket_launch_outlined),
-                  label: Text(
-                    _startingTrial ? 'Activando...' : 'Comenzar 30 días gratis',
-                  ),
-                ),
               ),
             ] else if (access.trialStartedAt != null ||
                 access.trialEndsAt != null) ...[
               const Text(
-                'Periodo gratuito utilizado',
+                'Promoción inicial finalizada',
                 style: TextStyle(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 6),
@@ -1147,7 +1041,7 @@ class _MarketplaceOnboardingScreenState
               ),
               const SizedBox(height: 6),
               Text(
-                'El siguiente paso será verificar la billetera para continuar aceptando nuevos trabajos.',
+                'Las nuevas aceptaciones usan la billetera y requieren saldo disponible suficiente para cubrir la comisión.',
                 style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
             ] else if (!access.onboardingComplete)
@@ -1164,7 +1058,7 @@ class _MarketplaceOnboardingScreenState
               )
             else
               const Text(
-                'La activación todavía no está disponible. Vuelve a consultar el estado.',
+                'Alta operativa completa. La promoción inicial se activa automáticamente al completar los requisitos. Actualiza el estado si acabas de guardar tus datos.',
               ),
             if (access.canAcceptNewJob) ...[
               const SizedBox(height: 12),
@@ -1175,10 +1069,12 @@ class _MarketplaceOnboardingScreenState
                     color: appPrimaryColor(context),
                   ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Ya puedes aceptar nuevos trabajos.',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                      access.nextBillingMode == MarketplaceBillingMode.trialFree
+                          ? 'Ya puedes aceptar trabajos sin comisión durante la promoción inicial.'
+                          : 'Trabajos habilitados. Para aceptar uno necesitas saldo disponible suficiente para la comisión.',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                 ],
@@ -1212,8 +1108,9 @@ class _MarketplaceOnboardingScreenState
           ),
           const SizedBox(height: 8),
           Text(
-            'Esta billetera se usa únicamente para las comisiones de Trabajos. '
-            'No afecta tu licencia ni el funcionamiento de TUKTUK Control.',
+            'La billetera se usa para cubrir las comisiones de Trabajos cuando '
+            'la promoción inicial ya terminó. Control y Estadísticas siguen '
+            'disponibles independientemente de este saldo.',
             style: TextStyle(color: appMutedColor(context), height: 1.35),
           ),
           const SizedBox(height: 14),
@@ -1319,7 +1216,8 @@ class _MarketplaceOnboardingScreenState
               ),
               const SizedBox(height: 8),
               const Text(
-                'El saldo promocional solo paga comisiones. No sustituye el depósito inicial real.',
+                'El saldo real y el saldo promocional pueden cubrir comisiones. '
+                'El saldo promocional no es retirable como efectivo.',
               ),
             ],
             const SizedBox(height: 10),
@@ -1345,76 +1243,24 @@ class _MarketplaceOnboardingScreenState
             const SizedBox(height: 8),
             if (access?.trialActive == true) ...[
               Text(
-                'Durante tus 30 días gratis no se reserva ni se descuenta '
+                'Durante la promoción inicial no se reserva ni se descuenta '
                 'comisión. Puedes tener saldo en la billetera sin perder '
-                'el periodo gratuito.',
+                'la promoción.',
                 style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
-            ] else if (access?.canStartTrial == true) ...[
+            ] else ...[
               Text(
-                'Tu periodo gratuito todavía no ha comenzado. '
-                'No necesitas realizar el depósito inicial para empezar '
-                'los 30 días gratis.',
+                'Fuera de la promoción inicial no existe un depósito mínimo. '
+                'Las nuevas aceptaciones solo requieren saldo disponible '
+                'suficiente para cubrir la comisión correspondiente.',
                 style: TextStyle(color: appMutedColor(context), height: 1.35),
               ),
-            ] else if (!wallet.initialDepositConfirmed &&
-                access?.trialEndsAt != null) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.info_outline_rounded, color: kTertiary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Para aceptar nuevos trabajos después del periodo '
-                      'gratuito debe confirmarse un depósito inicial mínimo '
-                      'de ${_marketplaceMoneyLabel(wallet.currentInitialMinimumDeposit, wallet.currency)}.',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ese depósito queda íntegramente como saldo en tu '
-                'billetera. No es una cuota de activación.',
-                style: TextStyle(color: appMutedColor(context), height: 1.35),
-              ),
-            ],
-            if (wallet.initialDepositConfirmed) ...[
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Icon(Icons.verified_rounded, color: appPrimaryColor(context)),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Depósito inicial confirmado',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                ],
-              ),
-              if (wallet.initialDepositAmount != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Importe confirmado: '
-                  '${_marketplaceMoneyLabel(wallet.initialDepositAmount!, wallet.currency)}',
-                ),
-              ],
-              if (wallet.initialDepositConfirmedAt != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Confirmado: '
-                  '${_marketplaceDateTimeLabel(wallet.initialDepositConfirmedAt)}',
-                ),
-              ],
             ],
             const SizedBox(height: 14),
             Text(
-              'Al aceptar un trabajo fuera del periodo gratuito se '
-              'necesita saldo disponible suficiente para reservar la '
-              'comisión correspondiente.',
+              'El saldo real y el saldo promocional pueden utilizarse para '
+              'cubrir comisiones. Una recarga no inicia, reinicia ni amplía '
+              'la promoción.',
               style: TextStyle(
                 color: appMutedColor(context),
                 fontSize: 12,
@@ -1586,8 +1432,7 @@ class _MarketplaceOnboardingScreenState
                       ),
                     ],
                   );
-                  final hasDriverPhoto =
-                      _driverPhotoBytes != null ||
+                  final hasDriverPhoto = _driverPhotoBytes != null ||
                       data.driverPhotoAssetId != null;
                   if (!hasDriverPhoto) return compactDriverFields;
 
@@ -1623,8 +1468,7 @@ class _MarketplaceOnboardingScreenState
                     _driverPhotoBytes == null && data.driverPhotoAssetId == null
                         ? Icons.photo_camera_outlined
                         : Icons.check_circle_outline,
-                    color:
-                        _driverPhotoBytes == null &&
+                    color: _driverPhotoBytes == null &&
                             data.driverPhotoAssetId == null
                         ? kTertiary
                         : appPrimaryColor(context),
@@ -1635,8 +1479,8 @@ class _MarketplaceOnboardingScreenState
                       _driverPhotoBytes != null
                           ? 'Foto lista para guardar · ${_driverPhotoLabel ?? ''}'
                           : data.driverPhotoAssetId == null
-                          ? 'Foto del conductor pendiente'
-                          : 'Foto del conductor guardada',
+                              ? 'Foto del conductor pendiente'
+                              : 'Foto del conductor guardada',
                     ),
                   ),
                 ],
@@ -1672,459 +1516,468 @@ class _MarketplaceOnboardingScreenState
           ),
         ),
         if (!widget.driverOnly) const SizedBox(height: 16),
-        if (!widget.driverOnly) GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Vehículo para Trabajos',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _canEdit ? _createVehicle : null,
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('Añadir vehículo'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (data.vehicles.isEmpty)
+        if (!widget.driverOnly)
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 const Text(
-                  'Todavía no tienes vehículos. Pulsa Añadir vehículo y luego completa sus datos y fotografías.',
-                )
-              else ...[
-                // TUKTUK_BALANCED_VEHICLE_LAYOUT_V4
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    const gap = 4.0;
-                    const horizontalGap = 6.0;
-                    const fieldHeight = 48.0;
-                    final showColumns = constraints.maxWidth >= 290;
-
-                    InputDecoration fieldDecoration(
-                      String label,
-                      IconData icon,
-                    ) {
-                      return InputDecoration(
-                        labelText: label,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        constraints: const BoxConstraints(
-                          minHeight: fieldHeight,
-                        ),
-                        prefixIcon: Icon(icon, size: 19),
-                        prefixIconConstraints: const BoxConstraints(
-                          minWidth: 38,
-                          minHeight: 38,
-                        ),
-                      );
-                    }
-
-                    Widget field(Widget child) =>
-                        SizedBox(height: fieldHeight, child: child);
-
-                    Widget pair(Widget left, Widget right) {
-                      if (!showColumns) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            left,
-                            const SizedBox(height: gap),
-                            right,
-                          ],
-                        );
-                      }
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: left),
-                          const SizedBox(width: horizontalGap),
-                          Expanded(child: right),
-                        ],
-                      );
-                    }
-
-                    Widget selector({
-                      required String label,
-                      required IconData icon,
-                      required String? value,
-                      required List<DropdownMenuItem<String>> items,
-                      required ValueChanged<String?>? onChanged,
-                    }) {
-                      return field(
-                        InputDecorator(
-                          decoration: fieldDecoration(label, icon),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              isExpanded: true,
-                              isDense: true,
-                              value: value,
-                              hint: const Text('Selecciona'),
-                              items: items,
-                              onChanged: onChanged,
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    Widget edit({
-                      required String label,
-                      required IconData icon,
-                      required TextEditingController controller,
-                      TextInputType? keyboardType,
-                      int? maxLength,
-                    }) {
-                      return field(
-                        TextField(
-                          controller: controller,
-                          enabled: _canEdit,
-                          keyboardType: keyboardType,
-                          maxLength: maxLength,
-                          decoration: fieldDecoration(label, icon).copyWith(
-                            counterText: maxLength == null ? null : '',
-                          ),
-                        ),
-                      );
-                    }
-
-                    final serviceChips = Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: data.serviceTypes.map((service) {
-                        return FilterChip(
-                          label: Text(service.name),
-                          visualDensity: VisualDensity.compact,
-                          selected: _selectedServices.contains(service.code),
-                          onSelected: _canEdit
-                              ? (selected) {
-                                  setState(() {
-                                    if (selected) {
-                                      _selectedServices.add(service.code);
-                                    } else {
-                                      _selectedServices.remove(service.code);
-                                    }
-                                  });
-                                }
-                              : null,
-                        );
-                      }).toList(),
-                    );
-
-                    final services = Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.work_outline, size: 18),
-                              SizedBox(width: 7),
-                              Expanded(
-                                child: Text(
-                                  'Servicios que puedes realizar',
-                                  style: TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          serviceChips,
-                        ],
-                      ),
-                    );
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        pair(
-                          selector(
-                            label: 'Vehículo',
-                            icon: Icons.directions_car_outlined,
-                            value: _selectedVehicleId,
-                            items: data.vehicles.map((item) {
-                              return DropdownMenuItem<String>(
-                                value: item.id,
-                                child: Text(
-                                  item.name?.trim().isNotEmpty == true
-                                      ? item.name!
-                                      : item.id,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: _canEdit
-                                ? (value) {
-                                    setState(() {
-                                      _vehiclePhotoBytes = null;
-                                      _vehiclePhotoUploadKey = null;
-                                      _vehiclePhotoLabel = null;
-                                      _selectedVehicleId = value;
-                                      _loadVehicleFields(_findVehicle(value));
-                                    });
-                                    unawaited(_loadAccess());
-                                  }
-                                : null,
-                          ),
-                          selector(
-                            label: 'Categoría',
-                            icon: Icons.category_outlined,
-                            value: _validCatalogValue(
-                              _selectedCategory,
-                              data.vehicleCategories,
-                            ),
-                            items: data.vehicleCategories.map((item) {
-                              return DropdownMenuItem<String>(
-                                value: item.code,
-                                child: Text(item.name),
-                              );
-                            }).toList(),
-                            onChanged: _canEdit
-                                ? (value) =>
-                                      setState(() => _selectedCategory = value)
-                                : null,
-                          ),
-                        ),
-                        if (_selectedCategory == 'other') ...[
-                          const SizedBox(height: gap),
-                          edit(
-                            label: 'Describe el tipo de vehículo',
-                            icon: Icons.edit_outlined,
-                            controller: _otherCategory,
-                          ),
-                        ],
-                        const SizedBox(height: gap),
-                        pair(
-                          edit(
-                            label: 'Nombre del vehículo',
-                            icon: Icons.edit_outlined,
-                            controller: _vehicleName,
-                            maxLength: 80,
-                          ),
-                          edit(
-                            label: 'Chapa (opcional)',
-                            icon: Icons.credit_card_outlined,
-                            controller: _registration,
-                            maxLength: 32,
-                          ),
-                        ),
-                        const SizedBox(height: gap),
-                        pair(
-                          selector(
-                            label: 'Propulsión',
-                            icon: Icons.bolt_outlined,
-                            value: _validCatalogValue(
-                              _selectedPropulsion,
-                              data.propulsionTypes,
-                            ),
-                            items: data.propulsionTypes.map((item) {
-                              return DropdownMenuItem<String>(
-                                value: item.code,
-                                child: Text(item.name),
-                              );
-                            }).toList(),
-                            onChanged: _canEdit
-                                ? (value) => setState(
-                                    () => _selectedPropulsion = value,
-                                  )
-                                : null,
-                          ),
-                          edit(
-                            label: 'Tipo de carrocería',
-                            icon: Icons.widgets_outlined,
-                            controller: _bodyType,
-                          ),
-                        ),
-                        const SizedBox(height: gap),
-                        pair(
-                          edit(
-                            label: 'Marca',
-                            icon: Icons.sell_outlined,
-                            controller: _brand,
-                          ),
-                          edit(
-                            label: 'Modelo',
-                            icon: Icons.info_outline,
-                            controller: _model,
-                          ),
-                        ),
-                        const SizedBox(height: gap),
-                        if (constraints.maxWidth >= 290)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: edit(
-                                  label: 'Año',
-                                  icon: Icons.calendar_today_outlined,
-                                  controller: _year,
-                                  keyboardType: TextInputType.number,
-                                ),
-                              ),
-                              const SizedBox(width: horizontalGap),
-                              Expanded(
-                                child: edit(
-                                  label: 'Pasajeros',
-                                  icon: Icons.people_outline,
-                                  controller: _passengers,
-                                  keyboardType: TextInputType.number,
-                                ),
-                              ),
-                              const SizedBox(width: horizontalGap),
-                              Expanded(
-                                child: edit(
-                                  label: 'Carga (kg)',
-                                  icon: Icons.scale_outlined,
-                                  controller: _cargoKg,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else ...[
-                          pair(
-                            edit(
-                              label: 'Año',
-                              icon: Icons.calendar_today_outlined,
-                              controller: _year,
-                              keyboardType: TextInputType.number,
-                            ),
-                            edit(
-                              label: 'Pasajeros',
-                              icon: Icons.people_outline,
-                              controller: _passengers,
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(height: gap),
-                          edit(
-                            label: 'Carga (kg)',
-                            icon: Icons.scale_outlined,
-                            controller: _cargoKg,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: gap),
-                        services,
-                        const SizedBox(height: 4),
-                      ],
-                    );
-                  },
+                  'Vehículo para Trabajos',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
-                if (_vehiclePhotoBytes != null ||
-                    vehicle?.mainPhotoAssetId != null) ...[
-                  _buildMarketplacePhotoPreview(
-                    pendingBytes: _vehiclePhotoBytes,
-                    savedAssetId: vehicle?.mainPhotoAssetId,
-                    vehicle: true,
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                Row(
-                  children: [
-                    Icon(
-                      _vehiclePhotoBytes == null &&
-                              vehicle?.mainPhotoAssetId == null
-                          ? Icons.directions_car_outlined
-                          : Icons.check_circle_outline,
-                      color:
-                          _vehiclePhotoBytes == null &&
-                              vehicle?.mainPhotoAssetId == null
-                          ? kTertiary
-                          : appPrimaryColor(context),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _vehiclePhotoBytes != null
-                            ? 'Foto lista para guardar · ${_vehiclePhotoLabel ?? ''}'
-                            : vehicle?.mainPhotoAssetId == null
-                            ? 'Foto principal del vehículo pendiente'
-                            : 'Foto principal del vehículo guardada',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: _canEdit && vehicle != null
-                        ? () => _pickPhoto('vehicle_photo')
-                        : null,
-                    icon: const Icon(Icons.add_photo_alternate_outlined),
-                    label: Text(
-                      vehicle?.mainPhotoAssetId == null &&
-                              _vehiclePhotoBytes == null
-                          ? 'Añadir foto del vehículo'
-                          : 'Cambiar foto del vehículo',
-                    ),
+                    onPressed: _canEdit ? _createVehicle : null,
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('Añadir vehículo'),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Elige una foto donde se vea claramente tu vehículo. TUKTUK la ajusta automáticamente.',
-                  style: TextStyle(color: appMutedColor(context), fontSize: 12),
-                ),
-                if (vehicle?.mainPhotoAssetId == null &&
-                    _vehiclePhotoBytes == null) ...[
-                  const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                if (data.vehicles.isEmpty)
+                  const Text(
+                    'Todavía no tienes vehículos. Pulsa Añadir vehículo y luego completa sus datos y fotografías.',
+                  )
+                else ...[
+                  // TUKTUK_BALANCED_VEHICLE_LAYOUT_V4
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const gap = 4.0;
+                      const horizontalGap = 6.0;
+                      const fieldHeight = 48.0;
+                      final showColumns = constraints.maxWidth >= 290;
+
+                      InputDecoration fieldDecoration(
+                        String label,
+                        IconData icon,
+                      ) {
+                        return InputDecoration(
+                          labelText: label,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          constraints: const BoxConstraints(
+                            minHeight: fieldHeight,
+                          ),
+                          prefixIcon: Icon(icon, size: 19),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 38,
+                            minHeight: 38,
+                          ),
+                        );
+                      }
+
+                      Widget field(Widget child) =>
+                          SizedBox(height: fieldHeight, child: child);
+
+                      Widget pair(Widget left, Widget right) {
+                        if (!showColumns) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              left,
+                              const SizedBox(height: gap),
+                              right,
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: left),
+                            const SizedBox(width: horizontalGap),
+                            Expanded(child: right),
+                          ],
+                        );
+                      }
+
+                      Widget selector({
+                        required String label,
+                        required IconData icon,
+                        required String? value,
+                        required List<DropdownMenuItem<String>> items,
+                        required ValueChanged<String?>? onChanged,
+                      }) {
+                        return field(
+                          InputDecorator(
+                            decoration: fieldDecoration(label, icon),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                isDense: true,
+                                value: value,
+                                hint: const Text('Selecciona'),
+                                items: items,
+                                onChanged: onChanged,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      Widget edit({
+                        required String label,
+                        required IconData icon,
+                        required TextEditingController controller,
+                        TextInputType? keyboardType,
+                        int? maxLength,
+                      }) {
+                        return field(
+                          TextField(
+                            controller: controller,
+                            enabled: _canEdit,
+                            keyboardType: keyboardType,
+                            maxLength: maxLength,
+                            decoration: fieldDecoration(label, icon).copyWith(
+                              counterText: maxLength == null ? null : '',
+                            ),
+                          ),
+                        );
+                      }
+
+                      final serviceChips = Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: data.serviceTypes.map((service) {
+                          return FilterChip(
+                            label: Text(service.name),
+                            visualDensity: VisualDensity.compact,
+                            selected: _selectedServices.contains(service.code),
+                            onSelected: _canEdit
+                                ? (selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedServices.add(service.code);
+                                      } else {
+                                        _selectedServices.remove(service.code);
+                                      }
+                                    });
+                                  }
+                                : null,
+                          );
+                        }).toList(),
+                      );
+
+                      final services = Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.work_outline, size: 18),
+                                SizedBox(width: 7),
+                                Expanded(
+                                  child: Text(
+                                    'Servicios que puedes realizar',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            serviceChips,
+                          ],
+                        ),
+                      );
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          pair(
+                            selector(
+                              label: 'Vehículo',
+                              icon: Icons.directions_car_outlined,
+                              value: _selectedVehicleId,
+                              items: data.vehicles.map((item) {
+                                return DropdownMenuItem<String>(
+                                  value: item.id,
+                                  child: Text(
+                                    item.name?.trim().isNotEmpty == true
+                                        ? item.name!
+                                        : item.id,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: _canEdit
+                                  ? (value) {
+                                      setState(() {
+                                        _vehiclePhotoBytes = null;
+                                        _vehiclePhotoUploadKey = null;
+                                        _vehiclePhotoLabel = null;
+                                        _selectedVehicleId = value;
+                                        _loadVehicleFields(_findVehicle(value));
+                                      });
+                                      unawaited(_loadAccess());
+                                    }
+                                  : null,
+                            ),
+                            selector(
+                              label: 'Categoría',
+                              icon: Icons.category_outlined,
+                              value: _validCatalogValue(
+                                _selectedCategory,
+                                data.vehicleCategories,
+                              ),
+                              items: data.vehicleCategories.map((item) {
+                                return DropdownMenuItem<String>(
+                                  value: item.code,
+                                  child: Text(item.name),
+                                );
+                              }).toList(),
+                              onChanged: _canEdit
+                                  ? (value) => setState(
+                                        () => _selectedCategory = value,
+                                      )
+                                  : null,
+                            ),
+                          ),
+                          if (_selectedCategory == 'other') ...[
+                            const SizedBox(height: gap),
+                            edit(
+                              label: 'Describe el tipo de vehículo',
+                              icon: Icons.edit_outlined,
+                              controller: _otherCategory,
+                            ),
+                          ],
+                          const SizedBox(height: gap),
+                          pair(
+                            edit(
+                              label: 'Nombre del vehículo',
+                              icon: Icons.edit_outlined,
+                              controller: _vehicleName,
+                              maxLength: 80,
+                            ),
+                            edit(
+                              label: 'Chapa (opcional)',
+                              icon: Icons.credit_card_outlined,
+                              controller: _registration,
+                              maxLength: 32,
+                            ),
+                          ),
+                          const SizedBox(height: gap),
+                          pair(
+                            selector(
+                              label: 'Propulsión',
+                              icon: Icons.bolt_outlined,
+                              value: _validCatalogValue(
+                                _selectedPropulsion,
+                                data.propulsionTypes,
+                              ),
+                              items: data.propulsionTypes.map((item) {
+                                return DropdownMenuItem<String>(
+                                  value: item.code,
+                                  child: Text(item.name),
+                                );
+                              }).toList(),
+                              onChanged: _canEdit
+                                  ? (value) => setState(
+                                        () => _selectedPropulsion = value,
+                                      )
+                                  : null,
+                            ),
+                            edit(
+                              label: 'Tipo de carrocería',
+                              icon: Icons.widgets_outlined,
+                              controller: _bodyType,
+                            ),
+                          ),
+                          const SizedBox(height: gap),
+                          pair(
+                            edit(
+                              label: 'Marca',
+                              icon: Icons.sell_outlined,
+                              controller: _brand,
+                            ),
+                            edit(
+                              label: 'Modelo',
+                              icon: Icons.info_outline,
+                              controller: _model,
+                            ),
+                          ),
+                          const SizedBox(height: gap),
+                          if (constraints.maxWidth >= 290)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: edit(
+                                    label: 'Año',
+                                    icon: Icons.calendar_today_outlined,
+                                    controller: _year,
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                                const SizedBox(width: horizontalGap),
+                                Expanded(
+                                  child: edit(
+                                    label: 'Pasajeros',
+                                    icon: Icons.people_outline,
+                                    controller: _passengers,
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                                const SizedBox(width: horizontalGap),
+                                Expanded(
+                                  child: edit(
+                                    label: 'Carga (kg)',
+                                    icon: Icons.scale_outlined,
+                                    controller: _cargoKg,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else ...[
+                            pair(
+                              edit(
+                                label: 'Año',
+                                icon: Icons.calendar_today_outlined,
+                                controller: _year,
+                                keyboardType: TextInputType.number,
+                              ),
+                              edit(
+                                label: 'Pasajeros',
+                                icon: Icons.people_outline,
+                                controller: _passengers,
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                            const SizedBox(height: gap),
+                            edit(
+                              label: 'Carga (kg)',
+                              icon: Icons.scale_outlined,
+                              controller: _cargoKg,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: gap),
+                          services,
+                          const SizedBox(height: 4),
+                        ],
+                      );
+                    },
+                  ),
+                  if (_vehiclePhotoBytes != null ||
+                      vehicle?.mainPhotoAssetId != null) ...[
+                    _buildMarketplacePhotoPreview(
+                      pendingBytes: _vehiclePhotoBytes,
+                      savedAssetId: vehicle?.mainPhotoAssetId,
+                      vehicle: true,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  Row(
+                    children: [
+                      Icon(
+                        _vehiclePhotoBytes == null &&
+                                vehicle?.mainPhotoAssetId == null
+                            ? Icons.directions_car_outlined
+                            : Icons.check_circle_outline,
+                        color: _vehiclePhotoBytes == null &&
+                                vehicle?.mainPhotoAssetId == null
+                            ? kTertiary
+                            : appPrimaryColor(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _vehiclePhotoBytes != null
+                              ? 'Foto lista para guardar · ${_vehiclePhotoLabel ?? ''}'
+                              : vehicle?.mainPhotoAssetId == null
+                                  ? 'Foto principal del vehículo pendiente'
+                                  : 'Foto principal del vehículo guardada',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _canEdit && vehicle != null
+                          ? () => _pickPhoto('vehicle_photo')
+                          : null,
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      label: Text(
+                        vehicle?.mainPhotoAssetId == null &&
+                                _vehiclePhotoBytes == null
+                            ? 'Añadir foto del vehículo'
+                            : 'Cambiar foto del vehículo',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Text(
-                    'La foto principal será obligatoria para activar Trabajos.',
+                    'Elige una foto donde se vea claramente tu vehículo. TUKTUK la ajusta automáticamente.',
                     style: TextStyle(
                       color: appMutedColor(context),
                       fontSize: 12,
                     ),
                   ),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _canEdit ? _saveVehicle : null,
-                    icon: const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'Guardando...' : 'Guardar vehículo'),
-                  ),
-                ),
-                if (vehicle?.onboardingComplete == true) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.verified_rounded,
-                        color: appPrimaryColor(context),
+                  if (vehicle?.mainPhotoAssetId == null &&
+                      _vehiclePhotoBytes == null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'La foto principal será obligatoria para activar Trabajos.',
+                      style: TextStyle(
+                        color: appMutedColor(context),
+                        fontSize: 12,
                       ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Este vehículo ya cumple los requisitos de onboarding.',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _canEdit ? _saveVehicle : null,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(
+                        _saving ? 'Guardando...' : 'Guardar vehículo',
+                      ),
+                    ),
+                  ),
+                  if (vehicle?.onboardingComplete == true) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.verified_rounded,
+                          color: appPrimaryColor(context),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Este vehículo ya cumple los requisitos de onboarding.',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ],
-            ],
+            ),
           ),
-        ),
       ],
     );
   }
