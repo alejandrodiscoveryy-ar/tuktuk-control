@@ -661,7 +661,7 @@ class _MarketplaceOnboardingScreenState
         }
       });
 
-      toast(context, 'Foto optimizada: $label');
+      toast(context, 'Foto ajustada automáticamente y lista para guardar.');
     } catch (_) {
       if (mounted) {
         toast(context, 'No se pudo procesar la foto. Prueba con otra imagen.');
@@ -1027,10 +1027,12 @@ class _MarketplaceOnboardingScreenState
         _applyData(updated, preferredVehicleId: vehicle.id);
       });
 
+      _updateMarketplaceDriverProfileNeedsSetup(updated);
       await _loadAccess(showSpinner: false);
 
       if (!mounted) return;
       toast(context, 'Vehículo guardado.');
+      widget.onManagementChanged?.call();
     } catch (_) {
       if (mounted) {
         toast(context, 'No se pudo guardar la configuración del vehículo.');
@@ -1654,7 +1656,7 @@ class _MarketplaceOnboardingScreenState
               ),
               const SizedBox(height: 6),
               Text(
-                'La imagen se optimiza automáticamente a 720 × 720 antes de subirla.',
+                'Elige una foto clara donde se vea bien tu rostro. TUKTUK la ajusta automáticamente.',
                 style: TextStyle(color: appMutedColor(context), fontSize: 12),
               ),
               const SizedBox(height: 14),
@@ -2078,7 +2080,7 @@ class _MarketplaceOnboardingScreenState
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Se conserva la proporción y se reduce hasta un máximo de 1280 × 960 antes de subirla.',
+                  'Elige una foto donde se vea claramente tu vehículo. TUKTUK la ajusta automáticamente.',
                   style: TextStyle(color: appMutedColor(context), fontSize: 12),
                 ),
                 if (vehicle?.mainPhotoAssetId == null &&

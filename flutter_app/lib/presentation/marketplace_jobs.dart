@@ -19,13 +19,17 @@ final ValueNotifier<bool> _marketplaceJobsVisible = ValueNotifier<bool>(false);
 final ValueNotifier<bool> _marketplaceDriverProfileNeedsSetup =
     ValueNotifier<bool>(false);
 
-bool _marketplaceDriverNeedsSetup(MarketplaceOnboarding data) =>
+bool marketplaceDriverOnboardingNeedsSetup(MarketplaceOnboarding data) =>
     !data.driverSuspended &&
     data.driverStatus != 'suspended' &&
     (!data.driverProfileExists ||
         data.displayName?.trim().isNotEmpty != true ||
         !RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(data.phone?.trim() ?? '') ||
-        data.driverPhotoAssetId?.trim().isNotEmpty != true);
+        data.driverPhotoAssetId?.trim().isNotEmpty != true ||
+        !data.vehicles.any((vehicle) => vehicle.onboardingComplete));
+
+bool _marketplaceDriverNeedsSetup(MarketplaceOnboarding data) =>
+    marketplaceDriverOnboardingNeedsSetup(data);
 
 void _updateMarketplaceDriverProfileNeedsSetup(MarketplaceOnboarding? data) {
   _marketplaceDriverProfileNeedsSetup.value =
@@ -2371,7 +2375,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (_marketplaceDriverNeedsSetup(onboarding)) {
       return MarketplaceOnboardingScreen(
         store: widget.store,
-        driverOnly: true,
         onManagementChanged: _onManagementChanged,
       );
     }

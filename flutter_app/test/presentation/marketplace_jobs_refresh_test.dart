@@ -144,6 +144,54 @@ void main() {
         'job_id': offer.id,
       });
 
+  test('onboarding requires driver data and at least one complete vehicle', () {
+    MarketplaceOnboarding onboarding({required bool vehicleComplete}) =>
+        MarketplaceOnboarding.fromMap({
+          'driver_profile_exists': true,
+          'driver_status': 'active',
+          'display_name': 'Conductor de prueba',
+          'phone': '+5355555555',
+          'driver_photo_asset_id': 'driver-photo-test',
+          'vehicles': [
+            {
+              'vehicle_id': 'vehicle-test',
+              'name': 'Vehículo de prueba',
+              'marketplace_status': vehicleComplete ? 'active' : 'onboarding',
+              'onboarding_complete': vehicleComplete,
+              'is_active': vehicleComplete,
+              'is_available': vehicleComplete,
+              'main_photo_asset_id':
+                  vehicleComplete ? 'vehicle-photo-test' : null,
+            },
+          ],
+        });
+
+    expect(
+      marketplaceDriverOnboardingNeedsSetup(
+        MarketplaceOnboarding.fromMap({
+          'driver_profile_exists': true,
+          'driver_status': 'active',
+          'display_name': 'Conductor de prueba',
+          'phone': '+5355555555',
+          'driver_photo_asset_id': 'driver-photo-test',
+          'vehicles': const [],
+        }),
+      ),
+      isTrue,
+    );
+    expect(
+      marketplaceDriverOnboardingNeedsSetup(
+        onboarding(vehicleComplete: false),
+      ),
+      isTrue,
+    );
+    expect(
+      marketplaceDriverOnboardingNeedsSetup(
+        onboarding(vehicleComplete: true),
+      ),
+      isFalse,
+    );
+  });
   test('acceptance messages distinguish wallet, profile and other errors', () {
     expect(
       marketplaceAcceptErrorMessage('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE'),
