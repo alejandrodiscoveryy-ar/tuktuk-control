@@ -1,93 +1,84 @@
-# PRD — TUKTUK Marketplace V1 / TUKTUK 2.0
+# PRD — TUKTUK Marketplace / TUKTUK 2.0
 
 **Producto:** Suite TUKTUK Control + TUKTUK Trabajos
 
-**Componentes:** TUKTUK Control Conductor, TUKTUK Cliente y Vrixora Admin
+**Componentes:** TUKTUK Control / Prestador, TUKTUK Cliente y Vrixora Admin
 
-**Versión del documento:** 1.1
+**Versión del documento:** 2.0
 
-**Fecha:** 14 de septiembre de 2026
+**Fecha:** 4 de octubre de 2026
 
-**Estado:** Fase 1 — implementación en curso; sin autorización de despliegue a producción
+**Estado:** Marketplace con componentes desplegados; modelo comercial TUKTUK 2.0 aprobado y pendiente de implementación/verificación completa
 
-**Rama de trabajo:** `feature/marketplace-v1`
+**Rama documental:** `docs/marketplace-business-model-v2-20261004`
 
-**Base estable:** `0efed3c` — versión 1.0.8+10
+**Base técnica verificada:** `06567abd84b69703a94d2ac6a4023c403e3f5816`
 
 ---
 
 ## 1. Propósito y relación con el producto actual
 
-Este documento formaliza la evolución de TUKTUK Control hacia TUKTUK 2.0,
-un marketplace multimodal de servicios prestados con categorías configurables
-de vehículos, sin eliminar, sustituir ni degradar ninguna capacidad actual de
-control económico y operativo.
+Este documento formaliza el contrato funcional de **TUKTUK Trabajos / Marketplace** dentro de TUKTUK 2.0.
 
-TUKTUK Trabajos ("Marketplace" es únicamente terminología técnica interna) es una ampliación del ecosistema, no una reescritura de la
-aplicación existente. Los registros diarios, ingresos, gastos, kilometraje,
-batería, mantenimiento, estadísticas, Hive, respaldo/restauración local,
-sincronización incremental, Google Sign-In, licencias y soporte continúan con
-sus contratos actuales salvo una migración posterior, explícita y compatible.
+Marketplace amplía TUKTUK Control, pero no sustituye ni degrada sus capacidades de control económico y operativo. Los registros diarios, ingresos, gastos, kilometraje, batería cuando corresponda, mantenimiento, estadísticas, Hive, respaldo/restauración local, sincronización incremental, Google Sign-In y soporte continúan disponibles conforme a sus contratos.
 
-El PRD maestro vigente enumera Marketplace como fuera de la primera versión de
-TUKTUK Control. Este PRD no contradice esa decisión: inicia una línea de producto
-posterior sobre la base estable 1.0.8+10. La incorporación de esta evolución a la
-fuente oficial `vrixora-admin-canvas/docs/PRD_MASTER.md` requiere el proceso de
-gobernanza y aprobación del owner; esa fuente no se modifica en esta fase.
+La regla comercial vigente cambia respecto de versiones anteriores:
+
+- una cuenta autenticada es un **usuario TUKTUK**;
+- ser usuario no significa ser conductor;
+- Control y Estadísticas son permanentes y no vencen;
+- el usuario se convierte en conductor cuando completa el alta operativa requerida de Trabajos;
+- al completar esa alta se inicia automáticamente una promoción inicial de **X días**, configurada desde Gestión Comercial;
+- durante la promoción no se cobra comisión por los trabajos aceptados bajo ese modo;
+- después de la promoción, nuevas aceptaciones requieren saldo disponible suficiente para cubrir la comisión aplicable;
+- el saldo puede proceder de recargas pagadas o de recompensas por referidos;
+- no existe depósito inicial mínimo obligatorio;
+- no existe compra, renovación ni vencimiento de licencia como condición para usar Control.
+
+Los nombres técnicos existentes, como `trial_free`, pueden conservarse temporalmente por compatibilidad interna, pero en producto representan la **promoción comercial inicial**, no una licencia de Control.
+
+Este PRD está subordinado a `vrixora-admin-canvas/docs/PRD_MASTER.md` y al PRD específico del Centro de Control cuando se trate de reglas generales o administrativas.
 
 ## 2. Objetivos
 
-- Conectar solicitudes reales de pasajeros, carga, mensajería y turismo con
-  conductores y vehículos compatibles.
-- Permitir que un cliente solicite el servicio desde una Web/PWA, sin instalar
-  una APK independiente.
-- Asignar cada trabajo de forma atómica, auditable y segura al primer conductor
-  elegible que lo confirme.
+- Conectar solicitudes reales de pasajeros, carga, mensajería y turismo con conductores y vehículos compatibles.
+- Permitir que un cliente solicite el servicio desde TUKTUK Cliente sin depender de una APK.
+- Asignar cada trabajo de forma atómica, auditable y segura al primer conductor elegible que lo confirme.
 - Proteger los datos de contacto del cliente hasta que exista una asignación.
-- Cobrar una comisión del 10 % únicamente en `wallet_commission`, mediante una
-  billetera prepago y operaciones transaccionales de servidor; `trial_free` no cobra.
-- Mantener la experiencia actual de TUKTUK Control y sus funciones esenciales
-  completamente disponibles sin conexión.
-- Usar 500–1.000 usuarios activos como supuesto técnico inicial de pruebas y
-  dimensionamiento, y permitir evolucionar conforme aumente el volumen real sin
-  sustituir la arquitectura principal.
+- Mantener Control y Estadísticas permanentemente disponibles para el usuario.
+- Convertir al usuario en conductor solo cuando complete el onboarding operativo requerido.
+- Iniciar automáticamente una promoción inicial configurable al completar el alta válida.
+- Cobrar, fuera de promoción, la comisión configurada mediante `wallet_commission`, con billetera prepago y operaciones transaccionales de servidor.
+- Permitir que saldo real o saldo promocional por referidos cubran comisiones.
+- Mantener las funciones esenciales de Control disponibles sin conexión.
+- Usar 500–1.000 usuarios activos únicamente como supuesto técnico inicial de pruebas y dimensionamiento, nunca como límite del producto.
 
 ## 3. Principios obligatorios
 
-1. El servidor es la autoridad para asignaciones, transiciones de estado,
-   compatibilidad, comisiones, reservas, liquidaciones y anulaciones.
-2. Ningún frontend usa `service_role`, decide quién ganó un trabajo ni escribe
-   directamente saldos financieros.
-3. El libro mayor y los eventos de trabajo son trazables; no se corrigen
-   eliminando o sobrescribiendo historia, sino con asientos o eventos
-   compensatorios.
+1. El servidor es la autoridad para asignaciones, transiciones de estado, compatibilidad, promoción, comisiones, reservas, liquidaciones y anulaciones.
+2. Ningún frontend usa `service_role`, decide quién ganó un trabajo ni escribe directamente saldos financieros.
+3. El ledger y los eventos de trabajo son trazables; las correcciones usan asientos o eventos compensatorios.
 4. Toda mutación crítica admite reintentos idempotentes.
 5. Los datos de contacto se exponen por capacidad y estado, no por conocer un ID.
-6. La prueba/licencia de TUKTUK Control, la prueba única de Trabajos y la
-   billetera son conceptos distintos. No existe una licencia Marketplace separada.
-7. Marketplace requiere conexión para publicar, aceptar y cambiar estados. Una
-   caché local nunca autoriza una operación crítica.
-8. Las listas de trabajos y eventos usan paginación por cursor, filtros e índices;
-   no descargan históricos completos ni generan una fila permanente por cada
-   conductor potencial.
-9. Se reutilizan identidades y datos existentes cuando sean canónicos; no se
-   crean copias de perfiles, vehículos, registros ni licencias sin una razón y
-   una estrategia de migración aprobadas.
+6. Control permanente, promoción de Trabajos y billetera son conceptos distintos.
+7. La promoción de Trabajos no se inicia por botón manual: comienza automáticamente cuando el backend valida un onboarding operativo completo.
+8. Marketplace requiere conexión para publicar, aceptar y cambiar estados. Una caché local nunca autoriza una operación crítica.
+9. Las listas usan paginación, filtros e índices y no crean filas permanentes por cada conductor potencial.
+10. Se reutilizan identidades y datos canónicos; no se crean copias innecesarias de perfiles, vehículos o registros.
+11. El saldo disponible puede componerse de recargas pagadas y recompensas promocionales; ninguna fuente exige una recarga mínima previa para ser utilizable.
+12. Las reglas comerciales configurables se congelan mediante snapshots cuando una operación ya ha adquirido efectos.
 
 ## 4. Componentes del sistema
 
-### 4.1. TUKTUK Control Conductor
+### 4.1. TUKTUK Control / Prestador
 
-Es la aplicación actual ampliada para propietarios y conductores. Conserva todos
-sus módulos y añade una sección principal **Trabajos**.
+Es la aplicación actual ampliada con una sección principal **Trabajos**.
 
-**Trabajos** es también un gancho principal de adquisición: el usuario no debe
-agotar ni esperar los 30 días de Control para iniciar la habilitación Marketplace.
-Desde el onboarding inicial puede elegir conceptualmente **Gestionar mi vehículo /
-usar TUKTUK Control** o **Quiero trabajar con TUKTUK**. La segunda opción inicia
-de inmediato el perfil de conductor, configuración de vehículo, fotografías y
-requisitos, inicio explícito de 30 días gratis, continuidad con saldo prepago y recepción de
-oportunidades. Esta elección no elimina la modalidad Control ni sus datos.
+Cualquier usuario autenticado puede utilizar Control y Estadísticas permanentemente.
+
+**Trabajos** permite iniciar el alta como conductor. El usuario completa los datos requeridos de conductor, vehículo y fotografías. Cuando el backend determina que el onboarding operativo está completo, consolida su condición de conductor e inicia automáticamente una única promoción comercial inicial con la duración configurada en Gestión Comercial.
+
+No existe un botón independiente para iniciar manualmente la promoción ni una licencia de Control que deba agotarse antes de entrar en Trabajos.
 
 Navegación prevista:
 
@@ -101,17 +92,12 @@ La sección **Tienda** pasa a **Más → Tienda**; no se elimina ni pierde funci
 
 **Trabajos** contiene:
 
-- **Disponibles:** oportunidades publicadas compatibles con el conductor, su
-  vehículo, disponibilidad y reglas de acceso.
+- **Disponibles:** oportunidades compatibles con conductor, vehículo, disponibilidad y reglas de acceso.
 - **Activos / Mis trabajos:** trabajo aceptado y flujo operativo actual.
 - **Programados:** trabajos aceptados cuya fecha/hora es futura.
-- **Historial:** trabajos completados, liquidados, cancelados, expirados o con
-  incidencia, mediante paginación por cursor.
+- **Historial:** trabajos completados, liquidados, cancelados, expirados o con incidencia.
 
-La aplicación debe distinguir visualmente funciones locales y funciones que
-requieren internet. Sin conexión, el conductor conserva la gestión actual, ve
-el último estado cacheado de Marketplace como no actualizado y no puede aceptar
-ni cambiar el estado de un trabajo.
+La aplicación distingue funciones locales de funciones que requieren internet. Sin conexión, Control continúa funcionando y Marketplace queda en lectura cacheada/no actualizada, sin permitir aceptar ni cambiar estados.
 
 ### 4.2. TUKTUK Cliente
 
@@ -136,6 +122,7 @@ Centro de control del Marketplace para personal autorizado. Amplía el producto
 administrativo, no la aplicación de conductores. Debe administrar:
 
 - conductores y clientes;
+- Conductor 360 con perfil, vehículos, promoción, billetera, recargas, referidos, trabajos, comisiones, valoraciones, incidencias y auditoría;
 - trabajos, asignaciones y eventos;
 - valoraciones y comentarios relevantes;
 - billeteras, recargas, reservas y comisiones;
@@ -248,6 +235,7 @@ Las categorías iniciales son:
 - Auto ligero.
 - Triciclo.
 - Motocicleta.
+- Bicicleta.
 - Furgoneta.
 - Camión.
 - Otro.
@@ -257,6 +245,7 @@ Los tipos iniciales de propulsión son:
 - Eléctrico.
 - Combustión.
 - Híbrido.
+- Humana / sin motor.
 
 La arquitectura conserva ambos como catálogos configurables con códigos estables,
 estado y orden de presentación, no como restricciones rígidas dispersas en el
@@ -267,7 +256,8 @@ verificadas que cualquier otra.
 
 Ejemplos válidos de combinaciones: Triciclo + Eléctrico, Triciclo + Combustión,
 Auto ligero + Combustión, Auto ligero + Eléctrico, Motocicleta + Eléctrico,
-Furgoneta + Combustión y Camión + Combustión.
+Bicicleta + Humana/sin motor, Bicicleta + Eléctrico, Furgoneta + Combustión y
+Camión + Combustión.
 
 ### 8.2. Perfil para Marketplace
 
@@ -302,6 +292,7 @@ correspondientes sin borrar datos existentes:
   eléctrica, no exige `batteryVoltage` ni valores ficticios y prepara combustible,
   consumo, repostajes y autonomía para fases posteriores.
 - **Híbrido:** permite ambos grupos cuando apliquen a la configuración real.
+- **Humana / sin motor:** no exige batería de tracción, combustible ni valores eléctricos ficticios; mantiene kilometraje, mantenimiento y los datos operativos que correspondan.
 
 La adaptación por propulsión no es solamente visual: define formularios,
 validaciones, campos requeridos, registros y estadísticas aplicables. Los datos
@@ -341,48 +332,43 @@ operación pública, pero no cambia este contrato técnico.
 
 ### 8.4. Habilitación Marketplace y estados del conductor
 
-El perfil de Trabajos tiene estados independientes de la licencia de Solo
-Control: **incompleto**, **activo** y **suspendido**. Tras completar onboarding,
-el conductor inicia explícitamente su única prueba con “Comenzar 30 días gratis”.
-Durante ella, un conductor activo con vehículo activo puede aceptar sin depósito.
+El perfil de Trabajos tiene estados operativos propios: **incompleto**, **activo** y **suspendido**.
 
-Como mínimo para activar Trabajos requiere nombre/perfil válido, WhatsApp,
-foto del conductor, vehículo, categoría, propulsión, marca, modelo,
-matrícula/identificación cuando aplique, capacidades, servicios habilitados y
-foto principal del vehículo. El MVP no exige aprobación documental administrativa
-previa; Vrixora puede suspender posteriormente.
+Un usuario todavía no es conductor operativo mientras su onboarding requerido esté incompleto.
 
-El primer depósito mínimo es CUP 500 por defecto y configurable desde Vrixora.
-Se acredita íntegro al saldo; no es cuota ni pago de activación. Requisitos
-completos + inicio explícito del trial otorgan 30 días gratuitos; al vencer,
-depósito confirmado = continuidad para nuevas aceptaciones. Personal con
-`payments.manage` verifica y acredita el pago; no existe un segundo activador.
+Como mínimo para completar el alta de Trabajos requiere nombre/perfil válido, WhatsApp, foto del conductor, vehículo, categoría, propulsión, marca, modelo, matrícula/identificación cuando aplique, capacidades, servicios habilitados y foto principal del vehículo.
 
-Un conductor es elegible solo si, en el momento de consultar y nuevamente al
-aceptar:
+Cuando el backend confirma que los requisitos están completos:
+
+1. consolida la condición de conductor;
+2. activa el perfil de Trabajos cuando corresponda;
+3. inicia automáticamente y de forma idempotente una única promoción inicial por conductor/proyecto;
+4. calcula inicio y fin con tiempo de servidor;
+5. congela la duración configurada vigente en Gestión Comercial.
+
+La promoción no depende de la antigüedad de la cuenta ni del uso de Control.
+
+Durante la promoción, un conductor activo y elegible puede aceptar trabajos sin reserva de comisión. Después, puede continuar si su saldo disponible cubre la comisión aplicable.
+
+No existe depósito inicial mínimo obligatorio. Una recarga pagada o una recompensa por referido pueden, por separado o combinadas, proporcionar saldo suficiente.
+
+Una suspensión puede impedir participar en Trabajos, pero no bloquea Control y Estadísticas.
+
+Un conductor es elegible solo si, al consultar y nuevamente al aceptar:
 
 - su identidad y relación con el vehículo están activas;
 - su perfil de Trabajos está activo;
 - conductor y vehículo están disponibles;
 - el tipo de servicio está habilitado;
-- la categoría del vehículo cumple las reglas configurables del servicio;
-- todas las capacidades requeridas satisfacen la solicitud;
+- la categoría cumple las reglas configurables;
+- las capacidades requeridas satisfacen la solicitud;
 - no existe un trabajo activo incompatible;
-- cumple la política de billetera aplicable;
+- cumple la política de billetera aplicable cuando la promoción ya terminó;
 - no está suspendido ni bloqueado por riesgo u operación.
 
-La validación definitiva ocurre dentro de la transacción de aceptación. La lista
-vista por el conductor es informativa y puede quedar obsoleta.
+La validación definitiva ocurre dentro de la transacción de aceptación. La lista vista por el conductor es informativa y puede quedar obsoleta.
 
-La categoría es una señal del motor de elegibilidad, no una regla absoluta de
-asignación. Las reglas pueden combinar tipo de servicio, categoría, pasajeros,
-carga máxima, volumen/dimensiones, carrocería y características solicitadas. Los
-ejemplos iniciales orientan configuración —motocicletas para mensajería y envíos
-pequeños; triciclos para pasajeros, carga ligera y mensajería; autos ligeros para
-pasajeros, turismo, mensajería y carga compatible; furgonetas para pasajeros o
-carga; y camiones principalmente para carga—, pero no se codifican como límites
-inamovibles. La decisión final se basa en capacidades reales declaradas o
-verificadas y reglas versionadas del servicio.
+La categoría es una señal del motor de elegibilidad, no una regla absoluta. Las reglas pueden combinar servicio, categoría, pasajeros, carga, volumen/dimensiones, carrocería y características solicitadas. Los ejemplos por modalidad orientan configuración, pero no se codifican como límites inamovibles.
 
 ## 9. Precio
 
@@ -403,10 +389,19 @@ El resultado conserva un desglose inmutable y la versión de reglas utilizada.
 Esto permite explicar el precio y reproducir auditorías aunque la configuración
 cambie después.
 
-En el MVP puede utilizarse una distancia introducida o calculada por un proveedor
-externo que se seleccione posteriormente; no se exige GPS propio. Si no existe
-una distancia confiable, la interfaz debe indicarlo y aplicar una regla explícita,
-no fingir precisión.
+TUKTUK Cliente debe permitir definir origen y destino mediante búsqueda/mapa y,
+cuando el dispositivo lo permita, utilizar ubicación con autorización del usuario.
+Si la ubicación no está disponible o no se concede permiso, debe existir selección
+manual sin bloquear la solicitud.
+
+La ruta, la distancia y la cotización se obtienen mediante el proveedor de mapas
+configurado detrás del gateway/adaptador de Marketplace. La integración vigente
+utiliza Mapbox, pero la lógica de negocio no debe depender directamente del token
+ni del proveedor: una sustitución futura no debe obligar a reconstruir el flujo.
+
+Antes de publicar, el cliente debe poder revisar la ruta disponible, la distancia
+calculada y el precio correspondiente. Si no existe una distancia confiable, la
+interfaz debe indicarlo y aplicar un fallback explícito; nunca debe fingir precisión.
 
 ### 9.2. Precio final del cliente
 
@@ -452,44 +447,34 @@ derivan de eventos de servidor y nunca cambian el estado por sí mismas.
 
 ## 11. Asignación atómica
 
-El primer conductor elegible que confirma obtiene el trabajo. La aceptación se
-implementa como una única operación transaccional de servidor, conceptualmente
-`accept_job(job_id, vehicle_id, idempotency_key)`.
+El primer conductor elegible que confirma obtiene el trabajo. La aceptación se implementa como una única operación transaccional de servidor, conceptualmente `accept_job(job_id, vehicle_id, idempotency_key)`.
 
 Dentro de una transacción corta, la operación debe:
 
 1. autenticar al actor y validar que controla la relación conductor–vehículo;
-2. bloquear o actualizar condicionalmente el trabajo solo si continúa publicado,
-   no expiró y no tiene ganador;
-3. reevaluar compatibilidad, disponibilidad, estado activo de Trabajos y
-   bloqueos;
-4. congelar `trial_free` si el trial está activo, o `wallet_commission` si existe
-   depósito inicial confirmado;
-5. en trial no bloquear billetera ni crear reserva; fuera de él, comprobar saldo;
+2. bloquear o actualizar condicionalmente el trabajo solo si continúa publicado, no expiró y no tiene ganador;
+3. reevaluar compatibilidad, disponibilidad, estado activo de Trabajos y bloqueos;
+4. congelar el modo económico: promoción sin comisión si la promoción estaba activa al aceptar, o `wallet_commission` si ya terminó;
+5. en promoción no bloquear billetera ni crear reserva; fuera de promoción comprobar que el saldo disponible cubre la comisión;
 6. crear una reserva solo en `wallet_commission`;
-7. crear la asignación ganadora con snapshots inmutables;
+7. crear la asignación ganadora con snapshots inmutables, incluida la regla de comisión;
 8. actualizar trabajo, disponibilidad y estado a **Aceptado**;
 9. añadir el evento auditable;
 10. devolver el mismo resultado ante un reintento con la misma clave.
 
-Una restricción única impide más de una asignación ganadora por trabajo y otra
-impide más de una reserva de comisión activa por trabajo. El cambio condicional
-de estado y esas restricciones son defensas complementarias. Las llamadas a
-WhatsApp, push u otros servicios externos se realizan después del commit mediante
-una cola/outbox; nunca mientras se mantienen bloqueos.
+La fuente del saldo no altera la elegibilidad financiera: saldo real y saldo promocional utilizable forman parte del saldo disponible conforme al ledger.
+
+Una restricción única impide más de una asignación ganadora por trabajo y otra impide más de una reserva de comisión activa por trabajo. El cambio condicional de estado y esas restricciones son defensas complementarias.
+
+WhatsApp, push y otros servicios externos se ejecutan después del commit mediante cola/outbox.
 
 ### 11.1. Decisión sobre “Reservado” y “Aceptado”
 
-Para el MVP se **simplifican como un único estado de negocio: Aceptado**.
-Mantener un estado durable **Reservado** entre pulsar y confirmar abre problemas
-de expiración, trabajos bloqueados, dos temporizadores y una experiencia confusa,
-sin aportar valor cuando la aceptación completa cabe en una sola transacción.
+Para el MVP se simplifican como un único estado de negocio: **Aceptado**.
 
-“Reservado” se conserva únicamente como concepto técnico futuro para una cesión
-temporal con vencimiento si más adelante se incorpora confirmación en dos pasos,
-documentación previa o pago del cliente. No aparece en la interfaz ni en la
-máquina de estados del MVP. Esta decisión no afecta al **saldo reservado** de la
-billetera, que es un concepto financiero distinto y sí existe en el MVP.
+“Reservado” se conserva únicamente como concepto técnico futuro de asignación temporal si se incorpora un flujo de dos pasos. No aparece en la interfaz ni en la máquina de estados actual.
+
+Esta decisión no afecta al **saldo reservado** de la billetera, que es un concepto financiero distinto y sí existe.
 
 ## 12. Máquina de estados
 
@@ -561,83 +546,128 @@ permisos. La valoración del conductor al cliente queda fuera del MVP.
 
 ## 14. Modelo económico y billetera
 
-### 14.1. Modalidades comerciales cerradas
+### 14.1. Modelo comercial vigente
 
-Los 30 días iniciales y la regla de una licencia por usuario y aplicación se
-mantienen para quienes comienzan en la modalidad **TUKTUK Control**. Después del
-período inicial, quien solo usa herramientas de gestión requiere una licencia
-periódica vigente conforme al PRD maestro.
+TUKTUK Control y Estadísticas son permanentes para cualquier usuario autenticado.
 
-TUKTUK Trabajos ofrece una única prueba gratuita de 30 días por usuario, iniciada
-explícitamente después de completar onboarding. Durante la prueba no requiere
-depósito, no reserva ni cobra comisión y no genera deuda posterior. El modo
-económico se congela al aceptar cada trabajo. Tras vencer, los nuevos trabajos
-requieren depósito inicial confirmado y saldo suficiente para reservar el 10 %.
+TUKTUK Trabajos monetiza mediante:
 
-La prueba de Trabajos ≠ la prueba de Control: usuarios antiguos de Control también
-reciben sus 30 días al pulsar el botón. Un depósito temprano se acredita íntegro y
-no termina el trial; un trabajo aceptado en trial sigue gratis aunque termine
-después. No hay comisión retroactiva.
+1. una **promoción comercial inicial de X días**;
+2. una **billetera**;
+3. una **comisión por trabajo** después de la promoción.
 
-Regla comercial: **Solo Control → licencia. `trial_free` → Control + Trabajos sin
-comisión. `wallet_commission` → Control + Trabajos + comisión del 10 %.**
+No existe plan periódico, renovación ni vencimiento de Control como condición de uso.
 
-### 14.2. Prueba de Trabajos y continuidad con saldo prepago
+La promoción comienza automáticamente cuando el backend valida el onboarding operativo completo. La duración se obtiene de Gestión Comercial, se calcula con tiempo de servidor y queda congelada al inicio.
 
-Pulsar “Comenzar 30 días gratis” tras completar ficha personal, vehículo y fotos
-inicia el trial con tiempo de servidor. Durante los 30 días las oportunidades son
-gratuitas. Después, una recarga física o transferencia confirmada por Vrixora
-habilita nuevas aceptaciones. El mínimo inicial es 500 CUP por defecto y
-configurable; aplica solo al primer depósito.
+El nombre técnico `trial_free` puede mantenerse temporalmente para compatibilidad con código y datos existentes, pero representa el modo económico promocional.
 
-Las oportunidades reales de **Trabajos** se muestran cuando la suite está activa.
-Antes de activar, el onboarding puede mostrar información explicativa o ejemplos,
-pero no el listado vivo de oportunidades. Durante `trial_free`, aceptar no exige
-saldo; después del trial, `wallet_commission` exige saldo disponible.
+### 14.2. Promoción y continuidad
 
-### 14.3. Saldos e insuficiencia
+Durante la promoción:
 
-- **Saldo total:** suma neta de transacciones contabilizadas del ledger.
-- **Saldo reservado:** suma de reservas abiertas asociadas a trabajos aceptados.
-- **Saldo disponible:** saldo total menos saldo reservado.
+- aceptar no exige saldo;
+- no se crea reserva de comisión;
+- no se genera deuda retroactiva;
+- un trabajo aceptado bajo promoción conserva ese modo aunque la promoción finalice antes de completar el servicio.
 
-Los tres se muestran juntos y con moneda. Los saldos cacheados pueden mantenerse
-para rendimiento, pero deben poder reconciliarse con el ledger y las reservas.
+Después de la promoción:
 
-Fuera del trial, si el saldo disponible no permite reservar el 10 %, el conductor no puede aceptar
-el trabajo y se le solicita recargar. Esto solo bloquea nuevas operaciones
-Marketplace que requieren reserva; nunca bloquea registros, ingresos/gastos
-históricos, estadísticas, mantenimiento, datos del vehículo ni las demás funciones
-de TUKTUK Control.
+- una nueva aceptación usa `wallet_commission`;
+- el servidor calcula la comisión aplicable;
+- verifica saldo disponible;
+- reserva exactamente el importe correspondiente;
+- si no alcanza, rechaza únicamente la aceptación y muestra un mensaje comprensible.
+
+No existe depósito inicial mínimo.
+
+El conductor puede recargar antes, durante o después de la promoción. Una recarga no inicia, reinicia, amplía ni termina la promoción.
+
+### 14.3. Fuentes y saldos
+
+La billetera puede recibir:
+
+1. **recargas pagadas y confirmadas** → saldo real;
+2. **recompensas por referidos** → saldo promocional;
+3. reversos o ajustes autorizados.
+
+Ambos tipos de saldo pueden cubrir comisiones.
+
+Un conductor con saldo pagado cero y saldo promocional suficiente puede aceptar después de la promoción.
+
+Conceptos visibles:
+
+- **Saldo real**.
+- **Saldo promocional**.
+- **Saldo reservado**.
+- **Saldo disponible**.
+
+Los saldos cacheados pueden utilizarse para rendimiento, pero deben reconciliarse con ledger y reservas.
+
+El orden exacto de consumo entre saldo real y promocional se rige por el contrato técnico vigente o por una regla explícitamente aprobada; la interfaz no lo inventa.
 
 ### 14.4. Comisión y pago del cliente
 
-En el MVP, el cliente paga directamente al conductor por el medio que acuerden.
-TUKTUK no procesa, recibe ni retiene el pago del servicio y no actúa como custodio
-de ese dinero. TUKTUK obtiene su ingreso al liquidar el 10 % desde el saldo
-prepago del conductor. Los pagos digitales del cliente dentro de TUKTUK quedan
-fuera del MVP.
+En el modelo actual, el cliente paga directamente al conductor por el medio acordado. TUKTUK no procesa el pago del servicio dentro del Marketplace.
 
-1. En `trial_free` no se reserva ni cobra nada; en `wallet_commission` se reserva
-   el 10 % esperado del precio final al aceptar.
-2. Al marcar Completado, el servidor valida asignación y estado; solo
-   `wallet_commission` valida y liquida reserva sin confirmación adicional.
-3. Solo al liquidar `wallet_commission` se crea un débito inmutable en
-   `wallet_transactions` y la reserva cambia a consumida.
-4. En una cancelación válida, la reserva se libera. Si ya existió un asiento, se
-   crea un asiento compensatorio; no se edita ni elimina el original.
-5. Un incidente congela el efecto pendiente hasta una resolución autorizada.
+La comisión de TUKTUK:
 
-`job_id` y el tipo de operación tienen restricciones únicas para impedir doble
-reserva o doble comisión. Cada recarga y acción financiera usa una clave de
-idempotencia, referencia externa única cuando corresponda, actor, motivo y evento
-de auditoría.
+- se configura desde Gestión Comercial;
+- se congela mediante snapshot al aceptar el trabajo;
+- no se aplica a trabajos aceptados bajo promoción;
+- se reserva al aceptar en `wallet_commission`;
+- se liquida cuando corresponde al completar/cerrar el trabajo;
+- se libera en cancelaciones válidas;
+- usa asiento compensatorio si ya existió un débito que debe revertirse.
 
-### 14.5. Inactividad
+`job_id` y el tipo de operación utilizan restricciones de unicidad para impedir doble reserva o doble comisión.
 
-No habrá desactivación automática por 180 días en el lanzamiento. Primero se
-medirá actividad y oportunidades compatibles. Nunca se confisca saldo ni se borra
-historia; una política futura requerirá aprobación separada.
+### 14.5. Recargas y facturación
+
+Una solicitud de recarga no modifica saldo.
+
+Al confirmar un pago, una única operación transaccional e idempotente debe:
+
+1. confirmar la recarga;
+2. acreditar exactamente una vez saldo real;
+3. registrar el movimiento de ledger;
+4. generar exactamente un documento financiero;
+5. registrar actor, referencia y auditoría;
+6. actualizar métricas.
+
+El documento conserva número único, conductor, importe, moneda, concepto, método, referencia, fechas, identificador de recarga y snapshot del emisor.
+
+Las correcciones conservan el documento original y utilizan reverso/documento correctivo o nota de crédito cuando corresponda.
+
+Los créditos promocionales por referidos no generan factura de pago porque no representan dinero recibido del conductor.
+
+### 14.6. Referidos
+
+Por cada referido válido que complete su primer trabajo válido, el referente recibe la recompensa configurada en saldo promocional.
+
+Valor inicial de referencia: **100 CUP**, configurable por importe, moneda y activación.
+
+Mientras el programa esté activo no existe un límite de referidos válidos, salvo
+que el owner apruebe posteriormente una regla comercial diferente y versionada.
+
+La recompensa:
+
+- se genera exactamente una vez;
+- entra mediante ledger como crédito promocional;
+- puede cubrir comisiones sin una recarga pagada previa;
+- no es retirable ni transferible como efectivo;
+- no altera la promoción;
+- no genera factura de pago;
+- impide autorreferido, duplicaciones y abuso mediante cuentas duplicadas;
+- conserva referente, referido, trabajo de cualificación, importe, moneda, versión e idempotencia.
+
+Un primer trabajo válido califica cuando alcanza `settled` o, si pasó por incidencia, cuando la resolución administrativa es `completed`. No califican cancelaciones ni expiraciones.
+
+### 14.7. Inactividad
+
+No habrá desactivación automática por inactividad en el lanzamiento.
+
+Nunca se confisca saldo ni se borra historia. Cualquier política futura requiere aprobación separada y debe considerar oportunidades realmente disponibles para el conductor.
 
 ## 15. Modelo de datos conceptual
 
@@ -652,16 +682,16 @@ validarse contra el esquema canónico de Vrixora antes de una migración.
 | `service_requests` | Entrada del cliente, origen/destino, horario, servicio, detalles de carga/pasajeros, observaciones, foto privada | Pertenece a customer; conserva snapshot solicitado |
 | `jobs` | Trabajo publicable/operable, estado actual, precio recomendado/final, moneda, versión de precio, expiración y ganador | Uno por solicitud publicada; actualización condicional de estado |
 | `job_assignments` | Ganador, conductor, vehículo, aceptación, finalización y modo económico congelado | `trial_free` o `wallet_commission`; snapshots inmutables |
-| `marketplace_work_trials` | Una prueba explícita por usuario/proyecto | Inmutable; inicio/fin exactos de 30 días |
+| `marketplace_work_trials` | Persistencia técnica de la promoción inicial | Una por conductor/proyecto; inicio automático, duración configurable congelada; nombre técnico heredado permitido temporalmente |
 | `job_events` | Historial append-only de transiciones y acciones | Orden por `(job_id, created_at, id)`; no editable por clientes |
 | `vehicles` | Proyección relacional canónica para Trabajos usando exactamente el `vehicle_id text` existente; propietario, categoría, propulsión, marca, modelo, año, matrícula/identificación, capacidades, servicios y foto principal | No sustituye `VehicleProfile`/`sync_entities`; el puente legacy actualiza solo campos legacy y nunca borra campos de Trabajos |
 | `driver_availability` | Relación conductor–vehículo, disponible/ocupado, ventanas y futura zona | Un estado actual por relación; solapes controlados; las capacidades físicas permanecen en `vehicles` |
 | `driver_profiles` | Extensión de Trabajos del perfil autenticado: foto vigente, estado, suspensión y requisitos de activación | Relación 1:1 con `profiles`; WhatsApp permanece canónico en `profiles.phone` y no se duplica |
 | `media_assets` | Referencia controlada a fotos de conductor y vehículo, propietario, tipo, estado, versión y metadatos mínimos | Acceso privado y proyecciones autorizadas; no depende indefinidamente de URL externa de Google |
 | `wallets` | Billetera por conductor/usuario y moneda en el MVP, saldos cacheados/revisión | Una por `profiles.id` y moneda; no editable desde frontend; propiedad por organización queda para una evolución posterior |
-| `wallet_transactions` | Ledger inmutable: recarga, comisión, ajuste, reverso; importe firmado y referencia | Claves únicas de idempotencia y origen; nunca hard delete |
+| `wallet_transactions` | Ledger inmutable: recarga, `referral_credit`, comisión, ajuste, reverso; importe firmado y referencia | Claves únicas de idempotencia y origen; nunca hard delete |
 | `commission_reservations` | Retención por job, importe, estado abierta/consumida/liberada y expiración | Una reserva canónica por job y wallet |
-| `topups` | Solicitud, validación y conciliación de recargas | Confirmación crea exactamente un crédito de ledger |
+| `topups` | Solicitud, validación y conciliación de recargas pagadas | Confirmación crea exactamente un crédito real de ledger y un documento financiero |
 | `ratings` | Valoración MVP de 1 a 5 estrellas y comentario opcional posterior a trabajo liquidado, con `job_id`, `customer_id`, `driver_id` y fecha/hora | Una valoración de cliente por trabajo; unicidad por `(job_id, customer_id, driver_id)` e historial sujeto a privacidad |
 | `disputes` | Incidencia/disputa, estado, responsable, resolución y referencias | Fase 3 o soporte mínimo de incidentes en MVP |
 
@@ -735,14 +765,22 @@ con la decisión contable que se cierre y sin contar dos veces el mismo importe.
 
 #### `licenses`
 
-Se reutiliza la misma licencia por usuario y aplicación; no se crea una “licencia
-Marketplace” duplicada. La prueba de 30 días y las reglas de compra/renovación se
-mantienen para Solo Control. Un Marketplace habilitado incluye Control conforme a
-la modalidad comercial. `trial_free` exige trial activo y onboarding/perfil/vehículo
-válidos, sin saldo. `wallet_commission` exige depósito inicial confirmado, saldo
-suficiente y reserva de comisión, sin un segundo cobro de licencia. La tabla y RPC actuales son
-administradas por Vrixora Admin y deben verificarse en su esquema canónico antes
-de añadir relaciones.
+Las licencias existentes de TUKTUK son infraestructura heredada y dejan de formar parte del contrato comercial activo de Control y Trabajos.
+
+No se crea una licencia Marketplace.
+
+Control y Estadísticas no consultan plan, vencimiento ni licencia como condición de acceso.
+
+Antes de eliminar tablas, RPC o campos heredados se deberá:
+
+- inventariar dependencias;
+- verificar usuarios y datos reales;
+- retirar bloqueos de interfaz/backend;
+- migrar o reemplazar referencias necesarias;
+- probar que Control y Marketplace siguen funcionando;
+- obtener autorización para la eliminación.
+
+Los datos exclusivamente de prueba no requieren migración comercial, pero ninguna limpieza destructiva se ejecutará sin autorización.
 
 ### 15.3. Tipos, claves e índices
 
@@ -854,10 +892,14 @@ transacciones de base de datos abiertas durante llamadas de red.
 
 ## 18. Idempotencia, auditoría y consistencia
 
-Toda publicación, aceptación, transición, cancelación, liquidación, recarga y
-ajuste recibe una `idempotency_key`. El servidor guarda actor, operación, hash
-del payload, estado y respuesta. Repetir exactamente la solicitud devuelve el
-resultado original; reutilizar la clave con otro payload falla.
+Toda mutación crítica —publicación, aceptación, transición, cancelación, liquidación,
+recarga, recompensa de referido y ajuste— utiliza una `idempotency_key` dentro de
+su contrato correspondiente. El servidor guarda actor, operación, hash del payload,
+estado y respuesta.
+
+Repetir exactamente una solicitud con la misma clave devuelve el resultado
+original y no duplica efectos. Reutilizar la misma clave con un payload diferente
+debe rechazarse.
 
 La auditoría registra como mínimo:
 
@@ -867,20 +909,23 @@ La auditoría registra como mínimo:
 - motivo;
 - fecha/hora de servidor;
 - idempotency key y correlation ID;
-- origen de la operación;
+- origen;
 - resultado.
 
-Los eventos de dominio no reemplazan la auditoría de seguridad y viceversa. Los
-procesos de conciliación verifican periódicamente:
+Los eventos de dominio no reemplazan la auditoría de seguridad y viceversa.
+
+Los procesos de conciliación verifican periódicamente:
 
 - un ganador máximo por trabajo;
-- `trial_free`: assignment válido, `billing_mode=trial_free`, cero
-  `commission_reservation` y cero débito de comisión;
-- `wallet_commission`: assignment válido, reserva canónica, reserva consumida al
-  liquidar y exactamente un débito de comisión;
+- modo promocional: assignment válido, modo económico promocional, cero `commission_reservation` y cero débito de comisión;
+- `wallet_commission`: assignment válido, reserva canónica, reserva consumida al liquidar y exactamente un débito de comisión;
 - saldos cacheados contra ledger y reservas;
-- recargas confirmadas contra créditos únicos;
-- ausencia de integraciones de Fase 2 duplicadas.
+- recargas confirmadas contra créditos reales únicos;
+- recompensas de referido contra créditos promocionales únicos;
+- documentos financieros contra recargas confirmadas;
+- ausencia de integraciones duplicadas.
+
+El nombre técnico `trial_free` puede seguir apareciendo en contratos existentes mientras represente exclusivamente el modo promocional y no una licencia ni una duración fija.
 
 ## 19. Compatibilidad offline y sincronización
 
@@ -925,47 +970,52 @@ La optimización de elegibilidad por zona se incorpora en Fase 3 con PostGIS o
 equivalente solo después de definir geolocalización. El MVP filtra por criterios
 no geoespaciales y ámbito operativo configurado.
 
-## 21. Fases
+## 21. Fases y estado
 
-### Fase 0 — diseño y arquitectura
+El Marketplace ya dispone de componentes implementados y algunos desplegados. Este documento no declara por ello que todo TUKTUK 2.0 esté completamente verificado.
 
-- cerrar este PRD, estados, límites y contratos;
-- validar el modelo contra el esquema canónico de Vrixora Admin;
-- mantener como configuración previa al piloto las tarifas/precios iniciales,
-  canales/evidencia de recarga, retención de datos y criterios operativos que no
-  cambian la arquitectura;
-- preparar diagramas, amenazas, migraciones y plan de pruebas sin desplegar.
+### Fase A — Alineación comercial 2.0
 
-### Fase 1 — Marketplace MVP
+- retirar bloqueo de Control por licencia;
+- iniciar promoción automáticamente al completar onboarding;
+- sustituir duración fija por configuración de Gestión Comercial;
+- eliminar el depósito inicial mínimo;
+- permitir saldo real o promocional para comisiones;
+- integrar referidos con wallet;
+- alinear recargas y documentos financieros;
+- adaptar mensajes, métricas y Admin.
 
-- PWA cliente;
+### Fase B — Marketplace operativo
+
+- TUKTUK Cliente;
 - publicación de trabajos;
-- precio recomendado editable y advertencia por precio bajo;
-- filtrado de conductores compatibles y notificaciones;
-- aceptación atómica sin pujas;
-- contacto por WhatsApp después de asignar;
-- notificaciones de estado al cliente;
-- valoración básica de cliente al conductor/servicio después de liquidar;
+- cotización;
+- filtrado compatible;
+- notificaciones;
+- aceptación atómica;
+- contacto posterior a asignación;
 - flujo hasta completado/liquidado;
-- wallet ledger, recarga mínima configurable, reserva y comisión del 10 % en `wallet_commission`; `trial_free` no cobra;
-- prueba explícita de Trabajos, congelación de `billing_mode` y transición trial → wallet;
-- operación y conciliación mínima en Vrixora Admin.
+- valoraciones;
+- incidencias;
+- wallet/ledger/reservas;
+- conciliación.
 
-### Fase 2 — integración automática
+### Fase C — Integración automática con Control
 
-- creación idempotente de ingreso y kilómetros desde un trabajo completado;
-- representación contable de la comisión sin doble conteo;
+- creación idempotente de ingreso y kilómetros desde trabajo completado;
+- representación contable de comisión sin doble conteo;
 - incorporación a estadísticas;
-- sincronización incremental con compatibilidad offline-first.
+- sincronización incremental compatible con offline-first.
 
-### Fase 3 — expansión
+### Fase D — Expansión
 
-- geolocalización y radio/zona de trabajo;
+- geolocalización y radio/zona;
 - empresas y hoteles;
 - trabajos recurrentes;
-- valoraciones mutuas, reseñas avanzadas e incidencias/disputas avanzadas;
+- valoraciones mutuas;
 - carga avanzada;
-- optimización de precios.
+- optimización de precios;
+- nuevas modalidades.
 
 ## 22. Fuera del MVP
 
@@ -981,79 +1031,53 @@ no geoespaciales y ámbito operativo configurado.
 
 ## 23. Decisiones cerradas
 
-1. El ecosistema tiene tres componentes: Conductor, Cliente PWA y Vrixora Admin.
-2. TUKTUK Control conserva todas sus funciones y añade **Trabajos**; Tienda pasa
-   a **Más → Tienda**.
-3. Los cuatro servicios iniciales son pasajeros, carga, courier y turismo.
-4. Solo conductores compatibles reciben/consultan oportunidades.
-5. El cliente puede cambiar el precio recomendado y publicar un precio bajo tras
-   una advertencia.
-6. No hay pujas en el MVP.
-7. El primer conductor elegible que confirma gana mediante una transacción de
-   servidor.
-8. **Reservado** se simplifica dentro de **Aceptado** para el MVP; no es un estado
-   durable visible.
-9. El contacto permanece oculto hasta asignar; después se usa WhatsApp como contacto operativo autorizado.
-10. No hay chat interno en el MVP.
-11. La comisión es 10 % del precio final y se reserva al aceptar solo en `wallet_commission`; el trial es `trial_free` sin deuda ni retroactividad.
-12. Wallet y comisión se implementan como ledger/reserva, no como saldo editable.
-13. Se mantiene una licencia por usuario/aplicación; los 30 días y la licencia
-    periódica aplican a Solo Control, mientras Marketplace activo incluye Control.
-14. Marketplace requiere conexión; la gestión actual continúa offline y no pierde
-    acceso por saldo Marketplace insuficiente.
-15. La integración con registros y estadísticas es idempotente y pertenece a
-    Fase 2.
-16. No se crean nuevas copias de perfiles, vehículos, registros o licencias sin
-    validar antes el modelo canónico existente.
-17. Categoría/tipo de vehículo y tipo de propulsión son dimensiones independientes,
-    configurables y obligatorias al habilitar un vehículo para Marketplace.
-18. La categoría participa en elegibilidad, pero la compatibilidad se decide por
-    capacidades reales declaradas o verificadas y reglas versionadas, no por una
-    lista rígida codificada de vehículos permitidos.
-19. La interfaz muestra módulos de batería/energía según la propulsión sin eliminar
-    datos ni degradar las funciones actuales de TUKTUK Control.
-20. La foto de Google, cuando exista, inicializa la foto del conductor durante el
-    onboarding de Marketplace; el conductor puede conservarla, sustituirla o
-    actualizarla y debe poder completar el perfil con una foto si Google no aporta
-    una.
-21. La foto del conductor y la foto principal del vehículo son activos independientes.
-22. Tras asignar, el cliente recibe una proyección autorizada con identidad visual,
-    reputación disponible y datos permitidos del conductor/vehículo; antes de
-    asignar no se expone información personal innecesaria del conductor.
-23. Las fotos se gestionan como activos privados controlados por TUKTUK; Google
-    puede aportar el valor inicial, pero la plataforma lo copia/importa o reemplaza
-    en almacenamiento controlado y no depende de la URL externa de forma permanente.
-24. Marketplace admite categorías configurables de vehículos; las categorías
-    iniciales no limitan rígidamente la elegibilidad, que se basa en capacidades y
-    requisitos concretos del trabajo.
-25. El conductor inicia una sola prueba explícita de 30 días de Trabajos tras
-    onboarding, sin esperar Control; durante ella acepta sin billetera.
-26. El primer depósito es CUP 500 por defecto, configurable desde Vrixora, entra
-    íntegro como saldo y no crea un mínimo permanente ni es cuota/comisión.
-27. El cliente paga directamente al conductor; TUKTUK cobra 10 % desde la billetera
-    solo en `wallet_commission`; `trial_free` no genera comisión.
-28. La valoración básica de cliente a conductor/servicio, de una a cinco estrellas
-    con comentario opcional y una sola vez por trabajo liquidado, pertenece al MVP.
-29. No hay desactivación automática por inactividad en el lanzamiento; nunca se
-    confisca saldo ni se borra historia.
-30. Las notificaciones al cliente reflejan eventos de servidor y cubren asignación,
-    avance, completado, cancelación e incidente.
-31. Tras vencer el trial, depósito físico o transferencia confirmado y acreditado
-    por `payments.manage` permite nuevas aceptaciones; no hay segundo activador.
+1. TUKTUK integra Control/Prestador, TUKTUK Cliente y Vrixora Admin.
+2. Control y Estadísticas permanecen disponibles sin licencia temporal.
+3. Un usuario se convierte en conductor solo al completar el alta de Trabajos.
+4. El onboarding exige conductor, vehículo y fotografías conforme al contrato operativo.
+5. La promoción inicial comienza automáticamente y una sola vez cuando el backend valida el onboarding completo.
+6. La duración promocional es configurable y queda congelada al iniciarse.
+7. No existe botón separado para comenzar manualmente una promoción que ya corresponde por alta.
+8. No existe depósito inicial mínimo obligatorio.
+9. Después de la promoción, saldo real y saldo promocional pueden cubrir comisiones.
+10. El saldo de referidos puede ser suficiente por sí solo.
+11. La comisión es configurable y se congela al aceptar; el modo promocional no cobra ni genera deuda retroactiva.
+12. Wallet y comisión usan ledger/reservas, nunca edición directa de balance.
+13. El cliente paga directamente al conductor en el modelo actual; el pago digital del servicio dentro de TUKTUK queda fuera del MVP.
+14. Solo conductores compatibles reciben/consultan oportunidades.
+15. El primer conductor elegible que confirma gana mediante transacción de servidor.
+16. **Reservado** no es un estado durable visible de trabajo; el saldo reservado sí existe.
+17. El contacto permanece oculto hasta asignar.
+18. No hay chat interno en el MVP.
+19. Marketplace requiere conexión; Control conserva su funcionamiento offline.
+20. La categoría del vehículo y la propulsión son dimensiones independientes y configurables.
+21. La elegibilidad usa capacidades reales y reglas versionadas, no una lista rígida de vehículos.
+22. La foto del conductor y la foto principal del vehículo son activos independientes.
+23. Las fotos privadas se gestionan mediante almacenamiento controlado y acceso autorizado.
+24. TUKTUK Cliente puede recibir después de asignar la proyección autorizada del conductor/vehículo.
+25. Las recargas pagadas generan saldo real y documento financiero al confirmarse.
+26. Las recompensas por referido generan saldo promocional, no factura de pago.
+27. Un referido válido recompensa exactamente una vez al completar su primer trabajo válido.
+28. No hay desactivación automática por inactividad en lanzamiento.
+29. Las notificaciones reflejan eventos del servidor y nunca cambian el estado por sí mismas.
+30. La valoración básica Cliente → Conductor de 1 a 5 estrellas con comentario opcional pertenece al alcance actual.
+31. Las licencias y planes heredados no son el modelo comercial vigente de TUKTUK y se retirarán solo después de auditar dependencias.
 
 ## 24. Decisiones pendientes
 
 | Decisión | Opciones/impacto | Debe cerrarse antes de |
 |---|---|---|
-| Proveedor de mapas/distancia | Entrada manual, API externa o combinación detrás de un adaptador | Configuración/cotización antes del piloto |
-| Configuración inicial de precio | Tarifas, mínimos, umbral de advertencia y regla de redondeo | Pruebas de cotización antes del piloto |
-| Canales/evidencia de recarga | El flujo es manual y Vrixora confirma; falta definir qué comprobantes/canales se aceptan | Operación con dinero real |
-| Privacidad y retención | Plazos para PII, fotos, ubicaciones, notificaciones técnicas y auditoría | Producción pública |
-| SLA de incidentes | Tiempos, escalamiento y cierre operativo; el estado mínimo `incident` ya está definido | Piloto operativo |
-| Verificaciones posteriores | Criterios de suspensión/revisión posterior; no bloquean la activación inicial del MVP | Operación/piloto |
-| Política de inactividad futura | No automatizar en lanzamiento; medir actividad/oportunidades antes de proponerla | Post-piloto |
-| Privacidad de reseñas | Visibilidad de comentarios, moderación, retención y respuesta administrativa | Publicación de valoraciones |
-| Responsabilidades legales/operativas | Seguros, cargas prohibidas, condiciones del servicio y revisión local | Antes de operación pública |
+| Evolución del proveedor de mapas/distancia | Mapbox es la integración vigente detrás de un gateway/adaptador; puede sustituirse sin acoplar el negocio | Antes de cambiar proveedor o contrato |
+| Configuración comercial inicial | Tarifas, mínimos de servicio, umbrales, comisión y redondeo se administran por configuración | Operación comercial estable |
+| Canales/evidencia de recarga | Definir métodos y comprobantes aceptados por operación | Dinero real a escala |
+| Orden de consumo de saldos | Saldo real vs promocional; debe respetar contrato técnico aprobado | Cambiar algoritmo de consumo |
+| Privacidad y retención | PII, fotos, ubicaciones, notificaciones y auditoría | Operación pública estable |
+| SLA de incidentes | Tiempos, escalamiento y cierre | Operación/piloto |
+| Verificaciones posteriores | Suspensión/revisión documental | Operación/piloto |
+| Política de inactividad futura | No automatizar en lanzamiento | Post-piloto |
+| Privacidad de reseñas | Moderación, visibilidad y retención | Publicación ampliada |
+| Responsabilidades legales/operativas | Seguros, cargas prohibidas y condiciones | Operación pública |
+| Tratamiento fiscal del documento de recarga | Denominación, impuestos y requisitos por jurisdicción | Facturación fiscal formal |
 
 ## 25. Riesgos técnicos
 
@@ -1068,8 +1092,8 @@ no geoespaciales y ámbito operativo configurado.
 - Push puede llegar tarde o duplicado; la interfaz debe volver a consultar al
   servidor y tolerar la pérdida de la oportunidad.
 - Relojes de dispositivos incorrectos no pueden gobernar expiraciones ni eventos.
-- La carrera al iniciar el trial, el intento de reiniciar/repetir sus 30 días, la
-  frontera exacta de expiración, la transición `trial_free` → `wallet_commission`
+- La carrera al iniciar automáticamente la promoción, el intento de reiniciarla, la
+  frontera exacta de expiración y la transición del modo promocional → `wallet_commission`
   y confundir prueba gratuita con deuda futura requieren pruebas transaccionales.
 - La futura creación de registros puede duplicar ingresos/kilómetros si no existe
   unicidad por `job_id` y una estrategia clara de reintentos.
@@ -1098,8 +1122,8 @@ no geoespaciales y ámbito operativo configurado.
 - Una PWA con baja fricción puede recibir spam o solicitudes fraudulentas.
 - La operación manual de recargas puede no escalar si crece el volumen sin
   conciliación y SLA claros.
-- Licencia y wallet pueden confundirse; la interfaz y soporte deben explicar por
-  separado Solo Control, Marketplace incluido, saldo, reserva y comisión.
+- Promoción, wallet, saldo real, saldo promocional, reserva y comisión pueden confundirse; la interfaz y soporte deben explicar
+  estos conceptos por separado.
 - Una política de inactividad ciega puede penalizar a conductores sin oportunidades
   compatibles; debe observar oferta real antes de desactivar.
 - La recarga podría interpretarse como cuota o cobro del servicio si no se comunica
@@ -1107,111 +1131,77 @@ no geoespaciales y ámbito operativo configurado.
 - Falta definir responsabilidades legales, privacidad, seguros y artículos/cargas
   prohibidas antes de operación pública.
 
-## 27. Criterios de aceptación del MVP
+## 27. Criterios de aceptación del modelo TUKTUK 2.0
 
-El MVP se considera aceptable solo cuando, con pruebas automatizadas e integración
-en un entorno no productivo:
+El modelo se considera correctamente implementado solo cuando las pruebas estáticas y dinámicas necesarias demuestren:
 
-1. TUKTUK Control conserva todos los módulos actuales y sus datos tras actualizar.
-2. Inicio, Registros, Trabajos, Estadísticas y Más funcionan en los anchos móviles
-   soportados; Tienda continúa disponible desde Más.
-3. Un cliente puede crear y publicar cada tipo inicial con validaciones específicas.
-4. El servidor genera un precio recomendado reproducible, muestra su desglose y
-   permite editarlo con advertencia registrable cuando corresponda.
-5. Un conductor incompatible no recibe ni puede consultar/aceptar la oportunidad,
-   incluso invocando el endpoint directamente.
-6. Una oportunidad nunca expone WhatsApp, contacto ni foto privada antes de la
-   asignación.
-7. Dos o más aceptaciones concurrentes producen exactamente un ganador y respuestas
-   coherentes para los demás.
-8. Repetir una aceptación con la misma idempotency key no crea asignación, reserva,
-   evento ni cargo adicional.
-9. Durante trial, aceptar no crea reserva ni exige billetera; fuera de trial crea
-   reserva exacta del 10 % y exige saldo disponible.
-10. Un trabajo `trial_free` termina gratis incluso tras vencer; `wallet_commission`
-    produce exactamente un débito y una cancelación válida libera la reserva.
-11. Cada transición acepta solo actores y estados permitidos y genera un evento
-    append-only con tiempo de servidor.
-12. Después de asignar, solo cliente y conductor asignado obtienen los contactos
-    autorizados y pueden abrir WhatsApp.
-13. RLS y grants impiden lectura cruzada entre clientes, conductores y organizaciones;
-    ningún frontend contiene `service_role` ni secretos.
-14. Las funciones/RPC privilegiadas validan identidad, fijan `search_path`, tienen
-    permisos mínimos y rechazan llamadas no autorizadas.
-15. Los listados principales usan índices y cursores y cumplen objetivos de latencia
-    acordados con el supuesto técnico inicial de pruebas y dimensionamiento de
-    500–1.000 usuarios activos, sin tratarlo como límite de producto.
-16. Una caída o duplicación de push no altera la asignación ni genera cobros dobles.
-17. Sin internet, Marketplace bloquea mutaciones con un mensaje claro mientras
-    registros, gastos, kilometraje, batería, mantenimiento y estadísticas locales
-    continúan funcionando.
-18. Recuperar conexión reintenta operaciones inciertas con la misma clave y no crea
-    duplicados.
-19. Ningún respaldo, restauración o dato local modifica trabajos, asignaciones,
-    billeteras, reservas, ledger ni estados remotos.
-20. Vrixora Admin puede localizar trabajos, reservas, cargos, recargas e incidentes
-    con permisos y auditoría adecuados.
-21. La conciliación detecta cualquier diferencia entre trabajo, asignación, reserva,
-    ledger y saldo cacheado.
-22. Pruebas de actualización y restauración conservan los registros históricos,
-    IDs, propietarios, vehículos y compatibilidad con esquemas anteriores.
-23. Se ejecutan análisis estático, pruebas unitarias, pruebas de integración RLS/RPC,
-    pruebas de concurrencia, pruebas offline, pruebas de carga y compilaciones
-    Android/Web antes de considerar implementada la fase.
-24. Existe un plan de rollback que no elimina datos financieros ni datos locales.
-25. El onboarding de Marketplace exige categoría y propulsión independientes y
-    permite las categorías iniciales Auto ligero, Triciclo, Motocicleta, Furgoneta,
-    Camión y Otro, junto con propulsión Eléctrico, Combustión o Híbrido.
-26. El perfil del vehículo conserva marca, modelo, año, matrícula/identificación,
-    categoría, propulsión, capacidades, carrocería y servicios habilitados sin
-    crear un vehículo duplicado ni cambiar su ID existente.
-27. El motor de elegibilidad evalúa categoría, servicio, pasajeros, carga,
-    volumen/dimensiones, carrocería y características del trabajo; los ejemplos
-    por categoría no bloquean combinaciones compatibles verificadas.
-28. La propulsión adapta interfaz, formularios, validaciones, registros,
-    estadísticas y campos requeridos: eléctrico muestra batería, voltaje, carga y
-    energía; combustión no exige valores eléctricos ficticios; e híbrido permite
-    ambos cuando corresponda, conservando datos históricos existentes.
-29. El onboarding usa la foto de Google como valor inicial cuando exista, permite
-    conservarla, cambiarla o subir una foto si falta, sin tratarla como identidad
-    verificada ni depender de su URL externa de forma permanente.
-30. La foto de conductor y la foto principal de vehículo se mantienen como activos
-    independientes y actualizables; Vrixora Admin puede consultar ambas, su origen
-    relevante y estado de perfil/verificación según permisos.
-31. Antes de asignar, el cliente no recibe foto ni información personal innecesaria
-    del conductor; tras asignar, la proyección autorizada incluye foto, nombre,
-    reputación disponible, vehículo y los contactos permitidos.
-32. La solución técnica de multimedia debe proteger acceso, actualización, respaldo
-    y disponibilidad de fotos personalizadas o procedentes de Google antes de su
-    despliegue, sin exponer activos privados ni depender de URLs externas caducables.
-33. “Comenzar 30 días gratis” inicia una sola prueba exacta de 30 días con tiempo
-    de servidor; reintentos, reinstalación o cambios de vehículo no la reinician.
-34. Durante trial, activo acepta sin depósito; vencida, una nueva aceptación exige
-    depósito confirmado y saldo. Suspendido nunca acepta.
-35. Una recarga inicial permanece como saldo; la insuficiencia bloquea nuevas
-    aceptaciones `wallet_commission`, no `trial_free`.
-36. `trial_free` termina con cero débito; `wallet_commission` genera exactamente
-    un débito de comisión del 10 % desde la billetera.
-37. Después de liquidar, el cliente puede registrar una única valoración de una a
-    cinco estrellas y comentario opcional para ese conductor/servicio; la unicidad
-    por trabajo, cliente y conductor impide duplicados y Vrixora Admin puede
-    revisarla según permisos.
-38. El cliente recibe actualizaciones de asignación, en camino, llegada/recogida,
-    en curso, completado, cancelación e incidente sin que la notificación pueda
-    alterar el estado del trabajo.
-39. La política configurable de inactividad conserva saldo, datos e historial y no
-    penaliza automáticamente a quien no recibió oportunidades compatibles; su
-    algoritmo considera oferta y disponibilidad real antes de desactivar.
+1. TUKTUK Control conserva todos sus módulos y datos tras actualizar.
+2. Control y Estadísticas funcionan sin licencia, plan o vencimiento.
+3. Inicio, Registros, Trabajos, Estadísticas y Más funcionan en los anchos soportados.
+4. Un usuario con onboarding incompleto no es tratado como conductor operativo.
+5. Completar conductor + vehículo + fotos inicia automáticamente una sola promoción con tiempo de servidor.
+6. La duración de esa promoción procede de Gestión Comercial y queda congelada.
+7. Reintentos, reinstalación y cambios de vehículo no reinician la promoción.
+8. Durante promoción, aceptar no crea reserva ni exige saldo.
+9. Un trabajo aceptado bajo promoción termina sin comisión aunque la promoción venza después.
+10. Fuera de promoción, `wallet_commission` calcula la comisión configurada y exige solo saldo disponible suficiente.
+11. No existe depósito inicial mínimo obligatorio.
+12. Saldo procedente únicamente de referidos puede cubrir una comisión.
+13. Una recarga pagada puede cubrir una comisión aunque no exista saldo promocional.
+14. Saldo insuficiente bloquea únicamente la nueva aceptación que requiere comisión, no Control.
+15. Suspendido no acepta trabajos, pero sigue pudiendo usar Control y Estadísticas.
+16. Una solicitud de recarga pendiente no altera el saldo.
+17. Confirmar una recarga acredita exactamente una vez saldo real y genera exactamente un documento financiero.
+18. Un crédito de referido acredita exactamente una vez saldo promocional y no genera factura de pago.
+19. Un referido solo cualifica por primer trabajo válido y no por instalación, registro u onboarding.
+20. Dos o más aceptaciones concurrentes producen exactamente un ganador.
+21. Repetir una aceptación con la misma idempotency key no duplica asignación, reserva, evento ni débito.
+22. Una cancelación válida libera reserva; una corrección posterior usa asiento compensatorio.
+23. Cada transición acepta solo actor y estado permitidos y genera evento append-only con tiempo de servidor.
+24. Antes de asignar no se expone WhatsApp ni PII innecesaria.
+25. Después de asignar solo las partes autorizadas obtienen contactos y proyección permitida.
+26. RLS y grants impiden lectura cruzada; ningún frontend contiene `service_role`.
+27. RPC privilegiadas validan identidad, fijan `search_path` y tienen permisos mínimos.
+28. Listados usan índices y cursores y cumplen objetivos acordados de rendimiento.
+29. Una caída o duplicación de push no altera asignación ni dinero.
+30. Sin internet, Marketplace bloquea mutaciones mientras Control local continúa.
+31. Reintentos con red inestable reutilizan la misma clave y no duplican efectos.
+32. Ningún respaldo o restauración local modifica jobs, wallet, ledger o estados remotos.
+33. Vrixora Admin puede localizar trabajos, conductores, reservas, recargas, documentos e incidentes con permisos.
+34. La conciliación detecta diferencias entre trabajo, assignment, reserva, ledger, saldo y documentos.
+35. Se ejecutan análisis estático, unitarias, integración RLS/RPC, concurrencia, offline y compilaciones necesarias antes de declarar cierre.
+36. Existe rollback que no destruye datos financieros ni datos locales.
+37. Categoría y propulsión permanecen independientes y configurables, incluyendo Bicicleta y propulsión Humana/sin motor sin exigir datos eléctricos ficticios.
+38. El motor de elegibilidad evalúa capacidades y requisitos reales.
+39. La propulsión adapta interfaz, validaciones, registros y estadísticas sin inventar valores eléctricos.
+40. La foto de Google puede iniciar la foto del conductor, pero el sistema no depende permanentemente de su URL externa.
+41. Foto de conductor y vehículo permanecen independientes.
+42. La valoración Cliente → Conductor es única por trabajo válido y auditable.
+43. Las notificaciones de estado nunca constituyen autoridad para cambiar el trabajo.
+44. La política de inactividad conserva saldo, datos e historial.
+45. Las referencias a licencias/planes heredados no pueden bloquear Control ni Trabajo bajo el nuevo contrato.
+46. TUKTUK Cliente obtiene ruta/distancia mediante el proveedor de mapas configurado, conserva fallback manual y no acopla la lógica de negocio al token del proveedor.
+47. Una repetición exacta con la misma idempotency key devuelve el resultado original y la misma clave con payload diferente es rechazada.
 
-## 28. Condición de salida de la Fase 0
+## 28. Condición de cierre documental y paso a implementación
 
-La Fase 0 termina cuando el owner aprueba este alcance, se valida el modelo contra
-el backend canónico de Vrixora Admin y quedan cerrados los contratos técnicos que
-afectan compatibilidad, entitlement, wallet, trabajos, privacidad e idempotencia.
-Las tarifas concretas, proveedor de distancia, evidencia de recarga, retención y
-otros parámetros operativos pueden cerrarse antes del piloto sin bloquear el
-inicio de la implementación estructural de Fase 1.
+Esta versión 2.0 queda documentalmente cerrada cuando:
 
-La existencia de este documento no autoriza cambios
-de código, Supabase, Edge Functions, Android, Web, producción, versiones, secretos,
-firma ni `google-services`.
+- el owner aprueba el modelo;
+- PRD Maestro, Centro de Control y Marketplace no se contradicen;
+- el estado real de código/backend se audita contra este contrato;
+- se identifica qué partes ya están implementadas, cuáles requieren adaptación y cuáles siguen pendientes;
+- cualquier migración o retirada de legado tiene un plan incremental y reversible.
+
+La aprobación de este documento no autoriza por sí sola:
+
+- migraciones remotas;
+- eliminación de tablas o datos;
+- merge a `main`;
+- despliegues;
+- publicación Android/Web;
+- cambios de secretos;
+- cambios de firma;
+- cambios de `google-services`.
+
+Cada operación de implementación o producción requiere su verificación y autorización correspondiente.
