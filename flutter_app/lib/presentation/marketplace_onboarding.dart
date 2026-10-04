@@ -80,6 +80,7 @@ class _MarketplaceOnboardingScreenState
   Uint8List? _driverPhotoBytes;
   String? _driverPhotoUploadKey;
   String? _driverPhotoLabel;
+  String? _googleAvatarAdoptionKey;
 
   Uint8List? _vehiclePhotoBytes;
   String? _vehiclePhotoUploadKey;
@@ -130,6 +131,34 @@ class _MarketplaceOnboardingScreenState
       !_saving &&
       !_processingPhoto &&
       !(_data?.driverSuspended ?? false);
+
+  String? get _googleDriverPhotoUrl {
+    final metadata = widget.store.user?.userMetadata;
+    for (final key in const ['avatar_url', 'picture']) {
+      final value = metadata?[key]?.toString().trim();
+      if (value == null || value.isEmpty) continue;
+      final uri = Uri.tryParse(value);
+      if (uri == null || uri.scheme != 'https') continue;
+      final host = uri.host.toLowerCase();
+      if (host == 'googleusercontent.com' ||
+          host.endsWith('.googleusercontent.com')) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  String _photoSaveError(Object error, {required bool vehicle}) {
+    if (error is MarketplacePhotoException) return error.message;
+    if (error is StorageException) {
+      return vehicle
+          ? 'No pudimos subir la foto del vehículo. La selección sigue lista para reintentar.'
+          : 'No pudimos subir la foto del conductor. La selección sigue lista para reintentar.';
+    }
+    return vehicle
+        ? 'No pudimos guardar el vehículo. Revisa los datos e inténtalo nuevamente.'
+        : 'No pudimos guardar el perfil de conductor. Revisa los datos e inténtalo nuevamente.';
+  }
 
   @override
   void initState() {
@@ -542,18 +571,31 @@ class _MarketplaceOnboardingScreenState
 
     setState(() => _processingPhoto = true);
 
+    XFile? picked;
     try {
-      final picked = await _imagePicker.pickImage(
+      picked = await _imagePicker.pickImage(
         source: source,
         maxWidth: 2048,
         maxHeight: 2048,
         imageQuality: 92,
       );
+    } catch (_) {
+      if (mounted) {
+        final origin =
+            source == ImageSource.camera ? 'la cámara' : 'la galería';
+        toast(context, 'No pudimos abrir $origin. Inténtalo nuevamente.');
+      }
+      if (mounted) setState(() => _processingPhoto = false);
+      return;
+    }
 
-      if (picked == null) return;
+    if (picked == null) {
+      if (mounted) setState(() => _processingPhoto = false);
+      return;
+    }
 
+    try {
       final sourceBytes = await picked.readAsBytes();
-
       final normalized = normalizeMarketplaceImage(
         sourceBytes: sourceBytes,
         assetKind: assetKind,
@@ -569,6 +611,7 @@ class _MarketplaceOnboardingScreenState
           _driverPhotoBytes = normalized.bytes;
           _driverPhotoUploadKey = _marketplaceUuidV4();
           _driverPhotoLabel = label;
+          _googleAvatarAdoptionKey = null;
         } else if (assetKind == 'vehicle_photo') {
           _vehiclePhotoBytes = normalized.bytes;
           _vehiclePhotoUploadKey = _marketplaceUuidV4();
@@ -576,10 +619,19 @@ class _MarketplaceOnboardingScreenState
         }
       });
 
-      toast(context, 'Foto ajustada automáticamente y lista para guardar.');
+      toast(
+        context,
+        assetKind == 'vehicle_photo'
+            ? 'Foto seleccionada. Se subirá al pulsar Guardar vehículo.'
+            : 'Foto seleccionada. Se subirá al pulsar Guardar conductor.',
+      );
+    } on FormatException catch (error) {
+      if (mounted) {
+        toast(context, error.message.toString());
+      }
     } catch (_) {
       if (mounted) {
-        toast(context, 'No se pudo procesar la foto. Prueba con otra imagen.');
+        toast(context, 'No pudimos procesar esa imagen. Prueba con otra foto.');
       }
     } finally {
       if (mounted) setState(() => _processingPhoto = false);
@@ -611,6 +663,7 @@ class _MarketplaceOnboardingScreenState
     required Uint8List? pendingBytes,
     required String? savedAssetId,
     required bool vehicle,
+    String? fallbackNetworkUrl,
   }) {
     Widget image(Uint8List bytes) => ClipRRect(
           borderRadius: BorderRadius.circular(18),
@@ -623,30 +676,51 @@ class _MarketplaceOnboardingScreenState
               : Image.memory(bytes, width: 120, height: 120, fit: BoxFit.cover),
         );
 
-    // The new selection is shown immediately, before it is saved.
+    // Manual selection has first priority.
     if (pendingBytes != null) return image(pendingBytes);
 
-    // Saved assets live in a private bucket: download with the user's session.
+    // A private Marketplace asset has priority over the Google fallback.
     final savedPhoto = _savedMarketplacePhoto(savedAssetId);
-    if (savedPhoto == null) {
-      return const Text(
-        'No se pudo localizar la foto guardada. Puedes cambiarla.',
+    if (savedPhoto != null) {
+      return FutureBuilder<Uint8List>(
+        future: savedPhoto,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) return image(snapshot.data!);
+          if (snapshot.hasError) {
+            return const Text(
+              'No se pudo mostrar la foto guardada. Puedes cambiarla.',
+            );
+          }
+          return const SizedBox(
+            height: 120,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        },
       );
     }
-    return FutureBuilder<Uint8List>(
-      future: savedPhoto,
-      builder: (context, snapshot) {
-        if (snapshot.hasData) return image(snapshot.data!);
-        if (snapshot.hasError) {
-          return const Text(
-            'No se pudo mostrar la foto guardada. Puedes cambiarla.',
-          );
-        }
-        return const SizedBox(
-          height: 120,
-          child: Center(child: CircularProgressIndicator()),
-        );
-      },
+
+    // Google is a driver-only fallback. Vehicle photos never use it.
+    if (!vehicle && fallbackNetworkUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: SizedBox.square(
+          dimension: 120,
+          child: Image.network(
+            fallbackNetworkUrl,
+            fit: BoxFit.cover,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+            errorBuilder: (context, error, stackTrace) => const Center(
+              child: Icon(Icons.person_outline_rounded, size: 42),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Text(
+      vehicle
+          ? 'Añade una foto principal del vehículo.'
+          : 'Añade una foto clara del conductor.',
     );
   }
 
@@ -658,14 +732,14 @@ class _MarketplaceOnboardingScreenState
     final phone = _phone.text.trim();
 
     if (name.isEmpty) {
-      toast(context, 'Escribe tu nombre.');
+      toast(context, 'Escribe tu nombre. La foto seleccionada no se perderá.');
       return;
     }
 
     if (!RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(phone)) {
       toast(
         context,
-        'Usa el teléfono con código de país. Ejemplo: +5355555555.',
+        'Usa el teléfono con código de país. Ejemplo: +5355555555. La foto seleccionada no se perderá.',
       );
       return;
     }
@@ -689,6 +763,21 @@ class _MarketplaceOnboardingScreenState
         );
 
         photoAssetId = uploaded.id;
+      } else if (photoAssetId == null && _googleDriverPhotoUrl != null) {
+        final adoptionKey =
+            _googleAvatarAdoptionKey ?? _marketplaceUuidV4();
+        _googleAvatarAdoptionKey = adoptionKey;
+
+        final adopted = await _service.adoptGoogleAvatar(
+          idempotencyKey: adoptionKey,
+        );
+        photoAssetId = adopted.id;
+      }
+
+      if (photoAssetId == null) {
+        throw const MarketplacePhotoException(
+          'Añade una foto del conductor para completar el perfil.',
+        );
       }
 
       final updated = await _service.saveDriver({
@@ -703,6 +792,7 @@ class _MarketplaceOnboardingScreenState
         _driverPhotoBytes = null;
         _driverPhotoUploadKey = null;
         _driverPhotoLabel = null;
+        _googleAvatarAdoptionKey = null;
         _data = updated;
         _applyData(updated, preferredVehicleId: _selectedVehicleId);
       });
@@ -712,10 +802,10 @@ class _MarketplaceOnboardingScreenState
       if (!widget.driverOnly) await _loadAccess(showSpinner: false);
 
       if (!mounted) return;
-      toast(context, 'Perfil de conductor guardado.');
-    } catch (_) {
+      toast(context, 'Perfil de conductor y foto guardados.');
+    } catch (error) {
       if (mounted) {
-        toast(context, 'No se pudo guardar el perfil de conductor.');
+        toast(context, _photoSaveError(error, vehicle: false));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -944,9 +1034,9 @@ class _MarketplaceOnboardingScreenState
       if (!mounted) return;
       toast(context, 'Vehículo guardado.');
       widget.onManagementChanged?.call();
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        toast(context, 'No se pudo guardar la configuración del vehículo.');
+        toast(context, _photoSaveError(error, vehicle: true));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1433,13 +1523,15 @@ class _MarketplaceOnboardingScreenState
                     ],
                   );
                   final hasDriverPhoto = _driverPhotoBytes != null ||
-                      data.driverPhotoAssetId != null;
+                      data.driverPhotoAssetId != null ||
+                      _googleDriverPhotoUrl != null;
                   if (!hasDriverPhoto) return compactDriverFields;
 
                   final photo = _buildMarketplacePhotoPreview(
                     pendingBytes: _driverPhotoBytes,
                     savedAssetId: data.driverPhotoAssetId,
                     vehicle: false,
+                    fallbackNetworkUrl: _googleDriverPhotoUrl,
                   );
                   if (constraints.maxWidth < 290) {
                     return Column(
@@ -1465,11 +1557,14 @@ class _MarketplaceOnboardingScreenState
               Row(
                 children: [
                   Icon(
-                    _driverPhotoBytes == null && data.driverPhotoAssetId == null
+                    _driverPhotoBytes == null &&
+                            data.driverPhotoAssetId == null &&
+                            _googleDriverPhotoUrl == null
                         ? Icons.photo_camera_outlined
                         : Icons.check_circle_outline,
                     color: _driverPhotoBytes == null &&
-                            data.driverPhotoAssetId == null
+                            data.driverPhotoAssetId == null &&
+                            _googleDriverPhotoUrl == null
                         ? kTertiary
                         : appPrimaryColor(context),
                   ),
@@ -1477,10 +1572,12 @@ class _MarketplaceOnboardingScreenState
                   Expanded(
                     child: Text(
                       _driverPhotoBytes != null
-                          ? 'Foto lista para guardar · ${_driverPhotoLabel ?? ''}'
-                          : data.driverPhotoAssetId == null
-                              ? 'Foto del conductor pendiente'
-                              : 'Foto del conductor guardada',
+                          ? 'Foto seleccionada. Se subirá al pulsar Guardar conductor. ${_driverPhotoLabel ?? ''}'
+                          : data.driverPhotoAssetId != null
+                              ? 'Foto del conductor guardada'
+                              : _googleDriverPhotoUrl != null
+                                  ? 'Usaremos tu foto de Google como foto inicial. Puedes cambiarla.'
+                                  : 'Foto del conductor pendiente',
                     ),
                   ),
                 ],
@@ -1492,7 +1589,9 @@ class _MarketplaceOnboardingScreenState
                   onPressed: _canEdit ? () => _pickPhoto('driver_photo') : null,
                   icon: const Icon(Icons.add_a_photo_outlined),
                   label: Text(
-                    data.driverPhotoAssetId == null && _driverPhotoBytes == null
+                    data.driverPhotoAssetId == null &&
+                            _driverPhotoBytes == null &&
+                            _googleDriverPhotoUrl == null
                         ? 'Añadir foto'
                         : 'Cambiar foto',
                   ),
@@ -1500,7 +1599,11 @@ class _MarketplaceOnboardingScreenState
               ),
               const SizedBox(height: 6),
               Text(
-                'Elige una foto clara donde se vea bien tu rostro. TUKTUK la ajusta automáticamente.',
+                _googleDriverPhotoUrl != null &&
+                        data.driverPhotoAssetId == null &&
+                        _driverPhotoBytes == null
+                    ? 'Al guardar, TUKTUK copiará tu foto de Google a tu perfil privado de conductor.'
+                    : 'Elige una foto clara donde se vea bien tu rostro. TUKTUK la ajusta automáticamente.',
                 style: TextStyle(color: appMutedColor(context), fontSize: 12),
               ),
               const SizedBox(height: 14),
@@ -1902,7 +2005,7 @@ class _MarketplaceOnboardingScreenState
                       Expanded(
                         child: Text(
                           _vehiclePhotoBytes != null
-                              ? 'Foto lista para guardar · ${_vehiclePhotoLabel ?? ''}'
+                              ? 'Foto seleccionada. Se subirá al pulsar Guardar vehículo. ${_vehiclePhotoLabel ?? ''}'
                               : vehicle?.mainPhotoAssetId == null
                                   ? 'Foto principal del vehículo pendiente'
                                   : 'Foto principal del vehículo guardada',

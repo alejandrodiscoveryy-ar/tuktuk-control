@@ -90,6 +90,33 @@ class MarketplaceMediaAsset {
   );
 }
 
+class MarketplacePhotoException implements Exception {
+  const MarketplacePhotoException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+String _marketplaceGoogleAvatarErrorMessage(Object? value) {
+  final code = value?.toString().trim();
+  return switch (code) {
+    'AUTHENTICATION_REQUIRED' =>
+      'Tu sesión de Google venció. Inicia sesión nuevamente e inténtalo otra vez.',
+    'GOOGLE_AVATAR_NOT_AVAILABLE' =>
+      'Tu cuenta de Google no tiene una foto disponible. Puedes añadir una manualmente.',
+    'GOOGLE_AVATAR_FETCH_FAILED' =>
+      'No pudimos descargar tu foto de Google. Puedes reintentar o elegir otra foto.',
+    'GOOGLE_AVATAR_TOO_LARGE' =>
+      'La foto de Google supera el tamaño permitido. Elige otra imagen.',
+    'GOOGLE_AVATAR_INVALID_FORMAT' =>
+      'La foto de Google tiene un formato no compatible. Elige otra imagen.',
+    _ =>
+      'No pudimos usar tu foto de Google. Puedes reintentar o elegir otra foto.',
+  };
+}
+
 class MarketplaceVehicle {
   const MarketplaceVehicle({
     required this.id,
@@ -945,6 +972,47 @@ class MarketplaceService {
     'target_vehicle_name': name,
     'target_idempotency_key': idempotencyKey,
   });
+
+  Future<MarketplaceMediaAsset> adoptGoogleAvatar({
+    required String idempotencyKey,
+  }) async {
+    try {
+      final response = await _client.functions.invoke(
+        'marketplace-driver-google-avatar',
+        body: {'idempotency_key': idempotencyKey},
+      );
+      final value = response.data;
+
+      if (value is Map && value['error'] != null) {
+        throw MarketplacePhotoException(
+          _marketplaceGoogleAvatarErrorMessage(value['error']),
+        );
+      }
+
+      final data = value is Map ? value['data'] : null;
+      if (data is! Map) {
+        throw const MarketplacePhotoException(
+          'No pudimos preparar tu foto de Google. Puedes elegir otra foto.',
+        );
+      }
+
+      final asset = MarketplaceMediaAsset.fromMap(data);
+      if (asset.id.isEmpty || !asset.isAvailable) {
+        throw const MarketplacePhotoException(
+          'No pudimos guardar tu foto de Google. Puedes elegir otra foto.',
+        );
+      }
+      return asset;
+    } on MarketplacePhotoException {
+      rethrow;
+    } on FunctionException catch (error) {
+      final details = error.details;
+      final code = details is Map ? details['error'] : null;
+      throw MarketplacePhotoException(
+        _marketplaceGoogleAvatarErrorMessage(code),
+      );
+    }
+  }
 
   Future<MarketplaceMediaAsset> prepareMedia(Map<String, dynamic> params) =>
       _one(

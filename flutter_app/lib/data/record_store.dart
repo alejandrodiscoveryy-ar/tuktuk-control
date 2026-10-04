@@ -1740,7 +1740,15 @@ class RecordStore extends ChangeNotifier {
   Future<void> _ensureRemoteProfile() async {
     final currentUser = user;
     if (currentUser == null) return;
+
     final metadata = currentUser.userMetadata ?? const <String, dynamic>{};
+    final rawGoogleAvatar =
+        metadata['avatar_url']?.toString().trim() ??
+        metadata['picture']?.toString().trim();
+    final googleAvatar =
+        rawGoogleAvatar == null || rawGoogleAvatar.isEmpty ? null : rawGoogleAvatar;
+    final now = DateTime.now().toUtc().toIso8601String();
+
     final profile = {
       'id': currentUser.id,
       'email': currentUser.email,
@@ -1748,24 +1756,45 @@ class RecordStore extends ChangeNotifier {
           metadata['full_name'] ??
           metadata['name'] ??
           currentUser.email?.split('@').first,
-      'avatar_url': metadata['avatar_url'] ?? metadata['picture'],
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'avatar_url': googleAvatar,
+      'updated_at': now,
     };
     final fingerprint = jsonEncode({
       'id': profile['id'],
       'email': profile['email'],
-      'display_name': profile['display_name'],
       'avatar_url': profile['avatar_url'],
     });
     if (_ensuredProfileFingerprint == fingerprint) return;
+
     final existing = await _supabase
         .from('profiles')
-        .select('id')
+        .select('id,email,avatar_url')
         .eq('id', currentUser.id)
         .maybeSingle();
+
     if (existing == null) {
       await _supabase.from('profiles').insert(profile);
+    } else {
+      final updates = <String, dynamic>{};
+      final existingEmail = existing['email']?.toString().trim();
+      final existingAvatar = existing['avatar_url']?.toString().trim();
+
+      if (currentUser.email != null && currentUser.email != existingEmail) {
+        updates['email'] = currentUser.email;
+      }
+      if (googleAvatar != null && googleAvatar != existingAvatar) {
+        updates['avatar_url'] = googleAvatar;
+      }
+
+      if (updates.isNotEmpty) {
+        updates['updated_at'] = now;
+        await _supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', currentUser.id);
+      }
     }
+
     _ensuredProfileFingerprint = fingerprint;
   }
 
