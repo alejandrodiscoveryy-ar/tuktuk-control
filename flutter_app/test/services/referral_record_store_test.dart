@@ -73,7 +73,7 @@ void main() {
         };
       } else if (path.endsWith('/licenses')) {
         licenseReads++;
-        // Suspended avoids unrelated first-vehicle writes in this attribution test.
+        // Legacy suspended fixture exercises refresh; Control no longer blocks writes.
         payload = {
           'id': 'license',
           'status': 'suspended',

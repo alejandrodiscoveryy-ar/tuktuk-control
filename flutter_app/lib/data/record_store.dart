@@ -127,6 +127,7 @@ class RecordStore extends ChangeNotifier {
   Timer? _referralRetryTimer;
   Timer? _installReferrerRetryTimer;
   int _installReferrerFailures = 0;
+  bool _disposed = false;
   bool _referralsDisposed = false;
   static const _installReferrerCheckedKey = 'referral:installReferrerChecked';
   final PushTokenRegistrationCoordinator? _pushTokenCoordinator;
@@ -1520,6 +1521,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _handleAuthState(User? authenticatedUser) async {
+    if (_disposed) return;
     if (authenticatedUser == null) {
       user = null;
       referralProgram = null;
@@ -1530,6 +1532,7 @@ class RecordStore extends ChangeNotifier {
       _stopAutomaticSync();
       _load();
       await refreshLicense();
+      if (_disposed) return;
       if (initialized) {
         syncMessage = 'Entra con Google para activar la sincronizacion';
         notifyListeners();
@@ -1550,14 +1553,19 @@ class RecordStore extends ChangeNotifier {
     _startAutomaticSync();
     try {
       await _processPendingReferralClaim(authenticatedUser.id);
+      if (_disposed) return;
       await _pushTokenCoordinator?.handleAuthenticatedUser(
         authenticatedUser.id,
       );
+      if (_disposed) return;
       await _ensureRemoteProfile();
+      if (_disposed) return;
       await _refreshLicenseIfNeeded(force: true);
+      if (_disposed) return;
 
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
+        if (_disposed) return;
       }
 
       // Los datos remotos deben restaurarse tambien en modo solo lectura.
@@ -1565,16 +1573,19 @@ class RecordStore extends ChangeNotifier {
       // el vehiculo y los registros que ya existen en Supabase.
       if (activeVehicle == null) {
         await _synchronizeWithSupabase();
+        if (_disposed) return;
       }
 
       // Solo un usuario realmente nuevo y con permiso de escritura
       // recibe un vehiculo inicial.
       if (canWrite && activeVehicle == null) {
         await configureFirstVehicle(name: 'Mi Tuk Tuk');
+        if (_disposed) return;
       }
 
       await syncNow();
     } catch (_) {
+      if (_disposed) return;
       syncMessage = 'Sin conexion. Trabajando con los datos locales';
       notifyListeners();
       _scheduleSyncRetry();
@@ -2226,6 +2237,7 @@ class RecordStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _referralsDisposed = true;
     _referralRetryTimer?.cancel();
     _installReferrerRetryTimer?.cancel();
