@@ -169,7 +169,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFFFFB547),
             ),
             title: Text(tr('Soporte y pagos')),
-            subtitle: Text(tr('Pagos, soporte y licencias')),
+            subtitle: Text(tr('Pagos y soporte')),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,

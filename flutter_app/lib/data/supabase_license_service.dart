@@ -145,7 +145,7 @@ class SupabaseLicenseService implements LicenseService {
   final Box _cache;
 
   @override
-  bool get restrictionsEnabled => true;
+  bool get restrictionsEnabled => false;
 
   @override
   LicenseSnapshot cachedLicense(String userId) {

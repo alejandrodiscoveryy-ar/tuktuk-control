@@ -69,7 +69,7 @@ void main() {
   });
 
   testWidgets(
-    'modo solo lectura abre Registros en Historial y deshabilita guardar',
+    'una licencia legado vencida no bloquea Registros ni Guardar',
     (tester) async {
       await tester.pumpWidget(MaterialApp(home: AppShell(store: store)));
       await tester.pump();
@@ -77,14 +77,15 @@ void main() {
       await tester.tap(find.text('Registros'));
       await tester.pumpAndSettle();
 
+      expect(
+        find.textContaining('Tu licencia no permite realizar cambios'),
+        findsNothing,
+      );
+
       final tabs = DefaultTabController.of(
         tester.element(find.byType(TabBarView)),
       );
-      expect(tabs.index, 1);
-      expect(
-        find.text('Cuando guardes registros, apareceran aqui.'),
-        findsOneWidget,
-      );
+      expect(tabs.index, 0);
 
       await tester.tap(find.text('Nuevo'));
       await tester.pumpAndSettle();
@@ -109,7 +110,7 @@ void main() {
           matching: find.byType(FilledButton),
         ),
       );
-      expect(saveButton.onPressed, isNull);
+      expect(saveButton.onPressed, isNotNull);
     },
   );
 }

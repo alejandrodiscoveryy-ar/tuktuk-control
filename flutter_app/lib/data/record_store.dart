@@ -179,8 +179,8 @@ class RecordStore extends ChangeNotifier {
   DateTime? exchangeRateUpdatedAt;
   ExchangeRateDirection exchangeRateDirection = ExchangeRateDirection.same;
 
-  bool get canWrite => license.canWrite;
-  bool get isReadOnly => !canWrite;
+  bool get canWrite => true; // TUKTUK 2.0: Control es permanente.
+  bool get isReadOnly => false;
 
   void _restoreCachedProjectIdentity() {
     final cached = ProjectIdentity.fromCache({
@@ -675,13 +675,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _requireWriteAccess() async {
-    final currentUser = user;
-    if (currentUser != null) {
-      license = _licenseService.cachedLicense(currentUser.id);
-      await _refreshLicenseIfNeeded();
-    }
-
-    if (!canWrite) throw ReadOnlyLicenseException(license);
+    // TUKTUK 2.0: Control y Estadísticas no dependen de licencias.
   }
 
   List<DailyRecord> get records => [..._records]..sort(_compareRecordsDesc);
@@ -1471,9 +1465,7 @@ class RecordStore extends ChangeNotifier {
         return;
       }
       await _synchronizeWithSupabase();
-      syncMessage = !canWrite
-          ? 'Tu licencia no permite realizar cambios. Modo solo lectura'
-          : pendingSyncCount == 0
+      syncMessage = pendingSyncCount == 0
           ? 'Datos sincronizados de forma segura'
           : 'Cambios guardados localmente, pendientes de conexion';
     });
@@ -1719,10 +1711,6 @@ class RecordStore extends ChangeNotifier {
     }
 
     final pendingBatch = _syncQueue.pendingForUser(currentUser.id, limit: 500);
-    if (!canWrite) {
-      _load();
-      return;
-    }
     final report = await _syncCoordinator.pushPending(
       userId: currentUser.id,
       batchSize: 500,
@@ -1732,61 +1720,10 @@ class RecordStore extends ChangeNotifier {
         await _markEntitySynced(operation);
       }
     }
-    if (report.blockedByLicense) {
-      await _licenseService.markWriteRejected(
-        currentUser.id,
-        const LicenseWriteRejectedException('RLS rejected write'),
-      );
-      await refreshLicense();
-      await _rollbackBlockedOperations(
-        pendingBatch.where(
-          (operation) =>
-              report.blockedOperationIds.contains(operation.id) &&
-              operation.rollbackOnLicenseRejection,
-        ),
-      );
-      syncMessage =
-          'Tu licencia no permite realizar cambios. Modo solo lectura';
-    }
     _load();
     if (report.failed > 0 && !report.blockedByLicense) {
       throw const TemporarySyncException('remote push failed');
     }
-  }
-
-  Future<void> _rollbackBlockedOperations(
-    Iterable<SyncOperation> operations,
-  ) async {
-    for (final operation in operations) {
-      final previous = operation.previousPayload;
-      switch (operation.entityType) {
-        case SyncEntityType.dailyRecord:
-          if (previous == null) {
-            await _box.delete(operation.entityId);
-          } else {
-            await _box.put(operation.entityId, previous);
-          }
-          break;
-        case SyncEntityType.maintenance:
-          if (previous == null) {
-            await _maintenanceBox.delete(operation.entityId);
-          } else {
-            await _maintenanceBox.put(operation.entityId, previous);
-          }
-          break;
-        case SyncEntityType.vehicle:
-          if (previous == null) {
-            await _meta.delete('vehicle:${operation.entityId}');
-          } else {
-            await _meta.put('vehicle:${operation.entityId}', previous);
-          }
-          break;
-        case SyncEntityType.settings:
-          if (previous != null) await _meta.putAll(previous);
-          break;
-      }
-    }
-    _load();
   }
 
   Future<void> _ensureRemoteProfile() async {

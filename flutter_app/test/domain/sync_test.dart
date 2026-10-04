@@ -186,7 +186,8 @@ void main() {
     expect(legacy?.isLegacy, isTrue);
   });
 
-  test('un rechazo RLS se retira de la cola y no se reintenta', () async {
+  test('un rechazo RLS conserva la operación para diagnóstico y reintento',
+      () async {
     final pending = operation();
     final queue = _MemoryQueue([pending]);
     final coordinator = SyncCoordinator(
@@ -196,10 +197,10 @@ void main() {
 
     final report = await coordinator.pushPending(userId: 'user-1');
 
-    expect(report.blockedByLicense, isTrue);
-    expect(report.blockedOperationIds, {pending.id});
-    expect(queue.completed, {pending.id});
-    expect(queue.failed, isEmpty);
+    expect(report.blockedByLicense, isFalse);
+    expect(report.blockedOperationIds, isEmpty);
+    expect(queue.completed, isEmpty);
+    expect(queue.failed, contains(pending.id));
   });
 
   test('identifica el rechazo 42501 de RLS como bloqueo de escritura', () {

@@ -42,16 +42,6 @@ class SyncCoordinator {
         failed: result.rejectedOperations.length,
         completedOperationIds: completedIds,
       );
-    } on LicenseWriteRejectedException {
-      final blockedIds = pending.map((operation) => operation.id).toSet();
-      await _queue.complete(blockedIds);
-      return SyncRunReport(
-        attempted: pending.length,
-        completed: 0,
-        failed: pending.length,
-        blockedByLicense: true,
-        blockedOperationIds: blockedIds,
-      );
     } catch (error) {
       await _queue.markFailed(
         pending.map((operation) => operation.id),
