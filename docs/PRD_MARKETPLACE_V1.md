@@ -484,11 +484,11 @@ Esta decisión no afecta al **saldo reservado** de la billetera, que es un conce
 |---|---|---|
 | Solicitado | Borrador validable aún no visible a conductores | Publicado, Cancelado por cliente |
 | Publicado | Disponible para conductores elegibles | Aceptado, Cancelado por cliente, Expirado |
-| Aceptado | Conductor asignado; modo económico congelado. Durante trial no hay reserva; fuera del trial se reserva comisión | En camino, Cancelado por cliente, Cancelado por conductor, Incidente |
+| Aceptado | Conductor asignado; modo económico congelado. Durante promoción no hay reserva; fuera de promoción se reserva comisión | En camino, Cancelado por cliente, Cancelado por conductor, Incidente |
 | En camino | Conductor se dirige al origen | Recogida, Cancelado, Incidente |
 | Recogida | Llegó o inició la recogida/abordaje | En curso, Cancelado, Incidente |
 | En curso | Servicio en ejecución | Completado, Incidente |
-| Completado | El conductor finalizó; trial queda gratis o el servidor liquida la reserva | Liquidado, Incidente |
+| Completado | El conductor finalizó; si fue aceptado bajo promoción no hay comisión, y en wallet_commission el servidor liquida la reserva | Liquidado, Incidente |
 | Liquidado | Trabajo cerrado; comisión asentada solo en `wallet_commission` | Incidente administrativo excepcional |
 | Cancelado por cliente | Terminal operativo | — |
 | Cancelado por conductor | Terminal operativo | — |
@@ -1094,7 +1094,7 @@ El Marketplace ya dispone de componentes implementados y algunos desplegados. Es
 - Relojes de dispositivos incorrectos no pueden gobernar expiraciones ni eventos.
 - La carrera al iniciar automáticamente la promoción, el intento de reiniciarla, la
   frontera exacta de expiración y la transición del modo promocional → `wallet_commission`
-  y confundir prueba gratuita con deuda futura requieren pruebas transaccionales.
+  y confundir promoción comercial con deuda futura requieren pruebas transaccionales.
 - La futura creación de registros puede duplicar ingresos/kilómetros si no existe
   unicidad por `job_id` y una estrategia clara de reintentos.
 - Guardar detalles variables solo en JSON dificultaría índices y validación; los
