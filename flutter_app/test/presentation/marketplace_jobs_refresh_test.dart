@@ -12,12 +12,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class _Store extends Fake implements RecordStore {
   @override
   User? get user => const User(
-    id: 'driver-test',
-    appMetadata: {},
-    userMetadata: {},
-    aud: 'authenticated',
-    createdAt: '2026-01-01',
-  );
+        id: 'driver-test',
+        appMetadata: {},
+        userMetadata: {},
+        aud: 'authenticated',
+        createdAt: '2026-01-01',
+      );
 
   @override
   VehicleProfile? get activeVehicle => null;
@@ -101,9 +101,9 @@ void main() {
   setUpAll(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('plugins.flutter.io/shared_preferences'),
-          (call) async => call.method == 'getAll' ? <String, dynamic>{} : true,
-        );
+      const MethodChannel('plugins.flutter.io/shared_preferences'),
+      (call) async => call.method == 'getAll' ? <String, dynamic>{} : true,
+    );
     await initializeDateFormatting('es');
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
@@ -131,60 +131,51 @@ void main() {
   }
 
   Future<void> open(WidgetTester tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarketplaceJobsScreen(store: _Store(), service: service),
-        ),
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: MarketplaceJobsScreen(store: _Store(), service: service),
       ),
-    );
+    ));
     await pumpJobs(tester);
   }
 
   void notify() => handleForegroundPushData({
-    'kind': 'marketplace_job_available',
-    'job_id': offer.id,
-  });
+        'kind': 'marketplace_job_available',
+        'job_id': offer.id,
+      });
 
   test('acceptance messages distinguish wallet, profile and other errors', () {
     expect(
       marketplaceAcceptErrorMessage('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE'),
       'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.',
     );
-    expect(
-      marketplaceAcceptErrorMessage('DRIVER_PROFILE_INCOMPLETE'),
-      contains('Completa tu perfil'),
-    );
-    expect(
-      marketplaceAcceptErrorMessage('network error'),
-      contains('Comprueba tu conexión'),
-    );
+    expect(marketplaceAcceptErrorMessage('DRIVER_PROFILE_INCOMPLETE'),
+        contains('Completa tu perfil'));
+    expect(marketplaceAcceptErrorMessage('network error'),
+        contains('Comprueba tu conexión'));
   });
 
   testWidgets(
-    'availability card keeps the switch at the top right and shows active state',
-    (tester) async {
-      await open(tester);
+      'availability card keeps the switch at the top right and shows active state',
+      (tester) async {
+    await open(tester);
 
-      expect(find.text('Vehículo activo'), findsOneWidget);
-      expect(find.text('Vehículo de prueba'), findsOneWidget);
-      expect(find.text('En servicio'), findsOneWidget);
-      expect(find.text('Recibiendo nuevas solicitudes'), findsOneWidget);
+    expect(find.text('Vehículo activo'), findsOneWidget);
+    expect(find.text('Vehículo de prueba'), findsOneWidget);
+    expect(find.text('En servicio'), findsOneWidget);
+    expect(find.text('Recibiendo nuevas solicitudes'), findsOneWidget);
 
-      final availabilitySwitch = find.byKey(
-        const ValueKey('marketplace-availability-switch'),
-      );
-      expect(availabilitySwitch, findsOneWidget);
+    final availabilitySwitch =
+        find.byKey(const ValueKey('marketplace-availability-switch'));
+    expect(availabilitySwitch, findsOneWidget);
 
-      final titleTop = tester.getTopLeft(find.text('Vehículo activo')).dy;
-      final switchTop = tester.getTopLeft(availabilitySwitch).dy;
-      expect((switchTop - titleTop).abs(), lessThan(30));
-    },
-  );
+    final titleTop = tester.getTopLeft(find.text('Vehículo activo')).dy;
+    final switchTop = tester.getTopLeft(availabilitySwitch).dy;
+    expect((switchTop - titleTop).abs(), lessThan(30));
+  });
 
-  testWidgets('availability card shows a distinct resting state', (
-    tester,
-  ) async {
+  testWidgets('availability card shows a distinct resting state',
+      (tester) async {
     service.acceptingJobs = false;
     await open(tester);
 
@@ -196,9 +187,8 @@ void main() {
     );
     expect(find.text('Aceptar trabajo'), findsNothing);
   });
-  testWidgets('advance button is unique below current status and above route', (
-    tester,
-  ) async {
+  testWidgets('advance button is unique below current status and above route',
+      (tester) async {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
@@ -217,98 +207,85 @@ void main() {
     final action = find.text('Salir hacia el cliente');
     expect(action, findsOneWidget);
     expect(
-      tester.getTopLeft(action).dy,
-      greaterThan(
-        tester
+        tester.getTopLeft(action).dy,
+        greaterThan(tester
             .getTopLeft(find.text('Servicio aceptado · prepárate para salir'))
-            .dy,
-      ),
-    );
-    expect(
-      tester.getTopLeft(action).dy,
-      lessThan(tester.getTopLeft(find.text('Origen de prueba')).dy),
-    );
+            .dy));
+    expect(tester.getTopLeft(action).dy,
+        lessThan(tester.getTopLeft(find.text('Origen de prueba')).dy));
   });
 
   testWidgets(
-    'foreground refresh coalesces pushes and clears stale offers on error',
-    (tester) async {
-      await open(tester);
-      expect(service.availableCalls, 1);
-      expect(service.historyCalls, 1);
-      service.pending = Completer<List<MarketplaceAvailableJob>>();
-      notify();
-      await tester.pump();
-      expect(marketplaceJobPushPending.value, isTrue);
-      expect(service.availableCalls, 2);
-      notify();
-      notify();
-      await tester.pump();
-      expect(service.availableCalls, 2);
-      service.failAvailable = true;
-      service.pending!.complete([offer]);
-      await pumpJobs(tester);
-      expect(service.availableCalls, 3);
-      expect(service.historyCalls, 1);
-      expect(marketplaceJobPushPending.value, isFalse);
-      expect(find.text('Aceptar trabajo'), findsNothing);
-      expect(
-        find.textContaining('No pudimos actualizar los trabajos'),
-        findsOneWidget,
-      );
-      await tester.pumpWidget(const SizedBox());
-      final calls = service.availableCalls;
-      notify();
-      await tester.pump();
-      expect(service.availableCalls, calls);
-    },
-  );
+      'foreground refresh coalesces pushes and clears stale offers on error',
+      (tester) async {
+    await open(tester);
+    expect(service.availableCalls, 1);
+    expect(service.historyCalls, 1);
+    service.pending = Completer<List<MarketplaceAvailableJob>>();
+    notify();
+    await tester.pump();
+    expect(marketplaceJobPushPending.value, isTrue);
+    expect(service.availableCalls, 2);
+    notify();
+    notify();
+    await tester.pump();
+    expect(service.availableCalls, 2);
+    service.failAvailable = true;
+    service.pending!.complete([offer]);
+    await pumpJobs(tester);
+    expect(service.availableCalls, 3);
+    expect(service.historyCalls, 1);
+    expect(marketplaceJobPushPending.value, isFalse);
+    expect(find.text('Aceptar trabajo'), findsNothing);
+    expect(find.textContaining('No pudimos actualizar los trabajos'),
+        findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    final calls = service.availableCalls;
+    notify();
+    await tester.pump();
+    expect(service.availableCalls, calls);
+  });
 
   testWidgets(
-    'resume rechecks offers and acceptance shows insufficient balance',
-    (tester) async {
-      await open(tester);
-      for (final state in [
-        AppLifecycleState.inactive,
-        AppLifecycleState.hidden,
-        AppLifecycleState.paused,
-        AppLifecycleState.hidden,
-        AppLifecycleState.inactive,
-        AppLifecycleState.resumed,
-      ]) {
-        tester.binding.handleAppLifecycleStateChanged(state);
-      }
-      await pumpJobs(tester);
-      expect(service.availableCalls, 2);
-      expect(service.historyCalls, 1);
-      await tester.ensureVisible(find.text('Aceptar trabajo'));
-      await tester.tap(find.text('Aceptar trabajo'));
-      await pumpJobs(tester);
-      expect(
+      'resume rechecks offers and acceptance shows insufficient balance',
+      (tester) async {
+    await open(tester);
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await pumpJobs(tester);
+    expect(service.availableCalls, 2);
+    expect(service.historyCalls, 1);
+    await tester.ensureVisible(find.text('Aceptar trabajo'));
+    await tester.tap(find.text('Aceptar trabajo'));
+    await pumpJobs(tester);
+    expect(
         find.text(
-          'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.',
-        ),
-        findsOneWidget,
-      );
-    },
-  );
+            'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.'),
+        findsOneWidget);
+  });
 
   testWidgets(
-    'unverified active jobs clear offers without querying availability',
-    (tester) async {
-      await open(tester);
-      service.failActive = true;
-      notify();
-      await pumpJobs(tester);
-      expect(service.availableCalls, 1);
-      expect(marketplaceJobPushPending.value, isFalse);
-      expect(find.text('Aceptar trabajo'), findsNothing);
-    },
-  );
+      'unverified active jobs clear offers without querying availability',
+      (tester) async {
+    await open(tester);
+    service.failActive = true;
+    notify();
+    await pumpJobs(tester);
+    expect(service.availableCalls, 1);
+    expect(marketplaceJobPushPending.value, isFalse);
+    expect(find.text('Aceptar trabajo'), findsNothing);
+  });
 
-  testWidgets('resting vehicle remains ineligible after a push', (
-    tester,
-  ) async {
+  testWidgets('resting vehicle remains ineligible after a push',
+      (tester) async {
     service.acceptingJobs = false;
     await open(tester);
     notify();
@@ -330,36 +307,23 @@ void main() {
     expect(find.text('Tu historial está vacío'), findsOneWidget);
   });
 
-  testWidgets('hidden Jobs refreshes without building maps or navigating', (
-    tester,
-  ) async {
-    service.active = [
-      MarketplaceJob.fromMap({
-        'job_id': offer.id,
-        'status': 'accepted',
-        'next_driver_action': 'start_en_route',
-        'origin_lat': 23.1,
-        'origin_lon': -82.4,
-        'destination_lat': 23.2,
-        'destination_lon': -82.5,
-      }),
-    ];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Stack(
-            children: [
-              MarketplaceJobsScreen(
-                store: _Store(),
-                service: service,
-                isVisible: false,
-              ),
-              const Text('Otra sección'),
-            ],
-          ),
-        ),
+  testWidgets('hidden Jobs refreshes without building maps or navigating',
+      (tester) async {
+    service.active = [MarketplaceJob.fromMap({
+      'job_id': offer.id,
+      'status': 'accepted',
+      'next_driver_action': 'start_en_route',
+      'origin_lat': 23.1,
+      'origin_lon': -82.4,
+      'destination_lat': 23.2,
+      'destination_lon': -82.5,
+    })];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Stack(children: [
+      MarketplaceJobsScreen(
+        store: _Store(), service: service, isVisible: false,
       ),
-    );
+      const Text('Otra sección'),
+    ]))));
     await pumpJobs(tester);
     notify();
     await pumpJobs(tester);
