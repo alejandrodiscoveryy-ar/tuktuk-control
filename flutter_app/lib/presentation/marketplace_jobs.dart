@@ -465,9 +465,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         distanceFilter: 10,
         intervalDuration: const Duration(seconds: 15),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'TUKTUK Â· servicio activo',
+          notificationTitle: 'TUKTUK · servicio activo',
           notificationText:
-              'Compartiendo tu ubicaciÃ³n durante el servicio en curso.',
+              'Compartiendo tu ubicación durante el servicio en curso.',
           notificationChannelName: 'Servicio activo TUKTUK',
           enableWakeLock: true,
           setOngoing: true,
@@ -548,7 +548,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _lastOperationalSentAt = nowUtc;
       }
     } catch (_) {
-      // El stream permanece vivo y vuelve a intentar con la siguiente posiciÃ³n.
+      // El stream permanece vivo y vuelve a intentar con la siguiente posición.
     } finally {
       _activeOperationalLocationPublishInFlight = false;
     }
