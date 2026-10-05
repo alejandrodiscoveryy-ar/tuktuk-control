@@ -61,7 +61,6 @@ class _MarketplaceOnboardingScreenState
 
   final _name = TextEditingController();
   final _phone = TextEditingController();
-  final _vehicleName = TextEditingController();
   final _registration = TextEditingController();
   final _brand = TextEditingController();
   final _model = TextEditingController();
@@ -172,7 +171,6 @@ class _MarketplaceOnboardingScreenState
   void dispose() {
     _name.dispose();
     _phone.dispose();
-    _vehicleName.dispose();
     _registration.dispose();
     _brand.dispose();
     _model.dispose();
@@ -432,7 +430,6 @@ class _MarketplaceOnboardingScreenState
     _selectedCategory = vehicle?.categoryCode;
     _selectedPropulsion = vehicle?.propulsionCode;
 
-    _vehicleName.text = vehicle?.name ?? '';
     _registration.text = vehicle?.registration ?? '';
     _brand.text = vehicle?.brand ?? '';
     _model.text = vehicle?.model ?? '';
@@ -815,49 +812,15 @@ class _MarketplaceOnboardingScreenState
   Future<void> _createVehicle() async {
     if (!_canEdit || _data == null) return;
 
-    // Keep the same name/key when retrying after a lost network response.
-    String? name = _vehicleCreateName;
-    if (name == null) {
-      // Use a route-local value instead of disposing a controller during
-      // the dialog's closing animation.
-      String enteredName = '';
-      name = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Añadir vehículo'),
-          content: TextField(
-            onChanged: (value) => enteredName = value,
-            autofocus: true,
-            maxLength: 80,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Nombre para identificarlo',
-              hintText: 'Mi triciclo',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(enteredName.trim()),
-              child: const Text('Crear borrador'),
-            ),
-          ],
-        ),
-      );
-    }
-    if (!mounted || name == null) return;
-    if (name.length < 2 || name.length > 80) {
-      toast(context, 'Escribe un nombre de 2 a 80 caracteres.');
-      return;
-    }
-
+    // El usuario no necesita inventar un nombre para el vehículo.
+    // El borrador usa un nombre técnico temporal y al guardar se reemplaza
+    // automáticamente por Marca + Modelo.
+    const draftName = 'Vehículo nuevo';
+    final name = _vehicleCreateName ?? draftName;
     final key = _vehicleCreateKey ?? _marketplaceUuidV4();
     _vehicleCreateKey = key;
     _vehicleCreateName = name;
+
     setState(() => _saving = true);
     try {
       final result = await _service.createVehicle(
@@ -888,7 +851,7 @@ class _MarketplaceOnboardingScreenState
       });
       await _loadAccess(showSpinner: false);
       if (mounted) {
-        toast(context, 'Vehículo creado. Completa los datos y añade su foto.');
+        toast(context, 'Vehículo añadido. Completa sus datos y añade la foto.');
       }
     } catch (_) {
       if (mounted) {
@@ -921,13 +884,22 @@ class _MarketplaceOnboardingScreenState
       return;
     }
 
-    final vehicleName = _vehicleName.text.trim();
+    final brand = _brand.text.trim();
+    final model = _model.text.trim();
     final registration = _registration.text.trim();
-    if (vehicleName.length < 2 || vehicleName.length > 80) {
-      toast(
-        context,
-        'El nombre del vehículo debe tener entre 2 y 80 caracteres.',
-      );
+
+    if (brand.isEmpty) {
+      toast(context, 'Escribe la marca del vehículo.');
+      return;
+    }
+    if (model.isEmpty) {
+      toast(context, 'Escribe el modelo del vehículo.');
+      return;
+    }
+
+    final vehicleName = '$brand $model'.trim();
+    if (vehicleName.length > 80) {
+      toast(context, 'Marca y modelo juntos no pueden superar 80 caracteres.');
       return;
     }
     if (registration.length > 32) {
@@ -994,10 +966,8 @@ class _MarketplaceOnboardingScreenState
           'target_propulsion_code': propulsion,
           'target_category_other_description':
               category == 'other' ? _otherCategory.text.trim() : null,
-          'target_brand':
-              _brand.text.trim().isEmpty ? null : _brand.text.trim(),
-          'target_model':
-              _model.text.trim().isEmpty ? null : _model.text.trim(),
+          'target_brand': brand,
+          'target_model': model,
           'target_year': year,
           'target_passenger_capacity': passengers,
           'target_cargo_capacity_kg': cargoKg,
@@ -1795,6 +1765,12 @@ class _MarketplaceOnboardingScreenState
                         ),
                       );
 
+                      final showPassengerCapacity =
+                          _selectedServices.contains('passenger') ||
+                          _selectedServices.contains('tourism');
+                      final showCargoCapacity =
+                          _selectedServices.contains('cargo');
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -1807,9 +1783,21 @@ class _MarketplaceOnboardingScreenState
                                 return DropdownMenuItem<String>(
                                   value: item.id,
                                   child: Text(
-                                    item.name?.trim().isNotEmpty == true
-                                        ? item.name!
-                                        : item.id,
+                                    [
+                                      if (item.brand?.trim().isNotEmpty == true)
+                                        item.brand!.trim(),
+                                      if (item.model?.trim().isNotEmpty == true)
+                                        item.model!.trim(),
+                                    ].join(' ').trim().isNotEmpty
+                                        ? [
+                                            if (item.brand?.trim().isNotEmpty ==
+                                                true)
+                                              item.brand!.trim(),
+                                            if (item.model?.trim().isNotEmpty ==
+                                                true)
+                                              item.model!.trim(),
+                                          ].join(' ')
+                                        : 'Vehículo sin completar',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -1859,48 +1847,6 @@ class _MarketplaceOnboardingScreenState
                           const SizedBox(height: gap),
                           pair(
                             edit(
-                              label: 'Nombre del vehículo',
-                              icon: Icons.edit_outlined,
-                              controller: _vehicleName,
-                              maxLength: 80,
-                            ),
-                            edit(
-                              label: 'Chapa (opcional)',
-                              icon: Icons.credit_card_outlined,
-                              controller: _registration,
-                              maxLength: 32,
-                            ),
-                          ),
-                          const SizedBox(height: gap),
-                          pair(
-                            selector(
-                              label: 'Propulsión',
-                              icon: Icons.bolt_outlined,
-                              value: _validCatalogValue(
-                                _selectedPropulsion,
-                                data.propulsionTypes,
-                              ),
-                              items: data.propulsionTypes.map((item) {
-                                return DropdownMenuItem<String>(
-                                  value: item.code,
-                                  child: Text(item.name),
-                                );
-                              }).toList(),
-                              onChanged: _canEdit
-                                  ? (value) => setState(
-                                        () => _selectedPropulsion = value,
-                                      )
-                                  : null,
-                            ),
-                            edit(
-                              label: 'Tipo de carrocería',
-                              icon: Icons.widgets_outlined,
-                              controller: _bodyType,
-                            ),
-                          ),
-                          const SizedBox(height: gap),
-                          pair(
-                            edit(
                               label: 'Marca',
                               icon: Icons.sell_outlined,
                               controller: _brand,
@@ -1912,70 +1858,98 @@ class _MarketplaceOnboardingScreenState
                             ),
                           ),
                           const SizedBox(height: gap),
-                          if (constraints.maxWidth >= 290)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: edit(
-                                    label: 'Año',
-                                    icon: Icons.calendar_today_outlined,
-                                    controller: _year,
-                                    keyboardType: TextInputType.number,
+                          selector(
+                            label: 'Propulsión',
+                            icon: Icons.bolt_outlined,
+                            value: _validCatalogValue(
+                              _selectedPropulsion,
+                              data.propulsionTypes,
+                            ),
+                            items: data.propulsionTypes.map((item) {
+                              return DropdownMenuItem<String>(
+                                value: item.code,
+                                child: Text(item.name),
+                              );
+                            }).toList(),
+                            onChanged: _canEdit
+                                ? (value) => setState(
+                                      () => _selectedPropulsion = value,
+                                    )
+                                : null,
+                          ),
+                          const SizedBox(height: gap),
+                          services,
+                          if (showPassengerCapacity ||
+                              showCargoCapacity) ...[
+                            const SizedBox(height: gap),
+                            if (showPassengerCapacity && showCargoCapacity)
+                              pair(
+                                edit(
+                                  label: 'Pasajeros',
+                                  icon: Icons.people_outline,
+                                  controller: _passengers,
+                                  keyboardType: TextInputType.number,
+                                ),
+                                edit(
+                                  label: 'Carga (kg)',
+                                  icon: Icons.scale_outlined,
+                                  controller: _cargoKg,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                    decimal: true,
                                   ),
                                 ),
-                                const SizedBox(width: horizontalGap),
-                                Expanded(
-                                  child: edit(
-                                    label: 'Pasajeros',
-                                    icon: Icons.people_outline,
-                                    controller: _passengers,
-                                    keyboardType: TextInputType.number,
-                                  ),
-                                ),
-                                const SizedBox(width: horizontalGap),
-                                Expanded(
-                                  child: edit(
-                                    label: 'Carga (kg)',
-                                    icon: Icons.scale_outlined,
-                                    controller: _cargoKg,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          else ...[
-                            pair(
-                              edit(
-                                label: 'Año',
-                                icon: Icons.calendar_today_outlined,
-                                controller: _year,
-                                keyboardType: TextInputType.number,
-                              ),
+                              )
+                            else if (showPassengerCapacity)
                               edit(
                                 label: 'Pasajeros',
                                 icon: Icons.people_outline,
                                 controller: _passengers,
                                 keyboardType: TextInputType.number,
+                              )
+                            else
+                              edit(
+                                label: 'Carga (kg)',
+                                icon: Icons.scale_outlined,
+                                controller: _cargoKg,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: gap),
-                            edit(
-                              label: 'Carga (kg)',
-                              icon: Icons.scale_outlined,
-                              controller: _cargoKg,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                            ),
                           ],
-                          const SizedBox(height: gap),
-                          services,
                           const SizedBox(height: 4),
+                          ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            childrenPadding: const EdgeInsets.only(bottom: 4),
+                            title: const Text(
+                              'Más datos del vehículo (opcional)',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: const Text('Chapa, año y carrocería'),
+                            children: [
+                              pair(
+                                edit(
+                                  label: 'Chapa (opcional)',
+                                  icon: Icons.credit_card_outlined,
+                                  controller: _registration,
+                                  maxLength: 32,
+                                ),
+                                edit(
+                                  label: 'Año',
+                                  icon: Icons.calendar_today_outlined,
+                                  controller: _year,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(height: gap),
+                              edit(
+                                label: 'Tipo de carrocería',
+                                icon: Icons.widgets_outlined,
+                                controller: _bodyType,
+                              ),
+                            ],
+                          ),
                         ],
                       );
                     },

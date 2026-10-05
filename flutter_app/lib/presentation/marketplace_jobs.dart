@@ -2369,7 +2369,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     // ya autorizó ubicación, el muestreo operativo puede continuar únicamente
     // mientras la app esté en primer plano; nunca se solicita permiso oculto.
     if (!widget.isVisible) return const SizedBox.shrink();
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading && _onboarding == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     final onboarding = _onboarding;
     if (onboarding == null) return _buildAvailableTab(context);
     if (_marketplaceDriverNeedsSetup(onboarding)) {

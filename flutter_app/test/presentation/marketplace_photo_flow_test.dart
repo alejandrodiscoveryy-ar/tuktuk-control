@@ -7,6 +7,7 @@ void main() {
   late String service;
   late String recordStore;
   late String edge;
+  late String jobs;
 
   setUpAll(() {
     onboarding =
@@ -16,6 +17,7 @@ void main() {
     edge = File(
       'supabase/functions/marketplace-driver-google-avatar/index.ts',
     ).readAsStringSync();
+    jobs = File('lib/presentation/marketplace_jobs.dart').readAsStringSync();
   });
 
   test('manual and saved Marketplace photos have priority over Google', () {
@@ -86,5 +88,30 @@ void main() {
     expect(onboarding, contains('Se subirá al pulsar Guardar vehículo.'));
     expect(onboarding, contains('MarketplacePhotoException'));
     expect(onboarding, contains('StorageException'));
+  });
+  test('Trabajos keeps onboarding mounted while the photo picker returns', () {
+    expect(
+      jobs,
+      contains('if (_loading && _onboarding == null)'),
+    );
+  });
+
+  test('vehicle onboarding is compact and uses brand/model identity', () {
+    expect(onboarding, isNot(contains("label: 'Nombre del vehículo'")));
+    expect(
+      onboarding,
+      isNot(contains("labelText: 'Nombre para identificarlo'")),
+    );
+    expect(onboarding, contains("const draftName = 'Vehículo nuevo';"));
+    expect(
+      onboarding,
+      contains(r"final vehicleName = '$brand $model'.trim();"),
+    );
+    expect(
+      onboarding,
+      contains("'Más datos del vehículo (opcional)'"),
+    );
+    expect(onboarding, contains('final showPassengerCapacity ='));
+    expect(onboarding, contains('final showCargoCapacity ='));
   });
 }
