@@ -75,28 +75,28 @@ void main() {
         MarketplaceOperationalLocationPolicy.failureRetryDelay(
           activeService: true,
         ),
-        const Duration(seconds: 60),
+        const Duration(seconds: 30),
       );
     });
 
-    test('aumenta precision solo durante servicio activo', () {
+    test('usa seguimiento mas frecuente durante servicio activo', () {
       expect(
         MarketplaceOperationalLocationPolicy.sampleInterval(
           activeService: true,
         ),
-        const Duration(seconds: 30),
+        const Duration(seconds: 15),
       );
       expect(
         MarketplaceOperationalLocationPolicy.heartbeatInterval(
           activeService: true,
         ),
-        const Duration(seconds: 75),
+        const Duration(seconds: 30),
       );
       expect(
         MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
           activeService: true,
         ),
-        50,
+        15,
       );
     });
   });
