@@ -8,7 +8,7 @@ void main() {
   setUpAll(() {
     migration = File(
       'supabase/migrations/'
-      '20261005003500_tuktuk_2_0_driver_topups_api.sql',
+      '20261005093553_tuktuk_2_0_driver_topups_api.sql',
     ).readAsStringSync();
   });
 

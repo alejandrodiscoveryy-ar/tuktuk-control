@@ -330,6 +330,72 @@ class MarketplaceTrial {
   );
 }
 
+class MarketplacePaymentMethod {
+  const MarketplacePaymentMethod({
+    required this.code,
+    required this.name,
+    required this.confirmationMode,
+    required this.requiresReference,
+    required this.sortOrder,
+  });
+
+  final String code;
+  final String name;
+  final String confirmationMode;
+  final bool requiresReference;
+  final int sortOrder;
+
+  factory MarketplacePaymentMethod.fromMap(Map map) => MarketplacePaymentMethod(
+        code: _marketText(map['code']) ?? '',
+        name: _marketText(map['name']) ?? '',
+        confirmationMode: _marketText(map['confirmation_mode']) ?? '',
+        requiresReference: _marketBool(map['requires_reference']),
+        sortOrder: _marketInt(map['sort_order']),
+      );
+}
+
+class MarketplaceTopup {
+  const MarketplaceTopup({
+    required this.id,
+    required this.amount,
+    required this.currency,
+    required this.status,
+    required this.method,
+    this.methodName,
+    this.reference,
+    this.requestedAt,
+    this.confirmedAt,
+    this.rejectedAt,
+    this.rejectionReason,
+  });
+
+  final String id;
+  final double amount;
+  final String currency;
+  final String status;
+  final String method;
+  final String? methodName;
+  final String? reference;
+  final DateTime? requestedAt;
+  final DateTime? confirmedAt;
+  final DateTime? rejectedAt;
+  final String? rejectionReason;
+
+  factory MarketplaceTopup.fromMap(Map map) => MarketplaceTopup(
+    id: _marketText(map['topup_id'] ?? map['id']) ?? '',
+        amount: _marketNumber(map['amount']),
+        currency: _marketText(map['currency']) ?? 'CUP',
+        status: _marketText(map['status']) ?? 'unknown',
+        method: _marketText(map['method']) ?? '',
+        methodName: _marketText(map['method_name']),
+        reference: _marketText(map['reference']),
+        requestedAt: _marketDate(map['requested_at']),
+        confirmedAt: _marketDate(map['confirmed_at']),
+        rejectedAt: _marketDate(map['rejected_at']),
+        rejectionReason: _marketText(map['rejection_reason']),
+      );
+}
+
 class MarketplaceWallet {
   const MarketplaceWallet({
     required this.currency,
@@ -1082,6 +1148,37 @@ class MarketplaceService {
 
   Future<MarketplaceWallet> wallet() =>
       _one('get_my_marketplace_wallet').then(MarketplaceWallet.fromMap);
+
+  Future<List<MarketplacePaymentMethod>> paymentMethods() =>
+      _list('list_my_marketplace_payment_methods').then(
+        (items) => items.map(MarketplacePaymentMethod.fromMap).toList()
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+      );
+
+  Future<List<MarketplaceTopup>> topups({
+    int limit = 50,
+    DateTime? beforeRequestedAt,
+    String? beforeTopupId,
+  }) =>
+      _list('list_my_marketplace_topups', {
+        'target_limit': limit,
+        'target_before_requested_at':
+            beforeRequestedAt?.toUtc().toIso8601String(),
+        'target_before_topup_id': beforeTopupId,
+      }).then((items) => items.map(MarketplaceTopup.fromMap).toList());
+
+  Future<MarketplaceTopup> requestTopup({
+    required double amount,
+    required String method,
+    String? reference,
+    required String idempotencyKey,
+  }) =>
+      _one('request_my_marketplace_topup', {
+        'target_amount': amount,
+        'target_method': method,
+        'target_reference': reference,
+        'target_request_idempotency_key': idempotencyKey,
+      }).then(MarketplaceTopup.fromMap);
 
   Future<List<MarketplaceAvailableJob>> available(String vehicleId) => _list(
     'list_my_marketplace_available_jobs',

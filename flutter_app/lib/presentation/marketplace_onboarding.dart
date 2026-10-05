@@ -33,6 +33,251 @@ String _marketplacePercentLabel(double rate) {
   return '${percent.toStringAsFixed(decimals)}%';
 }
 
+String marketplaceTopupStatusLabel(String status) => switch (status) {
+      'requested' => 'Pendiente',
+      'confirmed' || 'reconciled' => 'Confirmada',
+      'rejected' => 'Rechazada',
+      _ => 'Estado no disponible',
+    };
+
+String marketplaceTopupErrorMessage(Object error) {
+  final code = error is PostgrestException ? error.message : '';
+  return switch (code) {
+    'TOPUP_AMOUNT_MUST_BE_POSITIVE' => 'Introduce un importe mayor que cero.',
+    'INVALID_TOPUP_METHOD' =>
+      'Ese método de pago ya no está disponible. Actualiza e inténtalo nuevamente.',
+    'TOPUP_REFERENCE_REQUIRED' =>
+      'Debes indicar la referencia de esta operación.',
+    'AUTHENTICATION_REQUIRED' =>
+      'Tu sesión venció. Inicia sesión nuevamente para solicitar una recarga.',
+    'PROFILE_NOT_FOUND' =>
+      'Tu perfil no está disponible. Revisa tu perfil e inténtalo nuevamente.',
+    _ => 'No pudimos enviar la solicitud de recarga. Inténtalo nuevamente.',
+  };
+}
+
+class MarketplaceTopupHistory extends StatelessWidget {
+  const MarketplaceTopupHistory({required this.topups, super.key});
+  final List<MarketplaceTopup> topups;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (topups.isEmpty) const Text('Aún no tienes recargas.'),
+          for (final topup in topups)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_marketplaceMoneyLabel(topup.amount, topup.currency),
+                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(topup.methodName ?? 'Método no disponible'),
+                  Text(_marketplaceDateTimeLabel(topup.requestedAt)),
+                  if (topup.reference != null)
+                    Text('Referencia: ${topup.reference}'),
+                  Text(marketplaceTopupStatusLabel(topup.status)),
+                  if (topup.status == 'rejected' &&
+                      topup.rejectionReason != null)
+                    Text('Motivo: ${topup.rejectionReason}'),
+                ],
+              ),
+            ),
+        ],
+      );
+}
+
+class MarketplaceTopupForm extends StatefulWidget {
+  const MarketplaceTopupForm({
+    required this.service,
+    this.requestKeys,
+    super.key,
+  });
+
+  final MarketplaceService service;
+  // The wallet keeps uncertain submissions in memory across modal reopenings.
+  // Nothing is queued offline or persisted to Hive.
+  final Map<String, String>? requestKeys;
+
+  @override
+  State<MarketplaceTopupForm> createState() => _MarketplaceTopupFormState();
+}
+
+class _MarketplaceTopupFormState extends State<MarketplaceTopupForm> {
+  final _form = GlobalKey<FormState>();
+  final _amount = TextEditingController();
+  final _reference = TextEditingController();
+  late final Map<String, String> _requestKeys = widget.requestKeys ?? {};
+  List<MarketplacePaymentMethod> _methods = const [];
+  MarketplacePaymentMethod? _method;
+  bool _loading = true;
+  bool _sending = false;
+  String? _loadError;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadMethods());
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _reference.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMethods() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+      _method = null;
+    });
+    try {
+      final methods = await widget.service.paymentMethods();
+      if (!mounted) return;
+      setState(() => _methods = methods);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadError =
+          'No pudimos cargar los métodos de pago. Revisa tu conexión y actualiza.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_sending || _loading || !_form.currentState!.validate()) return;
+    final amount = _marketplaceOptionalNumber(_amount.text)!;
+    final method = _method!;
+    final reference = method.requiresReference ? _reference.text.trim() : null;
+    final fingerprint = jsonEncode([amount, method.code, reference]);
+    final key = _requestKeys.putIfAbsent(fingerprint, _marketplaceUuidV4);
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await widget.service.requestTopup(
+        amount: amount,
+        method: method.code,
+        reference: reference,
+        idempotencyKey: key,
+      );
+      _requestKeys.remove(fingerprint);
+      if (!mounted) return;
+      setState(() => _sending = false);
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = marketplaceTopupErrorMessage(error);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: !_sending,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+          child: Form(
+            key: _form,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Recargar saldo',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _amount,
+                  enabled: !_sending,
+                  decoration:
+                      const InputDecoration(labelText: 'Importe en CUP'),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) {
+                    final amount = _marketplaceOptionalNumber(value ?? '');
+                    return amount == null || !amount.isFinite || amount <= 0
+                        ? 'Introduce un importe mayor que cero.'
+                        : null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                if (_loading)
+                  const LinearProgressIndicator()
+                else if (_loadError != null)
+                  Text(_loadError!)
+                else if (_methods.isEmpty)
+                  const Text('No hay métodos de pago disponibles.')
+                else
+                  DropdownButtonFormField<MarketplacePaymentMethod>(
+                    key: ValueKey(_methods),
+                    initialValue: _method,
+                    isExpanded: true,
+                    decoration:
+                        const InputDecoration(labelText: 'Método de pago'),
+                    items: _methods
+                        .map((method) => DropdownMenuItem(
+                            value: method, child: Text(method.name)))
+                        .toList(),
+                    onChanged: _sending
+                        ? null
+                        : (value) => setState(() => _method = value),
+                    validator: (value) =>
+                        value == null ? 'Selecciona un método de pago.' : null,
+                  ),
+                TextButton.icon(
+                  onPressed: _loading || _sending ? null : _loadMethods,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Actualizar métodos'),
+                ),
+                if (_method?.requiresReference == true)
+                  TextFormField(
+                    controller: _reference,
+                    enabled: !_sending,
+                    decoration: const InputDecoration(labelText: 'Referencia'),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Debes indicar la referencia de esta operación.'
+                        : null,
+                  ),
+                const SizedBox(height: 16),
+                const Text(
+                    'La solicitud quedará pendiente hasta que sea confirmada. El saldo de tu billetera no cambia hasta esa confirmación.'),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                ],
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _sending ||
+                          _loading ||
+                          _loadError != null ||
+                          _methods.isEmpty
+                      ? null
+                      : _submit,
+                  child: Text(_sending ? 'Enviando…' : 'Solicitar recarga'),
+                ),
+                TextButton(
+                  onPressed:
+                      _sending ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
 class MarketplaceOnboardingScreen extends StatefulWidget {
   const MarketplaceOnboardingScreen({
     required this.store,
@@ -99,6 +344,11 @@ class _MarketplaceOnboardingScreenState
   MarketplaceWallet? _wallet;
   bool _walletLoading = false;
   String? _walletError;
+  List<MarketplaceTopup> _topups = const [];
+  bool _topupsLoading = false;
+  String? _topupsError;
+  bool _topupFormOpen = false;
+  final Map<String, String> _topupRequestKeys = {};
 
   String? get _marketplacePreviewState {
     if (!kIsWeb) return null;
@@ -360,6 +610,9 @@ class _MarketplaceOnboardingScreenState
         _accessError = null;
       });
 
+      if (widget.managementSection == MarketplaceManagementSection.wallet) {
+        await _loadWallet();
+      }
       return;
     }
     if (widget.store.user == null) {
@@ -387,7 +640,7 @@ class _MarketplaceOnboardingScreenState
 
       if (!widget.driverOnly) await _loadAccess();
       if (widget.managementSection == MarketplaceManagementSection.wallet) {
-        await _loadWallet();
+        await Future.wait([_loadWallet(), _loadTopups()]);
       }
     } catch (_) {
       if (!mounted) return;
@@ -1146,6 +1399,51 @@ class _MarketplaceOnboardingScreenState
     );
   }
 
+  Future<void> _loadTopups() async {
+    if (!mounted || _topupsLoading || _localPreview) return;
+    setState(() {
+      _topupsLoading = true;
+      _topupsError = null;
+    });
+    try {
+      final items = await _service.topups();
+      if (!mounted) return;
+      setState(() => _topups = items);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _topupsError =
+            'No pudimos consultar las recargas. Revisa tu conexión e inténtalo nuevamente.';
+      });
+    } finally {
+      if (mounted) setState(() => _topupsLoading = false);
+    }
+  }
+
+  Future<void> _requestTopup() async {
+    if (_topupFormOpen || _localPreview) return;
+    setState(() => _topupFormOpen = true);
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      useSafeArea: true,
+      builder: (_) => MarketplaceTopupForm(
+        service: _service,
+        requestKeys: _topupRequestKeys,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _topupFormOpen = false);
+    if (sent != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text(
+          'Solicitud de recarga enviada. Queda pendiente de confirmación.'),
+    ));
+    await Future.wait([_loadWallet(), _loadTopups()]);
+  }
+
   Widget _buildWalletCard(BuildContext context) {
     final wallet = _wallet;
     final access = _access;
@@ -1172,6 +1470,13 @@ class _MarketplaceOnboardingScreenState
             'la promoción inicial ya terminó. Control y Estadísticas siguen '
             'disponibles independientemente de este saldo.',
             style: TextStyle(color: appMutedColor(context), height: 1.35),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _topupFormOpen || _topupsLoading || _localPreview
+                ? null : _requestTopup,
+            icon: const Icon(Icons.add_card),
+            label: const Text('Recargar saldo'),
           ),
           const SizedBox(height: 14),
           if (_walletLoading)
@@ -1422,8 +1727,32 @@ class _MarketplaceOnboardingScreenState
               const SizedBox(height: 12),
             ],
             _buildAccessCard(context, vehicle),
-          ] else
+          ] else ...[
             _buildWalletCard(context),
+            const SizedBox(height: 16),
+            GlassCard(
+                child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Historial de recargas',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                TextButton.icon(
+                  onPressed: _topupsLoading || _walletLoading || _localPreview
+                      ? null
+                      : () async {
+                          await Future.wait([_loadWallet(), _loadTopups()]);
+                        },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Actualizar'),
+                ),
+                if (_topupsLoading) const LinearProgressIndicator(),
+                if (_topupsError != null) Text(_topupsError!),
+                if (!_topupsLoading && _topupsError == null)
+                  MarketplaceTopupHistory(topups: _topups),
+              ],
+            )),
+          ],
         ],
       );
     }
