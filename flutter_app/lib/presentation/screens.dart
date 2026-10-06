@@ -3029,7 +3029,7 @@ class _ReferralCard extends StatelessWidget {
             : program.isWalletReward
             ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido'
             : 'Gana ${program.rewardDays} días por cada referido',
-        style: TextStyle(
+        style: const TextStyle(
           color: _referralAccent,
           fontWeight: FontWeight.w800,
         ),
@@ -3247,7 +3247,7 @@ class _ReferralEntryTile extends StatelessWidget {
       rewardState,
     ].join(' · ');
     final imageUrl = entry.avatarUrl;
-    final fallbackIcon = Icon(
+    final fallbackIcon = const Icon(
       Icons.person_outline,
       color: _referralAccent,
     );
@@ -3308,7 +3308,7 @@ class _ReferralEntryTile extends StatelessWidget {
             children: [
               Text(
                 rewarded ? '+$rewardLabel' : 'Pendiente',
-                style: TextStyle(
+                style: const TextStyle(
                   color: _referralAccent,
                   fontWeight: FontWeight.w900,
                   fontSize: 12,
@@ -3320,7 +3320,7 @@ class _ReferralEntryTile extends StatelessWidget {
                     : (rewarded
                           ? 'Saldo promocional'
                           : 'Primer trabajo válido'),
-                style: TextStyle(
+                style: const TextStyle(
                   color: _referralAccent,
                   fontWeight: FontWeight.w800,
                   fontSize: 11,
@@ -3362,7 +3362,7 @@ class _ReferralMetric extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 color: _referralAccent,
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
