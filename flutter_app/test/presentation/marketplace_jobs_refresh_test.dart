@@ -228,7 +228,7 @@ void main() {
     await open(tester);
 
     expect(find.text('Descansando'), findsOneWidget);
-    expect(find.text('No recibirás nuevos trabajos'), findsOneWidget);
+    expect(find.text('No estás recibiendo solicitudes'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('marketplace-availability-switch')),
       findsOneWidget,

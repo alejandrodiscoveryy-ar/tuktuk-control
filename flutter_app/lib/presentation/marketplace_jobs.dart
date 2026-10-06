@@ -2085,13 +2085,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         : selectedVehicle.id;
 
     final restingColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF95A4B8)
-        : const Color(0xFF56677C);
+        ? const Color(0xFFFF6B3D)
+        : const Color(0xFFD94A24);
     final statusColor = acceptingJobs ? appPrimaryColor(context) : restingColor;
     final statusTitle = acceptingJobs ? 'En servicio' : 'Descansando';
     final statusMessage = acceptingJobs
         ? 'Recibiendo nuevas solicitudes'
-        : 'No recibirás nuevos trabajos';
+        : 'No estás recibiendo solicitudes';
     final statusIcon =
         acceptingJobs ? Icons.wifi_tethering_rounded : Icons.pause_rounded;
 
@@ -2150,21 +2150,44 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       ? 'Desactivar disponibilidad'
                       : 'Activar disponibilidad',
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: statusColor.withValues(alpha: 0.22),
-                      ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
                     ),
-                    child: Switch.adaptive(
-                      key: const ValueKey('marketplace-availability-switch'),
-                      value: acceptingJobs,
-                      onChanged: _updatingAvailability
-                          ? null
-                          : (value) {
-                              unawaited(_setAcceptingJobs(value));
-                            },
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(
+                        alpha: acceptingJobs ? 0.12 : 0.18,
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: statusColor.withValues(
+                          alpha: acceptingJobs ? 0.36 : 0.58,
+                        ),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: statusColor.withValues(
+                            alpha: acceptingJobs ? 0.12 : 0.24,
+                          ),
+                          blurRadius: acceptingJobs ? 10 : 16,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Transform.scale(
+                      scale: 1.18,
+                      child: Switch.adaptive(
+                        key: const ValueKey(
+                          'marketplace-availability-switch',
+                        ),
+                        value: acceptingJobs,
+                        onChanged: _updatingAvailability
+                            ? null
+                            : (value) {
+                                unawaited(_setAcceptingJobs(value));
+                              },
+                      ),
                     ),
                   ),
                 ),
@@ -2178,24 +2201,42 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: statusColor.withValues(alpha: 0.26)),
+                color: statusColor.withValues(
+                  alpha: acceptingJobs ? 0.11 : 0.16,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: statusColor.withValues(
+                    alpha: acceptingJobs ? 0.32 : 0.52,
+                  ),
+                  width: acceptingJobs ? 1 : 1.5,
+                ),
+                boxShadow: acceptingJobs
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: statusColor.withValues(alpha: 0.12),
+                          blurRadius: 18,
+                          spreadRadius: 1,
+                        ),
+                      ],
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.14),
+                      color: statusColor.withValues(
+                        alpha: acceptingJobs ? 0.15 : 0.22,
+                      ),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(statusIcon, size: 18, color: statusColor),
+                    child: Icon(statusIcon, size: 22, color: statusColor),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2207,7 +2248,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             key: ValueKey(statusTitle),
                             style: TextStyle(
                               color: statusColor,
-                              fontSize: 13,
+                              fontSize: 15,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
@@ -2216,9 +2257,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                         Text(
                           statusMessage,
                           style: TextStyle(
-                            color: appMutedColor(context),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            color: acceptingJobs
+                                ? appMutedColor(context)
+                                : statusColor.withValues(alpha: 0.92),
+                            fontSize: 12,
+                            fontWeight: acceptingJobs
+                                ? FontWeight.w600
+                                : FontWeight.w700,
                           ),
                         ),
                       ],
