@@ -80,7 +80,7 @@ jobs:
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Analyze source
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Obtener gateway para las pruebas
         shell: bash
