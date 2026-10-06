@@ -209,6 +209,12 @@ class MarketplaceOperationalLocationPolicy {
   static double distanceThresholdMeters({required bool activeService}) =>
       activeService ? activeDistanceMeters : availableDistanceMeters;
 
+  static bool shouldReadLastKnownPosition({
+    required bool activeService,
+    required bool isWeb,
+  }) =>
+      !activeService && !isWeb;
+
   static LocationAccuracy accuracy({required bool activeService}) =>
       activeService ? LocationAccuracy.high : LocationAccuracy.medium;
 }
@@ -693,7 +699,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }) async {
     final nowUtc = DateTime.now().toUtc();
 
-    if (!activeService) {
+    if (MarketplaceOperationalLocationPolicy.shouldReadLastKnownPosition(
+      activeService: activeService,
+      isWeb: kIsWeb,
+    )) {
       final cached = await Geolocator.getLastKnownPosition();
       if (cached != null && _cachedPositionUsable(cached, nowUtc)) {
         return cached;

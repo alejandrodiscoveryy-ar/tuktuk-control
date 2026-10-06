@@ -64,6 +64,29 @@ void main() {
       );
     });
 
+    test('en web usa posicion actual cuando el conductor esta disponible', () {
+      expect(
+        MarketplaceOperationalLocationPolicy.shouldReadLastKnownPosition(
+          activeService: false,
+          isWeb: true,
+        ),
+        isFalse,
+      );
+      expect(
+        MarketplaceOperationalLocationPolicy.shouldReadLastKnownPosition(
+          activeService: false,
+          isWeb: false,
+        ),
+        isTrue,
+      );
+      expect(
+        MarketplaceOperationalLocationPolicy.shouldReadLastKnownPosition(
+          activeService: true,
+          isWeb: false,
+        ),
+        isFalse,
+      );
+    });
     test('usa backoff ante fallos transitorios sin agotar bateria', () {
       expect(
         MarketplaceOperationalLocationPolicy.failureRetryDelay(
