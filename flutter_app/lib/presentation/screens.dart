@@ -2328,11 +2328,6 @@ class _StoreScreenState extends State<StoreScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          tr('Encuentra piezas, accesorios y servicios para tu vehículo.'),
-          style: TextStyle(color: appMutedColor(context), height: 1.4),
-        ),
-        const SizedBox(height: 16),
         SectionTitle(title: tr('Buscar en Revolico')),
         Row(
           children: [
