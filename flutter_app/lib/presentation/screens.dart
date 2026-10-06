@@ -2332,25 +2332,7 @@ class _StoreScreenState extends State<StoreScreen> {
           tr('Encuentra piezas, accesorios y servicios para tu vehículo.'),
           style: TextStyle(color: appMutedColor(context), height: 1.4),
         ),
-        const SizedBox(height: 14),
-        GlassCard(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.open_in_new_rounded, color: kTertiary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  tr(
-                    'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.',
-                  ),
-                  style: TextStyle(color: appMutedColor(context), height: 1.4),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         SectionTitle(title: tr('Buscar en Revolico')),
         Row(
           children: [
@@ -2866,6 +2848,8 @@ Future<void> _launchWhatsApp(
   }
 }
 
+const _referralAccent = Color(0xFF9A7BFF);
+
 class _ReferralCard extends StatelessWidget {
   const _ReferralCard({required this.store});
 
@@ -2881,24 +2865,24 @@ class _ReferralCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: dark
-              ? const [Color(0xFF102D2B), Color(0xFF0C201F)]
-              : const [Color(0xFFE5F7F2), Color(0xFFF2FBF8)],
+              ? const [Color(0xFF211A33), Color(0xFF171223)]
+              : const [Color(0xFFF1EDFF), Color(0xFFFAF8FF)],
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: dark ? const Color(0xFF2A7067) : const Color(0xFF75BEB0),
+          color: dark ? const Color(0xFF57458C) : const Color(0xFFB6A6EA),
         ),
         boxShadow: dark
             ? const [
                 BoxShadow(
-                  color: Color(0x2400CFA0),
+                  color: Color(0x269A7BFF),
                   blurRadius: 18,
                   offset: Offset(0, 8),
                 ),
               ]
             : const [
                 BoxShadow(
-                  color: Color(0x16006E60),
+                  color: Color(0x189A7BFF),
                   blurRadius: 14,
                   offset: Offset(0, 6),
                 ),
@@ -2914,19 +2898,17 @@ class _ReferralCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: dark
-                      ? const Color(0x332DD4A3)
-                      : const Color(0x292A9D83),
+                  color: _referralAccent.withValues(
+                    alpha: dark ? .20 : .14,
+                  ),
                   borderRadius: BorderRadius.circular(13),
                   border: Border.all(
-                    color: dark
-                        ? const Color(0x664ED9B5)
-                        : const Color(0x6675BEB0),
+                    color: _referralAccent.withValues(alpha: .42),
                   ),
                 ),
                 child: const Icon(
                   Icons.card_giftcard_rounded,
-                  color: Color(0xFF58E0BA),
+                  color: _referralAccent,
                   size: 24,
                 ),
               ),
@@ -2959,8 +2941,8 @@ class _ReferralCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: dark
-                            ? const Color(0xFF8DE5CE)
-                            : const Color(0xFF287C6C),
+                            ? const Color(0xFFC3B5FF)
+                            : const Color(0xFF6D55C8),
                         fontSize: 13,
                         height: 1.25,
                         fontWeight: FontWeight.w600,
@@ -3053,7 +3035,7 @@ class _ReferralCard extends StatelessWidget {
             ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido'
             : 'Gana ${program.rewardDays} días por cada referido',
         style: TextStyle(
-          color: appPrimaryColor(context),
+          color: _referralAccent,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -3069,11 +3051,21 @@ class _ReferralCard extends StatelessWidget {
           children: [
             OutlinedButton.icon(
               onPressed: () => _copyLink(context, link),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _referralAccent,
+                side: BorderSide(
+                  color: _referralAccent.withValues(alpha: .45),
+                ),
+              ),
               icon: const Icon(Icons.copy_rounded, size: 18),
               label: const Text('Copiar enlace'),
             ),
             FilledButton.tonalIcon(
               onPressed: () => _shareLink(context, link),
+              style: FilledButton.styleFrom(
+                backgroundColor: _referralAccent,
+                foregroundColor: Colors.white,
+              ),
               icon: const Icon(Icons.share_outlined, size: 18),
               label: const Text('Compartir'),
             ),
@@ -3159,6 +3151,7 @@ class _ReferralCard extends StatelessWidget {
           IconButton(
             tooltip: 'Actualizar',
             onPressed: store.refreshReferralsAndLicense,
+            color: _referralAccent,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -3261,7 +3254,7 @@ class _ReferralEntryTile extends StatelessWidget {
     final imageUrl = entry.avatarUrl;
     final fallbackIcon = Icon(
       Icons.person_outline,
-      color: appPrimaryColor(context),
+      color: _referralAccent,
     );
 
     return Container(
@@ -3278,7 +3271,7 @@ class _ReferralEntryTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: const Color(0x222DD4A3),
+            backgroundColor: _referralAccent.withValues(alpha: .14),
             child: imageUrl == null
                 ? fallbackIcon
                 : ClipOval(
@@ -3321,7 +3314,7 @@ class _ReferralEntryTile extends StatelessWidget {
               Text(
                 rewarded ? '+$rewardLabel' : 'Pendiente',
                 style: TextStyle(
-                  color: appPrimaryColor(context),
+                  color: _referralAccent,
                   fontWeight: FontWeight.w900,
                   fontSize: 12,
                 ),
@@ -3333,7 +3326,7 @@ class _ReferralEntryTile extends StatelessWidget {
                           ? 'Saldo promocional'
                           : 'Primer trabajo válido'),
                 style: TextStyle(
-                  color: appPrimaryColor(context),
+                  color: _referralAccent,
                   fontWeight: FontWeight.w800,
                   fontSize: 11,
                 ),
@@ -3375,7 +3368,7 @@ class _ReferralMetric extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: appPrimaryColor(context),
+                color: _referralAccent,
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
