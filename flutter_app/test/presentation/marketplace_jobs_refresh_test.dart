@@ -21,6 +21,14 @@ class _Store extends Fake implements RecordStore {
 
   @override
   VehicleProfile? get activeVehicle => null;
+
+  @override
+  Future<void> ensureMarketplaceJobIncome({
+    required String jobId,
+    required double amount,
+    double? distanceKm,
+    DateTime? completedAt,
+  }) async {}
 }
 
 class _JobsService extends MarketplaceService {
@@ -31,6 +39,7 @@ class _JobsService extends MarketplaceService {
   int atomicAcceptCalls = 0;
   int legacyAcceptCalls = 0;
   int advanceCalls = 0;
+  int finishCalls = 0;
   String? lastAdvanceAction;
   List<MarketplaceAvailableJob> availableJobs = [offer];
   bool failAvailable = false;
@@ -119,6 +128,20 @@ class _JobsService extends MarketplaceService {
     return MarketplaceJob.fromMap({
       'job_id': jobId,
       'status': 'en_route',
+      'final_price': 100,
+      'currency': 'CUP',
+    });
+  }
+
+  @override
+  Future<MarketplaceJob> finishJob(
+    String jobId,
+    String idempotencyKey,
+  ) async {
+    finishCalls++;
+    return MarketplaceJob.fromMap({
+      'job_id': jobId,
+      'status': 'settled',
       'final_price': 100,
       'currency': 'CUP',
     });
@@ -325,6 +348,33 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
+  });
+  testWidgets('ongoing ride finishes without intermediate steps',
+      (tester) async {
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'en_route',
+        'next_driver_action': 'mark_pickup',
+        'service_code': 'passenger',
+        'origin_text': 'Origen de prueba',
+        'destination_text': 'Destino de prueba',
+        'final_price': 100,
+        'currency': 'CUP',
+      }),
+    ];
+
+    await open(tester);
+
+    expect(find.text('Finalizar carrera'), findsOneWidget);
+    expect(find.text('Confirmar recogida'), findsNothing);
+
+    await tester.ensureVisible(find.text('Finalizar carrera'));
+    await tester.tap(find.text('Finalizar carrera'));
+    await pumpJobs(tester);
+
+    expect(service.finishCalls, 1);
+    expect(service.advanceCalls, 0);
   });
   testWidgets('advance button is unique below current status and above route',
       (tester) async {

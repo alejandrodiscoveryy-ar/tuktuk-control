@@ -177,6 +177,11 @@ String? _marketplaceJobActionLabel(String? action) {
   };
 }
 
+bool _marketplaceJobCanFinish(MarketplaceJob job) =>
+    job.status == 'en_route' ||
+    job.status == 'pickup' ||
+    job.status == 'in_progress';
+
 bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
   return job.status == 'accepted' ||
       job.status == 'en_route' ||
@@ -1510,37 +1515,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   Future<void> _advanceJob(MarketplaceJob job) async {
-    final action = job.nextAction;
-    final label = _marketplaceJobActionLabel(action);
+    final finishing = _marketplaceJobCanFinish(job);
+    final action = finishing ? 'finish_service' : job.nextAction;
 
-    if (action == null || label == null || _busyJobId != null) return;
-
-    var confirmed = true;
-
-    if (action == 'complete_service') {
-      confirmed = await showDialog<bool>(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('Completar servicio'),
-              content: const Text(
-                'Confirma únicamente cuando el servicio haya terminado.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Volver'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Completar'),
-                ),
-              ],
-            ),
-          ) ??
-          false;
+    if (_busyJobId != null ||
+        action == null ||
+        (!finishing && action != 'start_en_route')) {
+      return;
     }
-
-    if (!confirmed || !mounted) return;
 
     setState(() => _busyJobId = job.id);
 
@@ -1548,15 +1530,29 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final key = _operationKey(job.id, action);
 
     try {
-      final updatedJob = await _service.advance(job.id, action, key);
+      final updatedJob = finishing
+          ? await _service.finishJob(job.id, key)
+          : await _service.advance(job.id, action, key);
 
-      if (action == 'complete_service') {
-        await widget.store.ensureMarketplaceJobIncome(
-          jobId: updatedJob.id,
-          amount: updatedJob.finalPrice,
-          distanceKm: job.distanceKm,
-          completedAt: updatedJob.completedAt ?? DateTime.now(),
-        );
+      _operationKeys.remove(keyName);
+
+      if (finishing) {
+        try {
+          await widget.store.ensureMarketplaceJobIncome(
+            jobId: updatedJob.id,
+            amount: updatedJob.finalPrice,
+            distanceKm: job.distanceKm,
+            completedAt: updatedJob.completedAt ?? DateTime.now(),
+          );
+        } catch (_) {
+          if (mounted) {
+            toast(
+              context,
+              'Carrera finalizada en el servidor. '
+              'El ingreso local necesita sincronizarse.',
+            );
+          }
+        }
 
         if (mounted) {
           await _showCustomerRatingSurvey(updatedJob.id);
@@ -1564,26 +1560,37 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
 
-      _operationKeys.remove(keyName);
-
       if (!mounted) return;
-
       await _refreshAfterJobMutation();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
 
-      toast(
-        context,
-        'No se pudo actualizar el trabajo. Actualiza la sección '
-        'y vuelve a intentarlo.',
-      );
+      if (error.toString().toUpperCase().contains('FINISH_TOO_EARLY')) {
+        toast(
+          context,
+          'Todavía es demasiado pronto para finalizar esta carrera.',
+        );
+      } else if (finishing) {
+        toast(
+          context,
+          'No pudimos confirmar el cierre. '
+          'Actualiza los trabajos para comprobar su estado '
+          'antes de volver a intentarlo.',
+        );
+        await _refreshAfterJobMutation();
+      } else {
+        toast(
+          context,
+          'No se pudo actualizar el trabajo. '
+          'Actualiza la sección y vuelve a intentarlo.',
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _busyJobId = null);
       }
     }
   }
-
   Future<void> _cancelJob(MarketplaceJob job) async {
     if (_busyJobId != null || !_marketplaceJobCanDriverCancel(job)) return;
 
@@ -2940,7 +2947,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     onContact:
                         scope == 'history' ? null : () => _contactJob(job),
                     onAdvance: scope == 'active' &&
-                            _marketplaceJobActionLabel(job.nextAction) != null
+                            (_marketplaceJobCanFinish(job) ||
+                                (job.status == 'accepted' &&
+                                    job.nextAction == 'start_en_route'))
                         ? () => _advanceJob(job)
                         : null,
                     onCancel: scope != 'history' &&
@@ -3120,7 +3129,10 @@ class _AssignedJobCard extends StatelessWidget {
                 label: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Text(
-                    _marketplaceJobActionLabel(job.nextAction) ?? 'Continuar',
+                    _marketplaceJobCanFinish(job)
+                        ? 'Finalizar carrera'
+                        : (_marketplaceJobActionLabel(job.nextAction) ??
+                            'Continuar'),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),

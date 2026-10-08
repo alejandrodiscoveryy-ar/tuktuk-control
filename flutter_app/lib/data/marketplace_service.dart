@@ -1234,6 +1234,14 @@ class MarketplaceService {
     'target_idempotency_key': idempotencyKey,
   }).then(MarketplaceJob.fromMap);
 
+  Future<MarketplaceJob> finishJob(
+    String jobId,
+    String idempotencyKey,
+  ) => _one('finish_my_marketplace_job', {
+    'target_job_id': jobId,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceJob.fromMap);
+
   Future<MarketplaceJob> advance(
     String jobId,
     String action,
