@@ -21,6 +21,19 @@ Future<bool> _runLicensedWrite(
       toast(context, tr('Tu licencia no permite realizar cambios.'));
     }
     return false;
+  } on StateError catch (error) {
+    if (error.toString().contains('VEHICLE_REQUIRED')) {
+      if (context.mounted) {
+        toast(
+          context,
+          tr(
+            'Inicia sesión con Google para crear o recuperar tu vehículo antes de guardar información.',
+          ),
+        );
+      }
+      return false;
+    }
+    rethrow;
   }
 }
 
@@ -334,17 +347,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool saving = false;
   String? error;
 
-  Future<void> addVehicleExplicitly() async {
+  Future<void> enterControl() async {
     if (widget.previewOnly) return;
     setState(() {
       saving = true;
       error = null;
     });
     try {
-      await widget.store.configureFirstVehicle(name: tr('Mi Tuk Tuk'));
+      await widget.store.completeWelcome();
     } catch (_) {
       if (mounted) {
-        setState(() => error = tr('No se pudo agregar el vehículo.'));
+        setState(() => error = tr('No se pudo iniciar la aplicación.'));
       }
     } finally {
       if (mounted) setState(() => saving = false);
@@ -410,7 +423,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       children: [
                                         Text(
                                           tr(
-                                            'Inicia sesión con Google para recuperar tus datos. Si aún no tienes vehículo, agrégalo cuando decidas comenzar.',
+                                            'Puedes entrar y conocer TUKTUK Control sin crear nada. Cuando inicies sesión con Google recuperaremos tu vehículo y, solo si es tu primera vez, crearemos uno para esa cuenta.',
                                           ),
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(
@@ -457,12 +470,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                           child: OutlinedButton.icon(
                                             onPressed: saving
                                                 ? null
-                                                : addVehicleExplicitly,
+                                                : enterControl,
                                             icon: const Icon(
                                               Icons.add_rounded,
                                             ),
                                             label: Text(
-                                              tr('Agregar vehículo'),
+                                              tr('Entrar a TUKTUK Control'),
                                             ),
                                           ),
                                         ),
@@ -2710,6 +2723,15 @@ class LoginScreen extends StatelessWidget {
   }
 
   Future<void> _copyBackup(BuildContext context, {required bool csv}) async {
+    if (store.activeVehicle == null) {
+      toast(
+        context,
+        tr(
+          'Inicia sesión con Google para crear o recuperar tu vehículo antes de exportar datos.',
+        ),
+      );
+      return;
+    }
     final value = csv ? store.exportBackupCsv() : store.exportBackupJson();
     await Clipboard.setData(ClipboardData(text: value));
     if (context.mounted) {

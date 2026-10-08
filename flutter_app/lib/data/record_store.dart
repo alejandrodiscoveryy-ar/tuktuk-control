@@ -46,6 +46,7 @@ class RecordStore extends ChangeNotifier {
   static const _licenseRetryInterval = Duration(minutes: 2);
   static const _resumeRefreshMinInterval = Duration(minutes: 5);
   static const _automaticSyncInterval = Duration(minutes: 15);
+  static const _welcomeCompletedKey = 'welcomeCompletedV2';
 
   RecordStore({
     PushTokenRegistrationCoordinator? pushTokenCoordinator,
@@ -733,7 +734,7 @@ class RecordStore extends ChangeNotifier {
     final raw = _meta.get('vehicle:$vehicleId');
     if (raw is! Map) return null;
     final vehicle = VehicleProfile.fromMap(raw);
-    return vehicle.userId == userId ? vehicle : null;
+    return vehicle.userId == userId && !vehicle.isDeleted ? vehicle : null;
   }
 
   VehicleProfile? get activeVehicle => _vehicleForUser(activeUserId);
@@ -752,7 +753,19 @@ class RecordStore extends ChangeNotifier {
     return values;
   }
 
-  bool get needsOnboarding => initialized && activeVehicle == null;
+  bool get needsOnboarding =>
+      initialized &&
+      _meta.get(_welcomeCompletedKey) != true &&
+      user == null &&
+      activeVehicle == null &&
+      _box.isEmpty &&
+      _maintenanceBox.isEmpty;
+
+  Future<void> completeWelcome() async {
+    if (_meta.get(_welcomeCompletedKey) == true) return;
+    await _meta.put(_welcomeCompletedKey, true);
+    notifyListeners();
+  }
 
   DateTime? get lastSyncAt {
     final currentUser = user;
@@ -828,12 +841,14 @@ class RecordStore extends ChangeNotifier {
     Map<String, dynamic>? previousPayload,
   }) async {
     await _meta.put('settingsUpdatedAt', DateTime.now().toIso8601String());
+    final vehicleId = activeVehicleIdOrNull;
+    if (vehicleId == null) return;
     await _syncQueue.enqueue(
       entityType: SyncEntityType.settings,
-      entityId: 'app-settings-$activeVehicleId',
+      entityId: 'app-settings-$vehicleId',
       action: SyncAction.upsert,
       userId: activeUserId,
-      vehicleId: activeVehicleId,
+      vehicleId: vehicleId,
       previousPayload: previousPayload,
       rollbackOnLicenseRejection: previousPayload != null,
     );
@@ -922,6 +937,7 @@ class RecordStore extends ChangeNotifier {
     double initialOdometer = 0,
   }) async {
     await _requireWriteAccess();
+    if (activeVehicle != null) return;
     final cleanName = name.trim();
     if (cleanName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'El nombre es obligatorio.');
@@ -949,6 +965,7 @@ class RecordStore extends ChangeNotifier {
       vehicleId: vehicleId,
       rollbackOnLicenseRejection: true,
     );
+    await _enqueueSettingsSync();
     if (user != null) {
       await _claimLocalDataForSignedInUser();
     }
@@ -968,6 +985,58 @@ class RecordStore extends ChangeNotifier {
   }
 
   /// Prepara soporte multivehículo sin exponer todavía una pantalla de flota.
+  Future<bool> _adoptExistingMarketplaceVehicleForGoogleUser() async {
+    final currentUser = user;
+    if (currentUser == null || activeVehicle != null) {
+      return activeVehicle != null;
+    }
+
+    final response = await _supabase.rpc('get_my_marketplace_onboarding');
+    if (response is! Map) return false;
+
+    final onboarding = MarketplaceOnboarding.fromMap(response);
+    if (onboarding.vehicles.isEmpty) return false;
+
+    final canonicalId = 'vehicle-${currentUser.id}-primary';
+    var selected = onboarding.vehicles.first;
+    for (final vehicle in onboarding.vehicles) {
+      if (vehicle.id == canonicalId) {
+        selected = vehicle;
+        break;
+      }
+    }
+
+    final selectedName = selected.name?.trim();
+    final now = DateTime.now();
+    final vehicle = VehicleProfile(
+      id: selected.id,
+      userId: currentUser.id,
+      name: selectedName == null || selectedName.isEmpty
+          ? 'Mi Tuk Tuk'
+          : selectedName,
+      registration: selected.registration?.trim() ?? '',
+      createdAt: now,
+      updatedAt: now,
+      deviceId: deviceId,
+      syncStatus: SyncStatus.pending,
+    );
+
+    await _meta.put('activeVehicleId:${currentUser.id}', vehicle.id);
+    await _meta.put('vehicle:${vehicle.id}', vehicle.toMap());
+    await _syncQueue.enqueue(
+      entityType: SyncEntityType.vehicle,
+      entityId: vehicle.id,
+      action: SyncAction.upsert,
+      userId: currentUser.id,
+      vehicleId: vehicle.id,
+      rollbackOnLicenseRejection: true,
+    );
+    await _enqueueSettingsSync();
+    await _claimLocalDataForSignedInUser();
+    _load();
+    notifyListeners();
+    return true;
+  }
   Future<VehicleProfile> createVehicle({
     required String name,
     String registration = '',
@@ -1540,6 +1609,7 @@ class RecordStore extends ChangeNotifier {
       referralClaimNeedsRetry = false;
     }
     user = authenticatedUser;
+    await _meta.put(_welcomeCompletedKey, true);
     license = _licenseService.cachedLicense(authenticatedUser.id);
     notifyListeners();
     unawaited(refreshExchangeRate());
@@ -1558,11 +1628,38 @@ class RecordStore extends ChangeNotifier {
 
       // Restaurar sesión o sincronizar nunca crea vehículos.
       // Primero recuperamos los vehículos que YA existen en la cuenta.
-      await _synchronizeWithSupabase();
+      final previousActiveVehicleId = activeVehicleIdOrNull;
+
+      // Siempre recuperar primero el estado completo de esta cuenta.
+      await _synchronizeWithSupabase(fullRefresh: true);
+      if (_disposed) return;
+
+      if (previousActiveVehicleId != null &&
+          vehicles.any((vehicle) => vehicle.id == previousActiveVehicleId)) {
+        await selectVehicle(previousActiveVehicleId);
+      } else if (vehicles.isNotEmpty) {
+        final canonicalId = 'vehicle-${authenticatedUser.id}-primary';
+        var selectedVehicleId = vehicles.first.id;
+        for (final vehicle in vehicles) {
+          if (vehicle.id == canonicalId) {
+            selectedVehicleId = vehicle.id;
+            break;
+          }
+        }
+        await selectVehicle(selectedVehicleId);
+      }
       if (_disposed) return;
 
       if (canWrite) {
-        await _claimLocalDataForSignedInUser();
+        if (activeVehicle == null) {
+          final adopted =
+              await _adoptExistingMarketplaceVehicleForGoogleUser();
+          if (!adopted) {
+            await configureFirstVehicle(name: 'Mi Tuk Tuk');
+          }
+        } else {
+          await _claimLocalDataForSignedInUser();
+        }
         if (_disposed) return;
       }
 
@@ -1682,12 +1779,12 @@ class RecordStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _synchronizeWithSupabase() async {
+  Future<void> _synchronizeWithSupabase({bool fullRefresh = false}) async {
     final currentUser = user;
     if (currentUser == null) return;
     await _ensureRemoteProfile();
     final cursorKey = 'supabaseCursor:${currentUser.id}';
-    var cursor = _meta.get(cursorKey)?.toString();
+    var cursor = fullRefresh ? null : _meta.get(cursorKey)?.toString();
     var pageCount = 0;
     var hasMore = true;
     while (hasMore && pageCount < 100) {
