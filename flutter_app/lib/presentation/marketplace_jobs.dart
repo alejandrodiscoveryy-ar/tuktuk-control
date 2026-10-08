@@ -1276,9 +1276,29 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _acceptKeys[job.id] = key;
 
     try {
-      await _service.accept(job.id, vehicleId, key);
+      final acceptedJob = await _service.accept(job.id, vehicleId, key);
 
       _acceptKeys.remove(job.id);
+
+      // Las carreras inmediatas salen hacia el cliente al aceptarse.
+      // Las programadas para el futuro conservan su flujo.
+      if (acceptedJob.status == 'accepted' &&
+          (job.scheduledFor == null ||
+              !job.scheduledFor!.isAfter(DateTime.now().toUtc()))) {
+        final routeKey = _operationKey(job.id, 'start_en_route');
+        try {
+          await _service.advance(job.id, 'start_en_route', routeKey);
+          _operationKeys.remove('${job.id}:start_en_route');
+        } catch (_) {
+          if (mounted) {
+            toast(
+              context,
+              'Carrera aceptada. No pudimos iniciar el trayecto '
+              'automaticamente. Pulsa Salir hacia el cliente.',
+            );
+          }
+        }
+      }
 
       if (!mounted) return;
 

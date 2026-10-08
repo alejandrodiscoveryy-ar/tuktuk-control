@@ -27,6 +27,10 @@ class _JobsService extends MarketplaceService {
   _JobsService() : super(Supabase.instance.client);
   int availableCalls = 0;
   int historyCalls = 0;
+  bool successfulAccept = false;
+  int advanceCalls = 0;
+  String? lastAdvanceAction;
+  List<MarketplaceAvailableJob> availableJobs = [offer];
   bool failAvailable = false;
   bool failActive = false;
   bool acceptingJobs = true;
@@ -79,12 +83,41 @@ class _JobsService extends MarketplaceService {
   Future<List<MarketplaceAvailableJob>> available(String vehicleId) async {
     availableCalls++;
     if (failAvailable) throw const SocketException('offline');
-    return pending == null ? [offer] : pending!.future;
+    return pending == null ? availableJobs : pending!.future;
   }
 
   @override
-  Future<MarketplaceJob> accept(String jobId, String vehicleId, String key) =>
-      Future.error('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE');
+  Future<MarketplaceJob> accept(
+    String jobId,
+    String vehicleId,
+    String key,
+  ) async {
+    if (!successfulAccept) {
+      throw StateError('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE');
+    }
+    return MarketplaceJob.fromMap({
+      'job_id': jobId,
+      'status': 'accepted',
+      'final_price': 100,
+      'currency': 'CUP',
+    });
+  }
+
+  @override
+  Future<MarketplaceJob> advance(
+    String jobId,
+    String action,
+    String idempotencyKey,
+  ) async {
+    advanceCalls++;
+    lastAdvanceAction = action;
+    return MarketplaceJob.fromMap({
+      'job_id': jobId,
+      'status': 'en_route',
+      'final_price': 100,
+      'currency': 'CUP',
+    });
+  }
 }
 
 const offer = MarketplaceAvailableJob(
@@ -220,6 +253,40 @@ void main() {
     final titleTop = tester.getTopLeft(find.text('Vehículo activo')).dy;
     final switchTop = tester.getTopLeft(availabilitySwitch).dy;
     expect((switchTop - titleTop).abs(), lessThan(30));
+  });
+
+  testWidgets('immediate acceptance starts route automatically',
+      (tester) async {
+    service.successfulAccept = true;
+    await open(tester);
+
+    await tester.ensureVisible(find.text('Aceptar trabajo'));
+    await tester.tap(find.text('Aceptar trabajo'));
+    await pumpJobs(tester);
+
+    expect(service.advanceCalls, 1);
+    expect(service.lastAdvanceAction, 'start_en_route');
+  });
+
+  testWidgets('future scheduled acceptance does not start route',
+      (tester) async {
+    service.successfulAccept = true;
+    service.availableJobs = [
+      MarketplaceAvailableJob(
+        id: offer.id,
+        serviceCode: 'passenger',
+        finalPrice: 100,
+        currency: 'CUP',
+        scheduledFor: DateTime.utc(2099, 1, 1),
+      ),
+    ];
+    await open(tester);
+
+    await tester.ensureVisible(find.text('Aceptar trabajo'));
+    await tester.tap(find.text('Aceptar trabajo'));
+    await pumpJobs(tester);
+
+    expect(service.advanceCalls, 0);
   });
 
   testWidgets('availability card shows a distinct resting state',
