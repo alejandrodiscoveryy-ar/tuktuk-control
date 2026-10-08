@@ -2226,9 +2226,18 @@ class RecordStore extends ChangeNotifier {
     final fallbackVehicleId =
         existingTargetVehicle?.id ?? preferredSourceVehicleId;
 
+    final remappedLegacyVehicleIds = existingTargetVehicle == null
+        ? <String>{}
+        : sourceVehicles
+              .where((vehicle) => vehicle.id.endsWith('-primary'))
+              .map((vehicle) => vehicle.id)
+              .toSet();
+
     final now = DateTime.now();
 
     for (final vehicle in sourceVehicles) {
+      if (remappedLegacyVehicleIds.contains(vehicle.id)) continue;
+
       await _meta.put(
         'vehicle:${vehicle.id}',
         vehicle
@@ -2248,7 +2257,11 @@ class RecordStore extends ChangeNotifier {
           final migrated = record.withSyncInfo(
             deviceId: deviceId,
             userId: targetUserId,
-            vehicleId: record.vehicleId.isEmpty ? fallbackVehicleId : null,
+            vehicleId:
+                record.vehicleId.isEmpty ||
+                    remappedLegacyVehicleIds.contains(record.vehicleId)
+                ? fallbackVehicleId
+                : null,
             syncStatus: SyncStatus.pending,
           );
           await _box.put(migrated.id, migrated.toMap());
@@ -2260,7 +2273,11 @@ class RecordStore extends ChangeNotifier {
           final migrated = record.withSyncInfo(
             deviceId: deviceId,
             userId: targetUserId,
-            vehicleId: record.vehicleId.isEmpty ? fallbackVehicleId : null,
+            vehicleId:
+                record.vehicleId.isEmpty ||
+                    remappedLegacyVehicleIds.contains(record.vehicleId)
+                ? fallbackVehicleId
+                : null,
             syncStatus: SyncStatus.pending,
           );
           await _maintenanceBox.put(migrated.id, migrated.toMap());
@@ -2272,6 +2289,7 @@ class RecordStore extends ChangeNotifier {
           fromUserId: sourceOwner,
           toUserId: targetUserId,
           fallbackVehicleId: fallbackVehicleId,
+          remappedVehicleIds: remappedLegacyVehicleIds,
         );
       }
     }

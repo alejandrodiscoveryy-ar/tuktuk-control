@@ -48,16 +48,25 @@ class SyncQueueStore implements SyncQueueRepository {
     required String fromUserId,
     required String toUserId,
     String? fallbackVehicleId,
+    Set<String> remappedVehicleIds = const <String>{},
   }) async {
     for (final raw in _box.values.toList()) {
       final operation = SyncOperation.fromMap(raw as Map);
       if (operation.userId != fromUserId) continue;
 
-      final vehicleId = operation.vehicleId.isNotEmpty
-          ? operation.vehicleId
-          : fallbackVehicleId;
+      if (operation.entityType == SyncEntityType.vehicle &&
+          remappedVehicleIds.contains(operation.entityId)) {
+        await _box.delete(operation.id);
+        continue;
+      }
 
-      if (vehicleId == null || vehicleId.isEmpty) continue;
+      var vehicleId = operation.vehicleId;
+
+      if (vehicleId.isEmpty || remappedVehicleIds.contains(vehicleId)) {
+        vehicleId = fallbackVehicleId ?? '';
+      }
+
+      if (vehicleId.isEmpty) continue;
 
       final reassigned = operation.reassign(
         userId: toUserId,
