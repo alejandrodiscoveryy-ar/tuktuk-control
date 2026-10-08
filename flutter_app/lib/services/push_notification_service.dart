@@ -11,7 +11,7 @@ import 'firebase_web_options.dart';
 import 'web_foreground_notification.dart';
 
 const tuktukNotificationChannelId = 'tuktuk_general';
-const tuktukNotificationChannelName = 'TukTuk Control';
+const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukWebVapidKey =
     'BF-az4NW8nREYEw-RvnBOfQ2wrJGttOjBhR_PD0SKWEKDHWqWvFBLdmka5e_0d-_Mptdrpxxfy1aF-FFPQpvfEE';
 const tuktukWebMessagingServiceWorker = 'firebase-messaging-sw.js';
@@ -146,7 +146,7 @@ class PushNotificationService {
   static const _channel = AndroidNotificationChannel(
     tuktukNotificationChannelId,
     tuktukNotificationChannelName,
-    description: 'Notificaciones generales de TukTuk Control',
+    description: 'Notificaciones generales de TukTuk Conductor',
     importance: Importance.high,
   );
 
@@ -265,7 +265,7 @@ class PushNotificationService {
         android: AndroidNotificationDetails(
           tuktukNotificationChannelId,
           tuktukNotificationChannelName,
-          channelDescription: 'Notificaciones generales de TukTuk Control',
+          channelDescription: 'Notificaciones generales de TukTuk Conductor',
           importance: Importance.high,
           priority: Priority.high,
           icon: 'ic_stat_tuktuk',

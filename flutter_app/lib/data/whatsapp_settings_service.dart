@@ -66,7 +66,7 @@ class WhatsAppSettings {
 
   static const unavailable = WhatsAppSettings(
     projectId: '',
-    applicationName: 'TukTuk Control',
+    applicationName: 'TukTuk Conductor',
     support: WhatsAppChannelSettings(
       enabled: false,
       number: null,

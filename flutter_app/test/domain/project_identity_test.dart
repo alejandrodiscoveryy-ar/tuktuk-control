@@ -27,7 +27,7 @@ void main() {
 
   test('respuesta ausente conserva un fallback local utilizable', () {
     expect(ProjectIdentity.fromRpc(null), isNull);
-    expect(ProjectIdentity.fallback.name, 'TukTuk Control');
+    expect(ProjectIdentity.fallback.name, 'TukTuk Conductor');
     expect(ProjectIdentity.fallback.logoUrl, isNull);
     expect(ProjectIdentity.fallback.iconUrl, isNull);
   });

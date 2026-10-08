@@ -12,7 +12,7 @@ class MarketplaceCustomerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'TUKTUK',
+      title: 'TukTuk Cliente',
       theme: buildAppTheme(Brightness.dark),
       darkTheme: buildAppTheme(Brightness.dark),
       themeMode: ThemeMode.dark,

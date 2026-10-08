@@ -472,7 +472,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                               Icons.arrow_forward_rounded,
                                             ),
                                             label: Text(
-                                              tr('Entrar a TUKTUK Control'),
+                                              tr('Entrar a TukTuk Conductor'),
                                             ),
                                           ),
                                         ),
@@ -3181,8 +3181,8 @@ class _ReferralCard extends StatelessWidget {
 
   Future<void> _shareLink(BuildContext context, String link) async {
     final shared = await shareReferralLink(
-      title: 'TukTuk Control',
-      text: 'Únete a TukTuk Control con mi invitación.',
+      title: 'TukTuk Conductor',
+      text: 'Únete a TukTuk Conductor con mi invitación.',
       url: link,
     );
     if (!shared && context.mounted) await _copyLink(context, link);

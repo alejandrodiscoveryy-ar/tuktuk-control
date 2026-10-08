@@ -222,7 +222,7 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
         };
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: store.projectIdentity.name,
+          title: store.projectIdentity.name == 'TukTuk Control' ? 'TukTuk Conductor' : store.projectIdentity.name,
           themeMode: themeMode,
           theme: buildAppTheme(Brightness.light),
           darkTheme: buildAppTheme(Brightness.dark),
@@ -417,8 +417,8 @@ String tr(String key) {
           'Invite other drivers and earn additional days.',
       'Tu código': 'Your code',
       'Días acumulados': 'Days earned',
-      '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
-          'Need help with TukTuk Control? Message us on WhatsApp.',
+      '¿Necesitas ayuda con TukTuk Conductor? Escríbenos por WhatsApp.':
+          'Need help with TukTuk Conductor? Message us on WhatsApp.',
       'Contactar por WhatsApp': 'Contact via WhatsApp',
       'No se pudo abrir WhatsApp': 'WhatsApp could not be opened',
       'Ajustes': 'Settings',
@@ -620,8 +620,8 @@ String tr(String key) {
       'Tienda': 'Store',
       'Encuentra piezas, accesorios y servicios para tu vehículo.':
           'Find parts, accessories, and services for your vehicle.',
-      'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.':
-          'Searches open externally in Revolico. TukTuk Control does not copy or store listings.',
+      'Las búsquedas se abren externamente en Revolico. TukTuk Conductor no copia ni almacena anuncios.':
+          'Searches open externally in Revolico. TukTuk Conductor does not copy or store listings.',
       'Buscar en Revolico': 'Search Revolico',
       '¿Qué necesitas para tu vehículo?': 'What do you need for your vehicle?',
       'Categorías': 'Categories',
@@ -716,8 +716,8 @@ String tr(String key) {
           'Convide outros motoristas e ganhe dias adicionais.',
       'Tu código': 'Seu código',
       'Días acumulados': 'Dias acumulados',
-      '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
-          'Precisa de ajuda com o TukTuk Control? Fale conosco pelo WhatsApp.',
+      '¿Necesitas ayuda con TukTuk Conductor? Escríbenos por WhatsApp.':
+          'Precisa de ajuda com o TukTuk Conductor? Fale conosco pelo WhatsApp.',
       'Contactar por WhatsApp': 'Contatar pelo WhatsApp',
       'No se pudo abrir WhatsApp': 'Não foi possível abrir o WhatsApp',
       'Ajustes': 'Ajustes',
@@ -921,8 +921,8 @@ String tr(String key) {
       'Tienda': 'Loja',
       'Encuentra piezas, accesorios y servicios para tu vehículo.':
           'Encontre peças, acessórios e serviços para seu veículo.',
-      'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.':
-          'As buscas abrem externamente no Revolico. TukTuk Control não copia nem armazena anúncios.',
+      'Las búsquedas se abren externamente en Revolico. TukTuk Conductor no copia ni almacena anuncios.':
+          'As buscas abrem externamente no Revolico. TukTuk Conductor não copia nem armazena anúncios.',
       'Buscar en Revolico': 'Buscar no Revolico',
       '¿Qué necesitas para tu vehículo?':
           'O que você precisa para seu veículo?',
@@ -1018,8 +1018,8 @@ String tr(String key) {
           'Invitez d’autres conducteurs et gagnez des jours supplémentaires.',
       'Tu código': 'Votre code',
       'Días acumulados': 'Jours cumulés',
-      '¿Necesitas ayuda con TukTuk Control? Escríbenos por WhatsApp.':
-          'Besoin d’aide avec TukTuk Control ? Écrivez-nous sur WhatsApp.',
+      '¿Necesitas ayuda con TukTuk Conductor? Escríbenos por WhatsApp.':
+          'Besoin d’aide avec TukTuk Conductor ? Écrivez-nous sur WhatsApp.',
       'Contactar por WhatsApp': 'Contacter sur WhatsApp',
       'No se pudo abrir WhatsApp': 'Impossible d’ouvrir WhatsApp',
       'Ajustes': 'Paramètres',
@@ -1226,8 +1226,8 @@ String tr(String key) {
       'Tienda': 'Boutique',
       'Encuentra piezas, accesorios y servicios para tu vehículo.':
           'Trouvez des pièces, accessoires et services pour votre véhicule.',
-      'Las búsquedas se abren externamente en Revolico. TukTuk Control no copia ni almacena anuncios.':
-          'Les recherches s’ouvrent dans Revolico. TukTuk Control ne copie ni ne stocke les annonces.',
+      'Las búsquedas se abren externamente en Revolico. TukTuk Conductor no copia ni almacena anuncios.':
+          'Les recherches s’ouvrent dans Revolico. TukTuk Conductor ne copie ni ne stocke les annonces.',
       'Buscar en Revolico': 'Rechercher sur Revolico',
       '¿Qué necesitas para tu vehículo?':
           'De quoi avez-vous besoin pour votre véhicule ?',

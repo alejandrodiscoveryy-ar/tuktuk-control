@@ -1,6 +1,6 @@
 {
-  "name": "TukTuk Control",
-  "short_name": "TukTuk Control",
+  "name": "TukTuk Conductor",
+  "short_name": "TukTuk Conductor",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

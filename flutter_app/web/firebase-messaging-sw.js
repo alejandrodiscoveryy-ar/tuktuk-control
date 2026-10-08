@@ -18,7 +18,7 @@ messaging.onBackgroundMessage((payload) => {
 
   if (!title && !body) return;
 
-  self.registration.showNotification(title || 'TukTuk Control', {
+  self.registration.showNotification(title || 'TukTuk Conductor', {
     body: body || '',
     data: payload.data || {}
   });

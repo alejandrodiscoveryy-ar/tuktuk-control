@@ -347,7 +347,7 @@ Future<void> _addAndroidResources(
     )
     ..[_file(root, 'android/app/src/main/res/values/strings.xml')] = _xmlBytes(
       '''<resources>
-    <string name="app_name">${const HtmlEscape(HtmlEscapeMode.element).convert(identity.name)}</string>
+    <string name="app_name">${const HtmlEscape(HtmlEscapeMode.element).convert(identity.name == "TukTuk Control" ? "TukTuk Conductor" : identity.name)}</string>
 </resources>
 ''',
     );
@@ -557,7 +557,8 @@ Uint8List _updatedManifest(File manifest, _PublicProjectIdentity identity) {
     throw const FormatException('web/manifest.json no es un objeto JSON.');
   }
   final values = Map<String, dynamic>.from(decoded)
-    ..['short_name'] = 'TukTuk Control'
+    ..['name'] = identity.name == 'TukTuk Control' ? 'TukTuk Conductor' : identity.name
+    ..['short_name'] = 'TukTuk Conductor'
     ..['theme_color'] = identity.primaryColor;
   return Uint8List.fromList(
     utf8.encode('${const JsonEncoder.withIndent('  ').convert(values)}\n'),

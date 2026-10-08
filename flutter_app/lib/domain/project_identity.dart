@@ -13,7 +13,7 @@ class ProjectIdentity {
 
   static const fallback = ProjectIdentity(
     projectId: _projectId,
-    name: 'TukTuk Control',
+    name: 'TukTuk Conductor',
     primaryColorHex: '#2DD4A3',
     secondaryColorHex: '#00CFA0',
   );

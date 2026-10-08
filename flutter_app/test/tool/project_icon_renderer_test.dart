@@ -185,8 +185,8 @@ void main() {
   test('manifest cumple campos de instalación Chromium', () {
     final manifest = _readManifest();
 
-    expect(manifest['name'], 'TukTuk Control');
-    expect(manifest['short_name'], 'TukTuk Control');
+    expect(manifest['name'], 'TukTuk Conductor');
+    expect(manifest['short_name'], 'TukTuk Conductor');
     expect(manifest['start_url'], './');
     expect(manifest['scope'], './');
     expect(manifest['display'], 'standalone');

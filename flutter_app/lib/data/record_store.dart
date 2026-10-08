@@ -228,7 +228,7 @@ class RecordStore extends ChangeNotifier {
 
   void _applyProjectIdentityToPlatform() {
     applyProjectIdentityToPlatform(
-      name: projectIdentity.name,
+      name: projectIdentity.name == 'TukTuk Control' ? 'TukTuk Conductor' : projectIdentity.name,
       iconUrl: projectIdentity.iconUrl,
     );
   }
