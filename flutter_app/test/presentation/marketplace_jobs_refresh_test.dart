@@ -28,6 +28,8 @@ class _JobsService extends MarketplaceService {
   int availableCalls = 0;
   int historyCalls = 0;
   bool successfulAccept = false;
+  int atomicAcceptCalls = 0;
+  int legacyAcceptCalls = 0;
   int advanceCalls = 0;
   String? lastAdvanceAction;
   List<MarketplaceAvailableJob> availableJobs = [offer];
@@ -92,12 +94,31 @@ class _JobsService extends MarketplaceService {
     String vehicleId,
     String key,
   ) async {
+    legacyAcceptCalls++;
     if (!successfulAccept) {
       throw StateError('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE');
     }
     return MarketplaceJob.fromMap({
       'job_id': jobId,
       'status': 'accepted',
+      'final_price': 100,
+      'currency': 'CUP',
+    });
+  }
+
+  @override
+  Future<MarketplaceJob> acceptAndStart(
+    String jobId,
+    String vehicleId,
+    String key,
+  ) async {
+    atomicAcceptCalls++;
+    if (!successfulAccept) {
+      throw StateError('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE');
+    }
+    return MarketplaceJob.fromMap({
+      'job_id': jobId,
+      'status': 'en_route',
       'final_price': 100,
       'currency': 'CUP',
     });
@@ -260,12 +281,13 @@ void main() {
     service.successfulAccept = true;
     await open(tester);
 
-    await tester.ensureVisible(find.text('Aceptar trabajo'));
-    await tester.tap(find.text('Aceptar trabajo'));
+    await tester.ensureVisible(find.text('Aceptar e ir a buscar'));
+    await tester.tap(find.text('Aceptar e ir a buscar'));
     await pumpJobs(tester);
 
-    expect(service.advanceCalls, 1);
-    expect(service.lastAdvanceAction, 'start_en_route');
+    expect(service.atomicAcceptCalls, 1);
+    expect(service.legacyAcceptCalls, 0);
+    expect(service.advanceCalls, 0);
   });
 
   testWidgets('future scheduled acceptance does not start route',
@@ -286,6 +308,8 @@ void main() {
     await tester.tap(find.text('Aceptar trabajo'));
     await pumpJobs(tester);
 
+    expect(service.atomicAcceptCalls, 0);
+    expect(service.legacyAcceptCalls, 1);
     expect(service.advanceCalls, 0);
   });
 
@@ -300,7 +324,7 @@ void main() {
       find.byKey(const ValueKey('marketplace-availability-switch')),
       findsOneWidget,
     );
-    expect(find.text('Aceptar trabajo'), findsNothing);
+    expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
   testWidgets('advance button is unique below current status and above route',
       (tester) async {
@@ -351,7 +375,7 @@ void main() {
     expect(service.availableCalls, 3);
     expect(service.historyCalls, 1);
     expect(marketplaceJobPushPending.value, isFalse);
-    expect(find.text('Aceptar trabajo'), findsNothing);
+    expect(find.text('Aceptar e ir a buscar'), findsNothing);
     expect(find.textContaining('No pudimos actualizar los trabajos'),
         findsOneWidget);
     await tester.pumpWidget(const SizedBox());
@@ -378,8 +402,8 @@ void main() {
     await pumpJobs(tester);
     expect(service.availableCalls, 2);
     expect(service.historyCalls, 1);
-    await tester.ensureVisible(find.text('Aceptar trabajo'));
-    await tester.tap(find.text('Aceptar trabajo'));
+    await tester.ensureVisible(find.text('Aceptar e ir a buscar'));
+    await tester.tap(find.text('Aceptar e ir a buscar'));
     await pumpJobs(tester);
     expect(
         find.text(
@@ -396,7 +420,7 @@ void main() {
     await pumpJobs(tester);
     expect(service.availableCalls, 1);
     expect(marketplaceJobPushPending.value, isFalse);
-    expect(find.text('Aceptar trabajo'), findsNothing);
+    expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
 
   testWidgets('resting vehicle remains ineligible after a push',
@@ -407,7 +431,7 @@ void main() {
     await pumpJobs(tester);
     expect(service.availableCalls, 0);
     expect(marketplaceJobPushPending.value, isFalse);
-    expect(find.text('Aceptar trabajo'), findsNothing);
+    expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
 
   testWidgets('receiving push preserves selected tab', (tester) async {

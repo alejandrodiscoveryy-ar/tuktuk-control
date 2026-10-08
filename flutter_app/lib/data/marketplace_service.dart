@@ -1214,6 +1214,16 @@ class MarketplaceService {
     );
   }
 
+  Future<MarketplaceJob> acceptAndStart(
+    String jobId,
+    String vehicleId,
+    String idempotencyKey,
+  ) => _one('accept_and_start_my_marketplace_job', {
+    'target_job_id': jobId,
+    'target_vehicle_id': vehicleId,
+    'target_idempotency_key': idempotencyKey,
+  }).then(MarketplaceJob.fromMap);
+
   Future<MarketplaceJob> accept(
     String jobId,
     String vehicleId,

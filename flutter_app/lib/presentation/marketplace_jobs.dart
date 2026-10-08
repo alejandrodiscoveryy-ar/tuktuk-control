@@ -28,6 +28,9 @@ bool marketplaceDriverOnboardingNeedsSetup(MarketplaceOnboarding data) =>
         data.driverPhotoAssetId?.trim().isNotEmpty != true ||
         !data.vehicles.any((vehicle) => vehicle.onboardingComplete));
 
+bool _marketplaceJobStartsNow(MarketplaceAvailableJob job) =>
+    job.scheduledFor?.isAfter(DateTime.now()) != true;
+
 bool _marketplaceDriverNeedsSetup(MarketplaceOnboarding data) =>
     marketplaceDriverOnboardingNeedsSetup(data);
 
@@ -1276,29 +1279,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _acceptKeys[job.id] = key;
 
     try {
-      final acceptedJob = await _service.accept(job.id, vehicleId, key);
+      if (_marketplaceJobStartsNow(job)) {
+        await _service.acceptAndStart(job.id, vehicleId, key);
+      } else {
+        await _service.accept(job.id, vehicleId, key);
+      }
 
       _acceptKeys.remove(job.id);
-
-      // Las carreras inmediatas salen hacia el cliente al aceptarse.
-      // Las programadas para el futuro conservan su flujo.
-      if (acceptedJob.status == 'accepted' &&
-          (job.scheduledFor == null ||
-              !job.scheduledFor!.isAfter(DateTime.now().toUtc()))) {
-        final routeKey = _operationKey(job.id, 'start_en_route');
-        try {
-          await _service.advance(job.id, 'start_en_route', routeKey);
-          _operationKeys.remove('${job.id}:start_en_route');
-        } catch (_) {
-          if (mounted) {
-            toast(
-              context,
-              'Carrera aceptada. No pudimos iniciar el trayecto '
-              'automaticamente. Pulsa Salir hacia el cliente.',
-            );
-          }
-        }
-      }
 
       if (!mounted) return;
 
@@ -3416,7 +3403,13 @@ class _AvailableJobCard extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.check_circle_outline),
-              label: Text(accepting ? 'Aceptando...' : 'Aceptar trabajo'),
+              label: Text(
+                accepting
+                    ? 'Aceptando...'
+                    : _marketplaceJobStartsNow(job)
+                        ? 'Aceptar e ir a buscar'
+                        : 'Aceptar trabajo',
+              ),
             ),
           ),
         ],
