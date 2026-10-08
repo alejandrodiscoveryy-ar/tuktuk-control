@@ -154,10 +154,10 @@ class _ProjectIdentityImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget fallback() => Image.asset(
-      fallbackAsset,
-      fit: BoxFit.contain,
-      semanticLabel: semanticLabel,
-    );
+          fallbackAsset,
+          fit: BoxFit.contain,
+          semanticLabel: semanticLabel,
+        );
     final url = remoteUrl;
     if (url == null) return fallback();
     return Image.network(
@@ -320,8 +320,16 @@ class AppBackground extends StatelessWidget {
           colors: blueAccent
               ? const [Color(0xFF0A1422), Color(0xFF080D14), Color(0xFF101827)]
               : dark
-              ? const [Color(0xFF0B1718), Color(0xFF080D14), Color(0xFF101827)]
-              : const [Color(0xFFE8F0F8), Color(0xFFF3F7FB), Color(0xFFDDE8F4)],
+                  ? const [
+                      Color(0xFF0B1718),
+                      Color(0xFF080D14),
+                      Color(0xFF101827)
+                    ]
+                  : const [
+                      Color(0xFFE8F0F8),
+                      Color(0xFFF3F7FB),
+                      Color(0xFFDDE8F4)
+                    ],
         ),
       ),
       child: child,
@@ -421,16 +429,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   child: GlassCard(
                                     child: Column(
                                       children: [
-                                        Text(
-                                          tr(
-                                            'Puedes entrar y conocer TUKTUK Control sin crear nada. Cuando inicies sesión con Google recuperaremos tu vehículo y, solo si es tu primera vez, crearemos uno para esa cuenta.',
-                                          ),
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            color: kMuted,
-                                            height: 1.4,
-                                          ),
-                                        ),
                                         if (error != null) ...[
                                           const SizedBox(height: 12),
                                           Text(
@@ -453,8 +451,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                                     height: 18,
                                                     child:
                                                         CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                        ),
+                                                      strokeWidth: 2,
+                                                    ),
                                                   )
                                                 : const Icon(
                                                     Icons.login_rounded,
@@ -468,11 +466,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                         SizedBox(
                                           width: double.infinity,
                                           child: OutlinedButton.icon(
-                                            onPressed: saving
-                                                ? null
-                                                : enterControl,
+                                            onPressed:
+                                                saving ? null : enterControl,
                                             icon: const Icon(
-                                              Icons.add_rounded,
+                                              Icons.arrow_forward_rounded,
                                             ),
                                             label: Text(
                                               tr('Entrar a TUKTUK Control'),
@@ -600,15 +597,14 @@ class _AppShellState extends State<AppShell> {
         }
         _lastAuthenticatedUserId = authenticatedUserId;
 
-        final isSynchronized =
-            store.user != null &&
+        final isSynchronized = store.user != null &&
             store.pendingSyncCount == 0 &&
             store.lastSyncAt != null;
         final syncColor = store.syncing
             ? kTertiary
             : isSynchronized
-            ? appPrimaryColor(context)
-            : kDanger;
+                ? appPrimaryColor(context)
+                : kDanger;
         final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
           DashboardScreen(store: store),
@@ -666,9 +662,8 @@ class _AppShellState extends State<AppShell> {
                 tooltip: tr('Sincronizar'),
                 color: syncColor,
                 disabledColor: syncColor,
-                onPressed: store.user == null || store.syncing
-                    ? null
-                    : store.syncNow,
+                onPressed:
+                    store.user == null || store.syncing ? null : store.syncNow,
                 icon: store.syncing
                     ? SizedBox(
                         width: 18,
@@ -1356,8 +1351,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _dashboardWalletCard(BuildContext context) {
     final wallet = _wallet;
 
-    final reliableBreakdown =
-        wallet != null &&
+    final reliableBreakdown = wallet != null &&
         wallet.realAvailableBalance != null &&
         wallet.promotionalAvailableBalance != null &&
         ((wallet.realAvailableBalance! + wallet.promotionalAvailableBalance!) -
@@ -1701,19 +1695,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: FilledButton.icon(
                     onPressed: widget.store.canWrite
                         ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => Scaffold(
-                                appBar: AppBar(
-                                  title: Text(tr('Nuevo mantenimiento')),
-                                ),
-                                body: MaintenanceFormScreen(
-                                  store: widget.store,
-                                  onSaved: widget.onSaved,
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => Scaffold(
+                                  appBar: AppBar(
+                                    title: Text(tr('Nuevo mantenimiento')),
+                                  ),
+                                  body: MaintenanceFormScreen(
+                                    store: widget.store,
+                                    onSaved: widget.onSaved,
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
+                            )
                         : null,
                     icon: const Icon(Icons.add_task_outlined),
                     label: Text(tr('Completar mantenimiento')),
@@ -1804,8 +1798,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               editing
                   ? tr('Guardar cambios')
                   : recordType == _NewRecordType.expense
-                  ? tr('Guardar gasto')
-                  : tr('Guardar ingreso'),
+                      ? tr('Guardar gasto')
+                      : tr('Guardar ingreso'),
             ),
           ),
         ],
@@ -1825,8 +1819,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> save() async {
-    final isExpense =
-        (editingRecord && widget.record!.expense > 0) ||
+    final isExpense = (editingRecord && widget.record!.expense > 0) ||
         (!editingRecord && recordType == _NewRecordType.expense);
     final earned = isExpense ? 0.0 : _parseOptionalNumber(earnings.text) ?? 0.0;
     final spent = isExpense ? _parseOptionalNumber(expense.text) ?? 0.0 : 0.0;
@@ -1917,28 +1910,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget build(BuildContext context) {
     final term = search.text.trim().toLowerCase();
     final records = widget.store.records.where((record) {
-      final matchesType =
-          (filter == _HistoryFilter.earnings &&
+      final matchesType = (filter == _HistoryFilter.earnings &&
               record.expense <= 0 &&
               !record.isMarketplaceJobIncome) ||
           (filter == _HistoryFilter.expense && record.expense > 0) ||
           (filter == _HistoryFilter.marketplace &&
               record.isMarketplaceJobIncome);
-      final haystack =
-          '${record.note} ${numFmt(record.odometer)} '
-                  '${DateFormat('d MMM yyyy', activeLanguage).format(record.date)}'
-              .toLowerCase();
+      final haystack = '${record.note} ${numFmt(record.odometer)} '
+              '${DateFormat('d MMM yyyy', activeLanguage).format(record.date)}'
+          .toLowerCase();
       return matchesType && (term.isEmpty || haystack.contains(term));
     }).toList();
-    final showMaintenance =
-        filter == _HistoryFilter.expense ||
+    final showMaintenance = filter == _HistoryFilter.expense ||
         filter == _HistoryFilter.maintenance;
     final maintenances = showMaintenance
         ? widget.store.maintenanceRecords.where((record) {
-            final haystack =
-                '${record.type} ${record.description} '
-                        '${record.notes} ${numFmt(record.odometer)}'
-                    .toLowerCase();
+            final haystack = '${record.type} ${record.description} '
+                    '${record.notes} ${numFmt(record.odometer)}'
+                .toLowerCase();
             return term.isEmpty || haystack.contains(term);
           }).toList()
         : <MaintenanceRecord>[];
@@ -2009,17 +1998,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 record: record,
                 onTap: widget.store.canWrite && !record.isMarketplaceJobIncome
                     ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => Scaffold(
-                            appBar: AppBar(title: Text(tr('Editar registro'))),
-                            body: RegisterScreen(
-                              store: widget.store,
-                              record: record,
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar:
+                                  AppBar(title: Text(tr('Editar registro'))),
+                              body: RegisterScreen(
+                                store: widget.store,
+                                record: record,
+                              ),
                             ),
                           ),
-                        ),
-                      )
+                        )
                     : null,
               ),
             ),
@@ -2058,19 +2048,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     : Icon(Icons.lock_outline, color: appMutedColor(context)),
                 onTap: widget.store.canWrite
                     ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => Scaffold(
-                            appBar: AppBar(
-                              title: Text(tr('Editar mantenimiento')),
-                            ),
-                            body: MaintenanceFormScreen(
-                              store: widget.store,
-                              record: record,
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar: AppBar(
+                                title: Text(tr('Editar mantenimiento')),
+                              ),
+                              body: MaintenanceFormScreen(
+                                store: widget.store,
+                                record: record,
+                              ),
                             ),
                           ),
-                        ),
-                      )
+                        )
                     : null,
               ),
             ),
@@ -2165,9 +2155,10 @@ class StatsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = Metrics(store.records, store.maintenanceRecords);
-    final earningRecords =
-        store.records.where((record) => record.earnings > 0).toList()
-          ..sort((a, b) => b.earnings.compareTo(a.earnings));
+    final earningRecords = store.records
+        .where((record) => record.earnings > 0)
+        .toList()
+      ..sort((a, b) => b.earnings.compareTo(a.earnings));
     final cycles = metrics.cycleSummaries;
     final bestCycle = cycles.isEmpty
         ? null
@@ -2273,10 +2264,10 @@ class StatsScreen extends StatelessWidget {
 }
 
 Uri buildRevolicoSearchUri(String term) => Uri.https(
-  'www.revolico.com',
-  '/search',
-  {'q': term.trim(), 'order': 'relevance'},
-);
+      'www.revolico.com',
+      '/search',
+      {'q': term.trim(), 'order': 'relevance'},
+    );
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
@@ -2415,9 +2406,8 @@ class _StoreScreenState extends State<StoreScreen> {
     }
     final opened = await launchUrl(
       buildRevolicoSearchUri(term),
-      mode: kIsWeb
-          ? LaunchMode.platformDefault
-          : LaunchMode.externalApplication,
+      mode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
       webOnlyWindowName: '_blank',
     );
     if (!opened && mounted) {
@@ -2518,10 +2508,10 @@ class LoginScreen extends StatelessWidget {
                                     WebHtmlElementStrategy.fallback,
                                 errorBuilder: (context, error, stackTrace) =>
                                     Icon(
-                                      Icons.person,
-                                      color: appPrimaryColor(context),
-                                      size: 34,
-                                    ),
+                                  Icons.person,
+                                  color: appPrimaryColor(context),
+                                  size: 34,
+                                ),
                               ),
                             ),
                           ),
@@ -2561,9 +2551,8 @@ class LoginScreen extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: tr('Personalizar perfil'),
-                    onPressed: store.canWrite
-                        ? () => _editProfileName(context)
-                        : null,
+                    onPressed:
+                        store.canWrite ? () => _editProfileName(context) : null,
                     icon: const Icon(Icons.edit_outlined),
                   ),
                 ],
@@ -2637,8 +2626,8 @@ class LoginScreen extends StatelessWidget {
         onPressed: store.syncing
             ? null
             : user == null
-            ? store.signIn
-            : store.syncNow,
+                ? store.signIn
+                : store.syncNow,
         icon: Icon(user == null ? Icons.login : Icons.cloud_sync_outlined),
         label: Text(
           user == null ? tr('Entrar con Google') : tr('Sincronizar ahora'),
@@ -2950,10 +2939,10 @@ class _ReferralCard extends StatelessWidget {
                       store.referralProgram?.isRegistrationWalletLicense == true
                           ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} promocionales cuando tu referido complete su perfil de conductor y active Trabajos.'
                           : store.referralProgram?.isWalletReward == true
-                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido.'
-                          : store.referralProgram == null
-                          ? 'Consulta tus recompensas por invitar conductores.'
-                          : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
+                              ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido.'
+                              : store.referralProgram == null
+                                  ? 'Consulta tus recompensas por invitar conductores.'
+                                  : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -3049,8 +3038,8 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales por cada conductor referido válido'
             : program.isWalletReward
-            ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido'
-            : 'Gana ${program.rewardDays} días por cada referido',
+                ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido'
+                : 'Gana ${program.rewardDays} días por cada referido',
         style: const TextStyle(
           color: _referralAccent,
           fontWeight: FontWeight.w800,
@@ -3123,26 +3112,26 @@ class _ReferralCard extends StatelessWidget {
               label: program.isRegistrationWalletLicense
                   ? 'Acreditado'
                   : program.isWalletReward
-                  ? 'Cualificados'
-                  : 'Cumplieron',
+                      ? 'Cualificados'
+                      : 'Cumplieron',
               value: program.isRegistrationWalletLicense
                   ? '${totals.creditedCup.toStringAsFixed(0)} CUP'
                   : program.isWalletReward
-                  ? '${program.qualifiedCount}'
-                  : '${program.qualifiedCount}',
+                      ? '${program.qualifiedCount}'
+                      : '${program.qualifiedCount}',
             ),
             const _ReferralDivider(),
             _ReferralMetric(
               label: program.isRegistrationWalletLicense
                   ? 'Premiados'
                   : program.isWalletReward
-                  ? 'Premiados'
-                  : 'Días obtenidos',
+                      ? 'Premiados'
+                      : 'Días obtenidos',
               value: program.isRegistrationWalletLicense
                   ? '${totals.creditedReferrals}'
                   : program.isWalletReward
-                  ? '${program.rewardedCount}'
-                  : '${program.earnedDays}',
+                      ? '${program.rewardedCount}'
+                      : '${program.earnedDays}',
             ),
           ],
         ),
@@ -3152,8 +3141,8 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Referidos acreditados: ${totals.creditedReferrals} · Saldo promocional otorgado: ${totals.creditedCup.toStringAsFixed(0)} ${program.rewardCurrency}'
             : program.isWalletReward
-            ? 'Referidos premiados: ${program.rewardedCount} · Recompensa vigente: ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} por primer trabajo válido'
-            : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
+                ? 'Referidos premiados: ${program.rewardedCount} · Recompensa vigente: ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} por primer trabajo válido'
+                : 'Recompensas obtenidas: ${program.earnedRewards} · Aplicadas: ${program.appliedRewards} · Días aplicados: ${program.appliedDays}',
         style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
       const SizedBox(height: 18),
@@ -3213,8 +3202,9 @@ class _ReferralValue extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? .42 : .92,
-        ),
+              alpha:
+                  Theme.of(context).brightness == Brightness.dark ? .42 : .92,
+            ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: appOutlineColor(context)),
       ),
@@ -3279,8 +3269,9 @@ class _ReferralEntryTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? .35 : .88,
-        ),
+              alpha:
+                  Theme.of(context).brightness == Brightness.dark ? .35 : .88,
+            ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: appOutlineColor(context)),
       ),
@@ -3340,8 +3331,8 @@ class _ReferralEntryTile extends StatelessWidget {
                 entry.rewardMonths > 0
                     ? '+${entry.rewardMonths} meses · histórico'
                     : (rewarded
-                          ? 'Saldo promocional'
-                          : 'Primer trabajo válido'),
+                        ? 'Saldo promocional'
+                        : 'Primer trabajo válido'),
                 style: const TextStyle(
                   color: _referralAccent,
                   fontWeight: FontWeight.w800,
