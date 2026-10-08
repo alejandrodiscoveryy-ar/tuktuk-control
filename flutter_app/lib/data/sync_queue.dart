@@ -47,11 +47,18 @@ class SyncQueueStore implements SyncQueueRepository {
   Future<void> reassignOwnership({
     required String fromUserId,
     required String toUserId,
-    required String vehicleId,
+    String? fallbackVehicleId,
   }) async {
     for (final raw in _box.values.toList()) {
       final operation = SyncOperation.fromMap(raw as Map);
       if (operation.userId != fromUserId) continue;
+
+      final vehicleId = operation.vehicleId.isNotEmpty
+          ? operation.vehicleId
+          : fallbackVehicleId;
+
+      if (vehicleId == null || vehicleId.isEmpty) continue;
+
       final reassigned = operation.reassign(
         userId: toUserId,
         vehicleId: vehicleId,

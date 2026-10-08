@@ -334,7 +334,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool saving = false;
   String? error;
 
-  Future<void> continueDirectly() async {
+  Future<void> addVehicleExplicitly() async {
     if (widget.previewOnly) return;
     setState(() {
       saving = true;
@@ -344,7 +344,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await widget.store.configureFirstVehicle(name: tr('Mi Tuk Tuk'));
     } catch (_) {
       if (mounted) {
-        setState(() => error = tr('No se pudo iniciar la aplicacion.'));
+        setState(() => error = tr('No se pudo agregar el vehículo.'));
       }
     } finally {
       if (mounted) setState(() => saving = false);
@@ -359,7 +359,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
     try {
       // El callback OAuth completa la sesion de forma asincrona.
-      // RecordStore restaura o crea el vehiculo cuando recibe la sesion.
+      // RecordStore restaura vehículos existentes; iniciar sesión nunca crea uno.
       await widget.store.signIn();
     } catch (_) {
       if (mounted) {
@@ -410,7 +410,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       children: [
                                         Text(
                                           tr(
-                                            'Puedes iniciar sesión con Google para sincronizar tus datos o entrar directamente y usar la aplicación sin conexión.',
+                                            'Inicia sesión con Google para recuperar tus datos. Si aún no tienes vehículo, agrégalo cuando decidas comenzar.',
                                           ),
                                           textAlign: TextAlign.center,
                                           style: const TextStyle(
@@ -457,12 +457,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                           child: OutlinedButton.icon(
                                             onPressed: saving
                                                 ? null
-                                                : continueDirectly,
+                                                : addVehicleExplicitly,
                                             icon: const Icon(
-                                              Icons.arrow_forward_rounded,
+                                              Icons.add_rounded,
                                             ),
                                             label: Text(
-                                              tr('Entrar directamente'),
+                                              tr('Agregar vehículo'),
                                             ),
                                           ),
                                         ),

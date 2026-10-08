@@ -717,27 +717,14 @@ class RecordStore extends ChangeNotifier {
     return googleUser?.id ?? localOwnerId;
   }
 
-  String get activeVehicleId {
+  String? get activeVehicleIdOrNull {
     final key = 'activeVehicleId:$activeUserId';
     final existing = _meta.get(key);
-    if (existing is String && existing.isNotEmpty) return existing;
-    final generated = 'vehicle-$activeUserId-primary';
-    final now = DateTime.now();
-    _meta.put(key, generated);
-    _meta.put(
-      'vehicle:$generated',
-      VehicleProfile(
-        id: generated,
-        userId: activeUserId,
-        name: 'Mi Tuk Tuk',
-        createdAt: now,
-        updatedAt: now,
-        deviceId: deviceId,
-        syncStatus: SyncStatus.pending,
-      ).toMap(),
-    );
-    return generated;
+    return existing is String && existing.isNotEmpty ? existing : null;
   }
+
+  String get activeVehicleId =>
+      activeVehicleIdOrNull ?? (throw StateError('VEHICLE_REQUIRED'));
 
   VehicleProfile? _vehicleForUser(String userId) {
     final key = 'activeVehicleId:$userId';
@@ -962,6 +949,9 @@ class RecordStore extends ChangeNotifier {
       vehicleId: vehicleId,
       rollbackOnLicenseRejection: true,
     );
+    if (user != null) {
+      await _claimLocalDataForSignedInUser();
+    }
     if (initialOdometer > 0 && records.isEmpty) {
       await save(
         DailyRecord(
@@ -1151,6 +1141,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _migrateSyncMetadata() async {
+    final fallbackVehicleId = activeVehicleIdOrNull;
     for (final key in _meta.keys.toList()) {
       if (key is! String || !key.startsWith('vehicle:')) continue;
       final raw = _meta.get(key);
@@ -1180,7 +1171,7 @@ class RecordStore extends ChangeNotifier {
         final migrated = record.withSyncInfo(
           deviceId: deviceId,
           userId: record.userId.isEmpty ? localOwnerId : null,
-          vehicleId: record.vehicleId.isEmpty ? activeVehicleId : null,
+          vehicleId: record.vehicleId.isEmpty ? fallbackVehicleId : null,
         );
         await _box.put(migrated.id, migrated.toMap());
       }
@@ -1193,7 +1184,7 @@ class RecordStore extends ChangeNotifier {
         final migrated = record.withSyncInfo(
           deviceId: deviceId,
           userId: record.userId.isEmpty ? localOwnerId : null,
-          vehicleId: record.vehicleId.isEmpty ? activeVehicleId : null,
+          vehicleId: record.vehicleId.isEmpty ? fallbackVehicleId : null,
         );
         await _maintenanceBox.put(migrated.id, migrated.toMap());
       }
@@ -1202,6 +1193,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _seedInitialEarningsIfEmpty() async {
+    if (activeVehicleIdOrNull == null) return;
     final currentSeedVersion = _meta.get('seedVersion');
     if (!OwnershipPolicy.shouldLoadHistoricalSeed(currentSeedVersion)) return;
     final canReplaceSeed =
@@ -1237,6 +1229,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _seedInitialMaintenanceIfEmpty() async {
+    if (activeVehicleIdOrNull == null) return;
     if (_maintenanceBox.isNotEmpty) return;
     if (!OwnershipPolicy.shouldLoadHistoricalSeed(_meta.get('seedVersion'))) {
       return;
@@ -1563,23 +1556,13 @@ class RecordStore extends ChangeNotifier {
       await _refreshLicenseIfNeeded(force: true);
       if (_disposed) return;
 
+      // Restaurar sesión o sincronizar nunca crea vehículos.
+      // Primero recuperamos los vehículos que YA existen en la cuenta.
+      await _synchronizeWithSupabase();
+      if (_disposed) return;
+
       if (canWrite) {
         await _claimLocalDataForSignedInUser();
-        if (_disposed) return;
-      }
-
-      // Los datos remotos deben restaurarse tambien en modo solo lectura.
-      // Una licencia sin permiso de escritura no debe impedir consultar
-      // el vehiculo y los registros que ya existen en Supabase.
-      if (activeVehicle == null) {
-        await _synchronizeWithSupabase();
-        if (_disposed) return;
-      }
-
-      // Solo un usuario realmente nuevo y con permiso de escritura
-      // recibe un vehiculo inicial.
-      if (canWrite && activeVehicle == null) {
-        await configureFirstVehicle(name: 'Mi Tuk Tuk');
         if (_disposed) return;
       }
 
@@ -2183,6 +2166,7 @@ class RecordStore extends ChangeNotifier {
   Future<void> _claimLocalDataForSignedInUser() async {
     final googleUser = user;
     if (googleUser == null) return;
+
     final legacyClaimed = _meta.get('claimedUserId');
     final supabaseClaimed = _meta.get('supabaseClaimedUserId');
     final claimedUserId =
@@ -2193,74 +2177,119 @@ class RecordStore extends ChangeNotifier {
         : null;
 
     if (!OwnershipPolicy.canClaimLocalData(claimedUserId, googleUser.id)) {
-      // Este dispositivo ya contiene datos de otra cuenta.
-      // Se conservan intactos y la cuenta nueva usa exclusivamente
-      // sus propios datos locales/remotos.
       _load();
       return;
     }
 
     final targetUserId = googleUser.id;
-    final targetVehicleId = 'vehicle-$targetUserId-primary';
     final sourceOwners = <String>{localOwnerId};
-    if (legacyClaimed is String && legacyClaimed.isNotEmpty) {
+
+    if (legacyClaimed is String &&
+        legacyClaimed.isNotEmpty &&
+        legacyClaimed != targetUserId) {
       sourceOwners.add(legacyClaimed);
     }
-    final sourceVehicle = legacyClaimed is String
-        ? _vehicleForUser(legacyClaimed) ?? _vehicleForUser(localOwnerId)
-        : _vehicleForUser(localOwnerId);
-    for (final record in _allDailyRecords) {
-      if (record.userId.isEmpty || sourceOwners.contains(record.userId)) {
-        final migrated = record.withSyncInfo(
-          deviceId: deviceId,
-          userId: targetUserId,
-          vehicleId: targetVehicleId,
-          syncStatus: SyncStatus.pending,
-        );
-        await _box.put(migrated.id, migrated.toMap());
+
+    final existingTargetVehicle = activeVehicle;
+    final sourceVehicles = <VehicleProfile>[];
+
+    for (final key in _meta.keys.toList()) {
+      if (key is! String || !key.startsWith('vehicle:')) continue;
+
+      final raw = _meta.get(key);
+      if (raw is! Map) continue;
+
+      final vehicle = VehicleProfile.fromMap(raw);
+      if (vehicle.isDeleted || !sourceOwners.contains(vehicle.userId)) {
+        continue;
       }
+
+      sourceVehicles.add(vehicle);
     }
-    for (final record in _allMaintenanceRecords) {
-      if (record.userId.isEmpty || sourceOwners.contains(record.userId)) {
-        final migrated = record.withSyncInfo(
-          deviceId: deviceId,
-          userId: targetUserId,
-          vehicleId: targetVehicleId,
-          syncStatus: SyncStatus.pending,
-        );
-        await _maintenanceBox.put(migrated.id, migrated.toMap());
-      }
-    }
-    final now = DateTime.now();
+
+    String? preferredSourceVehicleId;
+
     for (final sourceOwner in sourceOwners) {
-      await _syncQueue.reassignOwnership(
-        fromUserId: sourceOwner,
-        toUserId: targetUserId,
-        vehicleId: targetVehicleId,
+      final rawVehicleId = _meta.get('activeVehicleId:$sourceOwner');
+      if (rawVehicleId is String &&
+          rawVehicleId.isNotEmpty &&
+          sourceVehicles.any((vehicle) => vehicle.id == rawVehicleId)) {
+        preferredSourceVehicleId = rawVehicleId;
+        break;
+      }
+    }
+
+    if (preferredSourceVehicleId == null && sourceVehicles.isNotEmpty) {
+      preferredSourceVehicleId = sourceVehicles.first.id;
+    }
+
+    final fallbackVehicleId =
+        existingTargetVehicle?.id ?? preferredSourceVehicleId;
+
+    final now = DateTime.now();
+
+    for (final vehicle in sourceVehicles) {
+      await _meta.put(
+        'vehicle:${vehicle.id}',
+        vehicle
+            .withSyncInfo(
+              deviceId: deviceId,
+              userId: targetUserId,
+              syncStatus: SyncStatus.pending,
+              updatedAt: now,
+            )
+            .toMap(),
       );
     }
+
+    if (fallbackVehicleId != null) {
+      for (final record in _allDailyRecords) {
+        if (record.userId.isEmpty || sourceOwners.contains(record.userId)) {
+          final migrated = record.withSyncInfo(
+            deviceId: deviceId,
+            userId: targetUserId,
+            vehicleId: record.vehicleId.isEmpty ? fallbackVehicleId : null,
+            syncStatus: SyncStatus.pending,
+          );
+          await _box.put(migrated.id, migrated.toMap());
+        }
+      }
+
+      for (final record in _allMaintenanceRecords) {
+        if (record.userId.isEmpty || sourceOwners.contains(record.userId)) {
+          final migrated = record.withSyncInfo(
+            deviceId: deviceId,
+            userId: targetUserId,
+            vehicleId: record.vehicleId.isEmpty ? fallbackVehicleId : null,
+            syncStatus: SyncStatus.pending,
+          );
+          await _maintenanceBox.put(migrated.id, migrated.toMap());
+        }
+      }
+
+      for (final sourceOwner in sourceOwners) {
+        await _syncQueue.reassignOwnership(
+          fromUserId: sourceOwner,
+          toUserId: targetUserId,
+          fallbackVehicleId: fallbackVehicleId,
+        );
+      }
+    }
+
     await _meta.put('claimedUserId', targetUserId);
     await _meta.put('supabaseClaimedUserId', targetUserId);
-    final hasOwnedData =
-        _allDailyRecords.any((record) => record.userId == targetUserId) ||
-        _allMaintenanceRecords.any((record) => record.userId == targetUserId);
-    if (hasOwnedData && activeVehicle == null) {
-      await _meta.put('activeVehicleId:$targetUserId', targetVehicleId);
+
+    if (existingTargetVehicle == null && preferredSourceVehicleId != null) {
       await _meta.put(
-        'vehicle:$targetVehicleId',
-        VehicleProfile(
-          id: targetVehicleId,
-          userId: targetUserId,
-          name: sourceVehicle?.name ?? 'Mi Tuk Tuk',
-          registration: sourceVehicle?.registration ?? '',
-          initialOdometer: sourceVehicle?.initialOdometer ?? 0,
-          createdAt: sourceVehicle?.createdAt ?? now,
-          updatedAt: now,
-          deviceId: deviceId,
-          syncStatus: SyncStatus.pending,
-        ).toMap(),
+        'activeVehicleId:$targetUserId',
+        preferredSourceVehicleId,
       );
     }
+
+    for (final sourceOwner in sourceOwners) {
+      await _meta.delete('activeVehicleId:$sourceOwner');
+    }
+
     _load();
   }
 
