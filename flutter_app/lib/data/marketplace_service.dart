@@ -1195,6 +1195,12 @@ class MarketplaceService {
 
   Future<List<MarketplaceJob>> jobs(String scope) => jobsPage(scope);
 
+  /// Read-only status of jobs represented by old local Marketplace income rows.
+  Future<List<Map<String, dynamic>>> incomeVerification(List<String> jobIds) =>
+      _list('list_my_marketplace_income_verification', {
+        'target_job_ids': jobIds,
+      });
+
   Future<List<MarketplaceJob>> incomePage({MarketplaceJob? after}) => _list(
         'list_my_marketplace_income_changes',
         {

@@ -13,6 +13,10 @@ class _IncomeService extends MarketplaceService {
   List<MarketplaceJob> feed = [];
   final cursors = <String?>[];
   bool fail = false;
+  final verification = <String, Map<String, dynamic>>{};
+  @override
+  Future<List<Map<String, dynamic>>> incomeVerification(List<String> jobIds) async =>
+      [for (final id in jobIds) if (verification[id] != null) verification[id]!];
   @override
   Future<List<MarketplaceJob>> incomePage({MarketplaceJob? after}) async {
     cursors.add(after?.id);
@@ -115,6 +119,44 @@ void main() {
   });
 
   tearDown(() => store.dispose());
+
+  test('legacy local income is hidden pending settlement and restored after it',
+      () async {
+    const jobId = '33333333-3333-4333-8333-333333333333';
+    final record = DailyRecord(
+      id: 'marketplace-job-$jobId',
+      date: DateTime.utc(2026, 10, 9),
+      earnings: 140,
+      odometer: 20,
+      userId: store.activeUserId,
+      vehicleId: store.activeVehicleId,
+    );
+    final box = Hive.box('daily_records');
+    await box.put(record.id, record.toMap());
+    final service = _IncomeService();
+    service.verification[jobId] = {
+      'job_id': jobId,
+      'status': 'in_progress',
+      'is_test': false,
+      'is_deleted': false,
+    };
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.records.where((entry) => entry.id == record.id), isEmpty);
+    expect(box.get(record.id), isNotNull); // raw data is never deleted
+    service.verification[jobId] = {
+      'job_id': jobId,
+      'status': 'settled',
+      'is_test': false,
+      'is_deleted': false,
+    };
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.records.single.id, record.id);
+    expect(store.records.single.earnings, 140);
+    service.verification[jobId]!['is_test'] = true;
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.records, isEmpty);
+    expect(box.get(record.id), isNotNull);
+  });
 
   test('periodic missing-income recovery is bounded and resumes its own cursor',
       () async {

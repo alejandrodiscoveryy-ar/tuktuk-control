@@ -1,0 +1,30 @@
+name: Marketplace legacy income audit - isolated Flutter
+on:
+  push:
+    branches:
+      - feat/ride-unified-flow-20261008
+    paths:
+      - '.github/workflows/marketplace-legacy-income-audit.yml'
+      - 'flutter_app/lib/data/record_store.dart'
+      - 'flutter_app/lib/data/marketplace_service.dart'
+      - 'flutter_app/test/presentation/marketplace_records_read_only_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  flutter-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: flutter_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze lib --no-fatal-infos
+      - run: flutter test test/presentation/marketplace_records_read_only_test.dart

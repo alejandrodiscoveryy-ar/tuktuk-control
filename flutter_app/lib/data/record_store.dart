@@ -1123,9 +1123,15 @@ class RecordStore extends ChangeNotifier {
     unawaitedSync();
   }
 
+  Set<String> _marketplaceSuppressedIncomeIds(String ownerId) {
+    final raw = _meta.get('marketplaceIncomeSuppressed:$ownerId');
+    return raw is List ? raw.whereType<String>().toSet() : <String>{};
+  }
+
   void _load() {
     final ownerId = activeUserId;
     final vehicleId = activeVehicle?.id;
+    final suppressed = _marketplaceSuppressedIncomeIds(ownerId);
     _records
       ..clear()
       ..addAll(
@@ -1136,7 +1142,8 @@ class RecordStore extends ChangeNotifier {
                   !record.isDeleted &&
                   record.userId == ownerId &&
                   vehicleId != null &&
-                  record.vehicleId == vehicleId,
+                  record.vehicleId == vehicleId &&
+                  !suppressed.contains(record.id),
             )
             .toList(),
       );
@@ -1325,6 +1332,68 @@ class RecordStore extends ChangeNotifier {
   Future<void>? _marketplaceIncomeRefresh;
   String? marketplaceIncomeReconciliationError;
 
+  /// Read-only audit of pre-existing local income, without deleting any record
+  /// or mutating sync state. Server absence after successful lookup is held for
+  /// review; server settlement restores the original record automatically.
+  Future<void> _auditLegacyMarketplaceIncomes(
+      MarketplaceService service, String ownerId) async {
+    final validId = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    final byJobId = <String, String>{};
+    for (final record in _allDailyRecords) {
+      if (record.userId != ownerId ||
+          record.isDeleted ||
+          !record.isMarketplaceJobIncome) continue;
+      final rawId = record.id.substring('marketplace-job-'.length);
+      if (validId.hasMatch(rawId)) {
+        byJobId[rawId.toLowerCase()] = record.id;
+      }
+    }
+    if (byJobId.isEmpty) return;
+    final jobIds = byJobId.keys.toList()..sort();
+    final suppression = _marketplaceSuppressedIncomeIds(ownerId);
+    final cursorKey = 'marketplaceIncomeAuditOffset:$ownerId';
+    final storedCursor = _meta.get(cursorKey);
+    var offset = storedCursor is int &&
+            storedCursor >= 0 && storedCursor < jobIds.length
+        ? storedCursor : 0;
+    // Limit network work to four 50-job batches per refresh.
+    for (var batch = 0; batch < 4 && offset < jobIds.length; batch++) {
+      final chunk = jobIds.skip(offset).take(50).toList();
+      final serverRows = await service.incomeVerification(chunk);
+      if (_disposed || activeUserId != ownerId) return;
+      final rows = <String, Map<String, dynamic>>{};
+      for (final row in serverRows) {
+        final uuid = '${row['job_id']}'.toLowerCase();
+        if (chunk.contains(uuid)) rows[uuid] = row;
+      }
+      for (final id in chunk) {
+        final row = rows[id];
+        final settledRealJob = row != null &&
+            row['status'] == 'settled' &&
+            row['is_test'] == false &&
+            row['is_deleted'] == false;
+        final recordId = byJobId[id]!;
+        if (settledRealJob) {
+          suppression.remove(recordId);
+        } else {
+          suppression.add(recordId);
+        }
+      }
+      offset += chunk.length;
+    }
+    if (_disposed || activeUserId != ownerId) return;
+    await _meta.put('marketplaceIncomeSuppressed:$ownerId',
+        suppression.toList(growable: false));
+    await _meta.put(cursorKey, offset == jobIds.length ? 0 : offset);
+    if (_disposed || activeUserId != ownerId) return;
+    _load();
+    if (suppression.isNotEmpty) {
+      marketplaceIncomeReconciliationError =
+          'Hay ingresos antiguos pendientes de validaciÃ³n. Los registros se conservaron.';
+    }
+  }
+
   Future<void> reconcileMarketplaceIncomes(MarketplaceService service) =>
       _marketplaceIncomeRefresh ??= _reconcileMarketplaceIncomes(service)
           .whenComplete(() => _marketplaceIncomeRefresh = null);
@@ -1334,6 +1403,7 @@ class RecordStore extends ChangeNotifier {
     final cursorKey = 'marketplaceIncomeCursor:$ownerId';
     marketplaceIncomeReconciliationError = null;
     try {
+      await _auditLegacyMarketplaceIncomes(service, ownerId);
       final raw = _meta.get(cursorKey);
       MarketplaceJob? cursor = raw is Map ? MarketplaceJob.fromMap(raw) : null;
       var caughtUp = false;
