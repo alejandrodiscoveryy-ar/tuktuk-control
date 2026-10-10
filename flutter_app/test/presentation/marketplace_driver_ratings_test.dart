@@ -7,6 +7,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _RatingsStore extends Fake implements RecordStore {
   @override
+  String? marketplaceIncomeReconciliationError;
+
+  @override
+  Future<void> reconcileMarketplaceIncomes(MarketplaceService service) async {}
+
+  @override
   User? get user => const User(
         id: 'driver-test',
         appMetadata: {},
