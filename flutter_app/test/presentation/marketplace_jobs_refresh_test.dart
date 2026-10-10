@@ -614,6 +614,53 @@ void main() {
     );
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
+  testWidgets('active ride displays only the two unified visual milestones',
+      (tester) async {
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'en_route',
+        'next_driver_action': 'mark_pickup',
+        'service_code': 'passenger',
+        'origin_text': 'Origen de prueba',
+        'destination_text': 'Destino de prueba',
+        'final_price': 100,
+        'currency': 'CUP',
+      }),
+    ];
+
+    await open(tester);
+
+    expect(find.text('En camino'), findsWidgets);
+    expect(find.text('Finalizado'), findsOneWidget);
+    expect(find.text('Aceptado'), findsNothing);
+    expect(find.text('Recogida'), findsNothing);
+    expect(find.text('Finalizar carrera'), findsOneWidget);
+  });
+
+  testWidgets('legacy pickup remains finishable without extra visual steps',
+      (tester) async {
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'pickup',
+        'next_driver_action': 'start_service',
+        'service_code': 'passenger',
+        'origin_text': 'Origen de prueba',
+        'destination_text': 'Destino de prueba',
+        'final_price': 100,
+        'currency': 'CUP',
+      }),
+    ];
+
+    await open(tester);
+
+    expect(find.text('En recogida'), findsOneWidget);
+    expect(find.text('Finalizado'), findsOneWidget);
+    expect(find.text('Recogida'), findsNothing);
+    expect(find.text('Finalizar carrera'), findsOneWidget);
+  });
+
   testWidgets('ongoing ride finishes without intermediate steps',
       (tester) async {
     service.active = [

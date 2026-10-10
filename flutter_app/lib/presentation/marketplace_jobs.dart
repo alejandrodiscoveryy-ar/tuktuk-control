@@ -143,14 +143,15 @@ String _marketplaceJobStatusMessage(String status) {
 }
 
 int _marketplaceJobProgressIndex(String status) {
+  // Visual progress uses two milestones; legacy backend states remain valid.
   return switch (status) {
-    'accepted' => 0,
-    'en_route' => 1,
-    'pickup' => 2,
-    'in_progress' => 3,
-    'completed' => 4,
-    'settled' => 4,
-    _ => 0,
+    'accepted' => -1,
+    'en_route' => 0,
+    'pickup' => 0,
+    'in_progress' => 0,
+    'completed' => 1,
+    'settled' => 1,
+    _ => -1,
   };
 }
 
@@ -3256,12 +3257,10 @@ class _AssignedJobCard extends StatelessWidget {
           if (scope != 'history' && job.status != 'incident') ...[
             const SizedBox(height: 14),
             Row(
-              children: List.generate(4, (index) {
+              children: List.generate(2, (index) {
                 const labels = [
-                  'Aceptado',
                   'En camino',
-                  'Recogida',
-                  'Servicio',
+                  'Finalizado',
                 ];
 
                 final active = progressIndex >= index;
