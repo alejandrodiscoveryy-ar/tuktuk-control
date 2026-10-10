@@ -17,7 +17,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
   MarketplaceRoutePath? toDestination;
   MarketplaceMapPoint? driver;
 
-  String? mapToken;
+  MarketplaceMapVisualConfiguration? mapConfiguration;
   String? message;
 
   bool loading = true;
@@ -75,15 +75,16 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
     );
 
     try {
-      final token = mapToken ?? await maps.runtimePublicToken();
+      final configuration =
+          mapConfiguration ?? await maps.runtimeVisualConfiguration();
 
-      if (token == null || token.isEmpty) {
+      if (configuration == null || configuration.token.isEmpty) {
         throw StateError('MAP_TOKEN_MISSING');
       }
 
       if (!mounted) return;
 
-      mapToken = token;
+      mapConfiguration = configuration;
 
       MarketplaceRoutePath? destinationRoute;
 
@@ -209,9 +210,9 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
       );
     }
 
-    final token = mapToken;
+    final configuration = mapConfiguration;
 
-    if (token == null || token.isEmpty) {
+    if (configuration == null || configuration.token.isEmpty) {
       return const Center(
         child: Text('Mapa no disponible para este servicio.'),
       );
@@ -240,8 +241,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             ),
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}?access_token=$token',
+                urlTemplate: configuration.tileUrlTemplate,
                 userAgentPackageName: 'com.vrixora.tuktuk',
               ),
               PolylineLayer(

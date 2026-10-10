@@ -64,40 +64,77 @@ class MarketplaceRouteQuote {
       );
 }
 
+String? marketplaceMapboxStylePath(Object? raw) {
+  final text = raw?.toString().trim() ?? '';
+  const prefix = 'mapbox://styles/';
+  final path = text.startsWith(prefix) ? text.substring(prefix.length) : text;
+  return RegExp(r'^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$').hasMatch(path)
+      ? path
+      : null;
+}
+
+
+class MarketplaceMapVisualConfiguration {
+  const MarketplaceMapVisualConfiguration({
+    required this.token,
+    required this.stylePath,
+    required this.tileSize,
+  });
+
+  final String token;
+  final String stylePath;
+  final int tileSize;
+
+  String get tileUrlTemplate =>
+      'https://api.mapbox.com/styles/v1/$stylePath/tiles/$tileSize/{z}/{x}/{y}?access_token=$token';
+
+  static MarketplaceMapVisualConfiguration? fromCapabilities(Object? raw) {
+    if (raw is! Map || raw['capabilities'] is! List) return null;
+    for (final item in raw['capabilities'] as List) {
+      if (item is! Map || item['capability'] != 'map_visual' ||
+          item['enabled'] != true || item['provider_code'] != 'mapbox') {
+        continue;
+      }
+      final token = item['public_token']?.toString().trim() ?? '';
+      if (token.isEmpty) return null;
+      final config = item['config'];
+      final fallback = item['public_config'];
+      final primaryStyle = config is Map ? config['style'] : null;
+      final fallbackStyle = fallback is Map ? fallback['style'] : null;
+      final stylePath = marketplaceMapboxStylePath(primaryStyle) ??
+          marketplaceMapboxStylePath(fallbackStyle) ??
+          'mapbox/dark-v11';
+      final sizeValue = config is Map && config['tile_size'] != null
+          ? config['tile_size']
+          : fallback is Map ? fallback['tile_size'] : null;
+      final size = sizeValue is num
+          ? sizeValue.toInt()
+          : int.tryParse('$sizeValue');
+      return MarketplaceMapVisualConfiguration(
+        token: token,
+        stylePath: stylePath,
+        tileSize: size == 512 ? 512 : 256,
+      );
+    }
+    return null;
+  }
+}
+
+
 class MarketplaceMapService {
   MarketplaceMapService(this._client);
   final SupabaseClient _client;
 
   static const publicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
 
-  Future<String?> runtimePublicToken() async {
+  Future<MarketplaceMapVisualConfiguration?> runtimeVisualConfiguration() async {
     final value = await _client.rpc(
       'get_public_marketplace_map_capabilities_by_slug',
       params: const {
         'target_project_slug': 'tuktuk-control',
       },
     );
-
-    if (value is! Map) return null;
-
-    final capabilities = value['capabilities'];
-
-    if (capabilities is! List) return null;
-
-    for (final raw in capabilities) {
-      if (raw is! Map) continue;
-
-      if (raw['capability']?.toString() != 'map_visual') continue;
-      if (raw['enabled'] == false) continue;
-
-      final token = raw['public_token']?.toString().trim();
-
-      if (token != null && token.isNotEmpty) {
-        return token;
-      }
-    }
-
-    return null;
+    return MarketplaceMapVisualConfiguration.fromCapabilities(value);
   }
 
   Future<dynamic> _invoke(
