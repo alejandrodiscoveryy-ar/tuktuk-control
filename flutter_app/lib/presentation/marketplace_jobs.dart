@@ -284,6 +284,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
+  final Set<String> _ratedHistoryJobs = {};
   final Map<String, MarketplaceCustomerContact> _contacts = {};
   final Map<String, MarketplaceJobCancellationDetail> _cancellationDetails = {};
 
@@ -1399,9 +1400,32 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     await _load();
   }
 
+  Future<void> _rateHistoryJob(MarketplaceJob job) async {
+    if (_busyJobId != null) return;
+    final userId = widget.store.user?.id;
+    setState(() => _busyJobId = job.id);
+    try {
+      final existing = await _service.customerRating(job.id);
+      if (!mounted || widget.store.user?.id != userId) return;
+      if (existing != null) {
+        setState(() => _ratedHistoryJobs.add(job.id));
+        toast(context, 'Ya has valorado esta carrera.');
+        return;
+      }
+      await _showCustomerRatingSurvey(job.id);
+      _ratingsLoaded = false;
+      await _refreshAfterJobMutation();
+    } catch (_) {
+      if (mounted) toast(context, 'No pudimos consultar la valoración. Reintenta.');
+    } finally {
+      if (mounted) setState(() => _busyJobId = null);
+    }
+  }
+
   Future<void> _showCustomerRatingSurvey(String jobId) async {
     final noteController = TextEditingController();
-    final idempotencyKey = _marketplaceUuidV4();
+    final requestUserId = widget.store.user?.id;
+    ModalRoute<void>? ratingRoute;
 
     var stars = 0;
     var sending = false;
@@ -1414,6 +1438,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         backgroundColor: Colors.transparent,
         barrierColor: Colors.black.withValues(alpha: .72),
         builder: (sheetContext) {
+          ratingRoute = ModalRoute.of<void>(sheetContext);
           return StatefulBuilder(
             builder: (context, setSheetState) {
               Future<void> submit() async {
@@ -1430,7 +1455,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 });
 
                 try {
+                  if (widget.store.user?.id != requestUserId) return;
                   final note = noteController.text.trim();
+                  final ratingAction = 'rating:${jsonEncode([stars, note])}';
+                  final idempotencyKey = _operationKey(jobId, ratingAction);
 
                   await _service.rateCustomer(
                     jobId: jobId,
@@ -1439,8 +1467,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     idempotencyKey: idempotencyKey,
                   );
 
+                  if (mounted && widget.store.user?.id == requestUserId) {
+                    setState(() => _ratedHistoryJobs.add(jobId));
+                  }
+
                   if (sheetContext.mounted) {
-                    Navigator.of(sheetContext).pop();
+                    Navigator.of(sheetContext).pop(true);
                   }
                 } catch (_) {
                   if (!sheetContext.mounted) return;
@@ -1567,14 +1599,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         },
       );
     } finally {
+      // The pop future resolves before the sheet's exit animation finishes.
+      // Keep its controller alive until the route removes the TextField.
+      await ratingRoute?.completed;
       noteController.dispose();
     }
-  }
-
-  Future<void> _reconcileIncome(MarketplaceJob job,
-      {MarketplaceJob? original}) async {
-    await widget.store.reconcileMarketplaceJob(job,
-        distanceKm: job.distanceKm ?? original?.distanceKm);
   }
 
   Future<void> _refreshIncome() async {
@@ -1603,67 +1632,23 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       if (finishing) {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('¿Finalizar carrera?'),
-            content: const Text(
-                'Confirma que el servicio ha terminado. Esta acción cerrará la carrera y liquidará la comisión que corresponda.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Volver')),
-              FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Confirmar finalización')),
-            ],
-          ),
-        );
-        if (confirmed != true ||
-            !mounted ||
-            widget.store.user?.id != requestUserId) {
-          return;
+        await _showCustomerRatingSurvey(job.id);
+        _ratingsLoaded = false;
+        if (mounted && widget.store.user?.id == requestUserId) {
+          await _refreshAfterJobMutation();
+          await _refreshIncome();
         }
+        return;
       }
-      final updatedJob = finishing
-          ? await _service.finishJob(job.id, key)
-          : await _service.advance(job.id, action, key);
-
+      await _service.advance(job.id, action, key);
       if (widget.store.user?.id != requestUserId) return;
-
       _operationKeys.remove(keyName);
-
-      if (finishing) {
-        try {
-          await _reconcileIncome(updatedJob, original: job);
-        } catch (_) {
-          if (mounted) {
-            toast(
-              context,
-              'Carrera finalizada en el servidor. '
-              'El ingreso local necesita sincronizarse.',
-            );
-          }
-        }
-
-        if (mounted) {
-          await _showCustomerRatingSurvey(updatedJob.id);
-          _ratingsLoaded = false;
-        }
-      }
-
       if (!mounted) return;
       await _refreshAfterJobMutation();
     } catch (error) {
       if (!mounted) return;
 
-      if (error.toString().toUpperCase().contains('FINISH_TOO_EARLY')) {
-        toast(
-          context,
-          'Todavía es demasiado pronto para finalizar esta carrera.',
-        );
-      } else if (finishing) {
+      if (finishing) {
         toast(
           context,
           'No pudimos confirmar el cierre. '
@@ -3055,6 +3040,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             _marketplaceJobCanDriverCancel(job)
                         ? () => _cancelJob(job)
                         : null,
+                    onRating: scope == 'history' && job.status == 'settled' &&
+                            !_ratedHistoryJobs.contains(job.id) &&
+                            !_ratings.any((r) => r.jobId == job.id && r.givenStars != null)
+                        ? () => _rateHistoryJob(job)
+                        : null,
                   ),
                 ),
               ),
@@ -3084,6 +3074,7 @@ class _AssignedJobCard extends StatelessWidget {
     this.onContact,
     this.onAdvance,
     this.onCancel,
+    this.onRating,
   });
 
   final MarketplaceJob job;
@@ -3094,6 +3085,7 @@ class _AssignedJobCard extends StatelessWidget {
   final VoidCallback? onContact;
   final VoidCallback? onAdvance;
   final VoidCallback? onCancel;
+  final VoidCallback? onRating;
 
   @override
   Widget build(BuildContext context) {
@@ -3413,6 +3405,14 @@ class _AssignedJobCard extends StatelessWidget {
                   label: const Text('Cancelar'),
                 ),
               ],
+            ),
+          ],
+          if (onRating != null) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: busy ? null : onRating,
+              icon: const Icon(Icons.star_outline_rounded),
+              label: const Text('Valorar cliente'),
             ),
           ],
         ],

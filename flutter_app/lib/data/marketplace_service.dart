@@ -1296,6 +1296,12 @@ class MarketplaceService {
     'target_idempotency_key': idempotencyKey,
   }).then(MarketplaceDriverCustomerRating.fromMap);
 
+  Future<MarketplaceDriverCustomerRating?> customerRating(String jobId) =>
+      _list('get_my_marketplace_customer_rating', {'target_job_id': jobId})
+          .then((items) => items.isEmpty
+              ? null
+              : MarketplaceDriverCustomerRating.fromMap(items.single));
+
   Future<List<MarketplaceDriverRatingEntry>> ratings({int limit = 100}) =>
       _list('list_my_marketplace_ratings', {'target_limit': limit}).then(
         (items) => items.map(MarketplaceDriverRatingEntry.fromMap).toList(),

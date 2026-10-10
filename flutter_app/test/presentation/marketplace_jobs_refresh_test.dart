@@ -77,6 +77,10 @@ class _JobsService extends MarketplaceService {
   int legacyAcceptCalls = 0;
   int advanceCalls = 0;
   int finishCalls = 0;
+  int ratingCalls = 0;
+  bool failRating = false;
+  final ratingKeys = <String>[];
+  final ratedJobs = <String>{};
   String? lastAdvanceAction;
   List<MarketplaceAvailableJob> availableJobs = [offer];
   bool failAvailable = false;
@@ -217,6 +221,33 @@ class _JobsService extends MarketplaceService {
       'final_price': 100,
       'currency': 'CUP',
     });
+  }
+
+  @override
+  Future<MarketplaceDriverCustomerRating?> customerRating(String jobId) async =>
+      ratedJobs.contains(jobId)
+          ? MarketplaceDriverCustomerRating(jobId: jobId, stars: 5)
+          : null;
+
+  @override
+  Future<MarketplaceDriverCustomerRating> rateCustomer({
+    required String jobId,
+    required int stars,
+    required String idempotencyKey,
+    String? internalNote,
+  }) async {
+    ratingCalls++;
+    ratingKeys.add(idempotencyKey);
+    if (failRating) throw const SocketException('offline');
+    ratedJobs.add(jobId);
+    if (!history.any((job) => job.id == jobId)) {
+      history = [...history, MarketplaceJob.fromMap({
+        'job_id': jobId, 'status': 'settled', 'is_test': false,
+        'assigned_vehicle_id': 'assigned-vehicle', 'final_price': 100,
+      })];
+    }
+    active = active.where((job) => job.id != jobId).toList();
+    return MarketplaceDriverCustomerRating(jobId: jobId, stars: stars);
   }
 
   @override
@@ -433,7 +464,7 @@ void main() {
         find.byKey(const ValueKey('marketplace-income-error')), findsNothing);
   });
 
-  testWidgets('canceling finish confirmation never calls the server',
+  testWidgets('abandoning the direct rating never closes or records income',
       (tester) async {
     service.active = [
       MarketplaceJob.fromMap({
@@ -445,9 +476,12 @@ void main() {
     await open(tester);
     await tester.tap(find.text('Finalizar carrera'));
     await pumpJobs(tester);
-    await tester.tap(find.text('Volver'));
+    expect(find.text('Evalúa al cliente'), findsOneWidget);
+    expect(find.text('¿Finalizar carrera?'), findsNothing);
+    await tester.tap(find.text('Ahora no'));
     await pumpJobs(tester);
     expect(service.finishCalls, 0);
+    expect(service.ratingCalls, 0);
     expect(store.incomes, isEmpty);
     expect(find.text('Finalizar carrera'), findsOneWidget);
   });
@@ -605,14 +639,66 @@ void main() {
     await pumpJobs(tester);
 
     expect(service.finishCalls, 0);
-    expect(find.text('¿Finalizar carrera?'), findsOneWidget);
-    await tester.tap(find.text('Confirmar finalización'));
+    expect(find.text('Evalúa al cliente'), findsOneWidget);
+    expect(find.text('¿Finalizar carrera?'), findsNothing);
+    expect(store.incomes, isEmpty);
+    await tester.tap(find.byTooltip('5 estrellas'));
+    await tester.ensureVisible(find.text('Enviar evaluación'));
+    await tester.tap(find.text('Enviar evaluación'));
     await pumpJobs(tester);
 
-    expect(service.finishCalls, 1);
+    expect(service.finishCalls, 0);
+    expect(service.ratingCalls, 1);
     expect(store.incomes[offer.id], 'assigned-vehicle');
     expect(service.advanceCalls, 0);
   });
+  testWidgets('offline rating retries the same payload without standalone finish', (tester) async {
+    service.active = [MarketplaceJob.fromMap({
+      'job_id': offer.id, 'status': 'en_route', 'final_price': 100,
+    })];
+    service.failRating = true;
+    await open(tester);
+    await tester.tap(find.text('Finalizar carrera'));
+    await pumpJobs(tester);
+    await tester.tap(find.byTooltip('5 estrellas'));
+    await tester.ensureVisible(find.text('Enviar evaluación'));
+    await tester.tap(find.text('Enviar evaluación'));
+    await pumpJobs(tester);
+    expect(store.incomes, isEmpty);
+    expect(service.active.single.status, 'en_route');
+    service.failRating = false;
+    await tester.tap(find.text('Enviar evaluación'));
+    await pumpJobs(tester);
+    expect(service.ratingKeys.toSet(), hasLength(1));
+    expect(service.ratingCalls, 2);
+    expect(service.finishCalls, 0);
+    expect(store.incomes, {offer.id: 'assigned-vehicle'});
+  });
+
+  for (final actor in ['customer', 'admin']) {
+    testWidgets('pending driver rating from history after $actor closure', (tester) async {
+      service.history = [MarketplaceJob.fromMap({
+        'job_id': offer.id, 'status': 'settled', 'is_test': false,
+        'assigned_vehicle_id': 'assigned-vehicle', 'final_price': 100,
+      })];
+      await open(tester);
+      await tester.tap(find.text('Hist.'));
+      await pumpJobs(tester);
+      await tester.ensureVisible(find.text('Valorar cliente'));
+      await tester.tap(find.text('Valorar cliente'));
+      await pumpJobs(tester);
+      await tester.tap(find.byTooltip('5 estrellas'));
+      await tester.ensureVisible(find.text('Enviar evaluación'));
+      await tester.tap(find.text('Enviar evaluación'));
+      await pumpJobs(tester);
+      expect(service.ratingCalls, 1);
+      expect(service.finishCalls, 0);
+      expect(service.history, hasLength(1));
+      expect(store.incomes, {offer.id: 'assigned-vehicle'});
+      expect(find.text('Valorar cliente'), findsNothing);
+    });
+  }
+
   testWidgets('advance button is unique below current status and above route',
       (tester) async {
     service.active = [
