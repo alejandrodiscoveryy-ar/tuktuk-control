@@ -254,6 +254,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   List<MarketplaceJob> _active = const [];
   List<MarketplaceJob> _scheduled = const [];
   List<MarketplaceJob> _history = const [];
+  bool _historyHasMore = false;
+  bool _loadingMoreHistory = false;
+  String? _historyMoreError;
   List<MarketplaceDriverRatingEntry> _ratings = const [];
   MarketplaceDriverRatingSummary? _ratingSummary;
   bool _loadingRatings = false;
@@ -265,6 +268,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   bool _loading = true;
   String? _error;
+  String? _incomeError;
   String? _acceptingJobId;
   String? _busyJobId;
   bool _updatingAvailability = false;
@@ -366,7 +370,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (marketplaceJobPushPending.value && !_marketplaceJobsVisible.value) {
       _marketplaceJobsNeedAttention.value = true;
     }
-    unawaited(_load(refreshHistory: false));
+    unawaited(_load());
   }
 
   @override
@@ -972,6 +976,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         throw StateError('Job availability could not be verified');
       }
       await _loadAvailable();
+      unawaited(_refreshIncome());
 
       if (mounted) {
         setState(() => _loading = false);
@@ -1069,6 +1074,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   Future<void> _fetchScope(String scope) async {
     if (!mounted) return;
+    final requestUserId = widget.store.user?.id;
 
     setState(() {
       _loadingScopes.add(scope);
@@ -1077,6 +1083,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       final jobs = await _service.jobs(scope);
+      if (widget.store.user?.id != requestUserId) return;
 
       List<MarketplaceJobCancellationDetail> cancellationDetails = const [];
 
@@ -1115,6 +1122,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
           case 'history':
             _history = jobs;
+            _historyHasMore = jobs.length == 50;
+            _historyMoreError = null;
             _cancellationDetails
               ..clear()
               ..addEntries(
@@ -1157,6 +1166,54 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       'history' => _history,
       _ => const <MarketplaceJob>[],
     };
+  }
+
+  Future<void> _loadMoreHistory() async {
+    if (_loadingMoreHistory || !_historyHasMore || _history.isEmpty) return;
+    final cursor = _history.last;
+    final ownerId = widget.store.user?.id;
+    setState(() {
+      _loadingMoreHistory = true;
+      _historyMoreError = null;
+    });
+    try {
+      if (cursor.createdAt == null) throw StateError('INVALID_HISTORY_CURSOR');
+      final page = await _service.jobsPage('history', before: cursor);
+      if (!mounted ||
+          widget.store.user?.id != ownerId ||
+          _history.isEmpty || _history.last.id != cursor.id) {
+        return;
+      }
+      if (page.isNotEmpty && page.last.id == cursor.id) {
+        throw StateError('INVALID_HISTORY_CURSOR');
+      }
+      final cancelledIds = page
+          .where((job) =>
+              job.status == 'cancelled_by_driver' ||
+              job.status == 'cancelled_by_customer')
+          .map((job) => job.id);
+      if (cancelledIds.isNotEmpty) {
+        try {
+          final details = await _service.cancellationDetails(cancelledIds);
+          if (!mounted || widget.store.user?.id != ownerId) return;
+          _cancellationDetails.addEntries(
+              details.map((detail) => MapEntry(detail.jobId, detail)));
+        } catch (_) {/* Cancellation details do not block history. */}
+      }
+      if (!mounted || widget.store.user?.id != ownerId) return;
+      final ids = _history.map((job) => job.id).toSet();
+      setState(() {
+        _history = [..._history, ...page.where((job) => ids.add(job.id))];
+        _historyHasMore = page.length == 50;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _historyMoreError =
+            'No se pudo cargar más historial. Inténtalo de nuevo.');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMoreHistory = false);
+    }
   }
 
   Future<void> _changeVehicle(String? vehicleId) async {
@@ -1514,6 +1571,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
+  Future<void> _reconcileIncome(MarketplaceJob job,
+      {MarketplaceJob? original}) async {
+    await widget.store.reconcileMarketplaceJob(job,
+        distanceKm: job.distanceKm ?? original?.distanceKm);
+  }
+
+  Future<void> _refreshIncome() async {
+    await widget.store.reconcileMarketplaceIncomes(_service);
+    if (mounted) {
+      setState(() =>
+          _incomeError = widget.store.marketplaceIncomeReconciliationError);
+    }
+  }
+
   Future<void> _advanceJob(MarketplaceJob job) async {
     final finishing = _marketplaceJobCanFinish(job);
     final action = finishing ? 'finish_service' : job.nextAction;
@@ -1528,22 +1599,44 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     final keyName = '${job.id}:$action';
     final key = _operationKey(job.id, action);
+    final requestUserId = widget.store.user?.id;
 
     try {
+      if (finishing) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('¿Finalizar carrera?'),
+            content: const Text(
+                'Confirma que el servicio ha terminado. Esta acción cerrará la carrera y liquidará la comisión que corresponda.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Volver')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Confirmar finalización')),
+            ],
+          ),
+        );
+        if (confirmed != true ||
+            !mounted ||
+            widget.store.user?.id != requestUserId) {
+          return;
+        }
+      }
       final updatedJob = finishing
           ? await _service.finishJob(job.id, key)
           : await _service.advance(job.id, action, key);
+
+      if (widget.store.user?.id != requestUserId) return;
 
       _operationKeys.remove(keyName);
 
       if (finishing) {
         try {
-          await widget.store.ensureMarketplaceJobIncome(
-            jobId: updatedJob.id,
-            amount: updatedJob.finalPrice,
-            distanceKm: job.distanceKm,
-            completedAt: updatedJob.completedAt ?? DateTime.now(),
-          );
+          await _reconcileIncome(updatedJob, original: job);
         } catch (_) {
           if (mounted) {
             toast(
@@ -1591,6 +1684,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       }
     }
   }
+
   Future<void> _cancelJob(MarketplaceJob job) async {
     if (_busyJobId != null || !_marketplaceJobCanDriverCancel(job)) return;
 
@@ -2630,6 +2724,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return Column(
       children: [
         const SizedBox(height: 8),
+        if (_incomeError != null)
+          Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(_incomeError!,
+                  key: const ValueKey('marketplace-income-error'))),
         TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -2958,6 +3057,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                         : null,
                   ),
                 ),
+              ),
+            if (scope == 'history' && _historyMoreError != null)
+              Text(_historyMoreError!),
+            if (scope == 'history' && _historyHasMore)
+              TextButton(
+                key: const ValueKey('marketplace-history-more'),
+                onPressed: _loadingMoreHistory ? null : _loadMoreHistory,
+                child: Text(
+                    _loadingMoreHistory ? 'Cargando…' : 'Cargar más historial'),
               ),
           ],
         ],

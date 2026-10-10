@@ -10,6 +10,39 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _Store extends Fake implements RecordStore {
+  final incomes = <String, String?>{};
+  int incomeCalls = 0;
+  @override
+  String? marketplaceIncomeReconciliationError;
+
+  @override
+  Future<void> reconcileMarketplaceJob(MarketplaceJob job,
+      {double? distanceKm}) async {
+    if (job.status != 'settled' ||
+        job.isTest != false ||
+        job.vehicleId == null) {
+      return;
+    }
+    await ensureMarketplaceJobIncome(
+        jobId: job.id,
+        amount: job.finalPrice,
+        vehicleId: job.vehicleId,
+        completedAt: job.completedAt);
+  }
+
+  @override
+  Future<void> reconcileMarketplaceIncomes(MarketplaceService service) async {
+    try {
+      for (final job in await service.incomePage()) {
+        await reconcileMarketplaceJob(job);
+      }
+      marketplaceIncomeReconciliationError = null;
+    } catch (_) {
+      marketplaceIncomeReconciliationError =
+          'No se pudieron conciliar algunos ingresos.';
+    }
+  }
+
   @override
   User? get user => const User(
         id: 'driver-test',
@@ -26,9 +59,13 @@ class _Store extends Fake implements RecordStore {
   Future<void> ensureMarketplaceJobIncome({
     required String jobId,
     required double amount,
+    String? vehicleId,
     double? distanceKm,
     DateTime? completedAt,
-  }) async {}
+  }) async {
+    incomeCalls++;
+    incomes[jobId] = vehicleId;
+  }
 }
 
 class _JobsService extends MarketplaceService {
@@ -44,8 +81,13 @@ class _JobsService extends MarketplaceService {
   List<MarketplaceAvailableJob> availableJobs = [offer];
   bool failAvailable = false;
   bool failActive = false;
+  bool failIncome = false;
+  int incomePageCalls = 0;
   bool acceptingJobs = true;
   List<MarketplaceJob> active = [];
+  List<MarketplaceJob> history = [];
+  int visualPageCalls = 0;
+  String? lastHistoryCursor;
   Completer<List<MarketplaceAvailableJob>>? pending;
 
   @override
@@ -87,7 +129,35 @@ class _JobsService extends MarketplaceService {
     if (scope == 'active' && failActive) {
       throw const SocketException('offline');
     }
-    return scope == 'active' ? active : [];
+    return scope == 'active'
+        ? active
+        : scope == 'history'
+            ? history
+            : [];
+  }
+
+  @override
+  Future<List<MarketplaceJob>> incomePage({MarketplaceJob? after}) async {
+    incomePageCalls++;
+    if (failIncome) throw const SocketException('income feed unavailable');
+    return history;
+  }
+
+  @override
+  Future<List<MarketplaceJob>> jobsPage(String scope,
+      {MarketplaceJob? before}) async {
+    visualPageCalls++;
+    lastHistoryCursor = before?.id;
+    return [
+      MarketplaceJob.fromMap({
+        'job_id': 'older-visible',
+        'status': 'settled',
+        'is_test': false,
+        'final_price': 100,
+        'origin_text': 'Origen antiguo visible',
+        'created_at': '2026-09-01T00:00:00Z',
+      })
+    ];
   }
 
   @override
@@ -142,6 +212,8 @@ class _JobsService extends MarketplaceService {
     return MarketplaceJob.fromMap({
       'job_id': jobId,
       'status': 'settled',
+      'is_test': false,
+      'assigned_vehicle_id': 'assigned-vehicle',
       'final_price': 100,
       'currency': 'CUP',
     });
@@ -171,9 +243,42 @@ const offer = MarketplaceAvailableJob(
   currency: 'CUP',
 );
 
+class _PagedService extends MarketplaceService {
+  _PagedService() : super(Supabase.instance.client);
+  final cursors = <MarketplaceJob?>[];
+  @override
+  Future<List<MarketplaceJob>> jobsPage(String scope,
+      {MarketplaceJob? before}) async {
+    cursors.add(before);
+    if (before != null) {
+      return [
+        MarketplaceJob.fromMap({
+          'job_id': 'older-settlement',
+          'status': 'settled',
+          'is_test': false,
+          'vehicle_id': 'older-vehicle',
+          'final_price': 123,
+          'created_at': '2026-09-01T00:00:00Z',
+        })
+      ];
+    }
+    return List.generate(
+        50,
+        (index) => MarketplaceJob.fromMap({
+              'job_id': 'page-$index',
+              'status': 'settled',
+              'is_test': false,
+              'vehicle_id': 'vehicle-test',
+              'final_price': 100,
+              'created_at': '2026-10-08T00:00:00Z',
+            }));
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _JobsService service;
+  late _Store store;
 
   setUpAll(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -195,6 +300,7 @@ void main() {
 
   setUp(() {
     service = _JobsService();
+    store = _Store();
     marketplaceJobPushPending.value = false;
   });
 
@@ -210,7 +316,7 @@ void main() {
   Future<void> open(WidgetTester tester) async {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: MarketplaceJobsScreen(store: _Store(), service: service),
+        body: MarketplaceJobsScreen(store: store, service: service),
       ),
     ));
     await pumpJobs(tester);
@@ -220,6 +326,131 @@ void main() {
         'kind': 'marketplace_job_available',
         'job_id': offer.id,
       });
+
+  test('visual history fetches only one page', () async {
+    final paged = _PagedService();
+    final jobs = await paged.jobs('history');
+    expect(jobs.length, 50);
+    expect(paged.cursors.length, 1);
+  });
+
+  testWidgets('older visual history loads one page only when requested',
+      (tester) async {
+    service.history = List.generate(
+        50,
+        (index) => MarketplaceJob.fromMap({
+              'job_id': 'visible-${index.toString().padLeft(2, '0')}',
+              'status': 'settled',
+              'is_test': false,
+              'final_price': 100,
+              'created_at': '2026-10-08T00:00:00Z',
+            }));
+    await open(tester);
+    await tester.tap(find.text('Hist.'));
+    await pumpJobs(tester);
+    expect(service.visualPageCalls, 0);
+    final more = find.byKey(const ValueKey('marketplace-history-more'));
+    await tester.scrollUntilVisible(more, 1000,
+        scrollable: find
+            .descendant(
+                of: find.byType(RefreshIndicator).last,
+                matching: find.byType(Scrollable))
+            .first,
+        maxScrolls: 60);
+    final incomeCalls = service.incomePageCalls;
+    await tester.tap(more);
+    await pumpJobs(tester);
+    expect(service.visualPageCalls, 1);
+    expect(service.lastHistoryCursor, 'visible-49');
+    expect(service.incomePageCalls, incomeCalls);
+    expect(find.text('Origen antiguo visible'), findsOneWidget);
+    expect(more, findsNothing);
+  });
+
+  for (final actor in ['customer', 'admin']) {
+    testWidgets(
+        '$actor settlement reconciles on reconnect with assigned vehicle',
+        (tester) async {
+      await open(tester);
+      service.failActive = true;
+      notify();
+      await pumpJobs(tester);
+      expect(store.incomes, isEmpty);
+      service.failActive = false;
+      service.history = [
+        MarketplaceJob.fromMap({
+          'job_id': offer.id,
+          'status': 'settled',
+          'is_test': false,
+          'vehicle_id': 'historical-vehicle',
+          'final_price': 100,
+          'completed_at': '2026-10-08T12:00:00Z',
+        })
+      ];
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await pumpJobs(tester);
+      expect(store.incomes[offer.id], 'historical-vehicle');
+      notify();
+      await pumpJobs(tester);
+      expect(store.incomes.length, 1);
+    });
+  }
+
+  testWidgets('unsettled or unassigned history does not invent income',
+      (tester) async {
+    service.history = [
+      MarketplaceJob.fromMap({
+        'job_id': 'pending',
+        'status': 'completed',
+        'vehicle_id': 'vehicle-test',
+        'final_price': 100
+      }),
+      MarketplaceJob.fromMap({
+        'job_id': 'missing-vehicle',
+        'status': 'settled',
+        'is_test': false,
+        'final_price': 100
+      }),
+    ];
+    await open(tester);
+    expect(store.incomeCalls, 0);
+  });
+
+  testWidgets('income errors do not block visual jobs or offers',
+      (tester) async {
+    service.failIncome = true;
+    await open(tester);
+    expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('marketplace-income-error')), findsOneWidget);
+    await tester.tap(find.text('Hist.'));
+    await pumpJobs(tester);
+    expect(find.text('Tu historial está vacío'), findsOneWidget);
+    service.failIncome = false;
+    notify();
+    await pumpJobs(tester);
+    expect(
+        find.byKey(const ValueKey('marketplace-income-error')), findsNothing);
+  });
+
+  testWidgets('canceling finish confirmation never calls the server',
+      (tester) async {
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'en_route',
+        'final_price': 100,
+      })
+    ];
+    await open(tester);
+    await tester.tap(find.text('Finalizar carrera'));
+    await pumpJobs(tester);
+    await tester.tap(find.text('Volver'));
+    await pumpJobs(tester);
+    expect(service.finishCalls, 0);
+    expect(store.incomes, isEmpty);
+    expect(find.text('Finalizar carrera'), findsOneWidget);
+  });
 
   test('onboarding requires driver data and at least one complete vehicle', () {
     MarketplaceOnboarding onboarding({required bool vehicleComplete}) =>
@@ -373,7 +604,13 @@ void main() {
     await tester.tap(find.text('Finalizar carrera'));
     await pumpJobs(tester);
 
+    expect(service.finishCalls, 0);
+    expect(find.text('¿Finalizar carrera?'), findsOneWidget);
+    await tester.tap(find.text('Confirmar finalización'));
+    await pumpJobs(tester);
+
     expect(service.finishCalls, 1);
+    expect(store.incomes[offer.id], 'assigned-vehicle');
     expect(service.advanceCalls, 0);
   });
   testWidgets('advance button is unique below current status and above route',
@@ -423,7 +660,7 @@ void main() {
     service.pending!.complete([offer]);
     await pumpJobs(tester);
     expect(service.availableCalls, 3);
-    expect(service.historyCalls, 1);
+    expect(service.historyCalls, 3);
     expect(marketplaceJobPushPending.value, isFalse);
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
     expect(find.textContaining('No pudimos actualizar los trabajos'),
@@ -451,7 +688,7 @@ void main() {
     }
     await pumpJobs(tester);
     expect(service.availableCalls, 2);
-    expect(service.historyCalls, 1);
+    expect(service.historyCalls, 2);
     await tester.ensureVisible(find.text('Aceptar e ir a buscar'));
     await tester.tap(find.text('Aceptar e ir a buscar'));
     await pumpJobs(tester);
@@ -498,18 +735,24 @@ void main() {
 
   testWidgets('hidden Jobs refreshes without building maps or navigating',
       (tester) async {
-    service.active = [MarketplaceJob.fromMap({
-      'job_id': offer.id,
-      'status': 'accepted',
-      'next_driver_action': 'start_en_route',
-      'origin_lat': 23.1,
-      'origin_lon': -82.4,
-      'destination_lat': 23.2,
-      'destination_lon': -82.5,
-    })];
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Stack(children: [
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'accepted',
+        'next_driver_action': 'start_en_route',
+        'origin_lat': 23.1,
+        'origin_lon': -82.4,
+        'destination_lat': 23.2,
+        'destination_lon': -82.5,
+      })
+    ];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: Stack(children: [
       MarketplaceJobsScreen(
-        store: _Store(), service: service, isVisible: false,
+        store: _Store(),
+        service: service,
+        isVisible: false,
       ),
       const Text('Otra sección'),
     ]))));
@@ -519,7 +762,7 @@ void main() {
     expect(find.text('Otra sección'), findsOneWidget);
     expect(find.byType(MarketplaceDriverMap), findsNothing);
     expect(find.byType(TabBar), findsNothing);
-    expect(service.historyCalls, 1);
+    expect(service.historyCalls, 2);
     expect(service.availableCalls, 0);
   });
 }

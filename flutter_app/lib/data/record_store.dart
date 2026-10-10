@@ -1320,13 +1320,192 @@ class RecordStore extends ChangeNotifier {
     await _maintenanceBox.put(record.id, record.toMap());
   }
 
+  Future<void> _marketplaceIncomeWrites = Future<void>.value();
+
+  Future<void>? _marketplaceIncomeRefresh;
+  String? marketplaceIncomeReconciliationError;
+
+  Future<void> reconcileMarketplaceIncomes(MarketplaceService service) =>
+      _marketplaceIncomeRefresh ??= _reconcileMarketplaceIncomes(service)
+          .whenComplete(() => _marketplaceIncomeRefresh = null);
+
+  Future<void> _reconcileMarketplaceIncomes(MarketplaceService service) async {
+    final ownerId = activeUserId;
+    final cursorKey = 'marketplaceIncomeCursor:$ownerId';
+    marketplaceIncomeReconciliationError = null;
+    try {
+      final raw = _meta.get(cursorKey);
+      MarketplaceJob? cursor = raw is Map ? MarketplaceJob.fromMap(raw) : null;
+      var caughtUp = false;
+      // Initial recovery and subsequent updates are both bounded. updated_at
+      // also captures old bookings settled after their creation-date page.
+      for (var pageNumber = 0; pageNumber < 2; pageNumber++) {
+        final page = await service.incomePage(after: cursor);
+        if (_disposed || activeUserId != ownerId) return;
+        if (page.isEmpty) {
+          caughtUp = true;
+          break;
+        }
+        await _applyMarketplaceIncomePage(page, cursor, ownerId);
+        cursor = page.last;
+        await _meta.put(cursorKey, {
+          'job_id': cursor.id,
+          'updated_at': cursor.updatedAt!.toUtc().toIso8601String(),
+        });
+        if (page.length < 50) {
+          caughtUp = true;
+          break;
+        }
+      }
+      if (caughtUp) await _recoverMissingMarketplaceIncomes(service, ownerId);
+    } catch (_) {
+      if (!_disposed && activeUserId == ownerId) {
+        marketplaceIncomeReconciliationError =
+            'No se pudieron conciliar algunos ingresos. Se reintentará al actualizar.';
+      }
+    }
+    if (!_disposed && activeUserId == ownerId) notifyListeners();
+  }
+
+  Future<void> _applyMarketplaceIncomePage(
+      List<MarketplaceJob> page, MarketplaceJob? cursor, String ownerId) async {
+    Object? failure;
+    for (final job in page) {
+      if (_disposed || activeUserId != ownerId) {
+        throw StateError('INCOME_OWNER_CHANGED');
+      }
+      try {
+        if (job.updatedAt == null ||
+            (cursor != null &&
+                (job.updatedAt!.isBefore(cursor.updatedAt!) ||
+                    (job.updatedAt == cursor.updatedAt &&
+                        job.id.compareTo(cursor.id) <= 0)))) {
+          throw StateError('INVALID_MARKETPLACE_INCOME_CURSOR');
+        }
+        cursor = job;
+        await reconcileMarketplaceJob(job);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    // No cursor is committed after a failure; successful rows are idempotent.
+    if (failure != null) throw failure;
+    if (_disposed || activeUserId != ownerId) {
+      throw StateError('INCOME_OWNER_CHANGED');
+    }
+  }
+
+  Future<void> _recoverMissingMarketplaceIncomes(
+      MarketplaceService service, String ownerId) async {
+    final completedKey = 'marketplaceIncomeSweepCompleted:$ownerId';
+    final cursorKey = 'marketplaceIncomeSweepCursor:$ownerId';
+    final now = DateTime.now().toUtc();
+    final last = DateTime.tryParse('${_meta.get(completedKey)}');
+    if (last == null) {
+      // The initial delta recovery just scanned all existing settlements.
+      await _meta.put(completedKey, now.toIso8601String());
+      return;
+    }
+    final raw = _meta.get(cursorKey);
+    if (raw == null && now.difference(last) < const Duration(days: 1)) return;
+    final cursor = raw is Map ? MarketplaceJob.fromMap(raw) : null;
+    // One extra page per refresh, only while a periodic recovery is due.
+    // Recovers omissions after backup restoration or late transaction commits.
+    final page = await service.incomePage(after: cursor);
+    await _applyMarketplaceIncomePage(page, cursor, ownerId);
+    if (page.length < 50) {
+      await _meta.put(completedKey, now.toIso8601String());
+      await _meta.delete(cursorKey);
+    } else {
+      await _meta.put(cursorKey, {
+        'job_id': page.last.id,
+        'updated_at': page.last.updatedAt!.toUtc().toIso8601String(),
+      });
+    }
+  }
+
+  Future<void> reconcileMarketplaceJob(MarketplaceJob job,
+      {double? distanceKm}) async {
+    if (job.status != 'settled' || job.isTest == true) return;
+    if (job.isTest == null) throw StateError('MARKETPLACE_TEST_FLAG_REQUIRED');
+    final vehicleId = job.vehicleId;
+    if (vehicleId == null ||
+        vehicleId.trim().isEmpty ||
+        job.id.isEmpty ||
+        !job.finalPrice.isFinite ||
+        job.finalPrice <= 0) {
+      throw StateError('INVALID_MARKETPLACE_INCOME');
+    }
+    final ownerId = activeUserId;
+    final raw = _meta.get('vehicle:$vehicleId');
+    if (raw != null &&
+        (raw is! Map ||
+            VehicleProfile.fromMap(raw).userId != ownerId ||
+            VehicleProfile.fromMap(raw).isDeleted)) {
+      throw StateError('MARKETPLACE_VEHICLE_OWNER_MISMATCH');
+    }
+    if (raw == null) {
+      final now = DateTime.now();
+      // Marketplace and Control share public.vehicles.id: never remap to the
+      // active/primary vehicle and never replace an existing local profile.
+      final vehicle = VehicleProfile(
+        id: vehicleId,
+        userId: ownerId,
+        name: job.vehicleName ?? 'Vehículo Marketplace',
+        registration: job.vehicleRegistration ?? '',
+        createdAt: now,
+        updatedAt: now,
+        deviceId: deviceId,
+        syncStatus: SyncStatus.synced,
+      );
+      await _meta.put('vehicle:$vehicleId', vehicle.toMap());
+    }
+    if (activeUserId != ownerId || _disposed) return;
+    await ensureMarketplaceJobIncome(
+        jobId: job.id,
+        amount: job.finalPrice,
+        vehicleId: vehicleId,
+        distanceKm: distanceKm ?? job.distanceKm,
+        completedAt: job.completedAt ?? job.updatedAt);
+  }
+
   Future<void> ensureMarketplaceJobIncome({
     required String jobId,
     required double amount,
+    String? vehicleId,
+    double? distanceKm,
+    DateTime? completedAt,
+  }) {
+    final ownerId = activeUserId;
+    final write =
+        _marketplaceIncomeWrites.then((_) => _writeMarketplaceJobIncome(
+              jobId: jobId,
+              amount: amount,
+              vehicleId: vehicleId,
+              ownerId: ownerId,
+              distanceKm: distanceKm,
+              completedAt: completedAt,
+            ));
+    _marketplaceIncomeWrites = write.catchError((Object _) {});
+    return write;
+  }
+
+  Future<void> _writeMarketplaceJobIncome({
+    required String jobId,
+    required double amount,
+    required String? vehicleId,
+    required String ownerId,
     double? distanceKm,
     DateTime? completedAt,
   }) async {
-    if (jobId.trim().isEmpty || amount <= 0) return;
+    if (jobId.trim().isEmpty ||
+        !amount.isFinite ||
+        amount <= 0 ||
+        vehicleId == null ||
+        vehicleId.trim().isEmpty ||
+        ownerId != activeUserId) {
+      return;
+    }
 
     final incomeId = 'marketplace-job-${jobId.trim()}';
 
@@ -1334,6 +1513,15 @@ class RecordStore extends ChangeNotifier {
     if (existingRaw != null) {
       final existing = DailyRecord.fromMap(existingRaw as Map);
       if (!existing.isDeleted) {
+        if (existing.userId != ownerId) {
+          throw StateError('MARKETPLACE_INCOME_OWNER_MISMATCH');
+        }
+        if (existing.vehicleId != vehicleId) {
+          await _saveDailyRecord(
+            existing.withSyncInfo(deviceId: deviceId, vehicleId: vehicleId),
+            preserveVehicle: true,
+          );
+        }
         return;
       }
     }
@@ -1341,7 +1529,8 @@ class RecordStore extends ChangeNotifier {
     final completed = completedAt ?? DateTime.now();
 
     final odometer = marketplaceIncomeOdometerFromHistory(
-      records: records,
+      records: _allDailyRecords.where((record) =>
+          record.userId == ownerId && record.vehicleId == vehicleId),
       distanceKm: distanceKm,
     );
 
@@ -1353,9 +1542,10 @@ class RecordStore extends ChangeNotifier {
       note: 'Trabajo TUKTUK',
       deviceId: deviceId,
       userId: activeUserId,
+      vehicleId: vehicleId,
     );
 
-    await _saveDailyRecord(record);
+    await _saveDailyRecord(record, preserveVehicle: true);
   }
 
   Future<void> save(DailyRecord record) async {
@@ -1366,13 +1556,17 @@ class RecordStore extends ChangeNotifier {
     await _saveDailyRecord(record);
   }
 
-  Future<void> _saveDailyRecord(DailyRecord record) async {
+  Future<void> _saveDailyRecord(DailyRecord record,
+      {bool preserveVehicle = false}) async {
     await _requireWriteAccess();
+    if (preserveVehicle && record.userId != activeUserId) {
+      throw StateError('MARKETPLACE_INCOME_OWNER_MISMATCH');
+    }
     final previousRaw = _box.get(record.id);
     final normalized = record.withSyncInfo(
       deviceId: deviceId,
       userId: activeUserId,
-      vehicleId: activeVehicleId,
+      vehicleId: preserveVehicle ? record.vehicleId : activeVehicleId,
       syncStatus: SyncStatus.pending,
       updatedAt: DateTime.now(),
     );
@@ -1383,9 +1577,8 @@ class RecordStore extends ChangeNotifier {
       action: SyncAction.upsert,
       userId: normalized.userId,
       vehicleId: normalized.vehicleId,
-      previousPayload: previousRaw is Map
-          ? Map<String, dynamic>.from(previousRaw)
-          : null,
+      previousPayload:
+          previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
       rollbackOnLicenseRejection: true,
     );
     _load();

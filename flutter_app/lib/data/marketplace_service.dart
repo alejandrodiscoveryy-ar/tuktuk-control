@@ -563,6 +563,9 @@ class MarketplaceJob {
     required this.billingMode,
     required this.finalPrice,
     required this.currency,
+    this.isTest,
+    this.vehicleName,
+    this.vehicleRegistration,
     this.serviceCode,
     this.originText,
     this.destinationText,
@@ -600,6 +603,10 @@ class MarketplaceJob {
 
   final String id;
   final String status;
+  // Unknown flags fail closed for income; trial_free is a separate billing rule.
+  final bool? isTest;
+  final String? vehicleName;
+  final String? vehicleRegistration;
   final String? serviceCode;
   final String? originText;
   final String? destinationText;
@@ -647,77 +654,78 @@ class MarketplaceJob {
 
   MarketplaceMapPoint? get destinationPoint =>
       destinationLat == null || destinationLon == null
-      ? null
-      : MarketplaceMapPoint(
-          label: destinationText ?? 'Destino',
-          lat: destinationLat!,
-          lon: destinationLon!,
-        );
+          ? null
+          : MarketplaceMapPoint(
+              label: destinationText ?? 'Destino',
+              lat: destinationLat!,
+              lon: destinationLon!,
+            );
 
   factory MarketplaceJob.fromMap(Map map) => MarketplaceJob(
-    id: _marketText(map['job_id'] ?? map['id']) ?? '',
-    status: _marketText(map['status']) ?? 'unknown',
-    serviceCode: _marketText(map['service_code']),
-    originText: _marketText(map['origin_text']),
-    destinationText: _marketText(map['destination_text']),
-    originLat: map['origin_lat'] == null
-        ? null
-        : _marketNumber(map['origin_lat']),
-    originLon: map['origin_lon'] == null
-        ? null
-        : _marketNumber(map['origin_lon']),
-    destinationLat: map['destination_lat'] == null
-        ? null
-        : _marketNumber(map['destination_lat']),
-    destinationLon: map['destination_lon'] == null
-        ? null
-        : _marketNumber(map['destination_lon']),
-    distanceKm: map['distance_km'] == null
-        ? null
-        : _marketNumber(map['distance_km']),
-    scheduledFor: _marketDate(map['scheduled_for']),
-    passengerCount: map['passenger_count'] == null
-        ? null
-        : _marketInt(map['passenger_count']),
-    cargoWeightKg: map['cargo_weight_kg'] == null
-        ? null
-        : _marketNumber(map['cargo_weight_kg']),
-    cargoVolumeM3: map['cargo_volume_m3'] == null
-        ? null
-        : _marketNumber(map['cargo_volume_m3']),
-    cargoLengthCm: map['cargo_length_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_length_cm']),
-    cargoWidthCm: map['cargo_width_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_width_cm']),
-    cargoHeightCm: map['cargo_height_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_height_cm']),
-    requiredBodyType: _marketText(map['required_body_type']),
-    finalPrice: _marketNumber(map['final_price']),
-    currency: _marketText(map['currency']) ?? 'CUP',
-    vehicleId: _marketText(map['vehicle_id'] ?? map['assigned_vehicle_id']),
-    billingMode: marketplaceBillingMode(map['billing_mode']),
-    commissionAmountSnapshot: map['commission_amount_snapshot'] == null
-        ? null
-        : _marketNumber(map['commission_amount_snapshot']),
-    trialStartedAtSnapshot: _marketDate(map['trial_started_at_snapshot']),
-    trialEndsAtSnapshot: _marketDate(map['trial_ends_at_snapshot']),
-    acceptedAt: _marketDate(map['accepted_at']),
-    completedAt: _marketDate(map['completed_at']),
-    cancelledAt: _marketDate(map['cancelled_at']),
-    publishedAt: _marketDate(map['published_at']),
-    expiresAt: _marketDate(map['expires_at']),
-    createdAt: _marketDate(map['created_at']),
-    updatedAt: _marketDate(map['updated_at']),
-    incidentFromStatus: _marketText(map['incident_from_status']),
-    incidentOpenedAt: _marketDate(map['incident_opened_at']),
-    incidentReason: _marketText(map['incident_reason']),
-    incidentResolution: _marketText(map['incident_resolution']),
-    incidentResolvedAt: _marketDate(map['incident_resolved_at']),
-    nextAction: _marketText(map['next_driver_action']),
-  );
+        id: _marketText(map['job_id'] ?? map['id']) ?? '',
+        status: _marketText(map['status']) ?? 'unknown',
+        isTest: map['is_test'] is bool ? map['is_test'] as bool : null,
+        vehicleName: _marketText(map['vehicle_name']),
+        vehicleRegistration: _marketText(map['vehicle_registration']),
+        serviceCode: _marketText(map['service_code']),
+        originText: _marketText(map['origin_text']),
+        destinationText: _marketText(map['destination_text']),
+        originLat:
+            map['origin_lat'] == null ? null : _marketNumber(map['origin_lat']),
+        originLon:
+            map['origin_lon'] == null ? null : _marketNumber(map['origin_lon']),
+        destinationLat: map['destination_lat'] == null
+            ? null
+            : _marketNumber(map['destination_lat']),
+        destinationLon: map['destination_lon'] == null
+            ? null
+            : _marketNumber(map['destination_lon']),
+        distanceKm: map['distance_km'] == null
+            ? null
+            : _marketNumber(map['distance_km']),
+        scheduledFor: _marketDate(map['scheduled_for']),
+        passengerCount: map['passenger_count'] == null
+            ? null
+            : _marketInt(map['passenger_count']),
+        cargoWeightKg: map['cargo_weight_kg'] == null
+            ? null
+            : _marketNumber(map['cargo_weight_kg']),
+        cargoVolumeM3: map['cargo_volume_m3'] == null
+            ? null
+            : _marketNumber(map['cargo_volume_m3']),
+        cargoLengthCm: map['cargo_length_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_length_cm']),
+        cargoWidthCm: map['cargo_width_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_width_cm']),
+        cargoHeightCm: map['cargo_height_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_height_cm']),
+        requiredBodyType: _marketText(map['required_body_type']),
+        finalPrice: _marketNumber(map['final_price']),
+        currency: _marketText(map['currency']) ?? 'CUP',
+        vehicleId: _marketText(map['vehicle_id'] ?? map['assigned_vehicle_id']),
+        billingMode: marketplaceBillingMode(map['billing_mode']),
+        commissionAmountSnapshot: map['commission_amount_snapshot'] == null
+            ? null
+            : _marketNumber(map['commission_amount_snapshot']),
+        trialStartedAtSnapshot: _marketDate(map['trial_started_at_snapshot']),
+        trialEndsAtSnapshot: _marketDate(map['trial_ends_at_snapshot']),
+        acceptedAt: _marketDate(map['accepted_at']),
+        completedAt: _marketDate(map['completed_at']),
+        cancelledAt: _marketDate(map['cancelled_at']),
+        publishedAt: _marketDate(map['published_at']),
+        expiresAt: _marketDate(map['expires_at']),
+        createdAt: _marketDate(map['created_at']),
+        updatedAt: _marketDate(map['updated_at']),
+        incidentFromStatus: _marketText(map['incident_from_status']),
+        incidentOpenedAt: _marketDate(map['incident_opened_at']),
+        incidentReason: _marketText(map['incident_reason']),
+        incidentResolution: _marketText(map['incident_resolution']),
+        incidentResolvedAt: _marketDate(map['incident_resolved_at']),
+        nextAction: _marketText(map['next_driver_action']),
+      );
 }
 
 class MarketplaceJobCancellationDetail {
@@ -1185,10 +1193,34 @@ class MarketplaceService {
     {'target_vehicle_id': vehicleId},
   ).then((items) => items.map(MarketplaceAvailableJob.fromMap).toList());
 
-  Future<List<MarketplaceJob>> jobs(String scope) => _list(
-    'list_my_marketplace_jobs',
-    {'target_scope': scope},
-  ).then((items) => items.map(MarketplaceJob.fromMap).toList());
+  Future<List<MarketplaceJob>> jobs(String scope) => jobsPage(scope);
+
+  Future<List<MarketplaceJob>> incomePage({MarketplaceJob? after}) => _list(
+        'list_my_marketplace_income_changes',
+        {
+          'target_limit': 50,
+          if (after != null) ...{
+            'target_after_updated_at':
+                after.updatedAt!.toUtc().toIso8601String(),
+            'target_after_job_id': after.id,
+          },
+        },
+      ).then((items) => items.map(MarketplaceJob.fromMap).toList());
+
+  Future<List<MarketplaceJob>> jobsPage(String scope,
+          {MarketplaceJob? before}) =>
+      _list(
+        'list_my_marketplace_jobs',
+        {
+          'target_scope': scope,
+          'target_limit': 50,
+          if (before != null) ...{
+            'target_before_created_at':
+                before.createdAt!.toUtc().toIso8601String(),
+            'target_before_job_id': before.id,
+          },
+        },
+      ).then((items) => items.map(MarketplaceJob.fromMap).toList());
 
   Future<List<MarketplaceJobCancellationDetail>> cancellationDetails(
     Iterable<String> jobIds,
