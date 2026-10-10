@@ -1390,7 +1390,7 @@ class RecordStore extends ChangeNotifier {
     _load();
     if (suppression.isNotEmpty) {
       marketplaceIncomeReconciliationError =
-          'Hay ingresos antiguos pendientes de validaciÃ³n. Los registros se conservaron.';
+          'Hay ingresos antiguos pendientes de validación. Los registros se conservaron.';
     }
   }
 
