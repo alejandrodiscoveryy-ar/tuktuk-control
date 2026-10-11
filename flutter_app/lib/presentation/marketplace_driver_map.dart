@@ -237,8 +237,8 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
                 spacing: 10,
                 runSpacing: 5,
                 children: [
-                  _legendItem(kTertiary, 'Hasta recogida'),
-                  _legendItem(kPrimary, 'Hasta destino'),
+                  _legendItem(const Color(0xFF28C7FF), 'Hasta recogida'),
+                  _legendItem(kTertiary, 'Hasta destino'),
                 ],
               ),
             ),
