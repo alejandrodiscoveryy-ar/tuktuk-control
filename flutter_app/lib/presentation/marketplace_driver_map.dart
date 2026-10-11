@@ -1,10 +1,7 @@
 part of '../main.dart';
 
 class MarketplaceDriverMap extends StatefulWidget {
-  const MarketplaceDriverMap({
-    required this.job,
-    super.key,
-  });
+  const MarketplaceDriverMap({required this.job, super.key});
 
   final MarketplaceJob job;
 
@@ -70,9 +67,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
       });
     }
 
-    final maps = MarketplaceMapService(
-      Supabase.instance.client,
-    );
+    final maps = MarketplaceMapService(Supabase.instance.client);
 
     try {
       final configuration =
@@ -85,6 +80,11 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
       if (!mounted) return;
 
       mapConfiguration = configuration;
+      // Solo token publico: rutas y sesiones siguen protegidas en el gateway.
+      if (!configuration.token.startsWith('pk.')) {
+        throw StateError('MAPBOX_PUBLIC_TOKEN_INVALID');
+      }
+      mbx.MapboxOptions.setAccessToken(configuration.token);
 
       MarketplaceRoutePath? destinationRoute;
 
@@ -164,10 +164,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
     }
   }
 
-  Widget _legendItem(
-    Color color,
-    String text,
-  ) {
+  Widget _legendItem(Color color, String text) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -182,10 +179,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         const SizedBox(width: 5),
         Text(
           text,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-          ),
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
         ),
       ],
     );
@@ -203,11 +197,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
     }
 
     if (loading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-        ),
-      );
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
 
     final configuration = mapConfiguration;
@@ -218,92 +208,27 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
       );
     }
 
-    final goingToPickup = widget.job.status == 'accepted' ||
-        widget.job.status == 'en_route' ||
-        widget.job.status == 'pickup';
-
-    final pickupColor = kTertiary.withValues(
-      alpha: goingToPickup ? 1 : .35,
-    );
-
-    final destinationColor = kPrimary.withValues(
-      alpha: goingToPickup ? .45 : 1,
-    );
+    final goingToPickup = marketplaceDriverGoingToPickup(widget.job.status);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: Stack(
         children: [
-          FlutterMap(
-            options: MapOptions(
-              initialCenter: pickup.latLng,
-              initialZoom: 13,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: configuration.tileUrlTemplate,
-                userAgentPackageName: 'com.vrixora.tuktuk',
-              ),
-              PolylineLayer(
-                polylines: [
-                  if (toPickup != null)
-                    Polyline(
-                      points: toPickup!.points
-                          .map((point) => point.latLng)
-                          .toList(),
-                      color: pickupColor,
-                      strokeWidth: goingToPickup ? 6 : 3,
-                    ),
-                  if (toDestination != null)
-                    Polyline(
-                      points: toDestination!.points
-                          .map((point) => point.latLng)
-                          .toList(),
-                      color: destinationColor,
-                      strokeWidth: goingToPickup ? 3 : 6,
-                    ),
-                ],
-              ),
-              MarkerLayer(
-                markers: [
-                  if (driver != null)
-                    Marker(
-                      point: driver!.latLng,
-                      child: const Icon(
-                        Icons.navigation_rounded,
-                        color: Colors.blue,
-                        size: 34,
-                      ),
-                    ),
-                  Marker(
-                    point: pickup.latLng,
-                    child: const Icon(
-                      Icons.person_pin_circle_rounded,
-                      color: kTertiary,
-                      size: 40,
-                    ),
-                  ),
-                  Marker(
-                    point: destination.latLng,
-                    child: const Icon(
-                      Icons.location_pin,
-                      color: kPrimary,
-                      size: 40,
-                    ),
-                  ),
-                ],
-              ),
-              marketplaceMapAttribution(pickup.latLng),
-            ],
+          MarketplaceDriverVectorMap(
+            key: ValueKey('${widget.job.id}-${widget.job.status}'),
+            pickup: pickup,
+            destination: destination,
+            driver: driver,
+            toPickup: toPickup,
+            toDestination: toDestination,
+            goingToPickup: goingToPickup,
+            stylePath: configuration.stylePath,
           ),
           Positioned(
             left: 10,
             top: 10,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: kSurfaceHigh.withValues(alpha: .92),
                 borderRadius: BorderRadius.circular(12),
@@ -312,14 +237,8 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
                 spacing: 10,
                 runSpacing: 5,
                 children: [
-                  _legendItem(
-                    kTertiary,
-                    'Hasta recogida',
-                  ),
-                  _legendItem(
-                    kPrimary,
-                    'Hasta destino',
-                  ),
+                  _legendItem(kTertiary, 'Hasta recogida'),
+                  _legendItem(kPrimary, 'Hasta destino'),
                 ],
               ),
             ),
@@ -338,9 +257,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
                 child: Text(
                   message!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ),
