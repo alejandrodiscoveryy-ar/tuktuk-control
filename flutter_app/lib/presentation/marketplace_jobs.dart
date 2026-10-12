@@ -834,6 +834,21 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
         _lastOperationalPosition = position;
         _lastOperationalSentAt = nowUtc;
+
+        // A push can arrive while the previous GPS position is stale.
+        // The initial jobs query may return empty before this GPS upload.
+        // Wait for that query, then recheck with the fresh position.
+        if (!activeService) {
+          final previousAvailableRequest = _availableRequest;
+          if (previousAvailableRequest != null) {
+            await previousAvailableRequest;
+          }
+          if (mounted &&
+              _selectedVehicleId == vehicle.id &&
+              _canPublishOperationalLocation()) {
+            await _loadAvailable();
+          }
+        }
       }
     } catch (_) {
       // Un fallo transitorio de GPS/red no debe detener el seguimiento.
