@@ -2241,46 +2241,62 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 const SizedBox(width: 10),
                 Semantics(
                   label: acceptingJobs
-                      ? 'Desactivar disponibilidad'
-                      : 'Activar disponibilidad',
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(
-                        alpha: acceptingJobs ? 0.12 : 0.18,
-                      ),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(
-                        color: statusColor.withValues(
-                          alpha: acceptingJobs ? 0.36 : 0.58,
-                        ),
-                        width: 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: statusColor.withValues(
-                            alpha: acceptingJobs ? 0.12 : 0.24,
-                          ),
-                          blurRadius: acceptingJobs ? 10 : 16,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: Transform.scale(
-                      scale: 1.18,
-                      child: Switch.adaptive(
-                        key: const ValueKey(
-                          'marketplace-availability-switch',
-                        ),
-                        value: acceptingJobs,
-                        onChanged: _updatingAvailability
+                      ? 'Descansar: dejar de recibir solicitudes'
+                      : 'Trabajar: empezar a recibir solicitudes',
+                  toggled: acceptingJobs,
+                  enabled: !_updatingAvailability,
+                  onTap: _updatingAvailability
+                      ? null
+                      : () => unawaited(_setAcceptingJobs(!acceptingJobs)),
+                  child: ExcludeSemantics(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        key: const ValueKey('marketplace-availability-switch'),
+                        borderRadius: BorderRadius.circular(32),
+                        onTap: _updatingAvailability
                             ? null
-                            : (value) {
-                                unawaited(_setAcceptingJobs(value));
-                              },
+                            : () => unawaited(
+                                  _setAcceptingJobs(!acceptingJobs),
+                                ),
+                        child: Container(
+                          width: 112,
+                          height: 58,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(
+                              alpha: acceptingJobs ? 0.12 : 0.18,
+                            ),
+                            borderRadius: BorderRadius.circular(32),
+                            border: Border.all(
+                              color: statusColor.withValues(
+                                alpha: acceptingJobs ? 0.36 : 0.58,
+                              ),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: statusColor.withValues(
+                                  alpha: acceptingJobs ? 0.12 : 0.24,
+                                ),
+                                blurRadius: acceptingJobs ? 10 : 16,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: Transform.scale(
+                            scale: 1.24,
+                            child: IgnorePointer(
+                              child: Switch.adaptive(
+                                value: acceptingJobs,
+                                // Todo el toque lo gestiona el InkWell exterior.
+                                onChanged: _updatingAvailability
+                                    ? null
+                                    : (_) {},
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
