@@ -109,14 +109,14 @@ class MarketplaceMoreScreen extends StatelessWidget {
               icon: Icons.work_outline_rounded,
               color: Color(0xFF2DD4A3),
             ),
-            title: const Text('Trabajar con nosotros'),
+            title: const Text('Conviértete en conductor'),
             subtitle: const Text(
               'Configura tu perfil de conductor y el vehículo que usarás para recibir solicitudes.',
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
-              title: 'Trabajar con nosotros',
+              title: 'Conviértete en conductor',
               child: MarketplaceOnboardingScreen(store: store),
             ),
           ),

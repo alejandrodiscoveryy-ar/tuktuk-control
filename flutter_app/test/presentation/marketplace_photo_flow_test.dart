@@ -10,8 +10,9 @@ void main() {
   late String jobs;
 
   setUpAll(() {
-    onboarding =
-        File('lib/presentation/marketplace_onboarding.dart').readAsStringSync();
+    onboarding = File(
+      'lib/presentation/marketplace_onboarding.dart',
+    ).readAsStringSync();
     service = File('lib/data/marketplace_service.dart').readAsStringSync();
     recordStore = File('lib/data/record_store.dart').readAsStringSync();
     edge = File(
@@ -24,7 +25,9 @@ void main() {
     expect(onboarding, contains('if (pendingBytes != null) return image'));
     expect(
       onboarding,
-      contains('A private Marketplace asset has priority over the Google fallback'),
+      contains(
+        'A private Marketplace asset has priority over the Google fallback',
+      ),
     );
     expect(onboarding, contains('fallbackNetworkUrl: _googleDriverPhotoUrl'));
   });
@@ -32,7 +35,9 @@ void main() {
   test('Google avatar is offered as the initial driver photo', () {
     expect(
       onboarding,
-      contains('Usaremos tu foto de Google como foto inicial. Puedes cambiarla.'),
+      contains(
+        'Usaremos tu foto de Google como foto inicial. Puedes cambiarla.',
+      ),
     );
     expect(onboarding, contains('_service.adoptGoogleAvatar('));
   });
@@ -48,7 +53,10 @@ void main() {
   });
 
   test('MarketplaceService invokes the dedicated Google avatar function', () {
-    expect(service, contains('Future<MarketplaceMediaAsset> adoptGoogleAvatar'));
+    expect(
+      service,
+      contains('Future<MarketplaceMediaAsset> adoptGoogleAvatar'),
+    );
     expect(service, contains("'marketplace-driver-google-avatar'"));
     expect(service, contains("'idempotency_key': idempotencyKey"));
   });
@@ -73,8 +81,7 @@ void main() {
 
   test('profile synchronization does not overwrite custom display name', () {
     final start = recordStore.indexOf('Future<void> _ensureRemoteProfile()');
-    final end =
-        recordStore.indexOf('Future<void> _applyRemoteChanges', start);
+    final end = recordStore.indexOf('Future<void> _applyRemoteChanges', start);
     expect(start, greaterThanOrEqualTo(0));
     expect(end, greaterThan(start));
     final ensureProfile = recordStore.substring(start, end);
@@ -84,16 +91,13 @@ void main() {
   });
 
   test('UI explains when conductor and vehicle photos are uploaded', () {
-    expect(onboarding, contains('Se subirá al pulsar Guardar conductor.'));
-    expect(onboarding, contains('Se subirá al pulsar Guardar vehículo.'));
+    expect(onboarding, contains('Se subirá al pulsar Guardar mi inscripción.'));
+    expect(onboarding, contains('Se subirá al pulsar Guardar mi inscripción.'));
     expect(onboarding, contains('MarketplacePhotoException'));
     expect(onboarding, contains('StorageException'));
   });
   test('Trabajos keeps onboarding mounted while the photo picker returns', () {
-    expect(
-      jobs,
-      contains('if (_loading && _onboarding == null)'),
-    );
+    expect(jobs, contains('if (_loading && _onboarding == null)'));
   });
 
   test('vehicle onboarding is compact and uses brand/model identity', () {
@@ -107,10 +111,7 @@ void main() {
       onboarding,
       contains(r"final vehicleName = '$brand $model'.trim();"),
     );
-    expect(
-      onboarding,
-      contains("'Más datos del vehículo (opcional)'"),
-    );
+    expect(onboarding, contains("'Más datos del vehículo (opcional)'"));
     expect(onboarding, contains('final showPassengerCapacity ='));
     expect(onboarding, contains('final showCargoCapacity ='));
   });
