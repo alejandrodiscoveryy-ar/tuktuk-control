@@ -558,6 +558,9 @@ void main() {
     final availabilitySwitch =
         find.byKey(const ValueKey('marketplace-availability-switch'));
     expect(availabilitySwitch, findsOneWidget);
+    // Zona tactil de la capsula entera; no solo el interruptor interno.
+    expect(tester.getSize(availabilitySwitch).width, greaterThanOrEqualTo(110));
+    expect(tester.getSize(availabilitySwitch).height, greaterThanOrEqualTo(56));
 
     final titleTop = tester.getTopLeft(find.text('Vehículo activo')).dy;
     final switchTop = tester.getTopLeft(availabilitySwitch).dy;
