@@ -71,8 +71,10 @@ class MarketplaceTopupHistory extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_marketplaceMoneyLabel(topup.amount, topup.currency),
-                      style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(
+                    _marketplaceMoneyLabel(topup.amount, topup.currency),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   Text(topup.methodName ?? 'Método no disponible'),
                   Text(_marketplaceDateTimeLabel(topup.requestedAt)),
                   if (topup.reference != null)
@@ -141,8 +143,10 @@ class _MarketplaceTopupFormState extends State<MarketplaceTopupForm> {
       setState(() => _methods = methods);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loadError =
-          'No pudimos cargar los métodos de pago. Revisa tu conexión y actualiza.');
+      setState(
+        () => _loadError =
+            'No pudimos cargar los métodos de pago. Revisa tu conexión y actualiza.',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -184,24 +188,30 @@ class _MarketplaceTopupFormState extends State<MarketplaceTopupForm> {
         canPop: !_sending,
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
-              20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+            20,
+            20,
+            20,
+            20 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
           child: Form(
             key: _form,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Recargar saldo',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                const Text(
+                  'Recargar saldo',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _amount,
                   enabled: !_sending,
                   decoration:
                       const InputDecoration(labelText: 'Importe en CUP'),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   validator: (value) {
                     final amount = _marketplaceOptionalNumber(value ?? '');
                     return amount == null || !amount.isFinite || amount <= 0
@@ -224,8 +234,12 @@ class _MarketplaceTopupFormState extends State<MarketplaceTopupForm> {
                     decoration:
                         const InputDecoration(labelText: 'Método de pago'),
                     items: _methods
-                        .map((method) => DropdownMenuItem(
-                            value: method, child: Text(method.name)))
+                        .map(
+                          (method) => DropdownMenuItem(
+                            value: method,
+                            child: Text(method.name),
+                          ),
+                        )
                         .toList(),
                     onChanged: _sending
                         ? null
@@ -249,12 +263,15 @@ class _MarketplaceTopupFormState extends State<MarketplaceTopupForm> {
                   ),
                 const SizedBox(height: 16),
                 const Text(
-                    'La solicitud quedará pendiente hasta que sea confirmada. El saldo de tu billetera no cambia hasta esa confirmación.'),
+                  'La solicitud quedará pendiente hasta que sea confirmada. El saldo de tu billetera no cambia hasta esa confirmación.',
+                ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    _error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
@@ -375,6 +392,227 @@ class _MarketplaceOnboardingScreenState
   bool _processingPhoto = false;
   String? _error;
 
+  int _registrationStep = 0;
+  final ScrollController _registrationScroll = ScrollController();
+  bool _showFieldErrors = false;
+  bool _registrationSubmitting = false;
+  bool _registrationSaved = false;
+  bool _driverSaveSucceeded = false;
+  bool _vehicleSaveSucceeded = false;
+
+  Map<String, String> _registrationErrors() {
+    final issues = <String, String>{};
+    if (_name.text.trim().isEmpty) {
+      issues['name'] = 'Escribe tu nombre y apellidos.';
+    }
+    if (!RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(_phone.text.trim())) {
+      issues['phone'] =
+          'Escribe un teléfono válido con código de país, por ejemplo +5355555555.';
+    }
+    if (_driverPhotoBytes == null &&
+        _data?.driverPhotoAssetId == null &&
+        _googleDriverPhotoUrl == null) {
+      issues['driverPhoto'] = 'Añade una foto clara de tu rostro.';
+    }
+    if (widget.driverOnly) return issues;
+    final vehicle = _findVehicle(_selectedVehicleId);
+    if (vehicle == null) {
+      issues['vehicleId'] =
+          'Pulsa Añadir vehículo para registrar el que utilizarás.';
+      return issues;
+    }
+    if (_validCatalogValue(
+          _selectedCategory,
+          _data?.vehicleCategories ?? const <MarketplaceCatalogItem>[],
+        ) ==
+        null) {
+      issues['category'] = 'Selecciona la categoría de vehículo.';
+    }
+    if (_selectedCategory == 'other' && _otherCategory.text.trim().isEmpty) {
+      issues['otherCategory'] = 'Describe el tipo de vehículo.';
+    }
+    if (_brand.text.trim().isEmpty) issues['brand'] = 'Indica la marca.';
+    if (_model.text.trim().isEmpty) issues['model'] = 'Indica el modelo.';
+    if ('${_brand.text.trim()} ${_model.text.trim()}'.trim().length > 80) {
+      issues['model'] = 'Marca y modelo no pueden superar 80 caracteres.';
+    }
+    if (_validCatalogValue(
+          _selectedPropulsion,
+          _data?.propulsionTypes ?? const <MarketplaceCatalogItem>[],
+        ) ==
+        null) {
+      issues['propulsion'] = 'Selecciona la propulsión.';
+    }
+    if (_selectedServices.isEmpty) {
+      issues['services'] =
+          'Selecciona al menos un servicio que puedas realizar.';
+    }
+    if (_selectedServices.contains('passenger') ||
+        _selectedServices.contains('tourism')) {
+      final people = _marketplaceOptionalInt(_passengers.text);
+      if (people == null || people <= 0) {
+        issues['passengers'] =
+            'Indica una capacidad de pasajeros mayor que cero.';
+      }
+    }
+    if (_selectedServices.contains('cargo')) {
+      final kg = _marketplaceOptionalNumber(_cargoKg.text);
+      if (kg == null || !kg.isFinite || kg <= 0) {
+        issues['cargoKg'] = 'Indica la capacidad de carga en kg.';
+      }
+    }
+    if (_year.text.trim().isNotEmpty &&
+        _marketplaceOptionalInt(_year.text) == null) {
+      issues['year'] = 'Introduce un año válido o deja el campo vacío.';
+    }
+    if (_registration.text.trim().length > 32) {
+      issues['registration'] = 'La chapa admite un máximo de 32 caracteres.';
+    }
+    if (_vehiclePhotoBytes == null && vehicle.mainPhotoAssetId == null) {
+      issues['vehiclePhoto'] = 'Añade una foto principal del vehículo.';
+    }
+    return issues;
+  }
+
+  String? _registrationError(String field) =>
+      _showFieldErrors ? _registrationErrors()[field] : null;
+
+  String? _vehicleFieldError(String label) =>
+      _registrationError(switch (label) {
+        'Vehículo' => 'vehicleId',
+        'Categoría' => 'category',
+        'Describe el tipo de vehículo' => 'otherCategory',
+        'Marca' => 'brand',
+        'Modelo' => 'model',
+        'Propulsión' => 'propulsion',
+        'Pasajeros' => 'passengers',
+        'Carga (kg)' => 'cargoKg',
+        'Año' => 'year',
+        'Chapa (opcional)' => 'registration',
+        _ => '',
+      });
+
+  void _refreshRegistrationErrors() {
+    if (_showFieldErrors && mounted && !_saving) setState(() {});
+  }
+
+  void _scrollRegistrationToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_registrationScroll.hasClients) return;
+      unawaited(
+        _registrationScroll.animateTo(
+          0,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        ),
+      );
+    });
+  }
+
+  void _goToRegistrationStep(int nextStep) {
+    if (_registrationSubmitting) return;
+    if (widget.driverOnly && nextStep == 1) nextStep = 2;
+    if (nextStep > _registrationStep) {
+      final issues = _registrationErrors();
+      final relevant = nextStep == 1
+          ? issues.keys.where(
+              (key) => key == 'name' || key == 'phone' || key == 'driverPhoto',
+            )
+          : issues.keys;
+      if (relevant.isNotEmpty) {
+        setState(() => _showFieldErrors = true);
+        _scrollRegistrationToTop();
+        toast(context, 'Revisa los campos obligatorios señalados en rojo.');
+        return;
+      }
+    }
+    setState(() {
+      _registrationStep = nextStep;
+      _showFieldErrors = false;
+      _registrationSaved = false;
+    });
+    _scrollRegistrationToTop();
+  }
+
+  Future<void> _saveRegistration() async {
+    if (_registrationSubmitting || !_canEdit) return;
+    final issues = _registrationErrors();
+    if (issues.isNotEmpty) {
+      setState(() {
+        _registrationStep = issues.keys.any(
+          (key) => key == 'name' || key == 'phone' || key == 'driverPhoto',
+        )
+            ? 0
+            : 1;
+        _showFieldErrors = true;
+      });
+      _scrollRegistrationToTop();
+      toast(context, 'Completa los campos obligatorios marcados en rojo.');
+      return;
+    }
+    // Guardamos los valores del vehiculo porque el RPC de conductor recarga
+    // los datos del servidor y no debe borrar lo escrito pero aun no enviado.
+    final vehicleFields = <TextEditingController, String>{
+      _registration: _registration.text,
+      _brand: _brand.text,
+      _model: _model.text,
+      _year: _year.text,
+      _passengers: _passengers.text,
+      _cargoKg: _cargoKg.text,
+      _bodyType: _bodyType.text,
+      _otherCategory: _otherCategory.text,
+    };
+    final category = _selectedCategory;
+    final propulsion = _selectedPropulsion;
+    final services = Set<String>.from(_selectedServices);
+    final vehicleId = _selectedVehicleId;
+    setState(() => _registrationSubmitting = true);
+    try {
+      await _saveDriver();
+      if (!mounted) return;
+      if (!widget.driverOnly) {
+        setState(() {
+          for (final entry in vehicleFields.entries) {
+            entry.key.text = entry.value;
+          }
+          _selectedCategory = category;
+          _selectedPropulsion = propulsion;
+          _selectedVehicleId = vehicleId;
+          _selectedServices
+            ..clear()
+            ..addAll(services);
+        });
+      }
+      if (!_driverSaveSucceeded) return;
+      if (!widget.driverOnly) {
+        await _saveVehicle();
+        if (!mounted) return;
+        if (!_vehicleSaveSucceeded) {
+          toast(
+            context,
+            'Los datos personales se guardaron, pero falta guardar el vehículo. Puedes reintentar sin crear otro.',
+          );
+          return;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _registrationSaved = true;
+        _showFieldErrors = false;
+      });
+      toast(context, 'Inscripción guardada correctamente.');
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          'No se pudo completar la inscripción. Conservamos tus datos para reintentar.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _registrationSubmitting = false);
+    }
+  }
+
   bool get _canEdit =>
       !_localPreview &&
       !_saving &&
@@ -414,6 +652,20 @@ class _MarketplaceOnboardingScreenState
     super.initState();
     _service = MarketplaceService(Supabase.instance.client);
     _imagePicker = ImagePicker();
+    for (final field in [
+      _name,
+      _phone,
+      _registration,
+      _brand,
+      _model,
+      _year,
+      _passengers,
+      _cargoKg,
+      _bodyType,
+      _otherCategory,
+    ]) {
+      field.addListener(_refreshRegistrationErrors);
+    }
     unawaited(_load());
   }
 
@@ -429,6 +681,7 @@ class _MarketplaceOnboardingScreenState
     _cargoKg.dispose();
     _bodyType.dispose();
     _otherCategory.dispose();
+    _registrationScroll.dispose();
     super.dispose();
   }
 
@@ -872,8 +1125,8 @@ class _MarketplaceOnboardingScreenState
       toast(
         context,
         assetKind == 'vehicle_photo'
-            ? 'Foto seleccionada. Se subirá al pulsar Guardar vehículo.'
-            : 'Foto seleccionada. Se subirá al pulsar Guardar conductor.',
+            ? 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción.'
+            : 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción.',
       );
     } on FormatException catch (error) {
       if (mounted) {
@@ -975,6 +1228,7 @@ class _MarketplaceOnboardingScreenState
   }
 
   Future<void> _saveDriver() async {
+    _driverSaveSucceeded = false;
     final data = _data;
     if (data == null || !_canEdit) return;
 
@@ -1014,8 +1268,7 @@ class _MarketplaceOnboardingScreenState
 
         photoAssetId = uploaded.id;
       } else if (photoAssetId == null && _googleDriverPhotoUrl != null) {
-        final adoptionKey =
-            _googleAvatarAdoptionKey ?? _marketplaceUuidV4();
+        final adoptionKey = _googleAvatarAdoptionKey ?? _marketplaceUuidV4();
         _googleAvatarAdoptionKey = adoptionKey;
 
         final adopted = await _service.adoptGoogleAvatar(
@@ -1052,7 +1305,10 @@ class _MarketplaceOnboardingScreenState
       if (!widget.driverOnly) await _loadAccess(showSpinner: false);
 
       if (!mounted) return;
-      toast(context, 'Perfil de conductor y foto guardados.');
+      _driverSaveSucceeded = true;
+      if (!_registrationSubmitting) {
+        toast(context, 'Perfil de conductor y foto guardados.');
+      }
     } catch (error) {
       if (mounted) {
         toast(context, _photoSaveError(error, vehicle: false));
@@ -1065,6 +1321,8 @@ class _MarketplaceOnboardingScreenState
   Future<void> _createVehicle() async {
     if (!_canEdit || _data == null) return;
 
+    final unsavedName = _name.text;
+    final unsavedPhone = _phone.text;
     // El usuario no necesita inventar un nombre para el vehículo.
     // El borrador usa un nombre técnico temporal y al guardar se reemplaza
     // automáticamente por Marca + Modelo.
@@ -1101,6 +1359,8 @@ class _MarketplaceOnboardingScreenState
         _vehiclePhotoLabel = null;
         _data = updated;
         _applyData(updated, preferredVehicleId: newVehicleId);
+        _name.text = unsavedName;
+        _phone.text = unsavedPhone;
       });
       await _loadAccess(showSpinner: false);
       if (mounted) {
@@ -1119,6 +1379,7 @@ class _MarketplaceOnboardingScreenState
   }
 
   Future<void> _saveVehicle() async {
+    _vehicleSaveSucceeded = false;
     final data = _data;
     final vehicle = _findVehicle(_selectedVehicleId);
 
@@ -1255,7 +1516,8 @@ class _MarketplaceOnboardingScreenState
       await _loadAccess(showSpinner: false);
 
       if (!mounted) return;
-      toast(context, 'Vehículo guardado.');
+      _vehicleSaveSucceeded = true;
+      if (!_registrationSubmitting) toast(context, 'Vehículo guardado.');
       widget.onManagementChanged?.call();
     } catch (error) {
       if (mounted) {
@@ -1437,10 +1699,13 @@ class _MarketplaceOnboardingScreenState
     if (!mounted) return;
     setState(() => _topupFormOpen = false);
     if (sent != true) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text(
-          'Solicitud de recarga enviada. Queda pendiente de confirmación.'),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Solicitud de recarga enviada. Queda pendiente de confirmación.',
+        ),
+      ),
+    );
     await Future.wait([_loadWallet(), _loadTopups()]);
   }
 
@@ -1474,7 +1739,8 @@ class _MarketplaceOnboardingScreenState
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: _topupFormOpen || _topupsLoading || _localPreview
-                ? null : _requestTopup,
+                ? null
+                : _requestTopup,
             icon: const Icon(Icons.add_card),
             label: const Text('Recargar saldo'),
           ),
@@ -1731,35 +1997,85 @@ class _MarketplaceOnboardingScreenState
             _buildWalletCard(context),
             const SizedBox(height: 16),
             GlassCard(
-                child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Historial de recargas',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                TextButton.icon(
-                  onPressed: _topupsLoading || _walletLoading || _localPreview
-                      ? null
-                      : () async {
-                          await Future.wait([_loadWallet(), _loadTopups()]);
-                        },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Actualizar'),
-                ),
-                if (_topupsLoading) const LinearProgressIndicator(),
-                if (_topupsError != null) Text(_topupsError!),
-                if (!_topupsLoading && _topupsError == null)
-                  MarketplaceTopupHistory(topups: _topups),
-              ],
-            )),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Historial de recargas',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  TextButton.icon(
+                    onPressed: _topupsLoading || _walletLoading || _localPreview
+                        ? null
+                        : () async {
+                            await Future.wait([_loadWallet(), _loadTopups()]);
+                          },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Actualizar'),
+                  ),
+                  if (_topupsLoading) const LinearProgressIndicator(),
+                  if (_topupsError != null) Text(_topupsError!),
+                  if (!_topupsLoading && _topupsError == null)
+                    MarketplaceTopupHistory(topups: _topups),
+                ],
+              ),
+            ),
           ],
         ],
       );
     }
 
     return ListView(
+      controller: _registrationScroll,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
       children: [
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Conviértete en conductor',
+                style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                'Completa tus datos y los del vehículo. Los campos con * son obligatorios.',
+                style: TextStyle(color: appMutedColor(context), height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                value: (_registrationStep + 1) / 3,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (final (index, title) in [
+                    'Mis datos',
+                    'Mi vehículo',
+                    'Finalizar',
+                  ].indexed)
+                    Expanded(
+                      child: Text(
+                        '${index + 1}. $title',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: _registrationStep == index
+                              ? FontWeight.w900
+                              : FontWeight.w500,
+                          color: _registrationStep == index
+                              ? appPrimaryColor(context)
+                              : appMutedColor(context),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
         if (data.driverSuspended) ...[
           const SizedBox(height: 14),
           const GlassCard(
@@ -1779,146 +2095,161 @@ class _MarketplaceOnboardingScreenState
           ),
         ],
         const SizedBox(height: 16),
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Datos del conductor',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 14),
-              // Keep the portrait beside the two fields on wider screens.
-              // On narrow phones, stack it to prevent clipped inputs.
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final compactDriverFields = Column(
-                    children: [
-                      TextField(
-                        controller: _name,
-                        enabled: _canEdit,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre y apellidos',
-                          isDense: true,
-                          prefixIcon: Icon(
-                            Icons.person_outline_rounded,
-                            size: 22,
+        if (_registrationStep == 0)
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Datos del conductor',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                if (_showFieldErrors) ...[
+                  const SizedBox(height: 8),
+                  for (final issue in _registrationErrors().entries)
+                    if (['name', 'phone', 'driverPhoto'].contains(issue.key))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '• ${issue.value}',
+                          style: const TextStyle(color: kDanger, fontSize: 12),
+                        ),
+                      ),
+                ],
+                const SizedBox(height: 14),
+                // Keep the portrait beside the two fields on wider screens.
+                // On narrow phones, stack it to prevent clipped inputs.
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compactDriverFields = Column(
+                      children: [
+                        TextField(
+                          controller: _name,
+                          enabled: _canEdit,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: 'Nombre y apellidos *',
+                            errorText: _registrationError('name'),
+                            isDense: true,
+                            prefixIcon: Icon(
+                              Icons.person_outline_rounded,
+                              size: 22,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _phone,
-                        enabled: _canEdit,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'WhatsApp / teléfono',
-                          hintText: '+5355555555',
-                          isDense: true,
-                          prefixIcon: Icon(Icons.phone_outlined, size: 22),
-                        ),
-                      ),
-                    ],
-                  );
-                  final hasDriverPhoto = _driverPhotoBytes != null ||
-                      data.driverPhotoAssetId != null ||
-                      _googleDriverPhotoUrl != null;
-                  if (!hasDriverPhoto) return compactDriverFields;
-
-                  final photo = _buildMarketplacePhotoPreview(
-                    pendingBytes: _driverPhotoBytes,
-                    savedAssetId: data.driverPhotoAssetId,
-                    vehicle: false,
-                    fallbackNetworkUrl: _googleDriverPhotoUrl,
-                  );
-                  if (constraints.maxWidth < 290) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        compactDriverFields,
                         const SizedBox(height: 12),
-                        photo,
+                        TextField(
+                          controller: _phone,
+                          enabled: _canEdit,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: 'WhatsApp / teléfono *',
+                            errorText: _registrationError('phone'),
+                            hintText: '+5355555555',
+                            isDense: true,
+                            prefixIcon: Icon(Icons.phone_outlined, size: 22),
+                          ),
+                        ),
                       ],
                     );
-                  }
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(child: compactDriverFields),
-                      const SizedBox(width: 8),
-                      SizedBox(width: 94, height: 104, child: photo),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    _driverPhotoBytes == null &&
-                            data.driverPhotoAssetId == null &&
-                            _googleDriverPhotoUrl == null
-                        ? Icons.photo_camera_outlined
-                        : Icons.check_circle_outline,
-                    color: _driverPhotoBytes == null &&
-                            data.driverPhotoAssetId == null &&
-                            _googleDriverPhotoUrl == null
-                        ? kTertiary
-                        : appPrimaryColor(context),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _driverPhotoBytes != null
-                          ? 'Foto seleccionada. Se subirá al pulsar Guardar conductor. ${_driverPhotoLabel ?? ''}'
-                          : data.driverPhotoAssetId != null
-                              ? 'Foto del conductor guardada'
-                              : _googleDriverPhotoUrl != null
-                                  ? 'Usaremos tu foto de Google como foto inicial. Puedes cambiarla.'
-                                  : 'Foto del conductor pendiente',
+                    final hasDriverPhoto = _driverPhotoBytes != null ||
+                        data.driverPhotoAssetId != null ||
+                        _googleDriverPhotoUrl != null;
+                    if (!hasDriverPhoto) return compactDriverFields;
+
+                    final photo = _buildMarketplacePhotoPreview(
+                      pendingBytes: _driverPhotoBytes,
+                      savedAssetId: data.driverPhotoAssetId,
+                      vehicle: false,
+                      fallbackNetworkUrl: _googleDriverPhotoUrl,
+                    );
+                    if (constraints.maxWidth < 290) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          compactDriverFields,
+                          const SizedBox(height: 12),
+                          photo,
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: compactDriverFields),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 94, height: 104, child: photo),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      _driverPhotoBytes == null &&
+                              data.driverPhotoAssetId == null &&
+                              _googleDriverPhotoUrl == null
+                          ? Icons.photo_camera_outlined
+                          : Icons.check_circle_outline,
+                      color: _driverPhotoBytes == null &&
+                              data.driverPhotoAssetId == null &&
+                              _googleDriverPhotoUrl == null
+                          ? kTertiary
+                          : appPrimaryColor(context),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _driverPhotoBytes != null
+                            ? 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción. ${_driverPhotoLabel ?? ''}'
+                            : data.driverPhotoAssetId != null
+                                ? 'Foto del conductor guardada'
+                                : _googleDriverPhotoUrl != null
+                                    ? 'Usaremos tu foto de Google como foto inicial. Puedes cambiarla.'
+                                    : 'Foto del conductor pendiente',
+                      ),
+                    ),
+                  ],
+                ),
+                if (_registrationError('driverPhoto') != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    _registrationError('driverPhoto')!,
+                    style: const TextStyle(color: kDanger, fontSize: 12),
                   ),
                 ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _canEdit ? () => _pickPhoto('driver_photo') : null,
-                  icon: const Icon(Icons.add_a_photo_outlined),
-                  label: Text(
-                    data.driverPhotoAssetId == null &&
-                            _driverPhotoBytes == null &&
-                            _googleDriverPhotoUrl == null
-                        ? 'Añadir foto'
-                        : 'Cambiar foto',
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _canEdit ? () => _pickPhoto('driver_photo') : null,
+                    icon: const Icon(Icons.add_a_photo_outlined),
+                    label: Text(
+                      data.driverPhotoAssetId == null &&
+                              _driverPhotoBytes == null &&
+                              _googleDriverPhotoUrl == null
+                          ? 'Añadir foto'
+                          : 'Cambiar foto',
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _googleDriverPhotoUrl != null &&
-                        data.driverPhotoAssetId == null &&
-                        _driverPhotoBytes == null
-                    ? 'Al guardar, TUKTUK copiará tu foto de Google a tu perfil privado de conductor.'
-                    : 'Elige una foto clara donde se vea bien tu rostro. TUKTUK la ajusta automáticamente.',
-                style: TextStyle(color: appMutedColor(context), fontSize: 12),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _canEdit ? _saveDriver : null,
-                  icon: const Icon(Icons.save_outlined),
-                  label: Text(_saving ? 'Guardando...' : 'Guardar conductor'),
+                const SizedBox(height: 6),
+                Text(
+                  _googleDriverPhotoUrl != null &&
+                          data.driverPhotoAssetId == null &&
+                          _driverPhotoBytes == null
+                      ? 'Al guardar, TUKTUK copiará tu foto de Google a tu perfil privado de conductor.'
+                      : 'Elige una foto clara donde se vea bien tu rostro. TUKTUK la ajusta automáticamente.',
+                  style: TextStyle(color: appMutedColor(context), fontSize: 12),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        if (!widget.driverOnly) const SizedBox(height: 16),
-        if (!widget.driverOnly)
+        if (_registrationStep == 1 && !widget.driverOnly)
+          const SizedBox(height: 16),
+        if (_registrationStep == 1 && !widget.driverOnly)
           GlassCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1927,6 +2258,18 @@ class _MarketplaceOnboardingScreenState
                   'Vehículo para Trabajos',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
+                if (_showFieldErrors) ...[
+                  const SizedBox(height: 8),
+                  for (final issue in _registrationErrors().entries)
+                    if (!['name', 'phone', 'driverPhoto'].contains(issue.key))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '• ${issue.value}',
+                          style: const TextStyle(color: kDanger, fontSize: 12),
+                        ),
+                      ),
+                ],
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
@@ -1938,8 +2281,18 @@ class _MarketplaceOnboardingScreenState
                 ),
                 const SizedBox(height: 12),
                 if (data.vehicles.isEmpty)
-                  const Text(
-                    'Todavía no tienes vehículos. Pulsa Añadir vehículo y luego completa sus datos y fotografías.',
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Todavía no tienes vehículos. Pulsa Añadir vehículo y luego completa sus datos y fotografías.',
+                      ),
+                      if (_registrationError('vehicleId') != null)
+                        Text(
+                          _registrationError('vehicleId')!,
+                          style: const TextStyle(color: kDanger, fontSize: 12),
+                        ),
+                    ],
                   )
                 else ...[
                   // TUKTUK_BALANCED_VEHICLE_LAYOUT_V4
@@ -1955,7 +2308,28 @@ class _MarketplaceOnboardingScreenState
                         IconData icon,
                       ) {
                         return InputDecoration(
-                          labelText: label,
+                          labelText: _vehicleFieldError(label) != null ||
+                                  [
+                                    'Vehículo',
+                                    'Categoría',
+                                    'Marca',
+                                    'Modelo',
+                                    'Propulsión',
+                                  ].contains(label) ||
+                                  (label == 'Pasajeros' &&
+                                      (_selectedServices.contains(
+                                            'passenger',
+                                          ) ||
+                                          _selectedServices.contains(
+                                            'tourism',
+                                          ))) ||
+                                  (label == 'Carga (kg)' &&
+                                      _selectedServices.contains('cargo')) ||
+                                  (label == 'Describe el tipo de vehículo' &&
+                                      _selectedCategory == 'other')
+                              ? '$label *'
+                              : label,
+                          errorText: _vehicleFieldError(label),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 10,
@@ -1972,8 +2346,12 @@ class _MarketplaceOnboardingScreenState
                         );
                       }
 
-                      Widget field(Widget child) =>
-                          SizedBox(height: fieldHeight, child: child);
+                      Widget field(Widget child) => ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minHeight: fieldHeight,
+                            ),
+                            child: child,
+                          );
 
                       Widget pair(Widget left, Widget right) {
                         if (!showColumns) {
@@ -2090,15 +2468,26 @@ class _MarketplaceOnboardingScreenState
                             ),
                             const SizedBox(height: 6),
                             serviceChips,
+                            if (_registrationError('services') != null) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                _registrationError('services')!,
+                                style: const TextStyle(
+                                  color: kDanger,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       );
 
                       final showPassengerCapacity =
                           _selectedServices.contains('passenger') ||
-                          _selectedServices.contains('tourism');
-                      final showCargoCapacity =
-                          _selectedServices.contains('cargo');
+                              _selectedServices.contains('tourism');
+                      final showCargoCapacity = _selectedServices.contains(
+                        'cargo',
+                      );
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2208,8 +2597,7 @@ class _MarketplaceOnboardingScreenState
                           ),
                           const SizedBox(height: gap),
                           services,
-                          if (showPassengerCapacity ||
-                              showCargoCapacity) ...[
+                          if (showPassengerCapacity || showCargoCapacity) ...[
                             const SizedBox(height: gap),
                             if (showPassengerCapacity && showCargoCapacity)
                               pair(
@@ -2308,7 +2696,7 @@ class _MarketplaceOnboardingScreenState
                       Expanded(
                         child: Text(
                           _vehiclePhotoBytes != null
-                              ? 'Foto seleccionada. Se subirá al pulsar Guardar vehículo. ${_vehiclePhotoLabel ?? ''}'
+                              ? 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción. ${_vehiclePhotoLabel ?? ''}'
                               : vehicle?.mainPhotoAssetId == null
                                   ? 'Foto principal del vehículo pendiente'
                                   : 'Foto principal del vehículo guardada',
@@ -2316,6 +2704,13 @@ class _MarketplaceOnboardingScreenState
                       ),
                     ],
                   ),
+                  if (_registrationError('vehiclePhoto') != null) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      _registrationError('vehiclePhoto')!,
+                      style: const TextStyle(color: kDanger, fontSize: 12),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
@@ -2351,17 +2746,7 @@ class _MarketplaceOnboardingScreenState
                       ),
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _canEdit ? _saveVehicle : null,
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text(
-                        _saving ? 'Guardando...' : 'Guardar vehículo',
-                      ),
-                    ),
-                  ),
+
                   if (vehicle?.onboardingComplete == true) ...[
                     const SizedBox(height: 12),
                     Row(
@@ -2384,6 +2769,103 @@ class _MarketplaceOnboardingScreenState
               ],
             ),
           ),
+        if (_registrationStep == 2) ...[
+          const SizedBox(height: 14),
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Revisa tu inscripción',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 12),
+                Text('Conductor: ${_name.text.trim()}'),
+                const SizedBox(height: 6),
+                Text('WhatsApp: ${_phone.text.trim()}'),
+                if (!widget.driverOnly) ...[
+                  const SizedBox(height: 6),
+                  Text('Vehículo: ${_brand.text.trim()} ${_model.text.trim()}'),
+                  const SizedBox(height: 6),
+                  Text('Servicios: ${_selectedServices.length} seleccionados'),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  'Al guardar se enviarán tus datos y fotografías. No se crearán vehículos adicionales.',
+                  style: TextStyle(color: appMutedColor(context), height: 1.4),
+                ),
+                if (_registrationSaved) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.verified_rounded,
+                        color: appPrimaryColor(context),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Inscripción guardada correctamente.',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_registrationStep < 2)
+                FilledButton.icon(
+                  onPressed: _canEdit && !_registrationSubmitting
+                      ? () => _goToRegistrationStep(_registrationStep + 1)
+                      : null,
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  label: Text(
+                    _registrationStep == 0
+                        ? (widget.driverOnly
+                            ? 'Continuar'
+                            : 'Continuar al vehículo')
+                        : 'Revisar inscripción',
+                  ),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: _canEdit &&
+                          !_registrationSubmitting &&
+                          !_registrationSaved
+                      ? _saveRegistration
+                      : null,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Text(
+                    _registrationSubmitting
+                        ? 'Guardando inscripción...'
+                        : _registrationSaved
+                            ? 'Inscripción guardada'
+                            : 'Guardar mi inscripción',
+                  ),
+                ),
+              if (_registrationStep > 0) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _canEdit && !_registrationSubmitting
+                      ? () => _goToRegistrationStep(
+                            widget.driverOnly ? 0 : _registrationStep - 1,
+                          )
+                      : null,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Volver'),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
