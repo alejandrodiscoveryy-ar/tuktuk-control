@@ -3259,7 +3259,7 @@ class _ReferralEntryTile extends StatelessWidget {
       rewardState,
     ].join(' · ');
     final imageUrl = entry.avatarUrl;
-    final fallbackIcon = const Icon(
+    const fallbackIcon = Icon(
       Icons.person_outline,
       color: _referralAccent,
     );

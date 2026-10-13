@@ -2133,7 +2133,7 @@ class _MarketplaceOnboardingScreenState
                             labelText: 'Nombre y apellidos *',
                             errorText: _registrationError('name'),
                             isDense: true,
-                            prefixIcon: Icon(
+                            prefixIcon: const Icon(
                               Icons.person_outline_rounded,
                               size: 22,
                             ),
@@ -2149,7 +2149,7 @@ class _MarketplaceOnboardingScreenState
                             errorText: _registrationError('phone'),
                             hintText: '+5355555555',
                             isDense: true,
-                            prefixIcon: Icon(Icons.phone_outlined, size: 22),
+                            prefixIcon: const Icon(Icons.phone_outlined, size: 22),
                           ),
                         ),
                       ],
