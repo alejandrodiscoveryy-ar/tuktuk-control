@@ -1648,7 +1648,9 @@ class _MarketplaceOnboardingScreenState
                     child: Text(
                       access.nextBillingMode == MarketplaceBillingMode.trialFree
                           ? 'Ya puedes aceptar trabajos sin comisión durante la promoción inicial.'
-                          : 'Trabajos habilitados. Para aceptar uno necesitas saldo disponible suficiente para la comisión.',
+                          : access.nextBillingMode == MarketplaceBillingMode.platformFree
+                              ? 'Trabajos habilitados sin comisiones. No necesitas saldo para aceptar carreras.'
+                              : 'Trabajos habilitados. Para aceptar uno necesitas saldo disponible suficiente para la comisión.',
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),

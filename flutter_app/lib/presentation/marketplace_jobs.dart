@@ -159,6 +159,8 @@ String _marketplaceJobBillingLabel(MarketplaceJob job) {
   switch (job.billingMode) {
     case MarketplaceBillingMode.trialFree:
       return 'Promoción inicial · sin comisión';
+    case MarketplaceBillingMode.platformFree:
+      return 'Plataforma sin comisiones · 0 CUP';
     case MarketplaceBillingMode.walletCommission:
       final commission = job.commissionAmountSnapshot;
       if (commission == null) return 'Comisión por billetera';

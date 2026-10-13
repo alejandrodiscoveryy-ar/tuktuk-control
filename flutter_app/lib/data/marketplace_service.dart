@@ -37,11 +37,12 @@ List<String> _marketStrings(Object? value) => value is List
           .toList()
     : const [];
 
-enum MarketplaceBillingMode { trialFree, walletCommission, unknown }
+enum MarketplaceBillingMode { trialFree, platformFree, walletCommission, unknown }
 
 MarketplaceBillingMode marketplaceBillingMode(Object? value) =>
     switch ('$value') {
       'trial_free' => MarketplaceBillingMode.trialFree,
+      'platform_free' => MarketplaceBillingMode.platformFree,
       'wallet_commission' => MarketplaceBillingMode.walletCommission,
       _ => MarketplaceBillingMode.unknown,
     };
