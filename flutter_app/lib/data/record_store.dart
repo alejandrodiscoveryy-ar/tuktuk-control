@@ -1343,7 +1343,9 @@ class RecordStore extends ChangeNotifier {
     for (final record in _allDailyRecords) {
       if (record.userId != ownerId ||
           record.isDeleted ||
-          !record.isMarketplaceJobIncome) continue;
+          !record.isMarketplaceJobIncome) {
+        continue;
+      }
       final rawId = record.id.substring('marketplace-job-'.length);
       if (validId.hasMatch(rawId)) {
         byJobId[rawId.toLowerCase()] = record.id;

@@ -377,8 +377,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   void _refreshAvailability() {
-    if (marketplaceJobPushPending.value && !_marketplaceJobsVisible.value) {
-      _marketplaceJobsNeedAttention.value = true;
+    if (marketplaceJobPushPending.value) {
+      if (!_marketplaceJobsVisible.value) {
+        _marketplaceJobsNeedAttention.value = true;
+      }
+      if (mounted && (_workPanelIndex != -1 || _workDrawerOpen)) {
+        setState(() {
+          _workPanelIndex = -1;
+          _workDrawerOpen = false;
+        });
+      }
     }
     unawaited(_load());
   }
@@ -2728,7 +2736,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!await Geolocator.isLocationServiceEnabled()) return;
       final permission = await Geolocator.checkPermission();
       if (permission != LocationPermission.always &&
-          permission != LocationPermission.whileInUse) return;
+          permission != LocationPermission.whileInUse) {
+        return;
+      }
       final position = await Geolocator.getLastKnownPosition();
       if (!mounted || position == null) return;
       setState(() => _workMapPosition =
@@ -2822,6 +2832,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             ),
                           ),
                           const Divider(),
+                          if (_incomeError != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                              child: Text(
+                                _incomeError ?? '',
+                                style: const TextStyle(color: kDanger),
+                              ),
+                            ),
                           _workMenuItem(Icons.work_outline_rounded,
                               'Trabajos y servicio', 0),
                           _workMenuItem(Icons.event_outlined,
@@ -2921,7 +2940,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             children: [
               Material(
                 color: kSurface.withValues(alpha: .95),
-                shape: CircleBorder(side: BorderSide(color: kTertiary, width: 2)),
+                shape: const CircleBorder(side: BorderSide(color: kTertiary, width: 2)),
                 child: InkWell(
                   key: const ValueKey('work-map-open-menu'),
                   customBorder: const CircleBorder(),
@@ -3040,12 +3059,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_marketplaceJobStatusLabel(active!.status),
+                      Text(_marketplaceJobStatusLabel(active.status),
                         style: const TextStyle(fontSize: 17,
                             fontWeight: FontWeight.w900)),
                       const SizedBox(height: 5),
-                      Text('${active!.originText ?? 'Recogida'} → '
-                          '${active!.destinationText ?? 'Destino'}',
+                      Text('${active.originText ?? 'Recogida'} → '
+                          '${active.destinationText ?? 'Destino'}',
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 9),
                       SizedBox(width: double.infinity,
