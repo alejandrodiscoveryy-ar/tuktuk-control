@@ -358,6 +358,17 @@ void main() {
         'job_id': offer.id,
       });
 
+  Future<void> openWorkPanel(
+      WidgetTester tester, String title) async {
+    await tester.tap(
+        find.byKey(const ValueKey('work-map-open-menu')));
+    await tester.pump();
+    final item = find.text(title);
+    await tester.ensureVisible(item);
+    await tester.tap(item);
+    await pumpJobs(tester);
+  }
+
   test('visual history fetches only one page', () async {
     final paged = _PagedService();
     final jobs = await paged.jobs('history');
@@ -377,7 +388,7 @@ void main() {
               'created_at': '2026-10-08T00:00:00Z',
             }));
     await open(tester);
-    await tester.tap(find.text('Hist.'));
+    await openWorkPanel(tester, 'Historial');
     await pumpJobs(tester);
     expect(service.visualPageCalls, 0);
     final more = find.byKey(const ValueKey('marketplace-history-more'));
@@ -452,16 +463,27 @@ void main() {
     service.failIncome = true;
     await open(tester);
     expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
+    await tester.tap(
+        find.byKey(const ValueKey('work-map-open-menu')));
+    await tester.pump();
     expect(
-        find.byKey(const ValueKey('marketplace-income-error')), findsOneWidget);
-    await tester.tap(find.text('Hist.'));
+        find.byKey(const ValueKey('marketplace-income-error')),
+        findsOneWidget);
+    await tester.tap(find.text('Historial'));
     await pumpJobs(tester);
     expect(find.text('Tu historial está vacío'), findsOneWidget);
     service.failIncome = false;
     notify();
     await pumpJobs(tester);
     expect(
-        find.byKey(const ValueKey('marketplace-income-error')), findsNothing);
+        find.byKey(const ValueKey('tuktuk-work-map-home')),
+        findsOneWidget);
+    await tester.tap(
+        find.byKey(const ValueKey('work-map-open-menu')));
+    await tester.pump();
+    expect(
+        find.byKey(const ValueKey('marketplace-income-error')),
+        findsNothing);
   });
 
   testWidgets('abandoning the direct rating never closes or records income',
@@ -474,6 +496,7 @@ void main() {
       })
     ];
     await open(tester);
+    await openWorkPanel(tester, 'Trabajos y servicio');
     await tester.tap(find.text('Finalizar carrera'));
     await pumpJobs(tester);
     expect(find.text('Evalúa al cliente'), findsOneWidget);
@@ -550,21 +573,28 @@ void main() {
       (tester) async {
     await open(tester);
 
-    expect(find.text('Vehículo activo'), findsOneWidget);
-    expect(find.text('Vehículo de prueba'), findsOneWidget);
-    expect(find.text('En servicio'), findsOneWidget);
-    expect(find.text('Recibiendo nuevas solicitudes'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('tuktuk-work-map-home')),
+        findsOneWidget);
+    expect(find.text('TRABAJANDO'), findsOneWidget);
 
     final availabilitySwitch =
-        find.byKey(const ValueKey('marketplace-availability-switch'));
-    expect(availabilitySwitch, findsOneWidget);
-    // Zona tactil de la capsula entera; no solo el interruptor interno.
-    expect(tester.getSize(availabilitySwitch).width, greaterThanOrEqualTo(110));
-    expect(tester.getSize(availabilitySwitch).height, greaterThanOrEqualTo(56));
+        find.byKey(const ValueKey('work-map-availability-toggle'));
+    final menu = find.byKey(const ValueKey('work-map-open-menu'));
 
-    final titleTop = tester.getTopLeft(find.text('Vehículo activo')).dy;
-    final switchTop = tester.getTopLeft(availabilitySwitch).dy;
-    expect((switchTop - titleTop).abs(), lessThan(30));
+    expect(availabilitySwitch, findsOneWidget);
+    expect(menu, findsOneWidget);
+    expect(tester.getSize(availabilitySwitch).width,
+        greaterThanOrEqualTo(110));
+    expect(tester.getSize(availabilitySwitch).height,
+        greaterThanOrEqualTo(56));
+
+    expect(tester.getTopLeft(availabilitySwitch).dx,
+        greaterThan(tester.getTopLeft(menu).dx));
+    expect(
+        (tester.getTopLeft(availabilitySwitch).dy -
+                tester.getTopLeft(menu).dy).abs(),
+        lessThan(30));
   });
 
   testWidgets('immediate acceptance starts route automatically',
@@ -609,12 +639,13 @@ void main() {
     service.acceptingJobs = false;
     await open(tester);
 
-    expect(find.text('Descansando'), findsOneWidget);
-    expect(find.text('No estás recibiendo solicitudes'), findsOneWidget);
+    expect(find.text('DESCANSANDO'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('marketplace-availability-switch')),
-      findsOneWidget,
-    );
+        find.text('Activa Trabajar para recibir solicitudes'),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('work-map-availability-toggle')),
+        findsOneWidget);
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
   testWidgets('active ride displays only the two unified visual milestones',
@@ -633,6 +664,7 @@ void main() {
     ];
 
     await open(tester);
+    await openWorkPanel(tester, 'Trabajos y servicio');
 
     expect(find.text('En camino'), findsWidgets);
     expect(find.text('Finalizado'), findsOneWidget);
@@ -657,6 +689,7 @@ void main() {
     ];
 
     await open(tester);
+    await openWorkPanel(tester, 'Trabajos y servicio');
 
     expect(find.text('En recogida'), findsOneWidget);
     expect(find.text('Finalizado'), findsOneWidget);
@@ -680,6 +713,7 @@ void main() {
     ];
 
     await open(tester);
+    await openWorkPanel(tester, 'Trabajos y servicio');
 
     expect(find.text('Finalizar carrera'), findsOneWidget);
     expect(find.text('Confirmar recogida'), findsNothing);
@@ -708,6 +742,7 @@ void main() {
     })];
     service.failRating = true;
     await open(tester);
+    await openWorkPanel(tester, 'Trabajos y servicio');
     await tester.tap(find.text('Finalizar carrera'));
     await pumpJobs(tester);
     await tester.tap(find.byTooltip('5 estrellas'));
@@ -732,7 +767,7 @@ void main() {
         'assigned_vehicle_id': 'assigned-vehicle', 'final_price': 100,
       })];
       await open(tester);
-      await tester.tap(find.text('Hist.'));
+      await openWorkPanel(tester, 'Historial');
       await pumpJobs(tester);
       await tester.ensureVisible(find.text('Valorar cliente'));
       await tester.tap(find.text('Valorar cliente'));
@@ -764,6 +799,7 @@ void main() {
       }),
     ];
     await open(tester);
+    await openWorkPanel(tester, 'Trabajos y servicio');
     expect(find.text('Vehículo activo'), findsNothing);
     expect(find.text('Trabajando'), findsNothing);
     final action = find.text('Salir hacia el cliente');
@@ -857,16 +893,19 @@ void main() {
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
 
-  testWidgets('receiving push preserves selected tab', (tester) async {
+  testWidgets('incoming push returns from history to the work map',
+      (tester) async {
     await open(tester);
-    await tester.tap(find.text('Hist.'));
-    await pumpJobs(tester);
-    final controller = tester.widget<TabBar>(find.byType(TabBar)).controller!;
-    expect(controller.index, 2);
+    await openWorkPanel(tester, 'Historial');
+    expect(find.text('Tu historial está vacío'), findsOneWidget);
+
     notify();
     await pumpJobs(tester);
-    expect(controller.index, 2);
-    expect(find.text('Tu historial está vacío'), findsOneWidget);
+
+    expect(
+        find.byKey(const ValueKey('tuktuk-work-map-home')),
+        findsOneWidget);
+    expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
   });
 
   testWidgets('hidden Jobs refreshes without building maps or navigating',

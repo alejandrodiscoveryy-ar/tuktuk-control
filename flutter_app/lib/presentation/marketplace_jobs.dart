@@ -2838,6 +2838,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                 horizontal: 16, vertical: 8),
                               child: Text(
                                 _incomeError ?? '',
+                                key: const ValueKey('marketplace-income-error'),
                                 style: const TextStyle(color: kDanger),
                               ),
                             ),

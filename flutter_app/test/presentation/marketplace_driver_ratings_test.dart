@@ -161,6 +161,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
+    await tester.tap(
+        find.byKey(const ValueKey('work-map-open-menu')));
+    await tester.pump();
+
     final evaluations = find.text('Evaluaciones');
     await tester.ensureVisible(evaluations);
     await tester.tap(evaluations);
