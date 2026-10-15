@@ -248,6 +248,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final MarketplaceService _service;
   late final TabController _tabController;
+  int _workPanelIndex = -1;
+  bool _workDrawerOpen = false;
+  MarketplaceMapVisualConfiguration? _workMapVisual;
+  LatLng? _workMapPosition;
+  final MapController _workMapController = MapController();
+  bool _workMapReady = false;
 
   MarketplaceOnboarding? _onboarding;
   String? _selectedVehicleId;
@@ -295,6 +301,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
+    unawaited(_prepareWorkMap());
     _operationalLifecycleState =
         WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
@@ -324,6 +331,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
     _tabController.dispose();
+    _workMapController.dispose();
     super.dispose();
   }
 
@@ -2706,11 +2714,447 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  Future<void> _prepareWorkMap() async {
+    try {
+      final config = await MarketplaceMapService(Supabase.instance.client)
+          .runtimeVisualConfiguration();
+      if (mounted && config != null && config.token.startsWith('pk.')) {
+        setState(() => _workMapVisual = config);
+      }
+    } catch (_) {
+      // La falta del mapa nunca debe bloquear la operación ni los servicios.
+    }
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) return;
+      final position = await Geolocator.getLastKnownPosition();
+      if (!mounted || position == null) return;
+      setState(() => _workMapPosition =
+          LatLng(position.latitude, position.longitude));
+    } catch (_) {
+      // No se pide permiso al cargar el mapa; el conductor decide cuando ubicarlo.
+    }
+  }
+
+  Future<void> _centerWorkMap() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) toast(context, 'Activa la ubicación del teléfono.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) toast(context, 'Autoriza la ubicación para centrar el mapa.');
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(timeLimit: Duration(seconds: 12)),
+      );
+      if (!mounted) return;
+      final center = LatLng(position.latitude, position.longitude);
+      setState(() => _workMapPosition = center);
+      if (_workMapReady) _workMapController.move(center, 15);
+    } catch (_) {
+      if (mounted) toast(context, 'No se pudo obtener tu ubicación.');
+    }
+  }
+
+  void _openWorkPanel(int panel) {
+    setState(() {
+      _workDrawerOpen = false;
+      _workPanelIndex = panel;
+    });
+    if (panel == 3) unawaited(_loadRatings(force: true));
+  }
+
+  void _backToWorkMap() {
+    setState(() => _workPanelIndex = -1);
+    unawaited(_load());
+  }
+
+  Widget _workMenuItem(IconData icon, String name, int panel) => ListTile(
+        leading: Icon(icon, color: kPrimary),
+        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => _openWorkPanel(panel),
+      );
+
+  Widget _buildWorkDrawer(BuildContext context) => Positioned.fill(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                key: const ValueKey('work-map-dismiss-menu'),
+                onTap: () => setState(() => _workDrawerOpen = false),
+                child: Container(color: Colors.black.withValues(alpha: .63)),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: .85,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: Material(
+                    color: kSurface,
+                    elevation: 18,
+                    child: SafeArea(
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        children: [
+                          ListTile(
+                            title: const Text('TUKTUK · Trabajo',
+                                style: TextStyle(fontSize: 22,
+                                    fontWeight: FontWeight.w900)),
+                            subtitle: const Text('Centro de operaciones'),
+                            trailing: IconButton(
+                              tooltip: 'Cerrar menú de Trabajo',
+                              onPressed: () =>
+                                  setState(() => _workDrawerOpen = false),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ),
+                          const Divider(),
+                          _workMenuItem(Icons.work_outline_rounded,
+                              'Trabajos y servicio', 0),
+                          _workMenuItem(Icons.event_outlined,
+                              'Programados', 1),
+                          _workMenuItem(Icons.history_rounded,
+                              'Historial', 2),
+                          _workMenuItem(Icons.star_outline_rounded,
+                              'Evaluaciones', 3),
+                          _workMenuItem(Icons.account_balance_wallet_outlined,
+                              'Billetera', 4),
+                          _workMenuItem(Icons.badge_outlined,
+                              'Conductor y vehículo', 5),
+                          _workMenuItem(Icons.insights_outlined,
+                              'Mi actividad', 6),
+                          const Divider(),
+                          ListTile(
+                            leading: const Icon(Icons.refresh_rounded),
+                            title: const Text('Actualizar trabajos'),
+                            onTap: () {
+                              setState(() => _workDrawerOpen = false);
+                              unawaited(_load());
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _workMapSurface(BuildContext context) {
+    final center = _workMapPosition ?? const LatLng(23.1136, -82.3666);
+    final active = _active.isNotEmpty ? _active.first : null;
+    if (active != null) {
+      _workMapReady = false;
+      return MarketplaceDriverMap(job: active);
+    }
+    final config = _workMapVisual;
+    if (config == null) {
+      _workMapReady = false;
+      return Container(
+        color: kBg,
+        alignment: Alignment.center,
+        child: const Text('Mapa no disponible. Los trabajos siguen accesibles.',
+          textAlign: TextAlign.center),
+      );
+    }
+    return FlutterMap(
+      mapController: _workMapController,
+      options: MapOptions(
+        initialCenter: center,
+        initialZoom: 13.5,
+        onMapReady: () => _workMapReady = true,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: config.tileUrlTemplate,
+          userAgentPackageName: 'com.alejandrocruz.tuktukcontrol',
+        ),
+        if (_workMapPosition != null)
+          MarkerLayer(markers: [
+            Marker(
+              point: _workMapPosition!,
+              width: 48,
+              height: 48,
+              child: const Icon(Icons.my_location_rounded,
+                  color: Color(0xFF2DD4A3), size: 36),
+            ),
+          ]),
+        marketplaceMapAttribution(center),
+      ],
+    );
+  }
+
+  Widget _buildWorkMapHome(BuildContext context) {
+    final vehicle = _vehicleById(_selectedVehicleId);
+    final valid = _vehicleReadyForWork(vehicle);
+    final available = vehicle?.acceptingJobs == true;
+    final active = _active.isNotEmpty ? _active.first : null;
+    final onRide = active != null;
+    final tint = available ? kPrimary : const Color(0xFF8A98AA);
+    final photo = _googleProfilePhotoUrl(widget.store.user);
+    return Stack(
+      key: const ValueKey('tuktuk-work-map-home'),
+      fit: StackFit.expand,
+      children: [
+        _workMapSurface(context),
+        Positioned(
+          left: 12,
+          right: 12,
+          top: 12,
+          child: Row(
+            children: [
+              Material(
+                color: kSurface.withValues(alpha: .95),
+                shape: CircleBorder(side: BorderSide(color: kTertiary, width: 2)),
+                child: InkWell(
+                  key: const ValueKey('work-map-open-menu'),
+                  customBorder: const CircleBorder(),
+                  onTap: () => setState(() => _workDrawerOpen = true),
+                  child: CircleAvatar(
+                    radius: 27,
+                    backgroundColor: kSurfaceHigh,
+                    backgroundImage: photo == null ? null : NetworkImage(photo),
+                    child: photo == null
+                        ? const Icon(Icons.directions_car_rounded,
+                            color: kTertiary)
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  toggled: available,
+                  enabled: valid && !onRide && !_updatingAvailability,
+                  child: Material(
+                    color: tint.withValues(alpha: .96),
+                    borderRadius: BorderRadius.circular(36),
+                    child: InkWell(
+                      key: const ValueKey('work-map-availability-toggle'),
+                      borderRadius: BorderRadius.circular(36),
+                      onTap: _updatingAvailability || onRide
+                          ? null
+                          : valid
+                              ? () => unawaited(_setAcceptingJobs(!available))
+                              : _openActivation,
+                      child: SizedBox(
+                        height: 57,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 15),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  onRide ? 'EN CARRERA' :
+                                      !valid ? 'ACTIVAR' :
+                                      available ? 'TRABAJANDO' : 'DESCANSANDO',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(onRide ? Icons.route_rounded :
+                                  available ? Icons.toggle_on_rounded :
+                                  Icons.toggle_off_rounded,
+                                  size: 34, color: Colors.white),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!onRide && _workMapVisual != null)
+          Positioned(
+            right: 12,
+            bottom: _available.isNotEmpty ? 288 : 128,
+            child: Column(
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'work-map-locate',
+                  tooltip: 'Centrar en mi ubicación',
+                  onPressed: () => unawaited(_centerWorkMap()),
+                  child: const Icon(Icons.my_location_rounded),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'work-map-zoom-in',
+                  tooltip: 'Acercar mapa',
+                  onPressed: () {
+                    if (_workMapReady) {
+                      final camera = _workMapController.camera;
+                      _workMapController.move(camera.center,
+                          (camera.zoom + 1).clamp(3, 19).toDouble());
+                    }
+                  },
+                  child: const Icon(Icons.add_rounded),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'work-map-zoom-out',
+                  tooltip: 'Alejar mapa',
+                  onPressed: () {
+                    if (_workMapReady) {
+                      final camera = _workMapController.camera;
+                      _workMapController.move(camera.center,
+                          (camera.zoom - 1).clamp(3, 19).toDouble());
+                    }
+                  },
+                  child: const Icon(Icons.remove_rounded),
+                ),
+              ],
+            ),
+          ),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 12,
+          child: onRide
+              ? GlassCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_marketplaceJobStatusLabel(active!.status),
+                        style: const TextStyle(fontSize: 17,
+                            fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 5),
+                      Text('${active!.originText ?? 'Recogida'} → '
+                          '${active!.destinationText ?? 'Destino'}',
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 9),
+                      SizedBox(width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () => _openWorkPanel(0),
+                          child: const Text('Gestionar servicio en curso'))),
+                    ],
+                  ),
+                )
+              : _scheduled.isNotEmpty
+                  ? GlassCard(child: ListTile(
+                      leading: const Icon(Icons.event_available_outlined),
+                      title: const Text('Tienes trabajos programados'),
+                      subtitle: const Text('Consulta tu agenda'),
+                      onTap: () => _openWorkPanel(1),
+                    ))
+                  : _available.isNotEmpty
+                      ? SizedBox(
+                          height: 264,
+                          child: ListView.builder(
+                            itemCount: _available.length,
+                            itemBuilder: (context, index) {
+                              final job = _available[index];
+                              return _AvailableJobCard(
+                                job: job,
+                                accepting: _acceptingJobId == job.id,
+                                acceptanceLocked: _acceptingJobId != null,
+                                onAccept: () => _acceptJob(job),
+                              );
+                            },
+                          ),
+                        )
+                      : GlassCard(
+                          child: ListTile(
+                            leading: Icon(Icons.work_outline_rounded,
+                                color: available ? kPrimary : kTertiary),
+                            title: Text(_error != null
+                                ? 'No pudimos actualizar las carreras'
+                                : available ? 'Esperando solicitudes'
+                                : 'Activa Trabajar para recibir solicitudes'),
+                            subtitle: Text(_error ?? 'Toca para actualizar trabajos.'),
+                            trailing: IconButton(
+                              tooltip: 'Actualizar trabajos',
+                              icon: const Icon(Icons.refresh_rounded),
+                              onPressed: _load,
+                            ),
+                            onTap: () => unawaited(_load()),
+                          ),
+                        ),
+        ),
+        if (_workDrawerOpen) _buildWorkDrawer(context),
+      ],
+    );
+  }
+
+  Widget _buildWorkPanel(BuildContext context) {
+    final names = <String>[
+      'Trabajos y servicio', 'Programados', 'Historial',
+      'Evaluaciones', 'Billetera', 'Conductor y vehículo', 'Mi actividad'
+    ];
+    final panel = _workPanelIndex;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(children: [
+            IconButton(
+              key: const ValueKey('work-map-back'),
+              tooltip: 'Volver al mapa de Trabajo',
+              onPressed: _backToWorkMap,
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            Expanded(child: Text(names[panel],
+              style: const TextStyle(fontSize: 18,
+                  fontWeight: FontWeight.w900))),
+            IconButton(
+              tooltip: 'Actualizar',
+              onPressed: () => unawaited(_load()),
+              icon: const Icon(Icons.refresh_rounded)),
+          ]),
+        ),
+        Expanded(child: switch (panel) {
+          0 => _buildServiceTab(context),
+          1 => _buildAssignedTab(context, scope: 'scheduled',
+              icon: Icons.event_outlined,
+              emptyTitle: 'No tienes trabajos programados',
+              emptyMessage: 'Los servicios futuros aparecerán aquí.'),
+          2 => _buildAssignedTab(context, scope: 'history',
+              icon: Icons.history_rounded,
+              emptyTitle: 'Tu historial está vacío',
+              emptyMessage: 'Aquí aparecen las carreras finalizadas.'),
+          3 => _buildRatingsTab(context),
+          4 => MarketplaceOnboardingScreen(
+              key: ValueKey('wallet-$_selectedVehicleId-$_managementRevision'),
+              store: widget.store,
+              managementSection: MarketplaceManagementSection.wallet,
+              initialVehicleId: _selectedVehicleId),
+          5 => MarketplaceOnboardingScreen(
+              store: widget.store,
+              onManagementChanged: _onManagementChanged),
+          6 => StatsScreen(store: widget.store),
+          _ => const SizedBox.shrink(),
+        }),
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) {
-    // La UI de Trabajos permanece viva al cambiar de sección. Si el conductor
-    // ya autorizó ubicación, el muestreo operativo puede continuar únicamente
-    // mientras la app esté en primer plano; nunca se solicita permiso oculto.
+    // La pestaña Trabajo mantiene su estado y su muestreo previo de GPS.
     if (!widget.isVisible) return const SizedBox.shrink();
     if (_loading && _onboarding == null) {
       return const Center(child: CircularProgressIndicator());
@@ -2723,66 +3167,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         onManagementChanged: _onManagementChanged,
       );
     }
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        if (_incomeError != null)
-          Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(_incomeError!,
-                  key: const ValueKey('marketplace-income-error'))),
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(Icons.route_outlined), text: 'Servicio'),
-            Tab(icon: Icon(Icons.event_outlined), text: 'Agenda'),
-            Tab(icon: Icon(Icons.history), text: 'Hist.'),
-            Tab(icon: Icon(Icons.star_outline_rounded), text: 'Evaluaciones'),
-            Tab(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              text: 'Saldo',
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildServiceTab(context),
-              _buildAssignedTab(
-                context,
-                scope: 'scheduled',
-                icon: Icons.event_outlined,
-                emptyTitle: 'No tienes trabajos programados',
-                emptyMessage:
-                    'Los servicios aceptados para una hora futura aparecerán aquí.',
-              ),
-              _buildAssignedTab(
-                context,
-                scope: 'history',
-                icon: Icons.history_rounded,
-                emptyTitle: 'Tu historial está vacío',
-                emptyMessage:
-                    'Aquí aparecerán los trabajos liquidados, cancelados o resueltos.',
-              ),
-              _buildRatingsTab(context),
-              MarketplaceOnboardingScreen(
-                key: ValueKey(
-                  'wallet-$_selectedVehicleId-$_managementRevision',
-                ),
-                store: widget.store,
-                managementSection: MarketplaceManagementSection.wallet,
-                initialVehicleId: _selectedVehicleId,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    if (_workPanelIndex >= 0) return _buildWorkPanel(context);
+    return _buildWorkMapHome(context);
   }
-
   Widget _buildAvailableTab(BuildContext context) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
