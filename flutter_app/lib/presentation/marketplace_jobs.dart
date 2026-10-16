@@ -3038,13 +3038,296 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  // TUKTUK Trabajo V3: avatar y estado premium sobre la cartografia.
+  Widget _workPremiumAvatar(String? photo) {
+    return Tooltip(
+      message: 'Abrir menú de Trabajo',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .32),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: const Color(0xF219303C),
+          shape: CircleBorder(
+            side: BorderSide(
+              color: const Color(0xFF51E0C1).withValues(alpha: .70),
+              width: 1.5,
+            ),
+          ),
+          child: InkWell(
+            key: const ValueKey('work-map-open-menu'),
+            customBorder: const CircleBorder(),
+            onTap: () => setState(() => _workDrawerOpen = true),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: kSurfaceHigh,
+                backgroundImage: photo == null ? null : NetworkImage(photo),
+                child: photo == null
+                    ? const Icon(Icons.directions_car_rounded, color: kTertiary)
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _workPremiumAvailability({
+    required bool available,
+    required bool valid,
+    required bool onRide,
+  }) {
+    final accent = onRide
+        ? const Color(0xFF8CB9FF)
+        : !valid || !available
+            ? const Color(0xFFE6BD81)
+            : const Color(0xFF43E4BB);
+    final label = onRide
+        ? 'EN CARRERA'
+        : !valid
+            ? 'ACTIVAR'
+            : available
+                ? 'TRABAJANDO'
+                : 'DESCANSANDO';
+    final subtitle = onRide
+        ? 'Servicio en curso'
+        : !valid
+            ? 'Completa la activación'
+            : available
+                ? 'Recibiendo solicitudes'
+                : 'Solicitudes en pausa';
+    final enabled = valid && !onRide && !_updatingAvailability;
+    return Semantics(
+      button: true,
+      toggled: available,
+      enabled: enabled,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xF51A2F3B), Color(0xF313222D)],
+          ),
+          border: Border.all(color: accent.withValues(alpha: .58), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .28),
+              blurRadius: 18,
+              offset: const Offset(0, 7),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: const ValueKey('work-map-availability-toggle'),
+            borderRadius: BorderRadius.circular(20),
+            onTap: _updatingAvailability || onRide
+                ? null
+                : valid
+                    ? () => unawaited(_setAcceptingJobs(!available))
+                    : _openActivation,
+            child: SizedBox(
+              height: 61,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accent,
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withValues(alpha: .36),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: .4,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: .72),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    if (onRide || !valid)
+                      Icon(
+                        onRide ? Icons.route_rounded : Icons.lock_open_rounded,
+                        size: 23,
+                        color: accent,
+                      )
+                    else
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 40,
+                        height: 24,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: available
+                              ? accent.withValues(alpha: .78)
+                              : Colors.white.withValues(alpha: .18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .16),
+                          ),
+                        ),
+                        child: AnimatedAlign(
+                          duration: const Duration(milliseconds: 180),
+                          alignment: available
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
+                          child: Container(
+                            width: 17,
+                            height: 17,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _workPremiumMapAction({
+    required String actionKey,
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: ValueKey(actionKey),
+            borderRadius: BorderRadius.circular(15),
+            onTap: onPressed,
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(icon, color: const Color(0xFFE1FFF5), size: 23),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _workPremiumMapTools() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xF51A303D), Color(0xF3112530)],
+        ),
+        border: Border.all(
+          color: const Color(0xFF61CDB5).withValues(alpha: .40),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .28),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _workPremiumMapAction(
+              actionKey: 'work-map-locate',
+              label: 'Centrar en mi ubicación',
+              icon: Icons.my_location_rounded,
+              onPressed: () => unawaited(_centerWorkMap()),
+            ),
+            Container(width: 22, height: 1, color: Colors.white.withValues(alpha: .13)),
+            _workPremiumMapAction(
+              actionKey: 'work-map-zoom-in',
+              label: 'Acercar mapa',
+              icon: Icons.add_rounded,
+              onPressed: () => setState(() {
+                _workMapZoom = (_workMapZoom + 1).clamp(3, 19).toDouble();
+                _workMapRevision++;
+              }),
+            ),
+            Container(width: 22, height: 1, color: Colors.white.withValues(alpha: .13)),
+            _workPremiumMapAction(
+              actionKey: 'work-map-zoom-out',
+              label: 'Alejar mapa',
+              icon: Icons.remove_rounded,
+              onPressed: () => setState(() {
+                _workMapZoom = (_workMapZoom - 1).clamp(3, 19).toDouble();
+                _workMapRevision++;
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWorkMapHome(BuildContext context) {
     final vehicle = _vehicleById(_selectedVehicleId);
     final valid = _vehicleReadyForWork(vehicle);
     final available = vehicle?.acceptingJobs == true;
     final active = _active.isNotEmpty ? _active.first : null;
     final onRide = active != null;
-    final tint = available ? kPrimary : const Color(0xFF8A98AA);
     final photo = _googleProfilePhotoUrl(widget.store.user);
     return Stack(
       key: const ValueKey('tuktuk-work-map-home'),
@@ -3057,84 +3340,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           top: 12,
           child: Row(
             children: [
-              Material(
-                color: kSurface.withValues(alpha: .95),
-                shape: const CircleBorder(
-                  side: BorderSide(color: kTertiary, width: 2),
-                ),
-                child: InkWell(
-                  key: const ValueKey('work-map-open-menu'),
-                  customBorder: const CircleBorder(),
-                  onTap: () => setState(() => _workDrawerOpen = true),
-                  child: CircleAvatar(
-                    radius: 27,
-                    backgroundColor: kSurfaceHigh,
-                    backgroundImage: photo == null ? null : NetworkImage(photo),
-                    child: photo == null
-                        ? const Icon(
-                            Icons.directions_car_rounded,
-                            color: kTertiary,
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 9),
+              _workPremiumAvatar(photo),
+              const SizedBox(width: 10),
               Expanded(
-                child: Semantics(
-                  button: true,
-                  toggled: available,
-                  enabled: valid && !onRide && !_updatingAvailability,
-                  child: Material(
-                    color: tint.withValues(alpha: .96),
-                    borderRadius: BorderRadius.circular(36),
-                    child: InkWell(
-                      key: const ValueKey('work-map-availability-toggle'),
-                      borderRadius: BorderRadius.circular(36),
-                      onTap: _updatingAvailability || onRide
-                          ? null
-                          : valid
-                          ? () => unawaited(_setAcceptingJobs(!available))
-                          : _openActivation,
-                      child: SizedBox(
-                        height: 57,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 15),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  onRide
-                                      ? 'EN CARRERA'
-                                      : !valid
-                                      ? 'ACTIVAR'
-                                      : available
-                                      ? 'TRABAJANDO'
-                                      : 'DESCANSANDO',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Icon(
-                                onRide
-                                    ? Icons.route_rounded
-                                    : available
-                                    ? Icons.toggle_on_rounded
-                                    : Icons.toggle_off_rounded,
-                                size: 34,
-                                color: Colors.white,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 238),
+                    child: _workPremiumAvailability(
+                      available: available,
+                      valid: valid,
+                      onRide: onRide,
                     ),
                   ),
                 ),
@@ -3146,36 +3362,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           Positioned(
             right: 12,
             bottom: _available.isNotEmpty ? 288 : 128,
-            child: Column(
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'work-map-locate',
-                  tooltip: 'Centrar en mi ubicación',
-                  onPressed: () => unawaited(_centerWorkMap()),
-                  child: const Icon(Icons.my_location_rounded),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton.small(
-                  heroTag: 'work-map-zoom-in',
-                  tooltip: 'Acercar mapa',
-                  onPressed: () => setState(() {
-                    _workMapZoom = (_workMapZoom + 1).clamp(3, 19).toDouble();
-                    _workMapRevision++;
-                  }),
-                  child: const Icon(Icons.add_rounded),
-                ),
-                const SizedBox(height: 8),
-                FloatingActionButton.small(
-                  heroTag: 'work-map-zoom-out',
-                  tooltip: 'Alejar mapa',
-                  onPressed: () => setState(() {
-                    _workMapZoom = (_workMapZoom - 1).clamp(3, 19).toDouble();
-                    _workMapRevision++;
-                  }),
-                  child: const Icon(Icons.remove_rounded),
-                ),
-              ],
-            ),
+            child: _workPremiumMapTools(),
           ),
         Positioned(
           left: 12,
