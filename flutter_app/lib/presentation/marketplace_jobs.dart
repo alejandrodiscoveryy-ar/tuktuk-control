@@ -3007,7 +3007,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           Positioned(
             left: 12,
             right: 12,
-            bottom: 115,
+            bottom: MediaQuery.paddingOf(context).bottom + 115,
             child: Material(
               color: kSurfaceHigh.withValues(alpha: .95),
               borderRadius: BorderRadius.circular(14),
@@ -3325,6 +3325,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final active = _active.isNotEmpty ? _active.first : null;
     final onRide = active != null;
     final photo = _googleProfilePhotoUrl(widget.store.user);
+    final bottomNavInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
       key: const ValueKey('tuktuk-work-map-home'),
       fit: StackFit.expand,
@@ -3357,9 +3358,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         if (!onRide && _workMapVisual != null)
           Positioned(
             right: 12,
-            bottom: _available.isNotEmpty
+            bottom: bottomNavInset + (_available.isNotEmpty
                 ? 288
-                : (_scheduled.isNotEmpty || _error != null ? 128 : 16),
+                : (_scheduled.isNotEmpty || _error != null ? 128 : 16)),
             child: _workPremiumMapTools(),
           ),
         // Sin solicitudes ni incidencias, el mapa permanece despejado.
@@ -3371,7 +3372,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           Positioned(
             left: 12,
             right: 12,
-            bottom: 12,
+            bottom: bottomNavInset + 12,
             child: onRide
                 ? GlassCard(
                     child: Column(
@@ -3523,6 +3524,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  // Los paneles y formularios mantienen la zona segura; el mapa es la excepcion.
+  Widget _workNonMapSafeArea(Widget content) => SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        child: content,
+      );
+
   @override
   Widget build(BuildContext context) {
     // La pestaña Trabajo mantiene su estado y su muestreo previo de GPS.
@@ -3531,14 +3540,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       return const Center(child: CircularProgressIndicator());
     }
     final onboarding = _onboarding;
-    if (onboarding == null) return _buildAvailableTab(context);
+    if (onboarding == null) {
+      return _workNonMapSafeArea(_buildAvailableTab(context));
+    }
     if (_marketplaceDriverNeedsSetup(onboarding)) {
-      return MarketplaceOnboardingScreen(
-        store: widget.store,
-        onManagementChanged: _onManagementChanged,
+      return _workNonMapSafeArea(
+        MarketplaceOnboardingScreen(
+          store: widget.store,
+          onManagementChanged: _onManagementChanged,
+        ),
       );
     }
-    if (_workPanelIndex >= 0) return _buildWorkPanel(context);
+    if (_workPanelIndex >= 0) {
+      return _workNonMapSafeArea(_buildWorkPanel(context));
+    }
     return _buildWorkMapHome(context);
   }
 

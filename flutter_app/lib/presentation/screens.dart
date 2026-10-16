@@ -679,6 +679,7 @@ class _AppShellState extends State<AppShell> {
           ),
           body: AppBackground(
             child: SafeArea(
+              bottom: index != 2 || useDesktopNavigation,
               child: Row(
                 children: [
                   if (useDesktopNavigation)
