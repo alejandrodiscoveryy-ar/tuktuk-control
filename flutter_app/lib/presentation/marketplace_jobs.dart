@@ -3428,7 +3428,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                               key: const ValueKey('work-map-advance-job'),
                               onPressed: busy
                                   ? null
-                                  : () => unawaited(_advanceJob(active!)),
+                                  : () => unawaited(_advanceJob(active)),
                               icon: busy
                                   ? const SizedBox(
                                       width: 18,
@@ -3453,7 +3453,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             key: const ValueKey('work-map-contact-customer'),
                             onPressed: busy
                                 ? null
-                                : () => unawaited(_contactJob(active!)),
+                                : () => unawaited(_contactJob(active)),
                             icon: const Icon(Icons.contact_phone_rounded),
                             label: const Text('Contactar cliente'),
                           ),
@@ -3466,7 +3466,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                               key: const ValueKey('work-map-cancel-job'),
                               onPressed: busy
                                   ? null
-                                  : () => unawaited(_cancelJob(active!)),
+                                  : () => unawaited(_cancelJob(active)),
                               child: const Text('Cancelar servicio'),
                             ),
                           ),
