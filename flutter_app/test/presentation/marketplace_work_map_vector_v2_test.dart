@@ -19,7 +19,7 @@ void main() {
       final surface = code.substring(begin, end);
       expect(surface, contains('mbx.MapWidget('));
       expect(surface, contains("styleUri: 'mapbox://styles/"));
-      expect(surface, contains('MarketplaceDriverMap(job: active)'));
+      expect(surface, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
       expect(surface, isNot(contains('TileLayer(')));
       expect(surface, isNot(contains('FlutterMap(')));
       expect(surface, contains('onMapLoadErrorListener:'));
