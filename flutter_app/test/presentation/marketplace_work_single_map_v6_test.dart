@@ -14,9 +14,9 @@ void main() {
     expect(home, contains('work-map-advance-job'));
     expect(home, contains('work-map-contact-customer'));
     expect(home, contains('work-map-cancel-job'));
-    expect(home, contains('_advanceJob(active!)'));
-    expect(home, contains('_contactJob(active!)'));
-    expect(home, contains('_cancelJob(active!)'));
+    expect(home, contains('_advanceJob(active)'));
+    expect(home, contains('_contactJob(active)'));
+    expect(home, contains('_cancelJob(active)'));
     expect(home, isNot(contains('Gestionar servicio en curso')));
     expect(home, contains('onAccept: () => _acceptJob(job)'));
   });
