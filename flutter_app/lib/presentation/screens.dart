@@ -625,18 +625,12 @@ class _AppShellState extends State<AppShell> {
             backgroundColor: Colors.transparent,
             surfaceTintColor: Colors.transparent,
             flexibleSpace: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              ),
+              borderRadius: BorderRadius.zero,
               child: BackdropFilter(
                 filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                 child: Container(
                   decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(14),
-                      bottomRight: Radius.circular(14),
-                    ),
+                    borderRadius: BorderRadius.zero,
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1150,22 +1144,25 @@ class _LiquidGlassNavigation extends StatelessWidget {
                       ? Colors.white.withValues(alpha: .13)
                       : appOutlineColor(context),
                 ),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: dark
-                      ? [
-                          Colors.white.withValues(alpha: .13),
-                          const Color(0xD9142230),
-                          const Color(0xE6081019),
-                        ]
-                      : [
-                          Colors.white,
-                          const Color(0xFFE8F0F8),
-                          const Color(0xFFDDE8F4),
-                        ],
-                  stops: const [0, .42, 1],
-                ),
+                color: selectedIndex == 2 ? const Color(0xE6081019) : null,
+                gradient: selectedIndex == 2
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: dark
+                            ? [
+                                Colors.white.withValues(alpha: .13),
+                                const Color(0xD9142230),
+                                const Color(0xE6081019),
+                              ]
+                            : [
+                                Colors.white,
+                                const Color(0xFFE8F0F8),
+                                const Color(0xFFDDE8F4),
+                              ],
+                        stops: const [0, .42, 1],
+                      ),
               ),
               child: Stack(
                 children: [
