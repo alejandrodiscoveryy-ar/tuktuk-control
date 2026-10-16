@@ -98,6 +98,7 @@ class MarketplaceDriverVectorMap extends StatefulWidget {
     required this.toDestination,
     required this.goingToPickup,
     required this.stylePath,
+    this.fullBleed = false,
     required this.idleCenter,
     required this.idleZoom,
     super.key,
@@ -109,6 +110,7 @@ class MarketplaceDriverVectorMap extends StatefulWidget {
   final MarketplaceRoutePath? toPickup;
   final MarketplaceRoutePath? toDestination;
   final bool goingToPickup;
+  final bool fullBleed;
   final String stylePath;
   final LatLng idleCenter;
   final double idleZoom;
@@ -323,13 +325,19 @@ class _MarketplaceDriverVectorMapState
         final highlighted =
             (source == _pickupRouteSource) == widget.goingToPickup;
         await map.setStyleLayerProperty(
-          '$source-outline', 'line-opacity', highlighted ? 1.0 : 0.25,
+          '$source-outline',
+          'line-opacity',
+          highlighted ? 1.0 : 0.25,
         );
         await map.setStyleLayerProperty(
-          '$source-line', 'line-opacity', highlighted ? 1.0 : 0.45,
+          '$source-line',
+          'line-opacity',
+          highlighted ? 1.0 : 0.45,
         );
         await map.setStyleLayerProperty(
-          '$source-line', 'line-width', highlighted ? 6.0 : 3.0,
+          '$source-line',
+          'line-width',
+          highlighted ? 6.0 : 3.0,
         );
       }
       final pickup = widget.pickup;
@@ -393,6 +401,20 @@ class _MarketplaceDriverVectorMapState
           ),
           onMapCreated: (map) {
             _map = map;
+            if (widget.fullBleed) {
+              // El mapa permanece bajo la navegación; los elementos legales de
+              // Mapbox se sitúan POR ENCIMA de la barra, sin duplicarlos ni ocultarlos.
+              final bottomMargin =
+                  max(MediaQuery.paddingOf(context).bottom, 104.0) + 8;
+              unawaited(map.logo.updateSettings(mbx.LogoSettings(
+                marginLeft: 12,
+                marginBottom: bottomMargin,
+              )));
+              unawaited(map.attribution.updateSettings(mbx.AttributionSettings(
+                marginRight: 12,
+                marginBottom: bottomMargin,
+              )));
+            }
             unawaited(
               map.scaleBar.updateSettings(mbx.ScaleBarSettings(enabled: false)),
             );
