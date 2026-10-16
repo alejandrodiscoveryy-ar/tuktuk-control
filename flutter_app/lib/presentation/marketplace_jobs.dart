@@ -251,8 +251,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   bool _workDrawerOpen = false;
   MarketplaceMapVisualConfiguration? _workMapVisual;
   LatLng? _workMapPosition;
-  final MapController _workMapController = MapController();
-  bool _workMapReady = false;
   double _workMapZoom = 13.5;
   bool _workMapFallback = false;
   String? _workMapError;
@@ -334,7 +332,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
     _tabController.dispose();
-    _workMapController.dispose();
     super.dispose();
   }
 
@@ -1449,8 +1446,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _ratingsLoaded = false;
       await _refreshAfterJobMutation();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         toast(context, 'No pudimos consultar la valoración. Reintenta.');
+      }
     } finally {
       if (mounted) setState(() => _busyJobId = null);
     }
@@ -2788,8 +2786,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (mounted)
+        if (mounted) {
           toast(context, 'Autoriza la ubicación para centrar el mapa.');
+        }
         return;
       }
       final position = await Geolocator.getCurrentPosition(
@@ -2928,12 +2927,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final center = _workMapPosition ?? const LatLng(23.1136, -82.3666);
     final active = _active.isNotEmpty ? _active.first : null;
     if (active != null) {
-      _workMapReady = false;
       return MarketplaceDriverMap(job: active);
     }
     final config = _workMapVisual;
     if (config == null) {
-      _workMapReady = false;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2971,7 +2968,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             pitch: 0,
           ),
           onMapCreated: (map) {
-            _workMapReady = true;
             unawaited(
               map.scaleBar.updateSettings(mbx.ScaleBarSettings(enabled: false)),
             );
