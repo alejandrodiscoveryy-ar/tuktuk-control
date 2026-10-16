@@ -65,7 +65,7 @@ void main() {
     expect(home, contains('if (onRide ||'));
     expect(home, contains('_available.isNotEmpty ||'));
     expect(home, contains('_error != null)'));
-    expect(home, contains('bottom: bottomNavInset + (_available.isNotEmpty'));
+    expect(home.replaceAll(RegExp(r'\s+'), ' '), contains('bottom: bottomNavInset + (_available.isNotEmpty'));
     expect(home, contains('onAccept: () => _acceptJob(job)'));
     expect(home, contains("ValueKey('work-map-advance-job')"));
   });
