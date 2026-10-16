@@ -3007,7 +3007,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           Positioned(
             left: 12,
             right: 12,
-            bottom: 115,
+            bottom: MediaQuery.paddingOf(context).bottom + 115,
             child: Material(
               color: kSurfaceHigh.withValues(alpha: .95),
               borderRadius: BorderRadius.circular(14),
@@ -3325,6 +3325,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final active = _active.isNotEmpty ? _active.first : null;
     final onRide = active != null;
     final photo = _googleProfilePhotoUrl(widget.store.user);
+    final bottomNavInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
       key: const ValueKey('tuktuk-work-map-home'),
       fit: StackFit.expand,
@@ -3357,9 +3358,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         if (!onRide && _workMapVisual != null)
           Positioned(
             right: 12,
-            bottom: _available.isNotEmpty
+            bottom: bottomNavInset + (_available.isNotEmpty
                 ? 288
-                : (_scheduled.isNotEmpty || _error != null ? 128 : 16),
+                : (_scheduled.isNotEmpty || _error != null ? 128 : 16)),
             child: _workPremiumMapTools(),
           ),
         // Sin solicitudes ni incidencias, el mapa permanece despejado.
@@ -3371,7 +3372,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           Positioned(
             left: 12,
             right: 12,
-            bottom: 12,
+            bottom: bottomNavInset + 12,
             child: onRide
                 ? GlassCard(
                     child: Column(

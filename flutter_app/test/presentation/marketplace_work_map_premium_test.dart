@@ -12,6 +12,7 @@ void main() {
     expect(code, contains('return _buildWorkMapHome(context);'));
     expect(shell, contains('MarketplaceRecordsScreen(store: store)'));
     expect(shell, contains('MarketplaceJobsScreen('));
+    expect(shell, contains('bottom: index != 2 || useDesktopNavigation'));
     expect(shell, contains('StatsScreen(store: store)'));
   });
 
@@ -22,6 +23,8 @@ void main() {
     expect(code, contains('MarketplaceDriverMap(job: active)'));
     expect(code, contains('_setAcceptingJobs(!available)'));
     expect(code, contains("ValueKey('work-map-availability-toggle')"));
+    expect(code, contains('final bottomNavInset = MediaQuery.paddingOf(context).bottom;'));
+    expect(code, contains('bottom: bottomNavInset + 12'));
     expect(
       code,
       contains(
