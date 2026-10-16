@@ -1,9 +1,10 @@
 part of '../main.dart';
 
 class MarketplaceDriverMap extends StatefulWidget {
-  const MarketplaceDriverMap({required this.job, super.key});
+  const MarketplaceDriverMap({required this.job, this.showLegend = true, super.key});
 
   final MarketplaceJob job;
+  final bool showLegend;
 
   @override
   State<MarketplaceDriverMap> createState() => _MarketplaceDriverMapState();
@@ -224,9 +225,10 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             goingToPickup: goingToPickup,
             stylePath: configuration.stylePath,
           ),
-          Positioned(
-            left: 10,
-            top: 10,
+          if (widget.showLegend)
+            Positioned(
+              left: 10,
+              top: 10,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
