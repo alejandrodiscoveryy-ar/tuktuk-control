@@ -20,7 +20,7 @@ void main() {
     final code = File(
       'lib/presentation/marketplace_jobs.dart',
     ).readAsStringSync();
-    expect(code, contains('MarketplaceDriverMap(job: active)'));
+    expect(code, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
     expect(code, contains('_setAcceptingJobs(!available)'));
     expect(code, contains("ValueKey('work-map-availability-toggle')"));
     expect(code, contains('final bottomNavInset = MediaQuery.paddingOf(context).bottom;'));
