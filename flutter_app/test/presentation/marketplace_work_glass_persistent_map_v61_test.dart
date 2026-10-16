@@ -29,7 +29,7 @@ void main() {
     expect(vector, contains('final MarketplaceMapPoint? destination;'));
   });
   test('Cristal marino translucido conserva botones de servicio', () {
-    final a = jobs.indexOf("? ClipRRect(", jobs.indexOf('child: onRide'));
+    final a = jobs.indexOf('? ClipRRect(', jobs.indexOf('child: onRide'));
     final b = jobs.indexOf(': _available.isNotEmpty', a);
     final card = jobs.substring(a, b);
     expect(card, contains('work-map-glass-active-card'));
