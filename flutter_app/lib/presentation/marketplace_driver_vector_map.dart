@@ -318,6 +318,20 @@ class _MarketplaceDriverVectorMapState
         if (s is! mbx.GeoJsonSource) return;
         await s.updateGeoJSON(item.value);
       }
+      // Una sola instancia de mapa: actualizar tambiÃ©n el tramo destacado.
+      for (final source in [_pickupRouteSource, _destinationRouteSource]) {
+        final highlighted =
+            (source == _pickupRouteSource) == widget.goingToPickup;
+        await map.setStyleLayerProperty(
+          '$source-outline', 'line-opacity', highlighted ? 1.0 : 0.25,
+        );
+        await map.setStyleLayerProperty(
+          '$source-line', 'line-opacity', highlighted ? 1.0 : 0.45,
+        );
+        await map.setStyleLayerProperty(
+          '$source-line', 'line-width', highlighted ? 6.0 : 3.0,
+        );
+      }
       final pickup = widget.pickup;
       final destination = widget.destination;
       final center = pickup != null && destination != null

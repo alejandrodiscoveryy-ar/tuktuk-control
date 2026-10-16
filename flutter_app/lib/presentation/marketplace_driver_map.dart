@@ -4,6 +4,7 @@ class MarketplaceDriverMap extends StatefulWidget {
   const MarketplaceDriverMap({
     this.job,
     this.showLegend = true,
+    this.showIdleLocation = false,
     this.idleCenter = const LatLng(23.1136, -82.3666),
     this.idleZoom = 13.5,
     this.configuration,
@@ -13,6 +14,7 @@ class MarketplaceDriverMap extends StatefulWidget {
 
   final MarketplaceJob? job;
   final bool showLegend;
+  final bool showIdleLocation;
   final LatLng idleCenter;
   final double idleZoom;
   final MarketplaceMapVisualConfiguration? configuration;
@@ -249,6 +251,16 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             idleCenter: widget.idleCenter,
             idleZoom: widget.idleZoom,
           ),
+          if (widget.showIdleLocation && ride == null)
+            const Center(
+              child: IgnorePointer(
+                child: Icon(
+                  Icons.my_location_rounded,
+                  color: Color(0xFF2DD4A3),
+                  size: 36,
+                ),
+              ),
+            ),
           if (widget.showLegend)
             Positioned(
               left: 10,

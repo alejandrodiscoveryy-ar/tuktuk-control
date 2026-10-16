@@ -16,12 +16,15 @@ void main() {
     expect(surface, isNot(contains('mbx.MapWidget(')));
     expect(driver, contains('final MarketplaceJob? job;'));
     expect(driver, contains('if (widget.job == null)'));
-    expect(driver, isNot(contains("ValueKey('\${widget.job.id}-\${widget.job.status}')")));
+    expect(driver, contains('widget.showIdleLocation && ride == null'));
+    expect(jobs, contains('showIdleLocation: _workMapPosition != null'));
+    expect(driver, isNot(contains('ValueKey(')));
   });
   test('La ruta actualiza GeoJSON y camara, sin recrear el mapa', () {
     expect(vector, contains('mbx.MapWidget('));
     expect(vector, contains('await s.updateGeoJSON(item.value)'));
     expect(vector, contains('await map.setCamera(mbx.CameraOptions('));
+    expect(vector, contains('map.setStyleLayerProperty('));
     expect(vector, contains('final MarketplaceMapPoint? pickup;'));
     expect(vector, contains('final MarketplaceMapPoint? destination;'));
   });

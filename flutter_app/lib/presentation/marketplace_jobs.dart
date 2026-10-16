@@ -2946,6 +2946,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       showLegend: false,
       idleCenter: center,
       idleZoom: _workMapZoom,
+      showIdleLocation: _workMapPosition != null,
       configuration: config,
       stylePath: style,
     );
