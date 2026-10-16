@@ -3099,18 +3099,27 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             : available
                 ? 'TRABAJANDO'
                 : 'DESCANSANDO';
-    final subtitle = onRide
-        ? 'Servicio en curso'
-        : !valid
-            ? 'Completa la activación'
-            : available
-                ? 'Recibiendo solicitudes'
-                : 'Solicitudes en pausa';
-    final enabled = valid && !onRide && !_updatingAvailability;
+    final subtitle = _updatingAvailability
+        ? 'Actualizando estado...'
+        : onRide
+            ? 'Servicio en curso'
+            : !valid
+                ? 'Completa la activación'
+                : available
+                    ? 'Toca para descansar'
+                    : 'Toca para trabajar';
+    final interactive = !onRide && !_updatingAvailability;
     return Semantics(
       button: true,
       toggled: available,
-      enabled: enabled,
+      enabled: interactive,
+      label: onRide
+          ? 'En carrera. Estado bloqueado durante el servicio'
+          : !valid
+              ? 'Completar activación para trabajar'
+              : available
+                  ? 'Trabajando. Toca para descansar'
+                  : 'Descansando. Toca para trabajar',
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
@@ -3133,32 +3142,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           child: InkWell(
             key: const ValueKey('work-map-availability-toggle'),
             borderRadius: BorderRadius.circular(20),
-            onTap: _updatingAvailability || onRide
+            excludeFromSemantics: true,
+            onTap: !interactive
                 ? null
                 : valid
                     ? () => unawaited(_setAcceptingJobs(!available))
                     : _openActivation,
             child: SizedBox(
-              height: 61,
+              height: 70,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.fromLTRB(13, 6, 7, 6),
                 child: Row(
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accent,
-                        boxShadow: [
-                          BoxShadow(
-                            color: accent.withValues(alpha: .36),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -3169,13 +3164,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: .4,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: .3,
                               color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 3),
                           Text(
                             subtitle,
                             maxLines: 1,
@@ -3183,49 +3178,49 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: .72),
+                              color: Colors.white.withValues(alpha: .78),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 7),
-                    if (onRide || !valid)
-                      Icon(
-                        onRide ? Icons.route_rounded : Icons.lock_open_rounded,
-                        size: 23,
+                    const SizedBox(width: 5),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
                         color: accent,
-                      )
-                    else
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 40,
-                        height: 24,
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: available
-                              ? accent.withValues(alpha: .78)
-                              : Colors.white.withValues(alpha: .18),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: .16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withValues(alpha: .26),
+                            blurRadius: 9,
                           ),
-                        ),
-                        child: AnimatedAlign(
-                          duration: const Duration(milliseconds: 180),
-                          alignment: available
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            width: 17,
-                            height: 17,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
+                      alignment: Alignment.center,
+                      child: _updatingAvailability
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                color: Color(0xFF142733),
+                              ),
+                            )
+                          : Icon(
+                              onRide
+                                  ? Icons.route_rounded
+                                  : !valid
+                                      ? Icons.settings_rounded
+                                      : available
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                              size: 31,
+                              color: const Color(0xFF142733),
+                            ),
+                    ),
                   ],
                 ),
               ),
@@ -3235,6 +3230,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       ),
     );
   }
+
 
   Widget _workPremiumMapAction({
     required String actionKey,
@@ -3361,92 +3357,91 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         if (!onRide && _workMapVisual != null)
           Positioned(
             right: 12,
-            bottom: _available.isNotEmpty ? 288 : 128,
+            bottom: _available.isNotEmpty
+                ? 288
+                : (_scheduled.isNotEmpty || _error != null ? 128 : 16),
             child: _workPremiumMapTools(),
           ),
-        Positioned(
-          left: 12,
-          right: 12,
-          bottom: 12,
-          child: onRide
-              ? GlassCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _marketplaceJobStatusLabel(active.status),
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
+        // Sin solicitudes ni incidencias, el mapa permanece despejado.
+        // Las ofertas reales tienen prioridad sobre el recordatorio de agenda.
+        if (onRide ||
+            _available.isNotEmpty ||
+            _scheduled.isNotEmpty ||
+            _error != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: onRide
+                ? GlassCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _marketplaceJobStatusLabel(active.status),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        '${active.originText ?? 'Recogida'} → '
-                        '${active.destinationText ?? 'Destino'}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 9),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () => _openWorkPanel(0),
-                          child: const Text('Gestionar servicio en curso'),
+                        const SizedBox(height: 5),
+                        Text(
+                          '${active.originText ?? 'Recogida'} → '
+                          '${active.destinationText ?? 'Destino'}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                )
-              : _scheduled.isNotEmpty
-              ? GlassCard(
-                  child: ListTile(
-                    leading: const Icon(Icons.event_available_outlined),
-                    title: const Text('Tienes trabajos programados'),
-                    subtitle: const Text('Consulta tu agenda'),
-                    onTap: () => _openWorkPanel(1),
-                  ),
-                )
-              : _available.isNotEmpty
-              ? SizedBox(
-                  height: 264,
-                  child: ListView.builder(
-                    itemCount: _available.length,
-                    itemBuilder: (context, index) {
-                      final job = _available[index];
-                      return _AvailableJobCard(
-                        job: job,
-                        accepting: _acceptingJobId == job.id,
-                        acceptanceLocked: _acceptingJobId != null,
-                        onAccept: () => _acceptJob(job),
-                      );
-                    },
-                  ),
-                )
-              : GlassCard(
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.work_outline_rounded,
-                      color: available ? kPrimary : kTertiary,
+                        const SizedBox(height: 9),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () => _openWorkPanel(0),
+                            child: const Text('Gestionar servicio en curso'),
+                          ),
+                        ),
+                      ],
                     ),
-                    title: Text(
-                      _error != null
-                          ? 'No pudimos actualizar las carreras'
-                          : available
-                          ? 'Esperando solicitudes'
-                          : 'Activa Trabajar para recibir solicitudes',
-                    ),
-                    subtitle: Text(_error ?? 'Toca para actualizar trabajos.'),
-                    trailing: IconButton(
-                      tooltip: 'Actualizar trabajos',
-                      icon: const Icon(Icons.refresh_rounded),
-                      onPressed: _load,
-                    ),
-                    onTap: () => unawaited(_load()),
-                  ),
-                ),
-        ),
+                  )
+                : _available.isNotEmpty
+                    ? SizedBox(
+                        height: 264,
+                        child: ListView.builder(
+                          itemCount: _available.length,
+                          itemBuilder: (context, index) {
+                            final job = _available[index];
+                            return _AvailableJobCard(
+                              job: job,
+                              accepting: _acceptingJobId == job.id,
+                              acceptanceLocked: _acceptingJobId != null,
+                              onAccept: () => _acceptJob(job),
+                            );
+                          },
+                        ),
+                      )
+                    : _scheduled.isNotEmpty
+                        ? GlassCard(
+                            child: ListTile(
+                              leading: const Icon(Icons.event_available_outlined),
+                              title: const Text('Tienes trabajos programados'),
+                              subtitle: const Text('Consulta tu agenda'),
+                              onTap: () => _openWorkPanel(1),
+                            ),
+                          )
+                        : GlassCard(
+                            child: ListTile(
+                              leading: const Icon(Icons.warning_amber_rounded),
+                              title: const Text('No pudimos actualizar las carreras'),
+                              subtitle: Text(_error ?? ''),
+                              trailing: IconButton(
+                                tooltip: 'Reintentar actualización',
+                                icon: const Icon(Icons.refresh_rounded),
+                                onPressed: () => unawaited(_load()),
+                              ),
+                              onTap: () => unawaited(_load()),
+                            ),
+                          ),
+          ),
         if (_workDrawerOpen) _buildWorkDrawer(context),
       ],
     );

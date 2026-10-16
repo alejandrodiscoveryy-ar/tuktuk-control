@@ -641,11 +641,13 @@ void main() {
 
     expect(find.text('DESCANSANDO'), findsOneWidget);
     expect(
-        find.text('Activa Trabajar para recibir solicitudes'),
+        find.text('Toca para trabajar'),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('work-map-availability-toggle')),
         findsOneWidget);
+    expect(find.text('Esperando solicitudes'), findsNothing);
+    expect(find.text('Activa Trabajar para recibir solicitudes'), findsNothing);
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
   testWidgets('active ride displays only the two unified visual milestones',
