@@ -65,8 +65,22 @@ void main() {
     expect(home, contains('if (onRide ||'));
     expect(home, contains('_available.isNotEmpty ||'));
     expect(home, contains('_error != null)'));
-    expect(home, contains('bottom: _available.isNotEmpty'));
+    expect(home, contains('bottom: bottomNavInset + (_available.isNotEmpty'));
     expect(home, contains('onAccept: () => _acceptJob(job)'));
     expect(home, contains('Gestionar servicio en curso'));
+  });
+
+  test('Solo el mapa se extiende debajo de la barra flotante', () {
+    final start = source.indexOf('Widget _workNonMapSafeArea(');
+    final end = source.indexOf('Widget _buildAvailableTab(', start);
+    expect(start, greaterThan(0));
+    expect(end, greaterThan(start));
+    final segment = source.substring(start, end);
+    expect(segment, contains('SafeArea('));
+    expect(segment, contains('child: content'));
+    expect(segment, contains('_workNonMapSafeArea(_buildAvailableTab(context))'));
+    expect(segment, contains('_workNonMapSafeArea(_buildWorkPanel(context))'));
+    expect(segment, contains('return _buildWorkMapHome(context);'));
+    expect(source, contains('final bottomNavInset = MediaQuery.paddingOf(context).bottom;'));
   });
 }

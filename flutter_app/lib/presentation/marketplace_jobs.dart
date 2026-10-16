@@ -3524,6 +3524,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  // Los paneles y formularios mantienen la zona segura; el mapa es la excepcion.
+  Widget _workNonMapSafeArea(Widget content) => SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        child: content,
+      );
+
   @override
   Widget build(BuildContext context) {
     // La pestaña Trabajo mantiene su estado y su muestreo previo de GPS.
@@ -3532,14 +3540,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       return const Center(child: CircularProgressIndicator());
     }
     final onboarding = _onboarding;
-    if (onboarding == null) return _buildAvailableTab(context);
+    if (onboarding == null) {
+      return _workNonMapSafeArea(_buildAvailableTab(context));
+    }
     if (_marketplaceDriverNeedsSetup(onboarding)) {
-      return MarketplaceOnboardingScreen(
-        store: widget.store,
-        onManagementChanged: _onManagementChanged,
+      return _workNonMapSafeArea(
+        MarketplaceOnboardingScreen(
+          store: widget.store,
+          onManagementChanged: _onManagementChanged,
+        ),
       );
     }
-    if (_workPanelIndex >= 0) return _buildWorkPanel(context);
+    if (_workPanelIndex >= 0) {
+      return _workNonMapSafeArea(_buildWorkPanel(context));
+    }
     return _buildWorkMapHome(context);
   }
 
