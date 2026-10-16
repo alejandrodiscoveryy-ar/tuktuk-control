@@ -1,10 +1,22 @@
 part of '../main.dart';
 
 class MarketplaceDriverMap extends StatefulWidget {
-  const MarketplaceDriverMap({required this.job, this.showLegend = true, super.key});
+  const MarketplaceDriverMap({
+    this.job,
+    this.showLegend = true,
+    this.idleCenter = const LatLng(23.1136, -82.3666),
+    this.idleZoom = 13.5,
+    this.configuration,
+    this.stylePath,
+    super.key,
+  });
 
-  final MarketplaceJob job;
+  final MarketplaceJob? job;
   final bool showLegend;
+  final LatLng idleCenter;
+  final double idleZoom;
+  final MarketplaceMapVisualConfiguration? configuration;
+  final String? stylePath;
 
   @override
   State<MarketplaceDriverMap> createState() => _MarketplaceDriverMapState();
@@ -19,33 +31,53 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
   String? message;
 
   bool loading = true;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    mapConfiguration = widget.configuration;
+    if (widget.job != null) {
+      unawaited(_load());
+    } else {
+      loading = false;
+    }
   }
 
   @override
   void didUpdateWidget(covariant MarketplaceDriverMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.job.id != widget.job.id ||
-        oldWidget.job.status != widget.job.status ||
-        oldWidget.job.originLat != widget.job.originLat ||
-        oldWidget.job.originLon != widget.job.originLon ||
-        oldWidget.job.destinationLat != widget.job.destinationLat ||
-        oldWidget.job.destinationLon != widget.job.destinationLon) {
-      unawaited(_load());
+    mapConfiguration = widget.configuration ?? mapConfiguration;
+    if (oldWidget.job?.id != widget.job?.id ||
+        oldWidget.job?.status != widget.job?.status ||
+        oldWidget.job?.originLat != widget.job?.originLat ||
+        oldWidget.job?.originLon != widget.job?.originLon ||
+        oldWidget.job?.destinationLat != widget.job?.destinationLat ||
+        oldWidget.job?.destinationLon != widget.job?.destinationLon) {
+      if (widget.job == null) {
+        ++_loadGeneration;
+        setState(() {
+          loading = false;
+          toPickup = null;
+          toDestination = null;
+          driver = null;
+          message = null;
+        });
+      } else {
+        unawaited(_load());
+      }
     }
   }
 
   Future<void> _load() async {
-    final pickup = widget.job.originPoint;
-    final destination = widget.job.destinationPoint;
+    final job = widget.job;
+    if (job == null) return;
+    final generation = ++_loadGeneration;
+    final pickup = job.originPoint;
+    final destination = job.destinationPoint;
 
     if (pickup == null || destination == null) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
 
       setState(() {
         loading = false;
@@ -78,7 +110,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         throw StateError('MAP_TOKEN_MISSING');
       }
 
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
 
       mapConfiguration = configuration;
       // Solo token publico: rutas y sesiones siguen protegidas en el gateway.
@@ -91,7 +123,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
 
       try {
         destinationRoute = await maps.driverRouteForJob(
-          jobId: widget.job.id,
+          jobId: job.id,
           stage: 'destination',
         );
       } catch (_) {
@@ -124,7 +156,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
 
         try {
           pickupRoute = await maps.driverRouteForJob(
-            jobId: widget.job.id,
+            jobId: job.id,
             stage: 'pickup',
             origin: current,
           );
@@ -141,7 +173,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         }
       }
 
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
 
       setState(() {
         driver = current;
@@ -156,7 +188,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         }
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
 
       setState(() {
         loading = false;
@@ -188,42 +220,34 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
 
   @override
   Widget build(BuildContext context) {
-    final pickup = widget.job.originPoint;
-    final destination = widget.job.destinationPoint;
+    final pickup = widget.job?.originPoint;
+    final destination = widget.job?.destinationPoint;
 
-    if (pickup == null || destination == null) {
-      return const Center(
-        child: Text('Mapa no disponible para este servicio.'),
-      );
+    if (widget.job != null && (pickup == null || destination == null)) {
+      return const Center(child: Text('Mapa no disponible para este servicio.'));
     }
-
-    if (loading) {
+    final configuration = widget.configuration ?? mapConfiguration;
+    if (configuration == null || configuration.token.isEmpty) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
-
-    final configuration = mapConfiguration;
-
-    if (configuration == null || configuration.token.isEmpty) {
-      return const Center(
-        child: Text('Mapa no disponible para este servicio.'),
-      );
-    }
-
-    final goingToPickup = marketplaceDriverGoingToPickup(widget.job.status);
+    final ride = widget.job;
+    final goingToPickup = ride == null ||
+        marketplaceDriverGoingToPickup(ride.status);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: Stack(
         children: [
           MarketplaceDriverVectorMap(
-            key: ValueKey('${widget.job.id}-${widget.job.status}'),
             pickup: pickup,
             destination: destination,
             driver: driver,
             toPickup: toPickup,
             toDestination: toDestination,
             goingToPickup: goingToPickup,
-            stylePath: configuration.stylePath,
+            stylePath: widget.stylePath ?? configuration.stylePath,
+            idleCenter: widget.idleCenter,
+            idleZoom: widget.idleZoom,
           ),
           if (widget.showLegend)
             Positioned(

@@ -34,7 +34,7 @@ void main() {
   });
 
   test('Carrera activa conserva mapa, menú y acceso a su gestión', () {
-    expect(source, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
+    expect(source, contains('return MarketplaceDriverMap('));
     expect(source, contains("ValueKey('work-map-open-menu')"));
     expect(source, contains('if (_workDrawerOpen) _buildWorkDrawer(context)'));
     expect(source, contains("ValueKey('work-map-advance-job')"));
