@@ -22,7 +22,12 @@ void main() {
     expect(code, contains('MarketplaceDriverMap(job: active)'));
     expect(code, contains('_setAcceptingJobs(!available)'));
     expect(code, contains("ValueKey('work-map-availability-toggle')"));
-    expect(code, contains('MarketplaceMapService(Supabase.instance.client)'));
+    expect(
+      code,
+      contains(
+        RegExp(r'MarketplaceMapService\s*\(\s*Supabase\.instance\.client,?\s*\)'),
+      ),
+    );
     expect(code, contains('mbx.MapWidget('));
     expect(code, contains('_AvailableJobCard('));
     expect(code, contains('onAccept: () => _acceptJob(job)'));
@@ -32,7 +37,10 @@ void main() {
     final code = File(
       'lib/presentation/marketplace_jobs.dart',
     ).readAsStringSync();
-    expect(code, contains("'Programados', 'Historial'"));
+    expect(
+      code,
+      contains(RegExp(r"'Programados'\s*,\s*'Historial'")),
+    );
     expect(
       code,
       contains('managementSection: MarketplaceManagementSection.wallet'),
