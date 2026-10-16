@@ -17,12 +17,12 @@ void main() {
       expect(begin, greaterThan(0));
       expect(end, greaterThan(begin));
       final surface = code.substring(begin, end);
-      expect(surface, contains('mbx.MapWidget('));
-      expect(surface, contains("styleUri: 'mapbox://styles/"));
-      expect(surface, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
+      expect(surface, contains('return MarketplaceDriverMap('));
+      expect(surface, contains('configuration: config'));
+      expect(surface, contains('return MarketplaceDriverMap('));
       expect(surface, isNot(contains('TileLayer(')));
       expect(surface, isNot(contains('FlutterMap(')));
-      expect(surface, contains('onMapLoadErrorListener:'));
+      expect(surface, contains('idleZoom: _workMapZoom'));
       expect(surface, contains("'mapbox/dark-v11'"));
       expect(surface, contains('Reintentar'));
     },

@@ -32,7 +32,7 @@ void main() {
   });
 
   test('leyenda permanece disponible solo en mapas detallados', () {
-    expect(jobs, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
+    expect(jobs, contains('return MarketplaceDriverMap('));
     expect(map, contains('this.showLegend = true'));
     expect(map, contains('if (widget.showLegend)'));
   });

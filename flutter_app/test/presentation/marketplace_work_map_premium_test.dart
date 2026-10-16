@@ -20,7 +20,7 @@ void main() {
     final code = File(
       'lib/presentation/marketplace_jobs.dart',
     ).readAsStringSync();
-    expect(code, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
+    expect(code, contains('return MarketplaceDriverMap('));
     expect(code, contains('_setAcceptingJobs(!available)'));
     expect(code, contains("ValueKey('work-map-availability-toggle')"));
     expect(code, contains('final bottomNavInset = MediaQuery.paddingOf(context).bottom;'));
@@ -31,7 +31,7 @@ void main() {
         RegExp(r'MarketplaceMapService\s*\(\s*Supabase\.instance\.client,?\s*\)'),
       ),
     );
-    expect(code, contains('mbx.MapWidget('));
+    expect(code, contains('return MarketplaceDriverMap('));
     expect(code, contains('_AvailableJobCard('));
     expect(code, contains('onAccept: () => _acceptJob(job)'));
   });

@@ -253,8 +253,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   LatLng? _workMapPosition;
   double _workMapZoom = 13.5;
   bool _workMapFallback = false;
-  String? _workMapError;
-  int _workMapRevision = 0;
 
   MarketplaceOnboarding? _onboarding;
   String? _selectedVehicleId;
@@ -2754,9 +2752,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         mbx.MapboxOptions.setAccessToken(config.token);
         setState(() {
           _workMapVisual = config;
-          _workMapError = null;
           _workMapFallback = false;
-          _workMapRevision++;
         });
       }
     } catch (_) {
@@ -2806,7 +2802,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       setState(() => _workMapPosition = center);
       setState(() {
         _workMapZoom = 15;
-        _workMapRevision++;
       });
     } catch (_) {
       if (mounted) toast(context, 'No se pudo obtener tu ubicación.');
@@ -2927,19 +2922,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Widget _workMapSurface(BuildContext context) {
     final center = _workMapPosition ?? const LatLng(23.1136, -82.3666);
     final active = _active.isNotEmpty ? _active.first : null;
-    if (active != null) {
-      return MarketplaceDriverMap(job: active, showLegend: false);
-    }
     final config = _workMapVisual;
     if (config == null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'No pudimos configurar el mapa. Puedes seguir recibiendo solicitudes.',
-              textAlign: TextAlign.center,
-            ),
+            const Text('No pudimos configurar el mapa. Puedes seguir recibiendo solicitudes.'),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => unawaited(_prepareWorkMap()),
@@ -2950,94 +2939,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         ),
       );
     }
-    // Mapbox Maps SDK: los estilos modernos pueden ser incompatibles con
-    // tiles raster /styles/.../tiles/{z}/{x}/{y}. El mapa de Trabajo
-    // comparte ahora el motor vectorial ya utilizado por carreras activas.
+    // Conserva el mismo Mapbox al aceptar, avanzar o finalizar una carrera.
     final style = _workMapFallback ? 'mapbox/dark-v11' : config.stylePath;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        mbx.MapWidget(
-          key: ValueKey('work-vector-$style-$_workMapRevision'),
-          styleUri: 'mapbox://styles/$style',
-          viewport: mbx.CameraViewportState(
-            center: mbx.Point(
-              coordinates: mbx.Position(center.longitude, center.latitude),
-            ),
-            zoom: _workMapZoom,
-            bearing: 0,
-            pitch: 0,
-          ),
-          onMapCreated: (map) {
-            unawaited(
-              map.scaleBar.updateSettings(mbx.ScaleBarSettings(enabled: false)),
-            );
-          },
-          onStyleLoadedListener: (_) {
-            if (mounted && _workMapError != null) {
-              setState(() => _workMapError = null);
-            }
-          },
-          onMapLoadErrorListener: (_) {
-            if (!mounted) return;
-            if (!_workMapFallback) {
-              setState(() {
-                _workMapFallback = true;
-                _workMapError = 'Reintentando mapa con estilo alternativo…';
-                _workMapRevision++;
-              });
-            } else {
-              setState(
-                () => _workMapError =
-                    'No pudimos cargar las calles. Comprueba la conexión y reintenta.',
-              );
-            }
-          },
-        ),
-        if (_workMapPosition != null)
-          const Center(
-            child: IgnorePointer(
-              child: Icon(
-                Icons.my_location_rounded,
-                color: Color(0xFF2DD4A3),
-                size: 36,
-              ),
-            ),
-          ),
-        if (_workMapError != null)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: MediaQuery.paddingOf(context).bottom + 115,
-            child: Material(
-              color: kSurfaceHigh.withValues(alpha: .95),
-              borderRadius: BorderRadius.circular(14),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_workMapError!, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _workMapFallback = false;
-                          _workMapError = null;
-                          _workMapRevision++;
-                        });
-                      },
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-      ],
+    return MarketplaceDriverMap(
+      job: active,
+      showLegend: false,
+      idleCenter: center,
+      idleZoom: _workMapZoom,
+      showIdleLocation: _workMapPosition != null,
+      configuration: config,
+      stylePath: style,
     );
   }
+
 
   // TUKTUK Trabajo V3: avatar y estado premium sobre la cartografia.
   Widget _workPremiumAvatar(String? photo) {
@@ -3300,7 +3214,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               icon: Icons.add_rounded,
               onPressed: () => setState(() {
                 _workMapZoom = (_workMapZoom + 1).clamp(3, 19).toDouble();
-                _workMapRevision++;
               }),
             ),
             Container(width: 22, height: 1, color: Colors.white.withValues(alpha: .13)),
@@ -3310,7 +3223,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               icon: Icons.remove_rounded,
               onPressed: () => setState(() {
                 _workMapZoom = (_workMapZoom - 1).clamp(3, 19).toDouble();
-                _workMapRevision++;
               }),
             ),
           ],
@@ -3380,105 +3292,179 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             right: 12,
             bottom: bottomNavInset + 12,
             child: onRide
-                ? GlassCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _marketplaceJobStatusLabel(active.status),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              _marketplaceMoneyLabel(
-                                active.finalPrice,
-                                active.currency,
-                              ),
-                              style: const TextStyle(
-                                color: Color(0xFF43E4BB),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
+                      child: Container(
+                        key: const ValueKey('work-map-glass-active-card'),
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xC00A2833), Color(0xD20B1925)],
+                          ),
+                          border: Border.all(
+                            color: const Color(0x804AE5D1),
+                            width: 1.1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: .26),
+                              blurRadius: 22,
+                              offset: const Offset(0, 8),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${active.originText ?? 'Recogida'} → '
-                          '${active.destinationText ?? 'Destino'}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (canFinish || canStart) ...[
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              key: const ValueKey('work-map-advance-job'),
-                              onPressed: busy
-                                  ? null
-                                  : () => unawaited(_advanceJob(active)),
-                              icon: busy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.near_me_rounded,
+                                    color: Color(0xFF77E9DF), size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        active.status == 'en_route'
+                                            ? 'En camino a recoger'
+                                            : _marketplaceJobStatusLabel(active.status),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 16, fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                        ),
                                       ),
-                                    )
-                                  : Icon(canFinish
-                                      ? Icons.check_circle_outline_rounded
-                                      : Icons.navigation_rounded),
-                              label: Text(canFinish
-                                  ? 'Finalizar carrera'
-                                  : 'Salir hacia el cliente'),
+                                      Text(
+                                        active.serviceCode == 'passenger'
+                                            ? 'Servicio de pasajeros'
+                                            : 'Servicio en curso',
+                                        style: const TextStyle(
+                                          color: Color(0xFFC3D4D9), fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _marketplaceMoneyLabel(
+                                    active.finalPrice, active.currency),
+                                  style: const TextStyle(
+                                    color: Color(0xFF58E6B3),
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                        const SizedBox(height: 7),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            key: const ValueKey('work-map-contact-customer'),
-                            onPressed: busy
-                                ? null
-                                : () => unawaited(_contactJob(active)),
-                            icon: const Icon(Icons.contact_phone_rounded),
-                            label: const Text('Contactar cliente'),
-                          ),
+                            const SizedBox(height: 10),
+                            Container(height: 1,
+                                color: Colors.white.withValues(alpha: .14)),
+                            const SizedBox(height: 10),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.radio_button_checked_rounded,
+                                    color: Color(0xFF58E6B3), size: 18),
+                                const SizedBox(width: 10),
+                                Expanded(child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Recogida',style: TextStyle(
+                                      color: Color(0xFFB4C9D2),fontSize: 11)),
+                                    Text(active.originText ?? 'Recogida',
+                                      maxLines: 2,overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white,
+                                        fontWeight: FontWeight.w700,fontSize: 13)),
+                                  ],
+                                )),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.location_on_rounded,
+                                    color: Color(0xFFF37B82), size: 18),
+                                const SizedBox(width: 10),
+                                Expanded(child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Destino',style: TextStyle(
+                                      color: Color(0xFFB4C9D2),fontSize: 11)),
+                                    Text(active.destinationText ?? 'Destino',
+                                      maxLines: 2,overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white,
+                                        fontWeight: FontWeight.w700,fontSize: 13)),
+                                  ],
+                                )),
+                              ],
+                            ),
+                            if (canFinish || canStart) ...[
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  key: const ValueKey('work-map-advance-job'),
+                                  onPressed: busy ? null
+                                      : () => unawaited(_advanceJob(active)),
+                                  icon: busy
+                                      ? const SizedBox(width: 18,height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2))
+                                      : Icon(canFinish ? Icons.check_circle_outline_rounded
+                                          : Icons.navigation_rounded),
+                                  label: Text(canFinish
+                                      ? 'Finalizar carrera' : 'Salir hacia el cliente'),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 5),
+                            Row(children: [
+                              Expanded(
+                                child: TextButton.icon(
+                                  key: const ValueKey('work-map-contact-customer'),
+                                  onPressed: busy ? null
+                                      : () => unawaited(_contactJob(active)),
+                                  icon: const Icon(Icons.phone_rounded,size: 18),
+                                  label: const FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text('Contactar cliente')),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF98F7DE),
+                                    padding: const EdgeInsets.symmetric(horizontal: 2)),
+                                ),
+                              ),
+                              if (canCancel)
+                                Flexible(
+                                  child: TextButton(
+                                    key: const ValueKey('work-map-cancel-job'),
+                                    onPressed: busy ? null
+                                        : () => unawaited(_cancelJob(active)),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFFCFDEE6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 3)),
+                                    child: const FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text('Cancelar servicio')),
+                                  ),
+                                ),
+                            ]),
+                            if (!canFinish && !canStart && !canCancel)
+                              TextButton(
+                                onPressed: () => _openWorkPanel(0),
+                                child: const Text('Ver opciones del servicio'),
+                              ),
+                          ],
                         ),
-                        if (canCancel) ...[
-                          const SizedBox(height: 2),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              key: const ValueKey('work-map-cancel-job'),
-                              onPressed: busy
-                                  ? null
-                                  : () => unawaited(_cancelJob(active)),
-                              child: const Text('Cancelar servicio'),
-                            ),
-                          ),
-                        ],
-                        if (!canFinish && !canStart && !canCancel) ...[
-                          const SizedBox(height: 6),
-                          TextButton(
-                            onPressed: () => _openWorkPanel(0),
-                            child: const Text('Ver opciones del servicio'),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                   )
                 : _available.isNotEmpty

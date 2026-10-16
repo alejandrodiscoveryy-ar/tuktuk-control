@@ -98,16 +98,20 @@ class MarketplaceDriverVectorMap extends StatefulWidget {
     required this.toDestination,
     required this.goingToPickup,
     required this.stylePath,
+    required this.idleCenter,
+    required this.idleZoom,
     super.key,
   });
 
-  final MarketplaceMapPoint pickup;
-  final MarketplaceMapPoint destination;
+  final MarketplaceMapPoint? pickup;
+  final MarketplaceMapPoint? destination;
   final MarketplaceMapPoint? driver;
   final MarketplaceRoutePath? toPickup;
   final MarketplaceRoutePath? toDestination;
   final bool goingToPickup;
   final String stylePath;
+  final LatLng idleCenter;
+  final double idleZoom;
 
   @override
   State<MarketplaceDriverVectorMap> createState() =>
@@ -137,7 +141,10 @@ class _MarketplaceDriverVectorMapState
         oldWidget.destination != widget.destination ||
         oldWidget.driver != widget.driver ||
         oldWidget.toPickup != widget.toPickup ||
-        oldWidget.toDestination != widget.toDestination) {
+        oldWidget.toDestination != widget.toDestination ||
+        oldWidget.goingToPickup != widget.goingToPickup ||
+        oldWidget.idleCenter != widget.idleCenter ||
+        oldWidget.idleZoom != widget.idleZoom) {
       unawaited(_refresh());
     }
   }
@@ -311,6 +318,41 @@ class _MarketplaceDriverVectorMapState
         if (s is! mbx.GeoJsonSource) return;
         await s.updateGeoJSON(item.value);
       }
+      // Una sola instancia de mapa: actualizar tambiÃ©n el tramo destacado.
+      for (final source in [_pickupRouteSource, _destinationRouteSource]) {
+        final highlighted =
+            (source == _pickupRouteSource) == widget.goingToPickup;
+        await map.setStyleLayerProperty(
+          '$source-outline', 'line-opacity', highlighted ? 1.0 : 0.25,
+        );
+        await map.setStyleLayerProperty(
+          '$source-line', 'line-opacity', highlighted ? 1.0 : 0.45,
+        );
+        await map.setStyleLayerProperty(
+          '$source-line', 'line-width', highlighted ? 6.0 : 3.0,
+        );
+      }
+      final pickup = widget.pickup;
+      final destination = widget.destination;
+      final center = pickup != null && destination != null
+          ? marketplaceDriverMapCenter(
+              pickup: pickup,
+              destination: destination,
+              driver: widget.driver,
+              activeRoute: _activeRoute)
+          : widget.idleCenter;
+      final zoom = pickup != null && destination != null
+          ? marketplaceDriverMapZoom(
+              pickup: pickup,
+              destination: destination,
+              driver: widget.driver,
+              activeRoute: _activeRoute)
+          : widget.idleZoom;
+      await map.setCamera(mbx.CameraOptions(
+        center: mbx.Point(
+            coordinates: mbx.Position(center.longitude, center.latitude)),
+        zoom: zoom,
+      ));
     } catch (_) {
       if (mounted && map == _map) {
         setState(() => _message = 'No pudimos actualizar la ruta.');
@@ -320,18 +362,22 @@ class _MarketplaceDriverVectorMapState
 
   @override
   Widget build(BuildContext context) {
-    final center = marketplaceDriverMapCenter(
-      pickup: widget.pickup,
-      destination: widget.destination,
-      driver: widget.driver,
-      activeRoute: _activeRoute,
-    );
-    final zoom = marketplaceDriverMapZoom(
-      pickup: widget.pickup,
-      destination: widget.destination,
-      driver: widget.driver,
-      activeRoute: _activeRoute,
-    );
+    final pickup = widget.pickup;
+    final destination = widget.destination;
+    final center = pickup != null && destination != null
+        ? marketplaceDriverMapCenter(
+            pickup: pickup,
+            destination: destination,
+            driver: widget.driver,
+            activeRoute: _activeRoute)
+        : widget.idleCenter;
+    final zoom = pickup != null && destination != null
+        ? marketplaceDriverMapZoom(
+            pickup: pickup,
+            destination: destination,
+            driver: widget.driver,
+            activeRoute: _activeRoute)
+        : widget.idleZoom;
     return Stack(
       fit: StackFit.expand,
       children: [

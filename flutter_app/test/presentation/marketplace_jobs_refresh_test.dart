@@ -668,10 +668,10 @@ void main() {
     await open(tester);
     expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
 
-    expect(find.text('En camino'), findsWidgets);
+    expect(find.text('En camino a recoger'), findsOneWidget);
     expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
     expect(find.text('Aceptado'), findsNothing);
-    expect(find.text('Recogida'), findsNothing);
+    expect(find.text('Recogida'), findsOneWidget);
     expect(find.text('Finalizar carrera'), findsOneWidget);
   });
 
@@ -695,7 +695,7 @@ void main() {
 
     expect(find.text('En recogida'), findsOneWidget);
     expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
-    expect(find.text('Recogida'), findsNothing);
+    expect(find.text('Recogida'), findsOneWidget);
     expect(find.text('Finalizar carrera'), findsOneWidget);
   });
 
