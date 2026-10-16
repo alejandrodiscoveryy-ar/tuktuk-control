@@ -1669,6 +1669,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _ratingsLoaded = false;
         if (mounted && widget.store.user?.id == requestUserId) {
           await _refreshAfterJobMutation();
+          // Si se ha cerrado desde una pantalla anterior, vuelve al mapa.
+          // Si el backend mantiene la carrera activa, no ocultar el servicio.
+          if (mounted && _active.isEmpty && _workPanelIndex == 0) {
+            setState(() => _workPanelIndex = -1);
+          }
           await _refreshIncome();
         }
         return;
@@ -2880,11 +2885,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             style: const TextStyle(color: kDanger),
                           ),
                         ),
-                      _workMenuItem(
-                        Icons.work_outline_rounded,
-                        'Trabajos y servicio',
-                        0,
-                      ),
+                      // Las carreras se gestionan desde el mapa principal.
                       _workMenuItem(Icons.event_outlined, 'Programados', 1),
                       _workMenuItem(Icons.history_rounded, 'Historial', 2),
                       _workMenuItem(
@@ -2927,7 +2928,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final center = _workMapPosition ?? const LatLng(23.1136, -82.3666);
     final active = _active.isNotEmpty ? _active.first : null;
     if (active != null) {
-      return MarketplaceDriverMap(job: active);
+      return MarketplaceDriverMap(job: active, showLegend: false);
     }
     final config = _workMapVisual;
     if (config == null) {
@@ -3324,6 +3325,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final available = vehicle?.acceptingJobs == true;
     final active = _active.isNotEmpty ? _active.first : null;
     final onRide = active != null;
+    final canFinish = active != null && _marketplaceJobCanFinish(active);
+    final canStart = active != null &&
+        active.status == 'accepted' && active.nextAction == 'start_en_route';
+    final canCancel = active != null && _marketplaceJobCanDriverCancel(active);
+    final busy = active != null && _busyJobId == active.id;
     final photo = _googleProfilePhotoUrl(widget.store.user);
     final bottomNavInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
@@ -3379,28 +3385,99 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          _marketplaceJobStatusLabel(active.status),
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _marketplaceJobStatusLabel(active.status),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              _marketplaceMoneyLabel(
+                                active.finalPrice,
+                                active.currency,
+                              ),
+                              style: const TextStyle(
+                                color: Color(0xFF43E4BB),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 6),
                         Text(
                           '${active.originText ?? 'Recogida'} → '
                           '${active.destinationText ?? 'Destino'}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 9),
+                        if (canFinish || canStart) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              key: const ValueKey('work-map-advance-job'),
+                              onPressed: busy
+                                  ? null
+                                  : () => unawaited(_advanceJob(active!)),
+                              icon: busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(canFinish
+                                      ? Icons.check_circle_outline_rounded
+                                      : Icons.navigation_rounded),
+                              label: Text(canFinish
+                                  ? 'Finalizar carrera'
+                                  : 'Salir hacia el cliente'),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 7),
                         SizedBox(
                           width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () => _openWorkPanel(0),
-                            child: const Text('Gestionar servicio en curso'),
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('work-map-contact-customer'),
+                            onPressed: busy
+                                ? null
+                                : () => unawaited(_contactJob(active!)),
+                            icon: const Icon(Icons.contact_phone_rounded),
+                            label: const Text('Contactar cliente'),
                           ),
                         ),
+                        if (canCancel) ...[
+                          const SizedBox(height: 2),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              key: const ValueKey('work-map-cancel-job'),
+                              onPressed: busy
+                                  ? null
+                                  : () => unawaited(_cancelJob(active!)),
+                              child: const Text('Cancelar servicio'),
+                            ),
+                          ),
+                        ],
+                        if (!canFinish && !canStart && !canCancel) ...[
+                          const SizedBox(height: 6),
+                          TextButton(
+                            onPressed: () => _openWorkPanel(0),
+                            child: const Text('Ver opciones del servicio'),
+                          ),
+                        ],
                       ],
                     ),
                   )
