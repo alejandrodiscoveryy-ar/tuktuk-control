@@ -496,7 +496,7 @@ void main() {
       })
     ];
     await open(tester);
-    await openWorkPanel(tester, 'Trabajos y servicio');
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
     await tester.tap(find.text('Finalizar carrera'));
     await pumpJobs(tester);
     expect(find.text('Evalúa al cliente'), findsOneWidget);
@@ -650,7 +650,7 @@ void main() {
     expect(find.text('Activa Trabajar para recibir solicitudes'), findsNothing);
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
-  testWidgets('active ride displays only the two unified visual milestones',
+  testWidgets('active ride is managed from main map without additional milestones',
       (tester) async {
     service.active = [
       MarketplaceJob.fromMap({
@@ -666,10 +666,10 @@ void main() {
     ];
 
     await open(tester);
-    await openWorkPanel(tester, 'Trabajos y servicio');
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
 
     expect(find.text('En camino'), findsWidgets);
-    expect(find.text('Finalizado'), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
     expect(find.text('Aceptado'), findsNothing);
     expect(find.text('Recogida'), findsNothing);
     expect(find.text('Finalizar carrera'), findsOneWidget);
@@ -691,10 +691,10 @@ void main() {
     ];
 
     await open(tester);
-    await openWorkPanel(tester, 'Trabajos y servicio');
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
 
     expect(find.text('En recogida'), findsOneWidget);
-    expect(find.text('Finalizado'), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
     expect(find.text('Recogida'), findsNothing);
     expect(find.text('Finalizar carrera'), findsOneWidget);
   });
@@ -715,7 +715,7 @@ void main() {
     ];
 
     await open(tester);
-    await openWorkPanel(tester, 'Trabajos y servicio');
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
 
     expect(find.text('Finalizar carrera'), findsOneWidget);
     expect(find.text('Confirmar recogida'), findsNothing);
@@ -744,7 +744,7 @@ void main() {
     })];
     service.failRating = true;
     await open(tester);
-    await openWorkPanel(tester, 'Trabajos y servicio');
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
     await tester.tap(find.text('Finalizar carrera'));
     await pumpJobs(tester);
     await tester.tap(find.byTooltip('5 estrellas'));
@@ -786,7 +786,7 @@ void main() {
     });
   }
 
-  testWidgets('advance button is unique below current status and above route',
+  testWidgets('advance button is unique on main map below route',
       (tester) async {
     service.active = [
       MarketplaceJob.fromMap({
@@ -801,18 +801,16 @@ void main() {
       }),
     ];
     await open(tester);
-    await openWorkPanel(tester, 'Trabajos y servicio');
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
     expect(find.text('Vehículo activo'), findsNothing);
     expect(find.text('Trabajando'), findsNothing);
     final action = find.text('Salir hacia el cliente');
     expect(action, findsOneWidget);
-    expect(
-        tester.getTopLeft(action).dy,
-        greaterThan(tester
-            .getTopLeft(find.text('Servicio aceptado · prepárate para salir'))
-            .dy));
+    expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
+    final routeText = find.textContaining('Origen de prueba');
+    expect(routeText, findsOneWidget);
     expect(tester.getTopLeft(action).dy,
-        lessThan(tester.getTopLeft(find.text('Origen de prueba')).dy));
+        greaterThan(tester.getTopLeft(routeText).dy));
   });
 
   testWidgets(
