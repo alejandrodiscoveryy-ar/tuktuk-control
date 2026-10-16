@@ -34,10 +34,10 @@ void main() {
   });
 
   test('Carrera activa conserva mapa, menú y acceso a su gestión', () {
-    expect(source, contains('MarketplaceDriverMap(job: active)'));
+    expect(source, contains('MarketplaceDriverMap(job: active, showLegend: false)'));
     expect(source, contains("ValueKey('work-map-open-menu')"));
     expect(source, contains('if (_workDrawerOpen) _buildWorkDrawer(context)'));
-    expect(source, contains('Gestionar servicio en curso'));
+    expect(source, contains("ValueKey('work-map-advance-job')"));
   });
   test('Boton grande para trabajar y descansar con toda la tarjeta tactil', () {
     final start = source.indexOf('Widget _workPremiumAvailability(');
@@ -67,7 +67,7 @@ void main() {
     expect(home, contains('_error != null)'));
     expect(home, contains('bottom: bottomNavInset + (_available.isNotEmpty'));
     expect(home, contains('onAccept: () => _acceptJob(job)'));
-    expect(home, contains('Gestionar servicio en curso'));
+    expect(home, contains("ValueKey('work-map-advance-job')"));
   });
 
   test('Solo el mapa se extiende debajo de la barra flotante', () {
