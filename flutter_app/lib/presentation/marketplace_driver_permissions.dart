@@ -113,11 +113,12 @@ class _MarketplaceDriverPermissionsScreenState
         await Geolocator.requestPermission();
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         toast(
           context,
           'Abre los ajustes del teléfono para autorizar la ubicación.',
         );
+      }
     }
     await _refreshPermissions();
   }
@@ -129,8 +130,9 @@ class _MarketplaceDriverPermissionsScreenState
         toast(context, 'Activa el GPS desde los ajustes del teléfono.');
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         toast(context, 'Activa el GPS desde los ajustes del teléfono.');
+      }
     }
     await _refreshPermissions();
   }
@@ -142,8 +144,9 @@ class _MarketplaceDriverPermissionsScreenState
         toast(context, 'Abre los ajustes de TUKTUK en tu dispositivo.');
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         toast(context, 'Abre los ajustes de TUKTUK en tu dispositivo.');
+      }
     }
     await _refreshPermissions();
   }
