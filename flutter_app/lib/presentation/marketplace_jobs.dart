@@ -2930,7 +2930,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 elevation: 18,
                 child: SafeArea(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    padding: EdgeInsets.fromLTRB(
+                      0,
+                      15,
+                      0,
+                      MediaQuery.sizeOf(context).width < 1100
+                          ? MediaQuery.paddingOf(context).bottom + 140
+                          : 15,
+                    ),
                     children: [
                       _workDrawerDriverHeader(),
 
