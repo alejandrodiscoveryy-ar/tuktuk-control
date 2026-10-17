@@ -1104,6 +1104,30 @@ class _MarketplaceOnboardingScreenState
     );
   }
 
+  Future<Uint8List?> _readMarketplacePhotoBytes({
+    required ImageSource source,
+    required String assetKind,
+    String? identitySide,
+  }) async {
+    if (kIsWeb &&
+        source == ImageSource.camera &&
+        (assetKind == 'vehicle_photo' ||
+            assetKind == 'identity_document')) {
+      return guided_capture.captureGuidedMarketplacePhoto(
+        assetKind == 'vehicle_photo'
+            ? 'vehicle'
+            : 'identity-$identitySide',
+      );
+    }
+    final picked = await _imagePicker.pickImage(
+      source: source,
+      maxWidth: assetKind == 'identity_document' ? 2400 : 2048,
+      maxHeight: assetKind == 'identity_document' ? 2400 : 2048,
+      imageQuality: assetKind == 'identity_document' ? 95 : 92,
+    );
+    return picked?.readAsBytes();
+  }
+
   Future<void> _pickPhoto(String assetKind) async {
     if (!_canEdit) return;
 
@@ -1112,13 +1136,11 @@ class _MarketplaceOnboardingScreenState
 
     setState(() => _processingPhoto = true);
 
-    XFile? picked;
+    Uint8List? sourceBytes;
     try {
-      picked = await _imagePicker.pickImage(
+      sourceBytes = await _readMarketplacePhotoBytes(
         source: source,
-        maxWidth: 2048,
-        maxHeight: 2048,
-        imageQuality: 92,
+        assetKind: assetKind,
       );
     } catch (_) {
       if (mounted) {
@@ -1130,13 +1152,12 @@ class _MarketplaceOnboardingScreenState
       return;
     }
 
-    if (picked == null) {
+    if (sourceBytes == null) {
       if (mounted) setState(() => _processingPhoto = false);
       return;
     }
 
     try {
-      final sourceBytes = await picked.readAsBytes();
       final normalized = normalizeMarketplaceImage(
         sourceBytes: sourceBytes,
         assetKind: assetKind,
@@ -1290,15 +1311,14 @@ class _MarketplaceOnboardingScreenState
     if (source == null || !mounted) return;
     setState(() => _processingPhoto = true);
     try {
-      final picked = await _imagePicker.pickImage(
+      final bytes = await _readMarketplacePhotoBytes(
         source: source,
-        maxWidth: 2400,
-        maxHeight: 2400,
-        imageQuality: 95,
+        assetKind: 'identity_document',
+        identitySide: side,
       );
-      if (picked == null || !mounted) return;
+      if (bytes == null || !mounted) return;
       final normalized = normalizeMarketplaceImage(
-        sourceBytes: await picked.readAsBytes(),
+        sourceBytes: bytes,
         assetKind: 'identity_document',
       );
       if (!mounted) return;

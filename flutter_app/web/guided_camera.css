@@ -1,0 +1,96 @@
+/* Only the WebApp in-browser camera uses these classes. */
+.tuktuk-camera-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: #070f19;
+  color: #f6fafc;
+  overflow-y: auto;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overscroll-behavior: contain;
+}
+.tuktuk-camera-panel {
+  box-sizing: border-box;
+  width: min(100%, 780px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+.tuktuk-camera-heading { margin: 0; font-size: 1.25rem; font-weight: 800; }
+.tuktuk-camera-help { margin: 0; line-height: 1.45; color: #d0dbe6; font-size: .91rem; }
+.tuktuk-camera-stage {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: min(62dvh, 520px);
+  min-height: 215px;
+  overflow: hidden;
+  background: #010407;
+  border-radius: 18px;
+  border: 1px solid #385369;
+  display: grid;
+  place-items: center;
+}
+.tuktuk-camera-video, .tuktuk-camera-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tuktuk-camera-frame {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(85%, 540px);
+  max-height: 82%;
+  border: 3px solid #50edbe;
+  border-radius: 14px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 26%), 0 0 24px rgb(80 237 190 / 36%);
+  pointer-events: none;
+}
+.tuktuk-camera-frame::before,
+.tuktuk-camera-frame::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 4px solid white;
+}
+.tuktuk-camera-frame::before { top: -4px; left: -4px; border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; }
+.tuktuk-camera-frame::after { bottom: -4px; right: -4px; border-top: 0; border-left: 0; border-radius: 0 0 8px 0; }
+.tuktuk-camera-frame-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 12px);
+  white-space: nowrap;
+  max-width: 100%;
+  font-size: .74rem;
+  text-shadow: 0 2px 4px #000;
+  font-weight: 700;
+}
+.tuktuk-camera-status { min-height: 1.4em; margin: 0; text-align: center; color: #dceae7; font-size: .87rem; }
+.tuktuk-camera-actions { display: flex; align-items: stretch; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.tuktuk-camera-button {
+  border-radius: 12px;
+  border: 1px solid #3c5969;
+  padding: 13px 18px;
+  min-height: 50px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tuktuk-camera-primary { background: #2dd4a3; color: #032519; border-color: #2dd4a3; }
+.tuktuk-camera-secondary { background: #1b3040; color: #edf6f8; }
+.tuktuk-camera-button:disabled { opacity: .5; cursor: wait; }
+.tuktuk-camera-button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.tuktuk-camera-dialog [hidden] { display: none !important; }
+@media (max-height: 550px) {
+  .tuktuk-camera-panel { justify-content: flex-start; }
+  .tuktuk-camera-stage { height: 48dvh; min-height: 180px; }
+}
