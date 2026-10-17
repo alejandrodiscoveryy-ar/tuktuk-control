@@ -56,6 +56,18 @@ void main() {
       expect(result.height, 600);
     });
 
+    test('identity document preserves full rectangular proportions', () {
+      final result = normalizeMarketplaceImage(
+        sourceBytes: _jpeg(3000, 2000),
+        assetKind: 'identity_document',
+      );
+      expect(result.width, 1800);
+      expect(result.height, 1200);
+      expect(result.width / result.height, closeTo(1.5, 0.01));
+      expect(result.mimeType, 'image/jpeg');
+      expect(result.bytes.length, lessThan(5000000));
+    });
+
     test('invalid image is rejected', () {
       expect(
         () => normalizeMarketplaceImage(
