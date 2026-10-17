@@ -20,6 +20,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mbx;
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'services/push_notification_service.dart';
@@ -51,6 +52,7 @@ part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
+part 'presentation/marketplace_driver_permissions.dart';
 part 'presentation/marketplace_customer.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';
 part 'presentation/marketplace_location_picker.dart';
@@ -130,20 +132,18 @@ void main() async {
   );
 
   if (_marketplaceCustomerEntry) {
-    runApp(
-      MarketplaceCustomerApp(
-        client: Supabase.instance.client,
-      ),
-    );
+    runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
     return;
   }
 
   final pushNotifications = PushNotificationService();
-  await pushNotifications.initialize(onMessageOpened: (data) async {
-    final jobId = marketplaceJobIdFromPush(data);
-    if (jobId != null) _marketplacePushJobId.value = jobId;
-    await openPushMessageAction(data);
-  });
+  await pushNotifications.initialize(
+    onMessageOpened: (data) async {
+      final jobId = marketplaceJobIdFromPush(data);
+      if (jobId != null) _marketplacePushJobId.value = jobId;
+      await openPushMessageAction(data);
+    },
+  );
   final webPushJobId = kIsWeb ? marketplaceJobIdFromUrl(Uri.base) : null;
   if (webPushJobId != null) _marketplacePushJobId.value = webPushJobId;
   final pushTokenCoordinator = PushTokenRegistrationCoordinator.supabase(
@@ -224,7 +224,9 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
         };
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: store.projectIdentity.name == 'TukTuk Control' ? 'TukTuk Conductor' : store.projectIdentity.name,
+          title: store.projectIdentity.name == 'TukTuk Control'
+              ? 'TukTuk Conductor'
+              : store.projectIdentity.name,
           themeMode: themeMode,
           theme: buildAppTheme(Brightness.light),
           darkTheme: buildAppTheme(Brightness.dark),
@@ -247,19 +249,20 @@ ThemeData buildAppTheme(Brightness brightness) {
   final outline = dark ? kOutline : kOutline;
   final inputOutline = dark ? const Color(0xFF263241) : const Color(0xFF263241);
   final semanticPrimary = dark ? kPrimary : const Color(0xFF2F80ED);
-  final scheme = ColorScheme.fromSeed(
-    brightness: effectiveBrightness,
-    seedColor: kPrimary,
-    primary: semanticPrimary,
-    secondary: dark ? kSecondary : const Color(0xFF3B82F6),
-    surface: surface,
-  ).copyWith(
-    onSurface: text,
-    onSurfaceVariant: muted,
-    outline: outline,
-    outlineVariant: outline,
-    surfaceContainerHighest: surfaceHigh,
-  );
+  final scheme =
+      ColorScheme.fromSeed(
+        brightness: effectiveBrightness,
+        seedColor: kPrimary,
+        primary: semanticPrimary,
+        secondary: dark ? kSecondary : const Color(0xFF3B82F6),
+        surface: surface,
+      ).copyWith(
+        onSurface: text,
+        onSurfaceVariant: muted,
+        outline: outline,
+        outlineVariant: outline,
+        surfaceContainerHighest: surfaceHigh,
+      );
   return ThemeData(
     useMaterial3: true,
     brightness: effectiveBrightness,
@@ -333,16 +336,18 @@ ThemeData buildAppTheme(Brightness brightness) {
       indicatorColor: semanticPrimary.withValues(alpha: .18),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
-          color:
-              states.contains(WidgetState.selected) ? semanticPrimary : muted,
+          color: states.contains(WidgetState.selected)
+              ? semanticPrimary
+              : muted,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
       ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
-          color:
-              states.contains(WidgetState.selected) ? semanticPrimary : muted,
+          color: states.contains(WidgetState.selected)
+              ? semanticPrimary
+              : muted,
         ),
       ),
     ),
