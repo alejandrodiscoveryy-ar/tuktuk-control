@@ -36,16 +36,16 @@
   window.tuktukGuidedCapturePhoto = async function (kind) {
     const guide = guides[kind];
     if (!guide || active) throw new Error('GUIDED_CAMERA_UNAVAILABLE');
-    if (!window.isSecureContext || !navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia) {
-      throw new Error('GUIDED_CAMERA_NOT_SUPPORTED');
-    }
+    const canPreview = Boolean(window.isSecureContext &&
+      navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
     active = true;
     return new Promise(function (resolve, reject) {
       let stream = null;
       let settled = false;
       let captured = null;
+      let ready = false;
+      let usingNative = false;
       const previousOverflow = document.body.style.overflow;
       const dialog = make('div', 'tuktuk-camera-dialog');
       dialog.setAttribute('role', 'dialog');
@@ -89,6 +89,45 @@
       actions.appendChild(cancel);
       actions.appendChild(retake);
       actions.appendChild(primary);
+const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 'Camara del telefono');
+      fallback.type = 'button';
+      const picker = make('input', '');
+      picker.type = 'file';
+      picker.accept = 'image/*';
+      picker.setAttribute('capture', 'environment');
+      picker.hidden = true;
+      actions.appendChild(fallback);
+      actions.appendChild(picker);
+      fallback.addEventListener('click', function () {
+        if (settled) return;
+        usingNative = true;
+        picker.value = '';
+        picker.click();
+      });
+      picker.addEventListener('cancel', function () { usingNative = false; });
+      picker.addEventListener('change', function () {
+        usingNative = false;
+        if (settled || !picker.files || !picker.files[0]) return;
+        const file = picker.files[0];
+        if ((file.type && !file.type.startsWith('image/')) || file.size > 20 * 1024 * 1024) {
+          status.textContent = 'Selecciona una foto valida de hasta 20 MB.';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function () {
+          if (settled) return;
+          const result = typeof reader.result === 'string' ? reader.result : '';
+          if (!result.startsWith('data:image/') || !result.includes(',')) {
+            status.textContent = 'No se pudo leer la foto.';
+            return;
+          }
+          finish(result.slice(result.indexOf(',') + 1));
+        };
+        reader.onerror = function () {
+          if (!settled) status.textContent = 'No se pudo leer la foto.';
+        };
+        reader.readAsDataURL(file);
+      });
       panel.appendChild(heading);
       panel.appendChild(instructions);
       panel.appendChild(stage);
@@ -97,7 +136,7 @@
       dialog.appendChild(panel);
 
       function onKey(event) {
-        if (event.key === 'Escape') finish(null);
+        if (event.key === 'Escape' && ready && !usingNative) finish(null);
       }
       function finish(result, error) {
         if (settled) return;
@@ -164,6 +203,10 @@
       document.body.appendChild(dialog);
       dialog.focus();
 
+      if (!canPreview) {
+        status.textContent = 'El visor no esta disponible. Pulsa Camara del telefono.';
+        return;
+      }
       navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
@@ -176,11 +219,17 @@
         video.srcObject = cameraStream;
         await video.play();
         if (settled) return;
+        ready = true;
         primary.disabled = false;
         status.textContent = 'Alinea el documento o vehículo y pulsa Tomar foto.';
       }).catch(function () {
         if (settled) return;
-        status.textContent = 'No se pudo abrir la cámara. Cancela y elige una foto de la galería.';
+        if (stream) {
+          stream.getTracks().forEach(function (track) { track.stop(); });
+          stream = null;
+          video.srcObject = null;
+        }
+        status.textContent = 'El visor no se inicio. Pulsa Camara del telefono o usa la galeria.';
         primary.disabled = true;
       });
     });
