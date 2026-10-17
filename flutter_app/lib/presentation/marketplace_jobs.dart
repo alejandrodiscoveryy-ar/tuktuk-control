@@ -2838,15 +2838,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'TUKTUK · Trabajo',
-                  style: TextStyle(
-                    color: kPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 5),
                 Text(
                   driverName,
                   key: const ValueKey('work-drawer-driver-name'),
