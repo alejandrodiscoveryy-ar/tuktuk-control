@@ -27,5 +27,8 @@ void main() {
     expect(script, contains('stream.getTracks()'));
     expect(script, contains('Repetir foto'));
     expect(stub, contains('=> null'));
+    expect(script, contains("event.key === 'Escape' && ready && !usingNative"));
+    expect(script, contains("picker.setAttribute('capture', 'environment')"));
+    expect(script, contains("picker.addEventListener('change'"));
   });
 }
