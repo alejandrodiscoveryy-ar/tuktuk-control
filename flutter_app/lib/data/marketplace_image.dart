@@ -65,9 +65,16 @@ MarketplaceNormalizedImage normalizeMarketplaceImage({
         interpolation: img.Interpolation.cubic,
       );
 
-    case 'vehicle_photo':
-      final widthScale = _marketplaceVehiclePhotoMaxWidth / oriented.width;
-      final heightScale = _marketplaceVehiclePhotoMaxHeight / oriented.height;
+    case 'vehicle_photo' || 'identity_document':
+      // Los documentos mantienen su proporción: nunca recortar los bordes.
+      final maxWidth = assetKind == 'identity_document'
+          ? 1800
+          : _marketplaceVehiclePhotoMaxWidth;
+      final maxHeight = assetKind == 'identity_document'
+          ? 1400
+          : _marketplaceVehiclePhotoMaxHeight;
+      final widthScale = maxWidth / oriented.width;
+      final heightScale = maxHeight / oriented.height;
 
       final scale = min(
         1.0,

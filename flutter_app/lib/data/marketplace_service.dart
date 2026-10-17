@@ -24,17 +24,17 @@ String? _marketText(Object? value) {
 
 List<Map<String, dynamic>> _marketMaps(Object? value) => value is List
     ? value
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList()
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList()
     : const [];
 
 List<String> _marketStrings(Object? value) => value is List
     ? value
-          .map(_marketText)
-          .whereType<String>()
-          .where((value) => value.isNotEmpty)
-          .toList()
+        .map(_marketText)
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toList()
     : const [];
 
 enum MarketplaceBillingMode { trialFree, walletCommission, unknown }
@@ -58,10 +58,10 @@ class MarketplaceCatalogItem {
   final int sortOrder;
 
   factory MarketplaceCatalogItem.fromMap(Map map) => MarketplaceCatalogItem(
-    code: _marketText(map['code']) ?? '',
-    name: _marketText(map['name']) ?? '',
-    sortOrder: _marketInt(map['sort_order']),
-  );
+        code: _marketText(map['code']) ?? '',
+        name: _marketText(map['name']) ?? '',
+        sortOrder: _marketInt(map['sort_order']),
+      );
 }
 
 class MarketplaceMediaAsset {
@@ -82,12 +82,12 @@ class MarketplaceMediaAsset {
   bool get isAvailable => status == 'available';
 
   factory MarketplaceMediaAsset.fromMap(Map map) => MarketplaceMediaAsset(
-    id: _marketText(map['asset_id'] ?? map['id']) ?? '',
-    status: _marketText(map['status']) ?? 'unknown',
-    assetKind: _marketText(map['asset_kind']),
-    storageBucket: _marketText(map['storage_bucket']),
-    storagePath: _marketText(map['storage_path']),
-  );
+        id: _marketText(map['asset_id'] ?? map['id']) ?? '',
+        status: _marketText(map['status']) ?? 'unknown',
+        assetKind: _marketText(map['asset_kind']),
+        storageBucket: _marketText(map['storage_bucket']),
+        storagePath: _marketText(map['storage_path']),
+      );
 }
 
 class MarketplacePhotoException implements Exception {
@@ -169,44 +169,45 @@ class MarketplaceVehicle {
   final bool acceptingJobs;
 
   factory MarketplaceVehicle.fromMap(Map map) => MarketplaceVehicle(
-    id: _marketText(map['vehicle_id'] ?? map['id']) ?? '',
-    name: _marketText(map['name']),
-    registration: _marketText(map['registration']),
-    categoryCode: _marketText(map['category_code']),
-    propulsionCode: _marketText(map['propulsion_code']),
-    categoryOtherDescription: _marketText(map['category_other_description']),
-    brand: _marketText(map['brand']),
-    model: _marketText(map['model']),
-    year: map['year'] == null ? null : _marketInt(map['year']),
-    passengerCapacity: map['passenger_capacity'] == null
-        ? null
-        : _marketInt(map['passenger_capacity']),
-    cargoCapacityKg: map['cargo_capacity_kg'] == null
-        ? null
-        : _marketNumber(map['cargo_capacity_kg']),
-    cargoVolumeM3: map['cargo_volume_m3'] == null
-        ? null
-        : _marketNumber(map['cargo_volume_m3']),
-    cargoLengthCm: map['cargo_length_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_length_cm']),
-    cargoWidthCm: map['cargo_width_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_width_cm']),
-    cargoHeightCm: map['cargo_height_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_height_cm']),
-    bodyType: _marketText(map['body_type']),
-    mainPhotoAssetId: _marketText(map['main_photo_asset_id']),
-    marketplaceStatus: _marketText(map['marketplace_status']),
-    services: _marketStrings(map['services']),
-    onboardingComplete: _marketBool(map['onboarding_complete']),
-    isActive: _marketBool(map['is_active']),
-    isAvailable: _marketBool(map['is_available']),
-    acceptingJobs: map.containsKey('accepting_jobs')
-        ? _marketBool(map['accepting_jobs'])
-        : true,
-  );
+        id: _marketText(map['vehicle_id'] ?? map['id']) ?? '',
+        name: _marketText(map['name']),
+        registration: _marketText(map['registration']),
+        categoryCode: _marketText(map['category_code']),
+        propulsionCode: _marketText(map['propulsion_code']),
+        categoryOtherDescription:
+            _marketText(map['category_other_description']),
+        brand: _marketText(map['brand']),
+        model: _marketText(map['model']),
+        year: map['year'] == null ? null : _marketInt(map['year']),
+        passengerCapacity: map['passenger_capacity'] == null
+            ? null
+            : _marketInt(map['passenger_capacity']),
+        cargoCapacityKg: map['cargo_capacity_kg'] == null
+            ? null
+            : _marketNumber(map['cargo_capacity_kg']),
+        cargoVolumeM3: map['cargo_volume_m3'] == null
+            ? null
+            : _marketNumber(map['cargo_volume_m3']),
+        cargoLengthCm: map['cargo_length_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_length_cm']),
+        cargoWidthCm: map['cargo_width_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_width_cm']),
+        cargoHeightCm: map['cargo_height_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_height_cm']),
+        bodyType: _marketText(map['body_type']),
+        mainPhotoAssetId: _marketText(map['main_photo_asset_id']),
+        marketplaceStatus: _marketText(map['marketplace_status']),
+        services: _marketStrings(map['services']),
+        onboardingComplete: _marketBool(map['onboarding_complete']),
+        isActive: _marketBool(map['is_active']),
+        isAvailable: _marketBool(map['is_available']),
+        acceptingJobs: map.containsKey('accepting_jobs')
+            ? _marketBool(map['accepting_jobs'])
+            : true,
+      );
 }
 
 class MarketplaceOnboarding {
@@ -239,29 +240,29 @@ class MarketplaceOnboarding {
   final List<MarketplaceMediaAsset> assets;
 
   factory MarketplaceOnboarding.fromMap(Map map) => MarketplaceOnboarding(
-    serverTime: _marketDate(map['server_time']),
-    displayName: _marketText(map['display_name']),
-    phone: _marketText(map['phone']),
-    driverProfileExists: _marketBool(map['driver_profile_exists']),
-    driverStatus: _marketText(map['driver_status']),
-    driverPhotoAssetId: _marketText(map['driver_photo_asset_id']),
-    driverSuspended: _marketBool(map['driver_suspended']),
-    vehicles: _marketMaps(
-      map['vehicles'],
-    ).map(MarketplaceVehicle.fromMap).toList(),
-    vehicleCategories: _marketMaps(
-      map['vehicle_categories'],
-    ).map(MarketplaceCatalogItem.fromMap).toList(),
-    propulsionTypes: _marketMaps(
-      map['propulsion_types'],
-    ).map(MarketplaceCatalogItem.fromMap).toList(),
-    serviceTypes: _marketMaps(
-      map['service_types'],
-    ).map(MarketplaceCatalogItem.fromMap).toList(),
-    assets: _marketMaps(
-      map['assets'],
-    ).map(MarketplaceMediaAsset.fromMap).toList(),
-  );
+        serverTime: _marketDate(map['server_time']),
+        displayName: _marketText(map['display_name']),
+        phone: _marketText(map['phone']),
+        driverProfileExists: _marketBool(map['driver_profile_exists']),
+        driverStatus: _marketText(map['driver_status']),
+        driverPhotoAssetId: _marketText(map['driver_photo_asset_id']),
+        driverSuspended: _marketBool(map['driver_suspended']),
+        vehicles: _marketMaps(
+          map['vehicles'],
+        ).map(MarketplaceVehicle.fromMap).toList(),
+        vehicleCategories: _marketMaps(
+          map['vehicle_categories'],
+        ).map(MarketplaceCatalogItem.fromMap).toList(),
+        propulsionTypes: _marketMaps(
+          map['propulsion_types'],
+        ).map(MarketplaceCatalogItem.fromMap).toList(),
+        serviceTypes: _marketMaps(
+          map['service_types'],
+        ).map(MarketplaceCatalogItem.fromMap).toList(),
+        assets: _marketMaps(
+          map['assets'],
+        ).map(MarketplaceMediaAsset.fromMap).toList(),
+      );
 }
 
 class MarketplaceWorkAccess {
@@ -294,19 +295,19 @@ class MarketplaceWorkAccess {
   final MarketplaceBillingMode nextBillingMode;
 
   factory MarketplaceWorkAccess.fromMap(Map map) => MarketplaceWorkAccess(
-    serverTime: _marketDate(map['server_time']),
-    onboardingComplete: _marketBool(map['onboarding_complete']),
-    driverActive: _marketBool(map['driver_active']),
-    vehicleAvailable: _marketBool(map['vehicle_available']),
-    trialActive: _marketBool(map['trial_active']),
-    trialStartedAt: _marketDate(map['trial_started_at']),
-    trialEndsAt: _marketDate(map['trial_ends_at']),
-    initialDepositConfirmed: _marketBool(map['initial_deposit_confirmed']),
-    suiteActive: _marketBool(map['suite_active']),
-    canStartTrial: _marketBool(map['can_start_trial']),
-    canAcceptNewJob: _marketBool(map['can_accept_new_job']),
-    nextBillingMode: marketplaceBillingMode(map['next_billing_mode']),
-  );
+        serverTime: _marketDate(map['server_time']),
+        onboardingComplete: _marketBool(map['onboarding_complete']),
+        driverActive: _marketBool(map['driver_active']),
+        vehicleAvailable: _marketBool(map['vehicle_available']),
+        trialActive: _marketBool(map['trial_active']),
+        trialStartedAt: _marketDate(map['trial_started_at']),
+        trialEndsAt: _marketDate(map['trial_ends_at']),
+        initialDepositConfirmed: _marketBool(map['initial_deposit_confirmed']),
+        suiteActive: _marketBool(map['suite_active']),
+        canStartTrial: _marketBool(map['can_start_trial']),
+        canAcceptNewJob: _marketBool(map['can_accept_new_job']),
+        nextBillingMode: marketplaceBillingMode(map['next_billing_mode']),
+      );
 }
 
 class MarketplaceTrial {
@@ -323,11 +324,11 @@ class MarketplaceTrial {
   final DateTime? createdAt;
 
   factory MarketplaceTrial.fromMap(Map map) => MarketplaceTrial(
-    startedVehicleId: _marketText(map['started_vehicle_id']),
-    startedAt: _marketDate(map['started_at']),
-    endsAt: _marketDate(map['ends_at']),
-    createdAt: _marketDate(map['created_at']),
-  );
+        startedVehicleId: _marketText(map['started_vehicle_id']),
+        startedAt: _marketDate(map['started_at']),
+        endsAt: _marketDate(map['ends_at']),
+        createdAt: _marketDate(map['created_at']),
+      );
 }
 
 class MarketplacePaymentMethod {
@@ -382,7 +383,7 @@ class MarketplaceTopup {
   final String? rejectionReason;
 
   factory MarketplaceTopup.fromMap(Map map) => MarketplaceTopup(
-    id: _marketText(map['topup_id'] ?? map['id']) ?? '',
+        id: _marketText(map['topup_id'] ?? map['id']) ?? '',
         amount: _marketNumber(map['amount']),
         currency: _marketText(map['currency']) ?? 'CUP',
         status: _marketText(map['status']) ?? 'unknown',
@@ -430,35 +431,37 @@ class MarketplaceWallet {
   final double commissionRate;
 
   factory MarketplaceWallet.fromMap(Map map) => MarketplaceWallet(
-    currency: _marketText(map['currency']) ?? 'CUP',
-    totalBalance: _marketNumber(map['total_balance']),
-    reservedBalance: _marketNumber(map['reserved_balance']),
-    availableBalance: _marketNumber(map['available_balance']),
-    realBalance: map['real_balance'] == null
-        ? null
-        : _marketNumber(map['real_balance']),
-    promotionalBalance: map['promotional_balance'] == null
-        ? null
-        : _marketNumber(map['promotional_balance']),
-    realAvailableBalance: map['real_available_balance'] == null
-        ? null
-        : _marketNumber(map['real_available_balance']),
-    promotionalAvailableBalance: map['promotional_available_balance'] == null
-        ? null
-        : _marketNumber(map['promotional_available_balance']),
-    initialDepositConfirmed: _marketBool(map['initial_deposit_confirmed']),
-    initialDepositConfirmedAt: _marketDate(map['initial_deposit_confirmed_at']),
-    initialDepositAmount: map['initial_deposit_amount'] == null
-        ? null
-        : _marketNumber(map['initial_deposit_amount']),
-    initialMinimumSnapshot: map['initial_minimum_snapshot'] == null
-        ? null
-        : _marketNumber(map['initial_minimum_snapshot']),
-    currentInitialMinimumDeposit: _marketNumber(
-      map['current_initial_minimum_deposit'],
-    ),
-    commissionRate: _marketNumber(map['commission_rate']),
-  );
+        currency: _marketText(map['currency']) ?? 'CUP',
+        totalBalance: _marketNumber(map['total_balance']),
+        reservedBalance: _marketNumber(map['reserved_balance']),
+        availableBalance: _marketNumber(map['available_balance']),
+        realBalance: map['real_balance'] == null
+            ? null
+            : _marketNumber(map['real_balance']),
+        promotionalBalance: map['promotional_balance'] == null
+            ? null
+            : _marketNumber(map['promotional_balance']),
+        realAvailableBalance: map['real_available_balance'] == null
+            ? null
+            : _marketNumber(map['real_available_balance']),
+        promotionalAvailableBalance:
+            map['promotional_available_balance'] == null
+                ? null
+                : _marketNumber(map['promotional_available_balance']),
+        initialDepositConfirmed: _marketBool(map['initial_deposit_confirmed']),
+        initialDepositConfirmedAt:
+            _marketDate(map['initial_deposit_confirmed_at']),
+        initialDepositAmount: map['initial_deposit_amount'] == null
+            ? null
+            : _marketNumber(map['initial_deposit_amount']),
+        initialMinimumSnapshot: map['initial_minimum_snapshot'] == null
+            ? null
+            : _marketNumber(map['initial_minimum_snapshot']),
+        currentInitialMinimumDeposit: _marketNumber(
+          map['current_initial_minimum_deposit'],
+        ),
+        commissionRate: _marketNumber(map['commission_rate']),
+      );
 }
 
 class MarketplaceAvailableJob {
@@ -511,49 +514,47 @@ class MarketplaceAvailableJob {
   final DateTime? createdAt;
 
   factory MarketplaceAvailableJob.fromMap(Map map) => MarketplaceAvailableJob(
-    id: _marketText(map['job_id'] ?? map['id']) ?? '',
-    status: _marketText(map['status']),
-    serviceCode: _marketText(map['service_code']) ?? '',
-    originText: _marketText(map['origin_text']),
-    destinationText: _marketText(map['destination_text']),
-    originLat: map['origin_lat'] == null
-        ? null
-        : _marketNumber(map['origin_lat']),
-    originLon: map['origin_lon'] == null
-        ? null
-        : _marketNumber(map['origin_lon']),
-    destinationLat: map['destination_lat'] == null
-        ? null
-        : _marketNumber(map['destination_lat']),
-    destinationLon: map['destination_lon'] == null
-        ? null
-        : _marketNumber(map['destination_lon']),
-    scheduledFor: _marketDate(map['scheduled_for']),
-    passengerCount: map['passenger_count'] == null
-        ? null
-        : _marketInt(map['passenger_count']),
-    cargoWeightKg: map['cargo_weight_kg'] == null
-        ? null
-        : _marketNumber(map['cargo_weight_kg']),
-    cargoVolumeM3: map['cargo_volume_m3'] == null
-        ? null
-        : _marketNumber(map['cargo_volume_m3']),
-    cargoLengthCm: map['cargo_length_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_length_cm']),
-    cargoWidthCm: map['cargo_width_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_width_cm']),
-    cargoHeightCm: map['cargo_height_cm'] == null
-        ? null
-        : _marketNumber(map['cargo_height_cm']),
-    requiredBodyType: _marketText(map['required_body_type']),
-    finalPrice: _marketNumber(map['final_price']),
-    currency: _marketText(map['currency']) ?? 'CUP',
-    publishedAt: _marketDate(map['published_at']),
-    expiresAt: _marketDate(map['expires_at']),
-    createdAt: _marketDate(map['created_at']),
-  );
+        id: _marketText(map['job_id'] ?? map['id']) ?? '',
+        status: _marketText(map['status']),
+        serviceCode: _marketText(map['service_code']) ?? '',
+        originText: _marketText(map['origin_text']),
+        destinationText: _marketText(map['destination_text']),
+        originLat:
+            map['origin_lat'] == null ? null : _marketNumber(map['origin_lat']),
+        originLon:
+            map['origin_lon'] == null ? null : _marketNumber(map['origin_lon']),
+        destinationLat: map['destination_lat'] == null
+            ? null
+            : _marketNumber(map['destination_lat']),
+        destinationLon: map['destination_lon'] == null
+            ? null
+            : _marketNumber(map['destination_lon']),
+        scheduledFor: _marketDate(map['scheduled_for']),
+        passengerCount: map['passenger_count'] == null
+            ? null
+            : _marketInt(map['passenger_count']),
+        cargoWeightKg: map['cargo_weight_kg'] == null
+            ? null
+            : _marketNumber(map['cargo_weight_kg']),
+        cargoVolumeM3: map['cargo_volume_m3'] == null
+            ? null
+            : _marketNumber(map['cargo_volume_m3']),
+        cargoLengthCm: map['cargo_length_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_length_cm']),
+        cargoWidthCm: map['cargo_width_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_width_cm']),
+        cargoHeightCm: map['cargo_height_cm'] == null
+            ? null
+            : _marketNumber(map['cargo_height_cm']),
+        requiredBodyType: _marketText(map['required_body_type']),
+        finalPrice: _marketNumber(map['final_price']),
+        currency: _marketText(map['currency']) ?? 'CUP',
+        publishedAt: _marketDate(map['published_at']),
+        expiresAt: _marketDate(map['expires_at']),
+        createdAt: _marketDate(map['created_at']),
+      );
 }
 
 class MarketplaceJob {
@@ -816,9 +817,8 @@ class MarketplaceReferralProgram {
               map['earned_rewards'] ??
               map['applied_rewards'],
         ),
-        rewardDays: map['reward_days'] == null
-            ? null
-            : _marketInt(map['reward_days']),
+        rewardDays:
+            map['reward_days'] == null ? null : _marketInt(map['reward_days']),
       );
 }
 
@@ -850,20 +850,19 @@ class MarketplaceReferralEntry {
   final int? rewardDays;
 
   factory MarketplaceReferralEntry.fromMap(Map map) => MarketplaceReferralEntry(
-    relationshipId: _marketText(map['relationship_id']),
-    name: _marketText(map['name']),
-    status: _marketText(map['status']) ?? 'unknown',
-    rewardAmount: _marketNumber(map['reward_amount']),
-    rewardCurrency: _marketText(map['reward_currency']),
-    rewardSource: _marketText(map['reward_source']),
-    qualificationJobId: _marketText(map['qualification_job_id']),
-    rewardedAt: _marketDate(map['rewarded_at']),
-    createdAt: _marketDate(map['created_at']),
-    qualifiedAt: _marketDate(map['qualified_at']),
-    rewardDays: map['reward_days'] == null
-        ? null
-        : _marketInt(map['reward_days']),
-  );
+        relationshipId: _marketText(map['relationship_id']),
+        name: _marketText(map['name']),
+        status: _marketText(map['status']) ?? 'unknown',
+        rewardAmount: _marketNumber(map['reward_amount']),
+        rewardCurrency: _marketText(map['reward_currency']),
+        rewardSource: _marketText(map['reward_source']),
+        qualificationJobId: _marketText(map['qualification_job_id']),
+        rewardedAt: _marketDate(map['rewarded_at']),
+        createdAt: _marketDate(map['created_at']),
+        qualifiedAt: _marketDate(map['qualified_at']),
+        rewardDays:
+            map['reward_days'] == null ? null : _marketInt(map['reward_days']),
+      );
 }
 
 class MarketplaceDriverCustomerRating {
@@ -914,9 +913,8 @@ class MarketplaceDriverRatingEntry {
         receivedStars: map['received_stars'] == null
             ? null
             : _marketInt(map['received_stars']),
-        givenStars: map['given_stars'] == null
-            ? null
-            : _marketInt(map['given_stars']),
+        givenStars:
+            map['given_stars'] == null ? null : _marketInt(map['given_stars']),
         receivedAt: _marketDate(map['received_at']),
         givenAt: _marketDate(map['given_at']),
         isTest: _marketBool(map['is_test']),
@@ -982,20 +980,88 @@ class MarketplaceService {
     final value = await _client.rpc(rpc, params: params);
     return value is List
         ? value
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .toList()
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
         : const [];
   }
 
   Future<MarketplaceOnboarding> onboarding() => _one(
-    'get_my_marketplace_onboarding_v2',
-  ).then(MarketplaceOnboarding.fromMap);
+        'get_my_marketplace_onboarding_v2',
+      ).then(MarketplaceOnboarding.fromMap);
 
   Future<MarketplaceOnboarding> saveDriver(Map<String, dynamic> params) => _one(
-    'save_my_marketplace_driver_onboarding',
-    params,
-  ).then(MarketplaceOnboarding.fromMap);
+        'save_my_marketplace_driver_onboarding',
+        params,
+      ).then(MarketplaceOnboarding.fromMap);
+
+  Future<Map<String, dynamic>> identityDocuments() =>
+      _one('get_my_marketplace_identity_documents');
+
+  Future<Map<String, dynamic>> saveIdentityDocuments({
+    String? frontId,
+    String? backId,
+  }) =>
+      _one('save_my_marketplace_identity_documents', {
+        'target_front_asset_id': frontId,
+        'target_back_asset_id': backId,
+      });
+
+  Future<MarketplaceMediaAsset> uploadIdentityMedia({
+    required String side,
+    required Uint8List bytes,
+    required String idempotencyKey,
+  }) async {
+    final prepared = MarketplaceMediaAsset.fromMap(
+      await _one('prepare_my_marketplace_identity_upload', {
+        'target_side': side,
+        'target_mime_type': 'image/jpeg',
+        'target_byte_size': bytes.length,
+        'target_sha256': sha256.convert(bytes).toString(),
+        'target_idempotency_key': idempotencyKey,
+      }),
+    );
+
+    if (prepared.isAvailable) return prepared;
+
+    if (prepared.id.isEmpty ||
+        prepared.storageBucket != 'marketplace-identity' ||
+        prepared.storagePath == null) {
+      throw const MarketplacePhotoException(
+        'No se pudo preparar el documento privado.',
+      );
+    }
+
+    try {
+      await _client.storage.from('marketplace-identity').uploadBinary(
+            prepared.storagePath!,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: false,
+            ),
+          );
+    } on StorageException {
+      // Recuperación idempotente si Storage recibió una subida anterior.
+      try {
+        final recovered = MarketplaceMediaAsset.fromMap(
+          await _one('finalize_my_marketplace_identity_upload', {
+            'target_asset_id': prepared.id,
+          }),
+        );
+        if (recovered.isAvailable) return recovered;
+      } catch (_) {
+        rethrow;
+      }
+      rethrow;
+    }
+
+    return MarketplaceMediaAsset.fromMap(
+      await _one('finalize_my_marketplace_identity_upload', {
+        'target_asset_id': prepared.id,
+      }),
+    );
+  }
 
   Future<MarketplaceOnboarding> saveVehicle(Map<String, dynamic> params) =>
       _one(
@@ -1006,10 +1072,11 @@ class MarketplaceService {
   Future<MarketplaceOnboarding> setAcceptingJobs(
     String vehicleId,
     bool acceptingJobs,
-  ) => _one('set_my_marketplace_accepting_jobs', {
-    'target_vehicle_id': vehicleId,
-    'target_accepting_jobs': acceptingJobs,
-  }).then(MarketplaceOnboarding.fromMap);
+  ) =>
+      _one('set_my_marketplace_accepting_jobs', {
+        'target_vehicle_id': vehicleId,
+        'target_accepting_jobs': acceptingJobs,
+      }).then(MarketplaceOnboarding.fromMap);
 
   Future<void> updateDriverOperationalLocation({
     required String vehicleId,
@@ -1042,10 +1109,11 @@ class MarketplaceService {
   Future<Map<String, dynamic>> createVehicle({
     required String name,
     required String idempotencyKey,
-  }) => _one('create_my_marketplace_vehicle', {
-    'target_vehicle_name': name,
-    'target_idempotency_key': idempotencyKey,
-  });
+  }) =>
+      _one('create_my_marketplace_vehicle', {
+        'target_vehicle_name': name,
+        'target_idempotency_key': idempotencyKey,
+      });
 
   Future<MarketplaceMediaAsset> adoptGoogleAvatar({
     required String idempotencyKey,
@@ -1122,9 +1190,7 @@ class MarketplaceService {
     }
 
     try {
-      await _client.storage
-          .from(bucket)
-          .uploadBinary(
+      await _client.storage.from(bucket).uploadBinary(
             path,
             bytes,
             fileOptions: FileOptions(contentType: mimeType, upsert: false),
@@ -1145,14 +1211,14 @@ class MarketplaceService {
   }
 
   Future<MarketplaceMediaAsset> finalizeMedia(String assetId) => _one(
-    'finalize_my_marketplace_media_upload',
-    {'target_asset_id': assetId},
-  ).then(MarketplaceMediaAsset.fromMap);
+        'finalize_my_marketplace_media_upload',
+        {'target_asset_id': assetId},
+      ).then(MarketplaceMediaAsset.fromMap);
 
   Future<MarketplaceWorkAccess> access(String vehicleId) => _one(
-    'get_my_marketplace_work_access',
-    {'target_vehicle_id': vehicleId},
-  ).then(MarketplaceWorkAccess.fromMap);
+        'get_my_marketplace_work_access',
+        {'target_vehicle_id': vehicleId},
+      ).then(MarketplaceWorkAccess.fromMap);
 
   Future<MarketplaceWallet> wallet() =>
       _one('get_my_marketplace_wallet').then(MarketplaceWallet.fromMap);
@@ -1189,9 +1255,9 @@ class MarketplaceService {
       }).then(MarketplaceTopup.fromMap);
 
   Future<List<MarketplaceAvailableJob>> available(String vehicleId) => _list(
-    'list_my_marketplace_available_jobs',
-    {'target_vehicle_id': vehicleId},
-  ).then((items) => items.map(MarketplaceAvailableJob.fromMap).toList());
+        'list_my_marketplace_available_jobs',
+        {'target_vehicle_id': vehicleId},
+      ).then((items) => items.map(MarketplaceAvailableJob.fromMap).toList());
 
   Future<List<MarketplaceJob>> jobs(String scope) => jobsPage(scope);
 
@@ -1256,51 +1322,56 @@ class MarketplaceService {
     String jobId,
     String vehicleId,
     String idempotencyKey,
-  ) => _one('accept_and_start_my_marketplace_job', {
-    'target_job_id': jobId,
-    'target_vehicle_id': vehicleId,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceJob.fromMap);
+  ) =>
+      _one('accept_and_start_my_marketplace_job', {
+        'target_job_id': jobId,
+        'target_vehicle_id': vehicleId,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceJob.fromMap);
 
   Future<MarketplaceJob> accept(
     String jobId,
     String vehicleId,
     String idempotencyKey,
-  ) => _one('accept_job', {
-    'target_job_id': jobId,
-    'target_vehicle_id': vehicleId,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceJob.fromMap);
+  ) =>
+      _one('accept_job', {
+        'target_job_id': jobId,
+        'target_vehicle_id': vehicleId,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceJob.fromMap);
 
   Future<MarketplaceJob> finishJob(
     String jobId,
     String idempotencyKey,
-  ) => _one('finish_my_marketplace_job', {
-    'target_job_id': jobId,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceJob.fromMap);
+  ) =>
+      _one('finish_my_marketplace_job', {
+        'target_job_id': jobId,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceJob.fromMap);
 
   Future<MarketplaceJob> advance(
     String jobId,
     String action,
     String idempotencyKey,
-  ) => _one('advance_my_marketplace_job', {
-    'target_job_id': jobId,
-    'target_action': action,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceJob.fromMap);
+  ) =>
+      _one('advance_my_marketplace_job', {
+        'target_job_id': jobId,
+        'target_action': action,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceJob.fromMap);
 
   Future<MarketplaceDriverCustomerRating> rateCustomer({
     required String jobId,
     required int stars,
     required String idempotencyKey,
     String? internalNote,
-  }) => _one('create_my_marketplace_customer_rating', {
-    'target_job_id': jobId,
-    'target_stars': stars,
-    'target_internal_note': internalNote,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceDriverCustomerRating.fromMap);
+  }) =>
+      _one('create_my_marketplace_customer_rating', {
+        'target_job_id': jobId,
+        'target_stars': stars,
+        'target_internal_note': internalNote,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceDriverCustomerRating.fromMap);
 
   Future<MarketplaceDriverCustomerRating?> customerRating(String jobId) =>
       _list('get_my_marketplace_customer_rating', {'target_job_id': jobId})
@@ -1314,32 +1385,33 @@ class MarketplaceService {
       );
 
   Future<MarketplaceDriverRatingSummary> ratingSummary() => _one(
-    'get_my_marketplace_rating_summary',
-  ).then(MarketplaceDriverRatingSummary.fromMap);
+        'get_my_marketplace_rating_summary',
+      ).then(MarketplaceDriverRatingSummary.fromMap);
   Future<MarketplaceJob> cancel(
     String jobId,
     String reason,
     String idempotencyKey,
-  ) => _one('cancel_my_marketplace_job', {
-    'target_job_id': jobId,
-    'target_reason': reason,
-    'target_idempotency_key': idempotencyKey,
-  }).then(MarketplaceJob.fromMap);
+  ) =>
+      _one('cancel_my_marketplace_job', {
+        'target_job_id': jobId,
+        'target_reason': reason,
+        'target_idempotency_key': idempotencyKey,
+      }).then(MarketplaceJob.fromMap);
 
   Future<MarketplaceCustomerContact> contact(String jobId) => _one(
-    'get_my_marketplace_customer_contact',
-    {'target_job_id': jobId},
-  ).then(MarketplaceCustomerContact.fromMap);
+        'get_my_marketplace_customer_contact',
+        {'target_job_id': jobId},
+      ).then(MarketplaceCustomerContact.fromMap);
 
   Future<MarketplaceReferralProgram> referralProgram(String projectId) => _one(
-    'get_my_referral_program',
-    {'target_project_id': projectId},
-  ).then(MarketplaceReferralProgram.fromMap);
+        'get_my_referral_program',
+        {'target_project_id': projectId},
+      ).then(MarketplaceReferralProgram.fromMap);
 
   Future<List<MarketplaceReferralEntry>> referrals(String projectId) => _list(
-    'get_my_referrals',
-    {'target_project_id': projectId},
-  ).then((items) => items.map(MarketplaceReferralEntry.fromMap).toList());
+        'get_my_referrals',
+        {'target_project_id': projectId},
+      ).then((items) => items.map(MarketplaceReferralEntry.fromMap).toList());
 
   Future<String> claimReferralCode(String projectId, String code) async {
     final value = await _client.rpc(

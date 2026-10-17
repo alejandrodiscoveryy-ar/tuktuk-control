@@ -343,6 +343,13 @@ class _MarketplaceOnboardingScreenState
   String? _driverPhotoLabel;
   String? _googleAvatarAdoptionKey;
 
+  final Map<String, Uint8List> _identityPending = {};
+  final Map<String, String> _identityUploadKeys = {};
+  Map<String, dynamic> _identityDocs = {};
+  bool _identityLoaded = false;
+  bool _identityRequired = false;
+  String? _identityError;
+
   Uint8List? _vehiclePhotoBytes;
   String? _vehiclePhotoUploadKey;
   String? _vehiclePhotoLabel;
@@ -413,6 +420,20 @@ class _MarketplaceOnboardingScreenState
         _data?.driverPhotoAssetId == null &&
         _googleDriverPhotoUrl == null) {
       issues['driverPhoto'] = 'Añade una foto clara de tu rostro.';
+    }
+    if (_identityRequired) {
+      if (!_identityLoaded) {
+        issues['identityLoad'] =
+            'No se pudo validar tu documentacion. Actualiza.';
+      }
+      if (!_identityPending.containsKey('front') &&
+          _identityDocs['front'] == null) {
+        issues['identityFront'] = 'Agrega una foto delantera del carnet.';
+      }
+      if (!_identityPending.containsKey('back') &&
+          _identityDocs['back'] == null) {
+        issues['identityBack'] = 'Agrega una foto trasera del carnet.';
+      }
     }
     if (widget.driverOnly) return issues;
     final vehicle = _findVehicle(_selectedVehicleId);
@@ -516,7 +537,14 @@ class _MarketplaceOnboardingScreenState
       final issues = _registrationErrors();
       final relevant = nextStep == 1
           ? issues.keys.where(
-              (key) => key == 'name' || key == 'phone' || key == 'driverPhoto',
+              (key) => [
+                'name',
+                'phone',
+                'driverPhoto',
+                'identityLoad',
+                'identityFront',
+                'identityBack'
+              ].contains(key),
             )
           : issues.keys;
       if (relevant.isNotEmpty) {
@@ -540,7 +568,14 @@ class _MarketplaceOnboardingScreenState
     if (issues.isNotEmpty) {
       setState(() {
         _registrationStep = issues.keys.any(
-          (key) => key == 'name' || key == 'phone' || key == 'driverPhoto',
+          (key) => [
+            'name',
+            'phone',
+            'driverPhoto',
+            'identityLoad',
+            'identityFront',
+            'identityBack'
+          ].contains(key),
         )
             ? 0
             : 1;
@@ -584,6 +619,7 @@ class _MarketplaceOnboardingScreenState
         });
       }
       if (!_driverSaveSucceeded) return;
+      if (!await _saveIdentityDocuments()) return;
       if (!widget.driverOnly) {
         await _saveVehicle();
         if (!mounted) return;
@@ -891,6 +927,8 @@ class _MarketplaceOnboardingScreenState
         _applyData(data);
       });
 
+      _identityRequired = kIsWeb && !data.driverProfileExists;
+      await _loadIdentityDocuments();
       if (!widget.driverOnly) await _loadAccess();
       if (widget.managementSection == MarketplaceManagementSection.wallet) {
         await Future.wait([_loadWallet(), _loadTopups()]);
@@ -1224,6 +1262,173 @@ class _MarketplaceOnboardingScreenState
       vehicle
           ? 'Añade una foto principal del vehículo.'
           : 'Añade una foto clara del conductor.',
+    );
+  }
+
+  Future<void> _loadIdentityDocuments() async {
+    try {
+      final documents = await _service.identityDocuments();
+      if (!mounted) return;
+      setState(() {
+        _identityDocs = documents;
+        _identityRequired = kIsWeb && documents['required'] == true;
+        _identityLoaded = true;
+        _identityError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _identityLoaded = false;
+        _identityError = 'No se pudieron consultar tus documentos.';
+      });
+    }
+  }
+
+  Future<void> _pickIdentityDocument(String side) async {
+    if (!_canEdit || _registrationSubmitting) return;
+    final source = await _choosePhotoSource();
+    if (source == null || !mounted) return;
+    setState(() => _processingPhoto = true);
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 2400,
+        maxHeight: 2400,
+        imageQuality: 95,
+      );
+      if (picked == null || !mounted) return;
+      final normalized = normalizeMarketplaceImage(
+        sourceBytes: await picked.readAsBytes(),
+        assetKind: 'identity_document',
+      );
+      if (!mounted) return;
+      setState(() {
+        _identityPending[side] = normalized.bytes;
+        _identityUploadKeys[side] = _marketplaceUuidV4();
+      });
+      toast(
+          context, 'Fotografia seleccionada. Se guardara con tu inscripcion.');
+    } catch (_) {
+      if (mounted) {
+        toast(context, 'No se pudo procesar la fotografia del carnet.');
+      }
+    } finally {
+      if (mounted) setState(() => _processingPhoto = false);
+    }
+  }
+
+  Future<bool> _saveIdentityDocuments() async {
+    if (_identityPending.isEmpty) return true;
+    final uploaded = <String, String>{};
+    try {
+      for (final side in const ['front', 'back']) {
+        final bytes = _identityPending[side];
+        if (bytes == null) continue;
+        final key = _identityUploadKeys.putIfAbsent(side, _marketplaceUuidV4);
+        final asset = await _service.uploadIdentityMedia(
+          side: side,
+          bytes: bytes,
+          idempotencyKey: key,
+        );
+        uploaded[side] = asset.id;
+      }
+      final saved = await _service.saveIdentityDocuments(
+        frontId: uploaded['front'],
+        backId: uploaded['back'],
+      );
+      if (!mounted) return false;
+      setState(() {
+        _identityDocs = saved;
+        _identityLoaded = true;
+        _identityError = null;
+        for (final side in uploaded.keys) {
+          _identityPending.remove(side);
+          _identityUploadKeys.remove(side);
+        }
+      });
+      return true;
+    } catch (_) {
+      if (mounted) {
+        toast(context,
+            'No se pudieron guardar las fotos. Puedes reintentar sin repetirlas.');
+      }
+      return false;
+    }
+  }
+
+  Widget _identityDocumentTile(String side, String title) {
+    final pending = _identityPending[side];
+    final saved = _identityDocs[side];
+    final asset = saved is Map ? saved : null;
+    final id = asset?['asset_id']?.toString();
+    final path = asset?['storage_path']?.toString();
+    final stored = asset?['status'] == 'available' &&
+        asset?['storage_bucket'] == 'marketplace-identity' &&
+        id != null &&
+        path != null;
+    Widget preview;
+    if (pending != null) {
+      preview = Image.memory(pending,
+          height: 152, width: double.infinity, fit: BoxFit.contain);
+    } else if (stored) {
+      final future = _savedPhotoFutures.putIfAbsent(
+        'identity-$id',
+        () => Supabase.instance.client.storage
+            .from('marketplace-identity')
+            .download(path),
+      );
+      preview = FutureBuilder<Uint8List>(
+        future: future,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return Image.memory(snapshot.data!,
+                height: 152, width: double.infinity, fit: BoxFit.contain);
+          }
+          if (snapshot.hasError) {
+            return const Text('No se pudo mostrar la fotografia privada.');
+          }
+          return const SizedBox(
+              height: 80, child: Center(child: CircularProgressIndicator()));
+        },
+      );
+    } else {
+      preview = const SizedBox(
+          height: 90, child: Icon(Icons.badge_outlined, size: 44));
+    }
+    final hasPhoto = pending != null || stored;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('$title${_identityRequired ? ' *' : ''}',
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: appOutlineColor(context)),
+          ),
+          child: preview,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _canEdit && !_registrationSubmitting
+              ? () => _pickIdentityDocument(side)
+              : null,
+          icon: Icon(hasPhoto
+              ? Icons.change_circle_outlined
+              : Icons.add_a_photo_outlined),
+          label: Text(hasPhoto ? 'Cambiar fotografia' : 'Agregar fotografia'),
+        ),
+        Text(
+          pending != null
+              ? 'Pendiente de guardar'
+              : stored
+                  ? 'Documento privado guardado'
+                  : 'Fotografia pendiente',
+          style: TextStyle(fontSize: 12, color: appMutedColor(context)),
+        ),
+      ],
     );
   }
 
@@ -2107,7 +2312,14 @@ class _MarketplaceOnboardingScreenState
                 if (_showFieldErrors) ...[
                   const SizedBox(height: 8),
                   for (final issue in _registrationErrors().entries)
-                    if (['name', 'phone', 'driverPhoto'].contains(issue.key))
+                    if ([
+                      'name',
+                      'phone',
+                      'driverPhoto',
+                      'identityLoad',
+                      'identityFront',
+                      'identityBack'
+                    ].contains(issue.key))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
@@ -2147,7 +2359,8 @@ class _MarketplaceOnboardingScreenState
                             errorText: _registrationError('phone'),
                             hintText: '+5355555555',
                             isDense: true,
-                            prefixIcon: const Icon(Icons.phone_outlined, size: 22),
+                            prefixIcon:
+                                const Icon(Icons.phone_outlined, size: 22),
                           ),
                         ),
                       ],
@@ -2247,6 +2460,44 @@ class _MarketplaceOnboardingScreenState
               ],
             ),
           ),
+        if (_registrationStep == 0) ...[
+          const SizedBox(height: 12),
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Carné de identidad',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                Text(
+                  _identityRequired
+                      ? 'Sube las fotografias de ambas caras para completar tu inscripcion.'
+                      : 'Puedes agregar las dos fotografias de tu carnet cuando quieras.',
+                  style: TextStyle(fontSize: 12, color: appMutedColor(context)),
+                ),
+                if (_identityError != null)
+                  Text(_identityError!, style: const TextStyle(color: kDanger)),
+                if (_showFieldErrors)
+                  for (final issue in _registrationErrors().entries)
+                    if (['identityLoad', 'identityFront', 'identityBack']
+                        .contains(issue.key))
+                      Text(issue.value, style: const TextStyle(color: kDanger)),
+                const SizedBox(height: 16),
+                _identityDocumentTile('front', 'Parte delantera'),
+                const SizedBox(height: 14),
+                const Divider(),
+                const SizedBox(height: 12),
+                _identityDocumentTile('back', 'Parte trasera'),
+                const SizedBox(height: 10),
+                Text(
+                  'Estas fotografias son privadas y nunca aparecen ante clientes.',
+                  style: TextStyle(fontSize: 12, color: appMutedColor(context)),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (_registrationStep == 1 && !widget.driverOnly)
           const SizedBox(height: 16),
         if (_registrationStep == 1 && !widget.driverOnly)
@@ -2261,7 +2512,14 @@ class _MarketplaceOnboardingScreenState
                 if (_showFieldErrors) ...[
                   const SizedBox(height: 8),
                   for (final issue in _registrationErrors().entries)
-                    if (!['name', 'phone', 'driverPhoto'].contains(issue.key))
+                    if (![
+                      'name',
+                      'phone',
+                      'driverPhoto',
+                      'identityLoad',
+                      'identityFront',
+                      'identityBack'
+                    ].contains(issue.key))
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
