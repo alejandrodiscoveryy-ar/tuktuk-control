@@ -158,6 +158,50 @@ void main() {
     expect(box.get(record.id), isNotNull);
   });
 
+  test('elimina localmente solo pruebas borradas confirmadas', () async {
+    const jobId = '55555555-5555-4555-8555-555555555555';
+    final record = DailyRecord(
+      id: 'marketplace-job-$jobId',
+      date: DateTime.utc(2026, 10, 10),
+      earnings: 140,
+      odometer: 20,
+      userId: store.activeUserId,
+      vehicleId: store.activeVehicleId,
+    );
+    final box = Hive.box('daily_records');
+    await box.put(record.id, record.toMap());
+
+    final pending = SyncOperation(
+      id: 'dailyRecord:${record.id}',
+      entityType: SyncEntityType.dailyRecord,
+      entityId: record.id,
+      action: SyncAction.upsert,
+      userId: store.activeUserId,
+      vehicleId: store.activeVehicleId,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await Hive.box('sync_queue').put(pending.id, pending.toMap());
+
+    final service = _IncomeService();
+    service.verification[jobId] = {
+      'job_id': jobId,
+      'status': 'settled',
+      'is_test': true,
+      'is_deleted': true,
+    };
+
+    await store.reconcileMarketplaceIncomes(service);
+
+    final saved = DailyRecord.fromMap(box.get(record.id) as Map);
+    expect(saved.isDeleted, isTrue);
+    expect(store.records.where((r) => r.id == record.id), isEmpty);
+    expect(Hive.box('sync_queue').containsKey(pending.id), isFalse);
+    expect(store.marketplaceIncomeReconciliationError, isNull);
+
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.marketplaceIncomeReconciliationError, isNull);
+  });
   test('periodic missing-income recovery is bounded and resumes its own cursor',
       () async {
     final service = _IncomeService();

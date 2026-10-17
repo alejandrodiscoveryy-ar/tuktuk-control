@@ -1332,9 +1332,9 @@ class RecordStore extends ChangeNotifier {
   Future<void>? _marketplaceIncomeRefresh;
   String? marketplaceIncomeReconciliationError;
 
-  /// Read-only audit of pre-existing local income, without deleting any record
-  /// or mutating sync state. Server absence after successful lookup is held for
-  /// review; server settlement restores the original record automatically.
+  /// Audits old local income against the server. Only records explicitly
+  /// confirmed as deleted test jobs are tombstoned locally; unverified income
+  /// remains preserved, and real settlement restores eligible records.
   Future<void> _auditLegacyMarketplaceIncomes(
       MarketplaceService service, String ownerId) async {
     final validId = RegExp(
@@ -1376,7 +1376,39 @@ class RecordStore extends ChangeNotifier {
             row['is_test'] == false &&
             row['is_deleted'] == false;
         final recordId = byJobId[id]!;
-        if (settledRealJob) {
+        if (row != null &&
+            row['is_test'] == true &&
+            row['is_deleted'] == true) {
+          // Solo limpia pruebas cuya eliminación confirmó el servidor.
+          final raw = _box.get(recordId);
+          if (raw is Map) {
+            final existing = DailyRecord.fromMap(raw);
+            if (existing.id != recordId || existing.userId != ownerId) {
+              throw StateError('MARKETPLACE_INCOME_OWNER_MISMATCH');
+            }
+            if (!existing.isDeleted) {
+              final now = DateTime.now().toUtc();
+              await _box.put(
+                recordId,
+                existing
+                    .withSyncInfo(
+                      deviceId: deviceId,
+                      syncStatus: SyncStatus.synced,
+                      updatedAt: now,
+                      deletedAt: now,
+                    )
+                    .toMap(),
+              );
+            }
+          }
+          final operationId = '${SyncEntityType.dailyRecord.name}:$recordId';
+          final pendingRaw = Hive.box(_syncQueueBox).get(operationId);
+          if (pendingRaw is Map &&
+              SyncOperation.fromMap(pendingRaw).userId == ownerId) {
+            await _syncQueue.complete([operationId]);
+          }
+          suppression.remove(recordId);
+        } else if (settledRealJob) {
           suppression.remove(recordId);
         } else {
           suppression.add(recordId);
