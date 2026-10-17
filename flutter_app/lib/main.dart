@@ -29,6 +29,7 @@ import 'services/install_referrer_service.dart';
 import 'services/referral_link_listener.dart';
 import 'services/referral_share.dart';
 import 'services/project_identity_runtime.dart';
+import 'services/marketplace_guided_capture.dart' as guided_capture;
 
 part 'domain/entities.dart';
 part 'domain/access.dart';
