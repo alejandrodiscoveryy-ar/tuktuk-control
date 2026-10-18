@@ -15,9 +15,27 @@ void main() {
       marketplaceResolvedPassengerCapacity(
         vehicleCategory: 'motorcycle',
         services: {'tourism'},
-        enteredCapacity: 5,
+        enteredCapacity: null,
       ),
       1,
+    );
+  });
+
+  test('limites y excepcion de motocicleta', () {
+    expect(marketplacePassengerLimit('motorcycle'), 2);
+    expect(marketplacePassengerLimit('tricycle'), 99);
+    expect(marketplaceValidPassengerCapacity(1, 'motorcycle'), isTrue);
+    expect(marketplaceValidPassengerCapacity(2, 'motorcycle'), isTrue);
+    expect(marketplaceValidPassengerCapacity(3, 'motorcycle'), isFalse);
+    expect(marketplaceValidPassengerCapacity(100, 'tricycle'), isFalse);
+    expect(marketplaceValidPassengerCapacity(0, 'tricycle'), isFalse);
+    expect(
+      marketplaceResolvedPassengerCapacity(
+        vehicleCategory: 'motorcycle',
+        services: {'passenger'},
+        enteredCapacity: 2,
+      ),
+      2,
     );
   });
 

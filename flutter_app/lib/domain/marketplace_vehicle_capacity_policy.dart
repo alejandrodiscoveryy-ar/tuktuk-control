@@ -6,6 +6,14 @@ bool marketplaceNeedsPassengerCapacity(Set<String> services) =>
 bool marketplaceNeedsCargoCapacity(Set<String> services) =>
     services.contains('cargo');
 
+const int marketplaceMaxPassengerCapacity = 99;
+
+int marketplacePassengerLimit(String? category) =>
+    category == 'motorcycle' ? 2 : marketplaceMaxPassengerCapacity;
+
+bool marketplaceValidPassengerCapacity(int? value, String? category) =>
+    value != null && value >= 1 && value <= marketplacePassengerLimit(category);
+
 /// Una motocicleta admite por defecto un pasajero aparte del conductor.
 /// Si no ofrece pasajeros o turismo, no anuncia plazas.
 int? marketplaceResolvedPassengerCapacity({
@@ -14,7 +22,7 @@ int? marketplaceResolvedPassengerCapacity({
   required int? enteredCapacity,
 }) {
   if (!marketplaceNeedsPassengerCapacity(services)) return null;
-  if (vehicleCategory == 'motorcycle') return 1;
+  if (vehicleCategory == 'motorcycle') return enteredCapacity ?? 1;
   return enteredCapacity;
 }
 

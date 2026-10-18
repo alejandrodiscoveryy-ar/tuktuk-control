@@ -474,7 +474,9 @@ class _MarketplaceOnboardingScreenState
         services: _selectedServices,
         enteredCapacity: _marketplaceOptionalInt(_passengers.text),
       );
-      if (people == null || people <= 0) {
+      if ((_passengers.text.trim().isNotEmpty &&
+              _marketplaceOptionalInt(_passengers.text) == null) ||
+          !marketplaceValidPassengerCapacity(people, _selectedCategory)) {
         issues['passengers'] =
             'Indica una capacidad de pasajeros mayor que cero.';
       }
@@ -513,6 +515,7 @@ class _MarketplaceOnboardingScreenState
         'Modelo' => 'model',
         'Propulsión' => 'propulsion',
         'Pasajeros' => 'passengers',
+        'Plazas de moto (opcional)' => 'passengers',
         'Carga (kg)' => 'cargoKg',
         'Año' => 'year',
         'Chapa (opcional)' => 'registration',
@@ -984,7 +987,8 @@ class _MarketplaceOnboardingScreenState
     _brand.text = vehicle?.brand ?? '';
     _model.text = vehicle?.model ?? '';
     _year.text = vehicle?.year?.toString() ?? '';
-    _passengers.text = vehicle?.passengerCapacity?.toString() ?? '';
+    _passengers.text = vehicle?.passengerCapacity?.toString() ??
+        (_selectedCategory == 'motorcycle' ? '1' : '');
     _cargoKg.text = vehicle?.cargoCapacityKg?.toString() ?? '';
     _bodyType.text = vehicle?.bodyType ?? '';
     _otherCategory.text = vehicle?.categoryOtherDescription ?? '';
@@ -1671,7 +1675,10 @@ class _MarketplaceOnboardingScreenState
     }
 
     if (marketplaceNeedsPassengerCapacity(_selectedServices) &&
-        (passengers == null || passengers <= 0)) {
+        ((_passengers.text.trim().isNotEmpty &&
+                _marketplaceOptionalInt(_passengers.text) == null) ||
+            !marketplaceValidPassengerCapacity(
+                passengers, _selectedCategory))) {
       toast(context, 'Indica una capacidad de pasajeros mayor que cero.');
       return;
     }
@@ -2778,14 +2785,24 @@ class _MarketplaceOnboardingScreenState
                       final automaticMotorcyclePassenger =
                           showPassengerCapacity &&
                               _selectedCategory == 'motorcycle';
+                      final motorCount = automaticMotorcyclePassenger
+                          ? marketplaceResolvedPassengerCapacity(
+                              vehicleCategory: _selectedCategory,
+                              services: _selectedServices,
+                              enteredCapacity:
+                                  _marketplaceOptionalInt(_passengers.text),
+                            )
+                          : null;
 
-                      Widget passengerStepper() {
+                      Widget passengerStepper({String label = 'Pasajeros'}) {
                         final raw = _marketplaceOptionalInt(_passengers.text);
                         final count = raw != null && raw > 0 ? raw : null;
+                        final limit =
+                            marketplacePassengerLimit(_selectedCategory);
                         return field(
                           InputDecorator(
                             decoration: fieldDecoration(
-                              'Pasajeros',
+                              label,
                               Icons.people_outline,
                             ).copyWith(prefixIcon: null),
                             child: Row(
@@ -2829,7 +2846,8 @@ class _MarketplaceOnboardingScreenState
                                 ),
                                 IconButton(
                                   tooltip: 'Aumentar pasajeros',
-                                  onPressed: !_canEdit || count == 999
+                                  onPressed: !_canEdit ||
+                                          (count != null && count >= limit)
                                       ? null
                                       : () => setState(() {
                                             _passengers.text =
@@ -2907,9 +2925,16 @@ class _MarketplaceOnboardingScreenState
                                 );
                               }).toList(),
                               onChanged: _canEdit
-                                  ? (value) => setState(
-                                        () => _selectedCategory = value,
-                                      )
+                                  ? (value) => setState(() {
+                                        if (value == 'motorcycle' &&
+                                            _selectedCategory != 'motorcycle') {
+                                          _passengers.text = '1';
+                                        } else if (value != 'motorcycle' &&
+                                            _selectedCategory == 'motorcycle') {
+                                          _passengers.clear();
+                                        }
+                                        _selectedCategory = value;
+                                      })
                                   : null,
                             ),
                           ),
@@ -2971,13 +2996,15 @@ class _MarketplaceOnboardingScreenState
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   children: [
-                                    Icon(Icons.people_outline, size: 19),
+                                    const Icon(Icons.people_outline, size: 19),
                                     SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
-                                        '1 pasajero · automático en motocicleta (sin contar al conductor)',
+                                        motorCount == 1
+                                            ? '1 pasajero · automático en motocicleta (sin contar al conductor)'
+                                            : '$motorCount pasajeros · capacidad especial de motocicleta',
                                       ),
                                     ),
                                   ],
@@ -3030,6 +3057,15 @@ class _MarketplaceOnboardingScreenState
                                 icon: Icons.widgets_outlined,
                                 controller: _bodyType,
                               ),
+                              if (automaticMotorcyclePassenger) ...[
+                                const SizedBox(height: gap),
+                                const Text(
+                                  'Solo si tu motocicleta admite otra capacidad:',
+                                ),
+                                const SizedBox(height: gap),
+                                passengerStepper(
+                                    label: 'Plazas de moto (opcional)'),
+                              ],
                             ],
                           ),
                         ],
