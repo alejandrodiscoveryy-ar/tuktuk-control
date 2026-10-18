@@ -1,4 +1,4 @@
-// TUKTUK WebApp: camera preview with guides. Keeps the full photo without cropping.
+// TUKTUK WebApp: camera preview with guides. Saves exactly what is inside the green frame.
 // Camera frames stay in the browser until the driver confirms the image.
 (function () {
   'use strict';
@@ -29,6 +29,34 @@
     if (className) element.className = className;
     if (text) element.textContent = text;
     return element;
+  }
+
+  // Convierte la guía visible a coordenadas reales de la cámara.
+  function guideCropRect(video, frame) {
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    const area = video.getBoundingClientRect();
+    const guide = frame.getBoundingClientRect();
+    if (![w, h, area.width, area.height, area.left, area.top,
+          guide.left, guide.top, guide.width, guide.height].every(Number.isFinite) ||
+        w < 1 || h < 1 || area.width < 1 || area.height < 1) {
+      throw new Error('CAMERA_INVALID_GEOMETRY');
+    }
+    // El visor utiliza object-fit: cover, centrado.
+    const zoom = Math.max(area.width / w, area.height / h);
+    const imageLeft = area.left + (area.width - w * zoom) / 2;
+    const imageTop = area.top + (area.height - h * zoom) / 2;
+    const left = Math.max(guide.left, area.left);
+    const top = Math.max(guide.top, area.top);
+    const right = Math.min(guide.right, area.right);
+    const bottom = Math.min(guide.bottom, area.bottom);
+    if (!(right > left && bottom > top)) throw new Error('CAMERA_FRAME_OUTSIDE');
+    const x = Math.max(0, (left - imageLeft) / zoom);
+    const y = Math.max(0, (top - imageTop) / zoom);
+    const width = Math.min(w - x, (right - left) / zoom);
+    const height = Math.min(h - y, (bottom - top) / zoom);
+    if (!(width >= 8 && height >= 8)) throw new Error('CAMERA_CROP_TOO_SMALL');
+    return { x, y, width, height };
   }
 
   let active = false;
@@ -176,13 +204,15 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
           return;
         }
         try {
+          const crop = guideCropRect(video, frame);
           const canvas = document.createElement('canvas');
-          const scale = Math.min(1, 2048 / Math.max(video.videoWidth, video.videoHeight));
-          canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-          canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+          const scale = Math.min(1, 2048 / Math.max(crop.width, crop.height));
+          canvas.width = Math.max(1, Math.round(crop.width * scale));
+          canvas.height = Math.max(1, Math.round(crop.height * scale));
           const ctx = canvas.getContext('2d');
           if (!ctx) throw new Error('CANVAS_UNAVAILABLE');
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height,
+            0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
           captured = dataUrl.split(',')[1];
           if (!captured) throw new Error('EMPTY_PHOTO');

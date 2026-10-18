@@ -42,6 +42,7 @@
   height: 100%;
   object-fit: contain;
 }
+.tuktuk-camera-video { object-fit: cover; }
 .tuktuk-camera-frame {
   position: relative;
   z-index: 1;
