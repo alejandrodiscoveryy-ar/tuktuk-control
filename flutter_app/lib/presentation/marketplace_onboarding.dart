@@ -468,16 +468,22 @@ class _MarketplaceOnboardingScreenState
       issues['services'] =
           'Selecciona al menos un servicio que puedas realizar.';
     }
-    if (_selectedServices.contains('passenger') ||
-        _selectedServices.contains('tourism')) {
-      final people = _marketplaceOptionalInt(_passengers.text);
+    if (marketplaceNeedsPassengerCapacity(_selectedServices)) {
+      final people = marketplaceResolvedPassengerCapacity(
+        vehicleCategory: _selectedCategory,
+        services: _selectedServices,
+        enteredCapacity: _marketplaceOptionalInt(_passengers.text),
+      );
       if (people == null || people <= 0) {
         issues['passengers'] =
             'Indica una capacidad de pasajeros mayor que cero.';
       }
     }
-    if (_selectedServices.contains('cargo')) {
-      final kg = _marketplaceOptionalNumber(_cargoKg.text);
+    if (marketplaceNeedsCargoCapacity(_selectedServices)) {
+      final kg = marketplaceResolvedCargoCapacity(
+        services: _selectedServices,
+        enteredCapacity: _marketplaceOptionalNumber(_cargoKg.text),
+      );
       if (kg == null || !kg.isFinite || kg <= 0) {
         issues['cargoKg'] = 'Indica la capacidad de carga en kg.';
       }
@@ -1111,12 +1117,9 @@ class _MarketplaceOnboardingScreenState
   }) async {
     if (kIsWeb &&
         source == ImageSource.camera &&
-        (assetKind == 'vehicle_photo' ||
-            assetKind == 'identity_document')) {
+        (assetKind == 'vehicle_photo' || assetKind == 'identity_document')) {
       return guided_capture.captureGuidedMarketplacePhoto(
-        assetKind == 'vehicle_photo'
-            ? 'vehicle'
-            : 'identity-$identitySide',
+        assetKind == 'vehicle_photo' ? 'vehicle' : 'identity-$identitySide',
       );
     }
     final picked = await _imagePicker.pickImage(
@@ -1652,22 +1655,30 @@ class _MarketplaceOnboardingScreenState
     }
 
     final year = _marketplaceOptionalInt(_year.text);
-    final passengers = _marketplaceOptionalInt(_passengers.text);
-    final cargoKg = _marketplaceOptionalNumber(_cargoKg.text);
+    final passengers = marketplaceResolvedPassengerCapacity(
+      vehicleCategory: _selectedCategory,
+      services: _selectedServices,
+      enteredCapacity: _marketplaceOptionalInt(_passengers.text),
+    );
+    final cargoKg = marketplaceResolvedCargoCapacity(
+      services: _selectedServices,
+      enteredCapacity: _marketplaceOptionalNumber(_cargoKg.text),
+    );
 
     if (_year.text.trim().isNotEmpty && year == null) {
       toast(context, 'El año del vehículo no es válido.');
       return;
     }
 
-    if (_passengers.text.trim().isNotEmpty &&
-        (passengers == null || passengers < 0)) {
-      toast(context, 'La capacidad de pasajeros no es válida.');
+    if (marketplaceNeedsPassengerCapacity(_selectedServices) &&
+        (passengers == null || passengers <= 0)) {
+      toast(context, 'Indica una capacidad de pasajeros mayor que cero.');
       return;
     }
 
-    if (_cargoKg.text.trim().isNotEmpty && (cargoKg == null || cargoKg < 0)) {
-      toast(context, 'La capacidad de carga no es válida.');
+    if (marketplaceNeedsCargoCapacity(_selectedServices) &&
+        (cargoKg == null || !cargoKg.isFinite || cargoKg <= 0)) {
+      toast(context, 'Indica la capacidad de carga en kilogramos.');
       return;
     }
 
@@ -2761,11 +2772,81 @@ class _MarketplaceOnboardingScreenState
                       );
 
                       final showPassengerCapacity =
-                          _selectedServices.contains('passenger') ||
-                              _selectedServices.contains('tourism');
-                      final showCargoCapacity = _selectedServices.contains(
-                        'cargo',
-                      );
+                          marketplaceNeedsPassengerCapacity(_selectedServices);
+                      final showCargoCapacity =
+                          marketplaceNeedsCargoCapacity(_selectedServices);
+                      final automaticMotorcyclePassenger =
+                          showPassengerCapacity &&
+                              _selectedCategory == 'motorcycle';
+
+                      Widget passengerStepper() {
+                        final raw = _marketplaceOptionalInt(_passengers.text);
+                        final count = raw != null && raw > 0 ? raw : null;
+                        return field(
+                          InputDecorator(
+                            decoration: fieldDecoration(
+                              'Pasajeros',
+                              Icons.people_outline,
+                            ).copyWith(prefixIcon: null),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Reducir pasajeros',
+                                  onPressed: !_canEdit ||
+                                          count == null ||
+                                          count <= 1
+                                      ? null
+                                      : () => setState(() {
+                                            _passengers.text = '${count - 1}';
+                                          }),
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                                SizedBox(
+                                  width: 54,
+                                  child: TextField(
+                                    controller: _passengers,
+                                    enabled: _canEdit,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    onChanged: (_) => setState(() {}),
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      hintText: '—',
+                                      isDense: true,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Aumentar pasajeros',
+                                  onPressed: !_canEdit || count == 999
+                                      ? null
+                                      : () => setState(() {
+                                            _passengers.text =
+                                                '${(count ?? 0) + 1}';
+                                          }),
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 40,
+                                    minHeight: 40,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2877,32 +2958,38 @@ class _MarketplaceOnboardingScreenState
                           services,
                           if (showPassengerCapacity || showCargoCapacity) ...[
                             const SizedBox(height: gap),
-                            if (showPassengerCapacity && showCargoCapacity)
-                              pair(
-                                edit(
-                                  label: 'Pasajeros',
-                                  icon: Icons.people_outline,
-                                  controller: _passengers,
-                                  keyboardType: TextInputType.number,
+                            if (automaticMotorcyclePassenger)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
                                 ),
-                                edit(
-                                  label: 'Carga (kg)',
-                                  icon: Icons.scale_outlined,
-                                  controller: _cargoKg,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                    decimal: true,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color:
+                                        Theme.of(context).colorScheme.outline,
                                   ),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                              )
-                            else if (showPassengerCapacity)
-                              edit(
-                                label: 'Pasajeros',
-                                icon: Icons.people_outline,
-                                controller: _passengers,
-                                keyboardType: TextInputType.number,
-                              )
-                            else
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.people_outline, size: 19),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        '1 pasajero · automático en motocicleta (sin contar al conductor)',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (showPassengerCapacity &&
+                                !automaticMotorcyclePassenger) ...[
+                              passengerStepper(),
+                              if (showCargoCapacity)
+                                const SizedBox(height: gap),
+                            ],
+                            if (showCargoCapacity)
                               edit(
                                 label: 'Carga (kg)',
                                 icon: Icons.scale_outlined,

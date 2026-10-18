@@ -30,6 +30,7 @@ import 'services/referral_link_listener.dart';
 import 'services/referral_share.dart';
 import 'services/project_identity_runtime.dart';
 import 'services/marketplace_guided_capture.dart' as guided_capture;
+import 'domain/marketplace_vehicle_capacity_policy.dart';
 
 part 'domain/entities.dart';
 part 'domain/access.dart';
@@ -250,20 +251,19 @@ ThemeData buildAppTheme(Brightness brightness) {
   final outline = dark ? kOutline : kOutline;
   final inputOutline = dark ? const Color(0xFF263241) : const Color(0xFF263241);
   final semanticPrimary = dark ? kPrimary : const Color(0xFF2F80ED);
-  final scheme =
-      ColorScheme.fromSeed(
-        brightness: effectiveBrightness,
-        seedColor: kPrimary,
-        primary: semanticPrimary,
-        secondary: dark ? kSecondary : const Color(0xFF3B82F6),
-        surface: surface,
-      ).copyWith(
-        onSurface: text,
-        onSurfaceVariant: muted,
-        outline: outline,
-        outlineVariant: outline,
-        surfaceContainerHighest: surfaceHigh,
-      );
+  final scheme = ColorScheme.fromSeed(
+    brightness: effectiveBrightness,
+    seedColor: kPrimary,
+    primary: semanticPrimary,
+    secondary: dark ? kSecondary : const Color(0xFF3B82F6),
+    surface: surface,
+  ).copyWith(
+    onSurface: text,
+    onSurfaceVariant: muted,
+    outline: outline,
+    outlineVariant: outline,
+    surfaceContainerHighest: surfaceHigh,
+  );
   return ThemeData(
     useMaterial3: true,
     brightness: effectiveBrightness,
@@ -337,18 +337,16 @@ ThemeData buildAppTheme(Brightness brightness) {
       indicatorColor: semanticPrimary.withValues(alpha: .18),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
-          color: states.contains(WidgetState.selected)
-              ? semanticPrimary
-              : muted,
+          color:
+              states.contains(WidgetState.selected) ? semanticPrimary : muted,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
       ),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? semanticPrimary
-              : muted,
+          color:
+              states.contains(WidgetState.selected) ? semanticPrimary : muted,
         ),
       ),
     ),
