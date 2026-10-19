@@ -853,6 +853,21 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
         _lastOperationalPosition = position;
         _lastOperationalSentAt = nowUtc;
+
+        // Una consulta iniciada antes del nuevo GPS puede devolver cero
+        // ofertas. Al publicar correctamente la ubicacion, reconsultar
+        // tras la peticion anterior sin cambiar las reglas del backend.
+        if (!activeService) {
+          final previousAvailableRequest = _availableRequest;
+          if (previousAvailableRequest != null) {
+            await previousAvailableRequest;
+          }
+          if (mounted &&
+              _selectedVehicleId == vehicle.id &&
+              _canPublishOperationalLocation()) {
+            await _loadAvailable();
+          }
+        }
       }
     } catch (_) {
       // Un fallo transitorio de GPS/red no debe detener el seguimiento.
