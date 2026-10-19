@@ -39,6 +39,13 @@ void main() {
       );
     });
 
+    test('reconoce platform_free', () {
+      expect(
+        marketplaceBillingMode('platform_free'),
+        MarketplaceBillingMode.platformFree,
+      );
+    });
+
     test('reconoce wallet_commission', () {
       expect(
         marketplaceBillingMode('wallet_commission'),
@@ -191,6 +198,20 @@ void main() {
       expect(job.nextAction, 'start_en_route');
       expect(job.vehicleId, 'vehicle-1');
       expect(job.distanceKm, 8.6);
+    });
+
+    test('parsea trabajo asignado platform_free', () {
+      final job = MarketplaceJob.fromMap({
+        'job_id': 'job-platform-free',
+        'status': 'accepted',
+        'billing_mode': 'platform_free',
+        'commission_amount_snapshot': 0,
+        'final_price': 1000,
+        'currency': 'CUP',
+      });
+
+      expect(job.billingMode, MarketplaceBillingMode.platformFree);
+      expect(job.commissionAmountSnapshot, 0);
     });
 
     test('parsea trabajo asignado wallet_commission', () {
