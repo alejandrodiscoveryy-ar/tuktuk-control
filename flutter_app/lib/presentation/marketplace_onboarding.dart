@@ -2999,7 +2999,7 @@ class _MarketplaceOnboardingScreenState
                                 child: Row(
                                   children: [
                                     const Icon(Icons.people_outline, size: 19),
-                                    SizedBox(width: 10),
+                                    const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
                                         motorCount == 1
