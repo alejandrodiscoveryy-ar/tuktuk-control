@@ -522,7 +522,7 @@ void main() {
     await pumpJobs(tester);
     expect(find.text('Evalúa al cliente'), findsOneWidget);
     expect(find.text('¿Finalizar carrera?'), findsNothing);
-    await tester.tap(find.text('Ahora no'));
+    await tester.tap(find.text('Volver a carrera'));
     await pumpJobs(tester);
     expect(service.finishCalls, 0);
     expect(service.ratingCalls, 0);

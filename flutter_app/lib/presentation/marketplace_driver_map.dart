@@ -291,17 +291,30 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             Positioned(
               left: 12,
               right: 12,
-              bottom: 12,
+              top: ride != null ? 96 : null,
+              bottom: ride == null ? 12 : null,
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: kSurfaceHigh.withValues(alpha: .94),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Text(
-                  message!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        message!,
+                        textAlign: TextAlign.left,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    if (ride != null)
+                      IconButton(
+                        tooltip: 'Reintentar cargar ruta',
+                        onPressed: () => unawaited(_load()),
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                  ],
                 ),
               ),
             ),
