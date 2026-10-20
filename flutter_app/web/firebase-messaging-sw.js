@@ -18,9 +18,18 @@ messaging.onBackgroundMessage((payload) => {
 
   if (!title && !body) return;
 
+  const data = payload.data || {};
+  const isJob = data.kind === 'marketplace_job_available' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.job_id || '');
   self.registration.showNotification(title || 'TukTuk Conductor', {
     body: body || '',
-    data: payload.data || {}
+    icon: 'icons/Icon-192.png',
+    badge: 'icons/Icon-192.png',
+    tag: isJob ? 'tuktuk-job-' + data.job_id : undefined,
+    renotify: isJob,
+    requireInteraction: isJob,
+    vibrate: isJob ? [250, 100, 250] : undefined,
+    data: data
   });
 });
 

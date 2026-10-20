@@ -19,26 +19,118 @@
 </head>
 <body>
   <script>
-    window.tuktukShowForegroundNotification = function (title, body, marketplaceJobId) {
-      try {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          const notification = new Notification(title, {
-            body: body,
-            icon: 'icons/Icon-192.png'
-          });
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(marketplaceJobId || '')) {
-            notification.onclick = function () {
-              window.focus();
-              const target = new URL(window.location.href);
-              target.searchParams.set('marketplace_job_id', marketplaceJobId);
-              window.location.assign(target.toString());
-            };
+    // Los avisos de carrera se habilitan solo con el estado de trabajo confirmado.
+    // El navegador exige una interacciÃ³n del usuario para permitir sonido.
+    (function () {
+      'use strict';
+      var jobAlertEnabled = false;
+      var audioContext = null;
+      var recentJobs = new Map();
+      var jobIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+      function unlockSound() {
+        try {
+          var AudioContextType = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextType) return;
+          audioContext = audioContext || new AudioContextType();
+          if (audioContext.state === 'suspended') {
+            audioContext.resume().catch(function () {});
           }
-        }
-      } catch (_) {
-        // Foreground browser notifications are optional.
+        } catch (_) {}
       }
-    };
+
+      window.tuktukPrepareJobAlertFromGesture = function () {
+        unlockSound();
+        try {
+          if ('Notification' in window && Notification.permission === 'default') {
+            Promise.resolve(Notification.requestPermission()).catch(function () {});
+          }
+        } catch (_) {}
+      };
+
+      window.tuktukSetJobAlertEnabled = function (enabled) {
+        jobAlertEnabled = enabled === true;
+      };
+
+      // TambiÃ©n desbloquea el audio si el conductor ya estaba trabajando al entrar.
+      document.addEventListener('pointerdown', function () {
+        if (jobAlertEnabled) unlockSound();
+      }, {capture: true, passive: true});
+      document.addEventListener('keydown', function () {
+        if (jobAlertEnabled) unlockSound();
+      }, {capture: true});
+
+      function soundForNewJob() {
+        try {
+          if (!audioContext || audioContext.state !== 'running') return;
+          var start = audioContext.currentTime + 0.025;
+          [880, 1175, 880].forEach(function (hz, index) {
+            var oscillator = audioContext.createOscillator();
+            var volume = audioContext.createGain();
+            var begin = start + index * 0.19;
+            oscillator.type = 'sine';
+            oscillator.frequency.value = hz;
+            volume.gain.setValueAtTime(0.001, begin);
+            volume.gain.exponentialRampToValueAtTime(0.23, begin + 0.025);
+            volume.gain.exponentialRampToValueAtTime(0.001, begin + 0.17);
+            oscillator.connect(volume);
+            volume.connect(audioContext.destination);
+            oscillator.start(begin);
+            oscillator.stop(begin + 0.18);
+          });
+        } catch (_) {}
+      }
+
+      function showOnScreen(body) {
+        try {
+          var banner = document.getElementById('tuktuk-new-job-alert');
+          if (!banner) {
+            banner = document.createElement('button');
+            banner.id = 'tuktuk-new-job-alert';
+            banner.type = 'button';
+            banner.setAttribute('role', 'alert');
+            banner.style.cssText = 'position:fixed;z-index:2147483640;top:95px;left:12px;right:12px;padding:14px 18px;border:2px solid #58E6B3;border-radius:16px;background:#102B36;color:white;font:700 16px system-ui;box-shadow:0 6px 26px #0009;text-align:left;';
+            banner.onclick = function () { banner.remove(); window.focus(); };
+            document.body.appendChild(banner);
+          }
+          banner.textContent = 'Nueva carrera disponible. ' + (body || 'Abre Trabajo para verla.');
+          window.clearTimeout(banner._closeTimer);
+          banner._closeTimer = window.setTimeout(function () { banner.remove(); }, 9000);
+        } catch (_) {}
+      }
+
+      window.tuktukShowForegroundNotification = function (title, body, marketplaceJobId) {
+        var job = jobIdPattern.test(marketplaceJobId || '');
+        if (job && !jobAlertEnabled) return;
+        if (job) {
+          var now = Date.now();
+          if (now - (recentJobs.get(marketplaceJobId) || 0) < 60000) return;
+          recentJobs.set(marketplaceJobId, now);
+          for (var entry of recentJobs) {
+            if (now - entry[1] > 120000) recentJobs.delete(entry[0]);
+          }
+          soundForNewJob();
+          showOnScreen(body);
+          try { if (navigator.vibrate) navigator.vibrate([250, 100, 250]); } catch (_) {}
+        }
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(function (registration) {
+              return registration.showNotification(title || 'TukTuk Conductor', {
+                body: body || '', icon: 'icons/Icon-192.png',
+                tag: job ? 'tuktuk-job-' + marketplaceJobId : undefined,
+                renotify: job, requireInteraction: job,
+                vibrate: job ? [250, 100, 250] : undefined,
+                data: job ? {kind: 'marketplace_job_available', job_id: marketplaceJobId} : {}
+              });
+            }).catch(function () {});
+          } else {
+            new Notification(title || 'TukTuk Conductor', {body: body || ''});
+          }
+        } catch (_) {}
+      };
+    })();
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
