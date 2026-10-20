@@ -3286,6 +3286,8 @@ class _ReferralEntryTile extends StatelessWidget {
                       width: 36,
                       height: 36,
                       fit: BoxFit.cover,
+                      webHtmlElementStrategy:
+                          WebHtmlElementStrategy.fallback,
                       errorBuilder: (_, __, ___) => fallbackIcon,
                     ),
                   ),
