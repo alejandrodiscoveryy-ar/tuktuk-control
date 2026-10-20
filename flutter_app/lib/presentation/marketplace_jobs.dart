@@ -251,6 +251,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   late final TabController _tabController;
   int _workPanelIndex = -1;
   bool _workDrawerOpen = false;
+  bool _workRideDetailsExpanded = false;
   MarketplaceMapVisualConfiguration? _workMapVisual;
   LatLng? _workMapPosition;
   double _workMapZoom = 13.5;
@@ -3187,7 +3188,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 ? () => unawaited(_setAcceptingJobs(!available))
                 : _openActivation,
             child: SizedBox(
-              height: 70,
+              height: MediaQuery.sizeOf(context).width < 375 ? 64 : 70,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(13, 6, 7, 6),
                 child: Row(
@@ -3426,50 +3427,46 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             right: 12,
             bottom: bottomNavInset + 12,
             child: onRide
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
-                      child: Container(
-                        key: const ValueKey('work-map-glass-active-card'),
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(24),
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xC00A2833), Color(0xD20B1925)],
-                          ),
-                          border: Border.all(
-                            color: const Color(0x804AE5D1),
-                            width: 1.1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: .26),
-                              blurRadius: 22,
-                              offset: const Offset(0, 8),
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: (MediaQuery.sizeOf(context).height * .46)
+                          .clamp(230.0, 420.0),
+                    ),
+                    child: SingleChildScrollView(
+                      primary: false,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(sigmaX: 13, sigmaY: 13),
+                          child: Container(
+                            key: const ValueKey('work-map-glass-active-card'),
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Color(0xC00A2833), Color(0xD20B1925)],
+                              ),
+                              border: Border.all(
+                                color: const Color(0x804AE5D1),
+                                width: 1.1,
+                              ),
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const Icon(
-                                  Icons.near_me_rounded,
-                                  color: Color(0xFF77E9DF),
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.near_me_rounded,
+                                      color: Color(0xFF77E9DF),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
                                         active.status == 'en_route'
                                             ? 'En camino a recoger'
                                             : _marketplaceJobStatusLabel(
@@ -3483,147 +3480,145 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                           color: Colors.white,
                                         ),
                                       ),
-                                      Text(
-                                        active.serviceCode == 'passenger'
-                                            ? 'Servicio de pasajeros'
-                                            : 'Servicio en curso',
-                                        style: const TextStyle(
-                                          color: Color(0xFFC3D4D9),
-                                          fontSize: 11,
-                                        ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _marketplaceMoneyLabel(
+                                        active.finalPrice,
+                                        active.currency,
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _marketplaceMoneyLabel(
-                                    active.finalPrice,
-                                    active.currency,
-                                  ),
-                                  style: const TextStyle(
-                                    color: Color(0xFF58E6B3),
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Container(
-                              height: 1,
-                              color: Colors.white.withValues(alpha: .14),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.radio_button_checked_rounded,
-                                  color: Color(0xFF58E6B3),
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Recogida',
-                                        style: TextStyle(
-                                          color: Color(0xFFB4C9D2),
-                                          fontSize: 11,
-                                        ),
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF58E6B3),
                                       ),
-                                      Text(
-                                        active.originText ?? 'Recogida',
-                                        maxLines: 2,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Recogida',
+                                      style: TextStyle(
+                                        color: Color(0xFF77E9DF),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        active.originText ?? 'Sin dirección',
+                                        maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                        ),
+                                        style: const TextStyle(fontSize: 12),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.location_on_rounded,
-                                  color: Color(0xFFF37B82),
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Destino',
-                                        style: TextStyle(
-                                          color: Color(0xFFB4C9D2),
-                                          fontSize: 11,
-                                        ),
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Destino',
+                                      style: TextStyle(
+                                        color: Color(0xFFF37B82),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
                                       ),
-                                      Text(
-                                        active.destinationText ?? 'Destino',
-                                        maxLines: 2,
+                                    ),
+                                    const SizedBox(width: 15),
+                                    Expanded(
+                                      child: Text(
+                                        active.destinationText ??
+                                            'Sin dirección',
+                                        maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                        ),
+                                        style: const TextStyle(fontSize: 12),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            if (canFinish || canStart) ...[
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  key: const ValueKey('work-map-advance-job'),
-                                  onPressed: busy
-                                      ? null
-                                      : () => unawaited(_advanceJob(active)),
-                                  icon: busy
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Icon(
-                                          canFinish
-                                              ? Icons
-                                                    .check_circle_outline_rounded
-                                              : Icons.navigation_rounded,
-                                        ),
-                                  label: Text(
-                                    canFinish
-                                        ? 'Finalizar carrera'
-                                        : 'Salir hacia el cliente',
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 5),
-                            Row(
-                              children: [
-                                Expanded(
+                                Align(
+                                  alignment: Alignment.centerLeft,
                                   child: TextButton.icon(
+                                    key: const ValueKey(
+                                      'work-map-toggle-details',
+                                    ),
+                                    onPressed: () => setState(
+                                      () => _workRideDetailsExpanded =
+                                          !_workRideDetailsExpanded,
+                                    ),
+                                    icon: Icon(
+                                      _workRideDetailsExpanded
+                                          ? Icons.expand_less_rounded
+                                          : Icons.expand_more_rounded,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      _workRideDetailsExpanded
+                                          ? 'Ocultar detalles'
+                                          : 'Ver direcciones completas',
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFF98F7DE),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                ),
+                                if (_workRideDetailsExpanded) ...[
+                                  const Divider(height: 8),
+                                  Text(
+                                    'Origen: ${active.originText ?? 'No disponible'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Destino: ${active.destinationText ?? 'No disponible'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
+                                if (canFinish || canStart) ...[
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: FilledButton.icon(
+                                      key: const ValueKey(
+                                        'work-map-advance-job',
+                                      ),
+                                      onPressed: busy
+                                          ? null
+                                          : () =>
+                                                unawaited(_advanceJob(active)),
+                                      icon: busy
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : Icon(
+                                              canFinish
+                                                  ? Icons
+                                                        .check_circle_outline_rounded
+                                                  : Icons.navigation_rounded,
+                                            ),
+                                      label: Text(
+                                        canFinish
+                                            ? 'Finalizar carrera'
+                                            : 'Salir hacia el cliente',
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: OutlinedButton.icon(
                                     key: const ValueKey(
                                       'work-map-contact-customer',
                                     ),
@@ -3631,64 +3626,72 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                         ? null
                                         : () => unawaited(_contactJob(active)),
                                     icon: const Icon(
-                                      Icons.phone_rounded,
-                                      size: 18,
+                                      Icons.contact_phone_rounded,
+                                      size: 21,
                                     ),
-                                    label: const FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Text('Contactar cliente'),
+                                    label: const Text(
+                                      'Contactar cliente',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
                                     ),
-                                    style: TextButton.styleFrom(
+                                    style: OutlinedButton.styleFrom(
                                       foregroundColor: const Color(0xFF98F7DE),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 2,
+                                      side: const BorderSide(
+                                        color: Color(0xFF58E6B3),
+                                        width: 1.6,
                                       ),
                                     ),
                                   ),
                                 ),
-                                if (canCancel)
-                                  Flexible(
-                                    child: TextButton(
+                                if (_workRideDetailsExpanded && canCancel)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton.icon(
                                       key: const ValueKey(
                                         'work-map-cancel-job',
                                       ),
                                       onPressed: busy
                                           ? null
                                           : () => unawaited(_cancelJob(active)),
+                                      icon: const Icon(
+                                        Icons.cancel_outlined,
+                                        size: 18,
+                                      ),
+                                      label: const Text('Cancelar servicio'),
                                       style: TextButton.styleFrom(
                                         foregroundColor: const Color(
                                           0xFFCFDEE6,
                                         ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 3,
-                                        ),
                                       ),
-                                      child: const FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text('Cancelar servicio'),
-                                      ),
+                                    ),
+                                  ),
+                                if (!canFinish && !canStart && !canCancel)
+                                  TextButton(
+                                    onPressed: () => _openWorkPanel(0),
+                                    child: const Text(
+                                      'Ver opciones del servicio',
                                     ),
                                   ),
                               ],
                             ),
-                            if (!canFinish && !canStart && !canCancel)
-                              TextButton(
-                                onPressed: () => _openWorkPanel(0),
-                                child: const Text('Ver opciones del servicio'),
-                              ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   )
                 : _available.isNotEmpty
                 ? SizedBox(
-                    height: 264,
+                    height: (MediaQuery.sizeOf(context).height * .40).clamp(
+                      195.0,
+                      250.0,
+                    ),
                     child: ListView.builder(
                       itemCount: _available.length,
                       itemBuilder: (context, index) {
                         final job = _available[index];
                         return _AvailableJobCard(
+                          key: ValueKey('work-map-offer-${job.id}'),
                           job: job,
                           accepting: _acceptingJobId == job.id,
                           acceptanceLocked: _acceptingJobId != null,
@@ -4533,12 +4536,13 @@ class _WorkMapGlassPanel extends StatelessWidget {
   }
 }
 
-class _AvailableJobCard extends StatelessWidget {
+class _AvailableJobCard extends StatefulWidget {
   const _AvailableJobCard({
     required this.job,
     required this.accepting,
     required this.acceptanceLocked,
     required this.onAccept,
+    super.key,
   });
 
   final MarketplaceAvailableJob job;
@@ -4547,7 +4551,15 @@ class _AvailableJobCard extends StatelessWidget {
   final VoidCallback onAccept;
 
   @override
+  State<_AvailableJobCard> createState() => _AvailableJobCardState();
+}
+
+class _AvailableJobCardState extends State<_AvailableJobCard> {
+  bool _detailsExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final job = widget.job;
     final origin = job.originText?.trim().isNotEmpty == true
         ? job.originText!
         : 'Origen';
@@ -4556,8 +4568,10 @@ class _AvailableJobCard extends StatelessWidget {
         : 'Destino';
 
     return _WorkMapGlassPanel(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -4565,7 +4579,7 @@ class _AvailableJobCard extends StatelessWidget {
                 child: Text(
                   _marketplaceJobServiceLabel(job.serviceCode),
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -4574,62 +4588,49 @@ class _AvailableJobCard extends StatelessWidget {
                 _marketplaceMoneyLabel(job.finalPrice, job.currency),
                 style: TextStyle(
                   color: appPrimaryColor(context),
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.trip_origin_rounded, size: 18),
-              const SizedBox(width: 8),
-              Expanded(child: Text(origin)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.location_on_outlined, size: 18),
-              const SizedBox(width: 8),
-              Expanded(child: Text(destination)),
-            ],
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Row(
             children: [
-              const Icon(Icons.schedule_outlined, size: 18),
-              const SizedBox(width: 8),
+              const Icon(Icons.trip_origin_rounded, size: 17),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  job.scheduledFor == null
-                      ? 'Solicitud para ahora'
-                      : 'Programado: ${_marketplaceJobDateLabel(job.scheduledFor)}',
+                  origin,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          if (job.passengerCount != null) ...[
-            const SizedBox(height: 8),
-            Text('${job.passengerCount} pasajero(s)'),
-          ],
-          if (job.cargoWeightKg != null) ...[
-            const SizedBox(height: 8),
-            Text('Carga: ${job.cargoWeightKg!.toStringAsFixed(0)} kg'),
-          ],
-          if (job.requiredBodyType?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 8),
-            Text('Carrocería requerida: ${job.requiredBodyType}'),
-          ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 3),
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 17),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  destination,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
+            height: 48,
             child: FilledButton.icon(
-              onPressed: acceptanceLocked && !accepting ? null : onAccept,
-              icon: accepting
+              onPressed: widget.acceptanceLocked && !widget.accepting
+                  ? null
+                  : widget.onAccept,
+              icon: widget.accepting
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -4637,7 +4638,7 @@ class _AvailableJobCard extends StatelessWidget {
                     )
                   : const Icon(Icons.check_circle_outline),
               label: Text(
-                accepting
+                widget.accepting
                     ? 'Aceptando...'
                     : _marketplaceJobStartsNow(job)
                     ? 'Aceptar e ir a buscar'
@@ -4645,6 +4646,48 @@ class _AvailableJobCard extends StatelessWidget {
               ),
             ),
           ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: ValueKey('work-map-offer-toggle-${job.id}'),
+              onPressed: () =>
+                  setState(() => _detailsExpanded = !_detailsExpanded),
+              icon: Icon(
+                _detailsExpanded
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                size: 18,
+              ),
+              label: Text(
+                _detailsExpanded ? 'Ocultar detalles' : 'Más detalles',
+              ),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            ),
+          ),
+          if (_detailsExpanded) ...[
+            const Divider(height: 10),
+            Text('Recogida: $origin'),
+            const SizedBox(height: 6),
+            Text('Destino: $destination'),
+            const SizedBox(height: 8),
+            Text(
+              job.scheduledFor == null
+                  ? 'Solicitud para ahora'
+                  : 'Programado: ${_marketplaceJobDateLabel(job.scheduledFor)}',
+            ),
+            if (job.passengerCount != null) ...[
+              const SizedBox(height: 6),
+              Text('${job.passengerCount} pasajero(s)'),
+            ],
+            if (job.cargoWeightKg != null) ...[
+              const SizedBox(height: 6),
+              Text('Carga: ${job.cargoWeightKg!.toStringAsFixed(0)} kg'),
+            ],
+            if (job.requiredBodyType?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 6),
+              Text('Carrocería requerida: ${job.requiredBodyType}'),
+            ],
+          ],
         ],
       ),
     );
