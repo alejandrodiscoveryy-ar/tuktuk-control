@@ -10,6 +10,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'firebase_web_options.dart';
 import 'web_foreground_notification.dart';
 
+// Web only: Android conserva su canal actual hasta la fase APK autorizada.
+void configureMarketplaceWebJobAlerts(bool enabled) =>
+    setWebJobAlertEnabled(enabled);
+
+void prepareMarketplaceWebJobAlertActivation() =>
+    prepareWebJobAlertFromGesture();
+
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukWebVapidKey =

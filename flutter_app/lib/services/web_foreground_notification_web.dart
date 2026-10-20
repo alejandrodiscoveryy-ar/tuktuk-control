@@ -7,6 +7,24 @@ external void _showForegroundNotification(
   JSString? marketplaceJobId,
 );
 
+@JS('tuktukSetJobAlertEnabled')
+external void _setJobAlertEnabled(JSBoolean enabled);
+
+@JS('tuktukPrepareJobAlertFromGesture')
+external void _prepareJobAlertFromGesture();
+
+void setWebJobAlertEnabled(bool enabled) {
+  try {
+    _setJobAlertEnabled(enabled.toJS);
+  } catch (_) {}
+}
+
+void prepareWebJobAlertFromGesture() {
+  try {
+    _prepareJobAlertFromGesture();
+  } catch (_) {}
+}
+
 void showWebForegroundNotification({
   required String title,
   required String body,

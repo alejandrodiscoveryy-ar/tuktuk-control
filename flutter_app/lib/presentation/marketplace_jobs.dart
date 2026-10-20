@@ -947,6 +947,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _fetchLoad({required bool refreshHistory}) async {
     if (widget.store.user == null) {
       if (!mounted) return;
+      configureMarketplaceWebJobAlerts(false);
 
       _stopOperationalLocationSampling();
       _updateMarketplaceDriverProfileNeedsSetup(null);
@@ -1046,6 +1047,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   Future<void> _fetchAvailable() async {
     if (_active.isNotEmpty || _scheduled.isNotEmpty) {
+      configureMarketplaceWebJobAlerts(false);
       if (!mounted) return;
 
       setState(() {
@@ -1061,6 +1063,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (vehicleId == null) {
       if (!mounted) return;
+      configureMarketplaceWebJobAlerts(false);
 
       setState(() => _available = const []);
       _setMarketplaceAvailableJobCount(0);
@@ -1068,6 +1071,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     final vehicle = _vehicleById(vehicleId);
+    configureMarketplaceWebJobAlerts(
+      _vehicleReadyForWork(vehicle) &&
+          vehicle?.isAvailable == true &&
+          vehicle?.acceptingJobs == true,
+    );
 
     if (!_vehicleReadyForWork(vehicle) || vehicle?.isAvailable != true) {
       if (!mounted) return;
@@ -1293,6 +1301,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       return;
     }
 
+    // Debe ejecutarse dentro del toque del usuario: navegador permite audio.
+    if (acceptingJobs) prepareMarketplaceWebJobAlertActivation();
     setState(() => _updatingAvailability = true);
 
     try {
@@ -1312,6 +1322,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       });
 
+      configureMarketplaceWebJobAlerts(acceptingJobs);
       await _loadWorkAccess(vehicle.id);
 
       if (!mounted) return;
