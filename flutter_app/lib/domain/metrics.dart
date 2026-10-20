@@ -50,9 +50,10 @@ class Metrics {
   }
 
   double get totalDistance {
-    if (withOdometer.length < 2) return 0;
+    if (withOdometer.length < 2) return marketplaceWorkedKm;
     final values = withOdometer.map((record) => record.odometer);
-    return max(0, values.reduce(max) - values.reduce(min));
+    return max(marketplaceWorkedKm,
+        max(0.0, values.reduce(max) - values.reduce(min)));
   }
 
   double get todayEarnings {
@@ -78,11 +79,13 @@ class Metrics {
   double get currentCycleNet => currentCycleEarnings - currentCycleExpenses;
 
   double get currentCycleDistance {
-    final days = [...currentCycleRecords.where((record) => record.odometer > 0)]
+    final cycle = currentCycleRecords;
+    final worked = Metrics(cycle).marketplaceWorkedKm;
+    final days = [...cycle.where((record) => record.odometer > 0)]
       ..sort(_compareRecordsAsc);
-    if (days.length < 2) return 0;
+    if (days.length < 2) return worked;
     final values = days.map((record) => record.odometer);
-    return max(0, values.reduce(max) - values.reduce(min));
+    return max(worked, max(0.0, values.reduce(max) - values.reduce(min)));
   }
 
   double get averageDailyEarnings {

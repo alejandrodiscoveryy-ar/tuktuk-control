@@ -461,7 +461,9 @@ class _MarketplaceOnboardingScreenState
     if (_draftHydrating || !_canEdit || _data == null ||
         (field != 'name' && field != 'phone' && vehicleId == null &&
          !field.contains('photo') && !field.startsWith('identity_')) ||
-        !_validDraftField(field, value)) return;
+        !_validDraftField(field, value)) {
+      return;
+    }
     final key = '${vehicleId ?? 'driver'}:$field';
     final normalized = field == 'cargo_kg' && value is String
         ? value.replaceAll(',', '.') : value;
@@ -718,8 +720,13 @@ class _MarketplaceOnboardingScreenState
     for (var i = 0; i < 100 && _draftBusy; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 60));
     }
-    if (_draftBusy) { toast(context, 'Espera a que termine el guardado.'); return; }
+    if (!mounted) return;
+    if (_draftBusy) {
+      toast(context, 'Espera a que termine el guardado.');
+      return;
+    }
     await _flushDraftFields();
+    if (!mounted) return;
     if (_draftBusy || _draftPending.isNotEmpty) {
       toast(context, 'Hay datos pendientes de guardar. Pulsa Reintentar.');
       return;
@@ -1387,10 +1394,14 @@ class _MarketplaceOnboardingScreenState
         // Refrescar solo catálogo de assets, nunca sobreescribir campos escritos.
         final refreshed = await _service.onboarding();
         if (mounted) setState(() => _data = refreshed);
-        if (mounted) toast(context, 'Fotografía guardada correctamente.');
+        if (mounted) {
+          toast(context, 'Fotografía guardada correctamente.');
+        }
       } catch (_) {
-        if (mounted) toast(context,
-          'Fotografía pendiente de guardar. Reintenta antes de salir.');
+        if (mounted) {
+          toast(context,
+              'Fotografía pendiente de guardar. Reintenta antes de salir.');
+        }
       }
     } on FormatException catch (error) {
       if (mounted) {
@@ -1553,8 +1564,9 @@ class _MarketplaceOnboardingScreenState
         });
         toast(context, 'Documento privado guardado.');
       } catch (_) {
-        if (mounted) toast(context,
-          'Foto pendiente de guardar. Reintenta antes de salir.');
+        if (mounted) {
+          toast(context, 'Foto pendiente de guardar. Reintenta antes de salir.');
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -3184,8 +3196,10 @@ class _MarketplaceOnboardingScreenState
                                           _passengers.clear();
                                         }
                                         _selectedCategory = value;
-                                        if (value != null) _queueDraftField('category', value,
-                                          vehicleId: _selectedVehicleId);
+                                        if (value != null) {
+                                          _queueDraftField('category', value,
+                                              vehicleId: _selectedVehicleId);
+                                        }
                                       })
                                   : null,
                             ),
@@ -3229,8 +3243,10 @@ class _MarketplaceOnboardingScreenState
                                 ? (value) => setState(
                                       () {
                                         _selectedPropulsion = value;
-                                        if (value != null) _queueDraftField('propulsion', value,
-                                          vehicleId: _selectedVehicleId);
+                                        if (value != null) {
+                                          _queueDraftField('propulsion', value,
+                                              vehicleId: _selectedVehicleId);
+                                        }
                                       },
                                     )
                                 : null,

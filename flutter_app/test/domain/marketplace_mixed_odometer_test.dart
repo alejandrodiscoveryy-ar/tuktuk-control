@@ -12,6 +12,25 @@ DailyRecord job(String id, int day, double km, {double earnings = 100}) => Daily
 );
 
 void main() {
+  test('ciclo incluye carreras cuando no hay lectura inicial', () {
+    final now = DateTime.now();
+    final first = DailyRecord(
+      id: 'marketplace-job-current-a',
+      date: now,
+      earnings: 200,
+      odometer: 20,
+      marketplaceDistanceKm: 20,
+    );
+    final second = DailyRecord(
+      id: 'marketplace-job-current-b',
+      date: now,
+      earnings: 300,
+      odometer: 30,
+      marketplaceDistanceKm: 10,
+    );
+    expect(Metrics([first, second]).currentCycleDistance, 30);
+  });
+
   test('sin ancla provisional cero; con ancla retroactiva se reajusta', () {
     final a = job('a', 2, 20, earnings: 2000);
     final b = job('b', 4, 10, earnings: 1000);
@@ -19,6 +38,7 @@ void main() {
       a.id: 20, b.id: 30,
     });
     expect(Metrics([a, b]).marketplaceWorkedKm, 30);
+    expect(Metrics([a, b]).totalDistance, 30);
     expect(marketplaceRebasedOdometers([b, manual('m', 1, 500), a]), {
       a.id: 520, b.id: 530,
     });

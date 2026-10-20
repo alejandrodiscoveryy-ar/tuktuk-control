@@ -1712,7 +1712,9 @@ class RecordStore extends ChangeNotifier {
       final current = DailyRecord.fromMap(raw);
       if (current.userId != ownerId || current.vehicleId != vehicleId ||
           current.isDeleted || !current.isMarketplaceJobIncome ||
-          (current.odometer - entry.value).abs() < 0.000001) continue;
+          (current.odometer - entry.value).abs() < 0.000001) {
+        continue;
+      }
       final fixed = current.withMarketplaceValues(derivedOdometer: entry.value)
           .withSyncInfo(
             deviceId: deviceId,
