@@ -16,18 +16,21 @@ class _Store extends Fake implements RecordStore {
   String? marketplaceIncomeReconciliationError;
 
   @override
-  Future<void> reconcileMarketplaceJob(MarketplaceJob job,
-      {double? distanceKm}) async {
+  Future<void> reconcileMarketplaceJob(
+    MarketplaceJob job, {
+    double? distanceKm,
+  }) async {
     if (job.status != 'settled' ||
         job.isTest != false ||
         job.vehicleId == null) {
       return;
     }
     await ensureMarketplaceJobIncome(
-        jobId: job.id,
-        amount: job.finalPrice,
-        vehicleId: job.vehicleId,
-        completedAt: job.completedAt);
+      jobId: job.id,
+      amount: job.finalPrice,
+      vehicleId: job.vehicleId,
+      completedAt: job.completedAt,
+    );
   }
 
   @override
@@ -45,12 +48,12 @@ class _Store extends Fake implements RecordStore {
 
   @override
   User? get user => const User(
-        id: 'driver-test',
-        appMetadata: {},
-        userMetadata: {},
-        aud: 'authenticated',
-        createdAt: '2026-01-01',
-      );
+    id: 'driver-test',
+    appMetadata: {},
+    userMetadata: {},
+    aud: 'authenticated',
+    createdAt: '2026-01-01',
+  );
 
   @override
   VehicleProfile? get activeVehicle => null;
@@ -136,8 +139,8 @@ class _JobsService extends MarketplaceService {
     return scope == 'active'
         ? active
         : scope == 'history'
-            ? history
-            : [];
+        ? history
+        : [];
   }
 
   @override
@@ -148,8 +151,10 @@ class _JobsService extends MarketplaceService {
   }
 
   @override
-  Future<List<MarketplaceJob>> jobsPage(String scope,
-      {MarketplaceJob? before}) async {
+  Future<List<MarketplaceJob>> jobsPage(
+    String scope, {
+    MarketplaceJob? before,
+  }) async {
     visualPageCalls++;
     lastHistoryCursor = before?.id;
     return [
@@ -160,7 +165,7 @@ class _JobsService extends MarketplaceService {
         'final_price': 100,
         'origin_text': 'Origen antiguo visible',
         'created_at': '2026-09-01T00:00:00Z',
-      })
+      }),
     ];
   }
 
@@ -208,10 +213,7 @@ class _JobsService extends MarketplaceService {
   }
 
   @override
-  Future<MarketplaceJob> finishJob(
-    String jobId,
-    String idempotencyKey,
-  ) async {
+  Future<MarketplaceJob> finishJob(String jobId, String idempotencyKey) async {
     finishCalls++;
     return MarketplaceJob.fromMap({
       'job_id': jobId,
@@ -226,8 +228,8 @@ class _JobsService extends MarketplaceService {
   @override
   Future<MarketplaceDriverCustomerRating?> customerRating(String jobId) async =>
       ratedJobs.contains(jobId)
-          ? MarketplaceDriverCustomerRating(jobId: jobId, stars: 5)
-          : null;
+      ? MarketplaceDriverCustomerRating(jobId: jobId, stars: 5)
+      : null;
 
   @override
   Future<MarketplaceDriverCustomerRating> rateCustomer({
@@ -241,10 +243,16 @@ class _JobsService extends MarketplaceService {
     if (failRating) throw const SocketException('offline');
     ratedJobs.add(jobId);
     if (!history.any((job) => job.id == jobId)) {
-      history = [...history, MarketplaceJob.fromMap({
-        'job_id': jobId, 'status': 'settled', 'is_test': false,
-        'assigned_vehicle_id': 'assigned-vehicle', 'final_price': 100,
-      })];
+      history = [
+        ...history,
+        MarketplaceJob.fromMap({
+          'job_id': jobId,
+          'status': 'settled',
+          'is_test': false,
+          'assigned_vehicle_id': 'assigned-vehicle',
+          'final_price': 100,
+        }),
+      ];
     }
     active = active.where((job) => job.id != jobId).toList();
     return MarketplaceDriverCustomerRating(jobId: jobId, stars: stars);
@@ -278,8 +286,10 @@ class _PagedService extends MarketplaceService {
   _PagedService() : super(Supabase.instance.client);
   final cursors = <MarketplaceJob?>[];
   @override
-  Future<List<MarketplaceJob>> jobsPage(String scope,
-      {MarketplaceJob? before}) async {
+  Future<List<MarketplaceJob>> jobsPage(
+    String scope, {
+    MarketplaceJob? before,
+  }) async {
     cursors.add(before);
     if (before != null) {
       return [
@@ -290,19 +300,20 @@ class _PagedService extends MarketplaceService {
           'vehicle_id': 'older-vehicle',
           'final_price': 123,
           'created_at': '2026-09-01T00:00:00Z',
-        })
+        }),
       ];
     }
     return List.generate(
-        50,
-        (index) => MarketplaceJob.fromMap({
-              'job_id': 'page-$index',
-              'status': 'settled',
-              'is_test': false,
-              'vehicle_id': 'vehicle-test',
-              'final_price': 100,
-              'created_at': '2026-10-08T00:00:00Z',
-            }));
+      50,
+      (index) => MarketplaceJob.fromMap({
+        'job_id': 'page-$index',
+        'status': 'settled',
+        'is_test': false,
+        'vehicle_id': 'vehicle-test',
+        'final_price': 100,
+        'created_at': '2026-10-08T00:00:00Z',
+      }),
+    );
   }
 }
 
@@ -314,9 +325,9 @@ void main() {
   setUpAll(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/shared_preferences'),
-      (call) async => call.method == 'getAll' ? <String, dynamic>{} : true,
-    );
+          const MethodChannel('plugins.flutter.io/shared_preferences'),
+          (call) async => call.method == 'getAll' ? <String, dynamic>{} : true,
+        );
     await initializeDateFormatting('es');
     await Supabase.initialize(
       url: 'http://127.0.0.1:54321',
@@ -345,23 +356,23 @@ void main() {
   }
 
   Future<void> open(WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: MarketplaceJobsScreen(store: store, service: service),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarketplaceJobsScreen(store: store, service: service),
+        ),
       ),
-    ));
+    );
     await pumpJobs(tester);
   }
 
   void notify() => handleForegroundPushData({
-        'kind': 'marketplace_job_available',
-        'job_id': offer.id,
-      });
+    'kind': 'marketplace_job_available',
+    'job_id': offer.id,
+  });
 
-  Future<void> openWorkPanel(
-      WidgetTester tester, String title) async {
-    await tester.tap(
-        find.byKey(const ValueKey('work-map-open-menu')));
+  Future<void> openWorkPanel(WidgetTester tester, String title) async {
+    await tester.tap(find.byKey(const ValueKey('work-map-open-menu')));
     await tester.pump();
     final item = find.text(title);
     await tester.ensureVisible(item);
@@ -376,29 +387,35 @@ void main() {
     expect(paged.cursors.length, 1);
   });
 
-  testWidgets('older visual history loads one page only when requested',
-      (tester) async {
+  testWidgets('older visual history loads one page only when requested', (
+    tester,
+  ) async {
     service.history = List.generate(
-        50,
-        (index) => MarketplaceJob.fromMap({
-              'job_id': 'visible-${index.toString().padLeft(2, '0')}',
-              'status': 'settled',
-              'is_test': false,
-              'final_price': 100,
-              'created_at': '2026-10-08T00:00:00Z',
-            }));
+      50,
+      (index) => MarketplaceJob.fromMap({
+        'job_id': 'visible-${index.toString().padLeft(2, '0')}',
+        'status': 'settled',
+        'is_test': false,
+        'final_price': 100,
+        'created_at': '2026-10-08T00:00:00Z',
+      }),
+    );
     await open(tester);
     await openWorkPanel(tester, 'Historial');
     await pumpJobs(tester);
     expect(service.visualPageCalls, 0);
     final more = find.byKey(const ValueKey('marketplace-history-more'));
-    await tester.scrollUntilVisible(more, 1000,
-        scrollable: find
-            .descendant(
-                of: find.byType(RefreshIndicator).last,
-                matching: find.byType(Scrollable))
-            .first,
-        maxScrolls: 60);
+    await tester.scrollUntilVisible(
+      more,
+      1000,
+      scrollable: find
+          .descendant(
+            of: find.byType(RefreshIndicator).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+      maxScrolls: 60,
+    );
     final incomeCalls = service.incomePageCalls;
     await tester.tap(more);
     await pumpJobs(tester);
@@ -411,89 +428,93 @@ void main() {
 
   for (final actor in ['customer', 'admin']) {
     testWidgets(
-        '$actor settlement reconciles on reconnect with assigned vehicle',
-        (tester) async {
-      await open(tester);
-      service.failActive = true;
-      notify();
-      await pumpJobs(tester);
-      expect(store.incomes, isEmpty);
-      service.failActive = false;
-      service.history = [
-        MarketplaceJob.fromMap({
-          'job_id': offer.id,
-          'status': 'settled',
-          'is_test': false,
-          'vehicle_id': 'historical-vehicle',
-          'final_price': 100,
-          'completed_at': '2026-10-08T12:00:00Z',
-        })
-      ];
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await pumpJobs(tester);
-      expect(store.incomes[offer.id], 'historical-vehicle');
-      notify();
-      await pumpJobs(tester);
-      expect(store.incomes.length, 1);
-    });
+      '$actor settlement reconciles on reconnect with assigned vehicle',
+      (tester) async {
+        await open(tester);
+        service.failActive = true;
+        notify();
+        await pumpJobs(tester);
+        expect(store.incomes, isEmpty);
+        service.failActive = false;
+        service.history = [
+          MarketplaceJob.fromMap({
+            'job_id': offer.id,
+            'status': 'settled',
+            'is_test': false,
+            'vehicle_id': 'historical-vehicle',
+            'final_price': 100,
+            'completed_at': '2026-10-08T12:00:00Z',
+          }),
+        ];
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await pumpJobs(tester);
+        expect(store.incomes[offer.id], 'historical-vehicle');
+        notify();
+        await pumpJobs(tester);
+        expect(store.incomes.length, 1);
+      },
+    );
   }
 
-  testWidgets('unsettled or unassigned history does not invent income',
-      (tester) async {
+  testWidgets('unsettled or unassigned history does not invent income', (
+    tester,
+  ) async {
     service.history = [
       MarketplaceJob.fromMap({
         'job_id': 'pending',
         'status': 'completed',
         'vehicle_id': 'vehicle-test',
-        'final_price': 100
+        'final_price': 100,
       }),
       MarketplaceJob.fromMap({
         'job_id': 'missing-vehicle',
         'status': 'settled',
         'is_test': false,
-        'final_price': 100
+        'final_price': 100,
       }),
     ];
     await open(tester);
     expect(store.incomeCalls, 0);
   });
 
-  testWidgets('income errors do not block visual jobs or offers',
-      (tester) async {
+  testWidgets('income errors do not block visual jobs or offers', (
+    tester,
+  ) async {
     service.failIncome = true;
     await open(tester);
     expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
-    await tester.tap(
-        find.byKey(const ValueKey('work-map-open-menu')));
+    await tester.tap(find.byKey(const ValueKey('work-map-open-menu')));
     await tester.pump();
     expect(
-        find.byKey(const ValueKey('marketplace-income-error')),
-        findsOneWidget);
+      find.byKey(const ValueKey('marketplace-income-error')),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Historial'));
     await pumpJobs(tester);
     expect(find.text('Tu historial está vacío'), findsOneWidget);
     service.failIncome = false;
     notify();
     await pumpJobs(tester);
-    expect(
-        find.byKey(const ValueKey('tuktuk-work-map-home')),
-        findsOneWidget);
-    await tester.tap(
-        find.byKey(const ValueKey('work-map-open-menu')));
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('work-map-open-menu')));
     await tester.pump();
     expect(
-        find.byKey(const ValueKey('marketplace-income-error')),
-        findsNothing);
+      find.byKey(const ValueKey('marketplace-income-error')),
+      findsNothing,
+    );
   });
 
-  testWidgets('abandoning the direct rating never closes or records income',
-      (tester) async {
+  testWidgets('abandoning the direct rating never closes or records income', (
+    tester,
+  ) async {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
         'status': 'en_route',
         'final_price': 100,
-      })
+      }),
     ];
     await open(tester);
     expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
@@ -525,8 +546,9 @@ void main() {
               'onboarding_complete': vehicleComplete,
               'is_active': vehicleComplete,
               'is_available': vehicleComplete,
-              'main_photo_asset_id':
-                  vehicleComplete ? 'vehicle-photo-test' : null,
+              'main_photo_asset_id': vehicleComplete
+                  ? 'vehicle-photo-test'
+                  : null,
             },
           ],
         });
@@ -545,15 +567,11 @@ void main() {
       isTrue,
     );
     expect(
-      marketplaceDriverOnboardingNeedsSetup(
-        onboarding(vehicleComplete: false),
-      ),
+      marketplaceDriverOnboardingNeedsSetup(onboarding(vehicleComplete: false)),
       isTrue,
     );
     expect(
-      marketplaceDriverOnboardingNeedsSetup(
-        onboarding(vehicleComplete: true),
-      ),
+      marketplaceDriverOnboardingNeedsSetup(onboarding(vehicleComplete: true)),
       isFalse,
     );
   });
@@ -562,43 +580,58 @@ void main() {
       marketplaceAcceptErrorMessage('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE'),
       'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.',
     );
-    expect(marketplaceAcceptErrorMessage('DRIVER_PROFILE_INCOMPLETE'),
-        contains('Completa tu perfil'));
-    expect(marketplaceAcceptErrorMessage('network error'),
-        contains('Comprueba tu conexión'));
+    expect(
+      marketplaceAcceptErrorMessage('DRIVER_PROFILE_INCOMPLETE'),
+      contains('Completa tu perfil'),
+    );
+    expect(
+      marketplaceAcceptErrorMessage('network error'),
+      contains('Comprueba tu conexión'),
+    );
   });
 
   testWidgets(
-      'availability card keeps the switch at the top right and shows active state',
-      (tester) async {
-    await open(tester);
+    'availability card keeps the switch at the top right and shows active state',
+    (tester) async {
+      await open(tester);
 
-    expect(
+      expect(
         find.byKey(const ValueKey('tuktuk-work-map-home')),
-        findsOneWidget);
-    expect(find.text('TRABAJANDO'), findsOneWidget);
+        findsOneWidget,
+      );
+      expect(find.text('TRABAJANDO'), findsOneWidget);
 
-    final availabilitySwitch =
-        find.byKey(const ValueKey('work-map-availability-toggle'));
-    final menu = find.byKey(const ValueKey('work-map-open-menu'));
+      final availabilitySwitch = find.byKey(
+        const ValueKey('work-map-availability-toggle'),
+      );
+      final menu = find.byKey(const ValueKey('work-map-open-menu'));
 
-    expect(availabilitySwitch, findsOneWidget);
-    expect(menu, findsOneWidget);
-    expect(tester.getSize(availabilitySwitch).width,
-        greaterThanOrEqualTo(110));
-    expect(tester.getSize(availabilitySwitch).height,
-        greaterThanOrEqualTo(56));
+      expect(availabilitySwitch, findsOneWidget);
+      expect(menu, findsOneWidget);
+      expect(
+        tester.getSize(availabilitySwitch).width,
+        greaterThanOrEqualTo(110),
+      );
+      expect(
+        tester.getSize(availabilitySwitch).height,
+        greaterThanOrEqualTo(56),
+      );
 
-    expect(tester.getTopLeft(availabilitySwitch).dx,
-        greaterThan(tester.getTopLeft(menu).dx));
-    expect(
-        (tester.getTopLeft(availabilitySwitch).dy -
-                tester.getTopLeft(menu).dy).abs(),
-        lessThan(30));
-  });
+      expect(
+        tester.getTopLeft(availabilitySwitch).dx,
+        greaterThan(tester.getTopLeft(menu).dx),
+      );
+      expect(
+        (tester.getTopLeft(availabilitySwitch).dy - tester.getTopLeft(menu).dy)
+            .abs(),
+        lessThan(30),
+      );
+    },
+  );
 
-  testWidgets('immediate acceptance starts route automatically',
-      (tester) async {
+  testWidgets('immediate acceptance starts route automatically', (
+    tester,
+  ) async {
     service.successfulAccept = true;
     await open(tester);
 
@@ -611,8 +644,9 @@ void main() {
     expect(service.advanceCalls, 0);
   });
 
-  testWidgets('future scheduled acceptance does not start route',
-      (tester) async {
+  testWidgets('future scheduled acceptance does not start route', (
+    tester,
+  ) async {
     service.successfulAccept = true;
     service.availableJobs = [
       MarketplaceAvailableJob(
@@ -634,49 +668,58 @@ void main() {
     expect(service.advanceCalls, 0);
   });
 
-  testWidgets('availability card shows a distinct resting state',
-      (tester) async {
+  testWidgets('availability card shows a distinct resting state', (
+    tester,
+  ) async {
     service.acceptingJobs = false;
     await open(tester);
 
     expect(find.text('DESCANSANDO'), findsOneWidget);
+    expect(find.text('Toca para trabajar'), findsOneWidget);
     expect(
-        find.text('Toca para trabajar'),
-        findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('work-map-availability-toggle')),
-        findsOneWidget);
+      find.byKey(const ValueKey('work-map-availability-toggle')),
+      findsOneWidget,
+    );
     expect(find.text('Esperando solicitudes'), findsNothing);
     expect(find.text('Activa Trabajar para recibir solicitudes'), findsNothing);
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
-  testWidgets('active ride is managed from main map without additional milestones',
-      (tester) async {
-    service.active = [
-      MarketplaceJob.fromMap({
-        'job_id': offer.id,
-        'status': 'en_route',
-        'next_driver_action': 'mark_pickup',
-        'service_code': 'passenger',
-        'origin_text': 'Origen de prueba',
-        'destination_text': 'Destino de prueba',
-        'final_price': 100,
-        'currency': 'CUP',
-      }),
-    ];
+  testWidgets(
+    'active ride is managed from main map without additional milestones',
+    (tester) async {
+      service.active = [
+        MarketplaceJob.fromMap({
+          'job_id': offer.id,
+          'status': 'en_route',
+          'next_driver_action': 'mark_pickup',
+          'service_code': 'passenger',
+          'origin_text': 'Origen de prueba',
+          'destination_text': 'Destino de prueba',
+          'final_price': 100,
+          'currency': 'CUP',
+        }),
+      ];
 
-    await open(tester);
-    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
+      await open(tester);
+      expect(
+        find.byKey(const ValueKey('tuktuk-work-map-home')),
+        findsOneWidget,
+      );
 
-    expect(find.text('En camino a recoger'), findsOneWidget);
-    expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
-    expect(find.text('Aceptado'), findsNothing);
-    expect(find.text('Recogida'), findsOneWidget);
-    expect(find.text('Finalizar carrera'), findsOneWidget);
-  });
+      expect(find.text('En camino a recoger'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('work-map-advance-job')),
+        findsOneWidget,
+      );
+      expect(find.text('Aceptado'), findsNothing);
+      expect(find.text('Recogida'), findsOneWidget);
+      expect(find.text('Finalizar carrera'), findsOneWidget);
+    },
+  );
 
-  testWidgets('legacy pickup remains finishable without extra visual steps',
-      (tester) async {
+  testWidgets('legacy pickup remains finishable without extra visual steps', (
+    tester,
+  ) async {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
@@ -699,8 +742,9 @@ void main() {
     expect(find.text('Finalizar carrera'), findsOneWidget);
   });
 
-  testWidgets('ongoing ride finishes without intermediate steps',
-      (tester) async {
+  testWidgets('ongoing ride finishes without intermediate steps', (
+    tester,
+  ) async {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
@@ -738,36 +782,53 @@ void main() {
     expect(store.incomes[offer.id], 'assigned-vehicle');
     expect(service.advanceCalls, 0);
   });
-  testWidgets('offline rating retries the same payload without standalone finish', (tester) async {
-    service.active = [MarketplaceJob.fromMap({
-      'job_id': offer.id, 'status': 'en_route', 'final_price': 100,
-    })];
-    service.failRating = true;
-    await open(tester);
-    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
-    await tester.tap(find.text('Finalizar carrera'));
-    await pumpJobs(tester);
-    await tester.tap(find.byTooltip('5 estrellas'));
-    await tester.ensureVisible(find.text('Enviar evaluación'));
-    await tester.tap(find.text('Enviar evaluación'));
-    await pumpJobs(tester);
-    expect(store.incomes, isEmpty);
-    expect(service.active.single.status, 'en_route');
-    service.failRating = false;
-    await tester.tap(find.text('Enviar evaluación'));
-    await pumpJobs(tester);
-    expect(service.ratingKeys.toSet(), hasLength(1));
-    expect(service.ratingCalls, 2);
-    expect(service.finishCalls, 0);
-    expect(store.incomes, {offer.id: 'assigned-vehicle'});
-  });
+  testWidgets(
+    'offline rating retries the same payload without standalone finish',
+    (tester) async {
+      service.active = [
+        MarketplaceJob.fromMap({
+          'job_id': offer.id,
+          'status': 'en_route',
+          'final_price': 100,
+        }),
+      ];
+      service.failRating = true;
+      await open(tester);
+      expect(
+        find.byKey(const ValueKey('tuktuk-work-map-home')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Finalizar carrera'));
+      await pumpJobs(tester);
+      await tester.tap(find.byTooltip('5 estrellas'));
+      await tester.ensureVisible(find.text('Enviar evaluación'));
+      await tester.tap(find.text('Enviar evaluación'));
+      await pumpJobs(tester);
+      expect(store.incomes, isEmpty);
+      expect(service.active.single.status, 'en_route');
+      service.failRating = false;
+      await tester.tap(find.text('Enviar evaluación'));
+      await pumpJobs(tester);
+      expect(service.ratingKeys.toSet(), hasLength(1));
+      expect(service.ratingCalls, 2);
+      expect(service.finishCalls, 0);
+      expect(store.incomes, {offer.id: 'assigned-vehicle'});
+    },
+  );
 
   for (final actor in ['customer', 'admin']) {
-    testWidgets('pending driver rating from history after $actor closure', (tester) async {
-      service.history = [MarketplaceJob.fromMap({
-        'job_id': offer.id, 'status': 'settled', 'is_test': false,
-        'assigned_vehicle_id': 'assigned-vehicle', 'final_price': 100,
-      })];
+    testWidgets('pending driver rating from history after $actor closure', (
+      tester,
+    ) async {
+      service.history = [
+        MarketplaceJob.fromMap({
+          'job_id': offer.id,
+          'status': 'settled',
+          'is_test': false,
+          'assigned_vehicle_id': 'assigned-vehicle',
+          'final_price': 100,
+        }),
+      ];
       await open(tester);
       await openWorkPanel(tester, 'Historial');
       await pumpJobs(tester);
@@ -786,8 +847,9 @@ void main() {
     });
   }
 
-  testWidgets('advance button is unique on main map below route',
-      (tester) async {
+  testWidgets('advance button is unique on main map below route', (
+    tester,
+  ) async {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
@@ -809,81 +871,91 @@ void main() {
     expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
     final routeText = find.textContaining('Origen de prueba');
     expect(routeText, findsOneWidget);
-    expect(tester.getTopLeft(action).dy,
-        greaterThan(tester.getTopLeft(routeText).dy));
-  });
-
-  testWidgets(
-      'foreground refresh coalesces pushes and clears stale offers on error',
-      (tester) async {
-    await open(tester);
-    expect(service.availableCalls, 1);
-    expect(service.historyCalls, 1);
-    service.pending = Completer<List<MarketplaceAvailableJob>>();
-    notify();
-    await tester.pump();
-    expect(marketplaceJobPushPending.value, isTrue);
-    expect(service.availableCalls, 2);
-    notify();
-    notify();
-    await tester.pump();
-    expect(service.availableCalls, 2);
-    service.failAvailable = true;
-    service.pending!.complete([offer]);
-    await pumpJobs(tester);
-    expect(service.availableCalls, 3);
-    expect(service.historyCalls, 3);
-    expect(marketplaceJobPushPending.value, isFalse);
-    expect(find.text('Aceptar e ir a buscar'), findsNothing);
-    expect(find.textContaining('No pudimos actualizar los trabajos'),
-        findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-    final calls = service.availableCalls;
-    notify();
-    await tester.pump();
-    expect(service.availableCalls, calls);
-  });
-
-  testWidgets(
-      'resume rechecks offers and acceptance shows insufficient balance',
-      (tester) async {
-    await open(tester);
-    for (final state in [
-      AppLifecycleState.inactive,
-      AppLifecycleState.hidden,
-      AppLifecycleState.paused,
-      AppLifecycleState.hidden,
-      AppLifecycleState.inactive,
-      AppLifecycleState.resumed,
-    ]) {
-      tester.binding.handleAppLifecycleStateChanged(state);
-    }
-    await pumpJobs(tester);
-    expect(service.availableCalls, 2);
-    expect(service.historyCalls, 2);
-    await tester.ensureVisible(find.text('Aceptar e ir a buscar'));
-    await tester.tap(find.text('Aceptar e ir a buscar'));
-    await pumpJobs(tester);
     expect(
-        find.text(
-            'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.'),
-        findsOneWidget);
+      tester.getTopLeft(action).dy,
+      greaterThan(tester.getTopLeft(routeText).dy),
+    );
   });
 
   testWidgets(
-      'unverified active jobs clear offers without querying availability',
-      (tester) async {
-    await open(tester);
-    service.failActive = true;
-    notify();
-    await pumpJobs(tester);
-    expect(service.availableCalls, 1);
-    expect(marketplaceJobPushPending.value, isFalse);
-    expect(find.text('Aceptar e ir a buscar'), findsNothing);
-  });
+    'foreground refresh coalesces pushes and clears stale offers on error',
+    (tester) async {
+      await open(tester);
+      expect(service.availableCalls, 1);
+      expect(service.historyCalls, 1);
+      service.pending = Completer<List<MarketplaceAvailableJob>>();
+      notify();
+      await tester.pump();
+      expect(marketplaceJobPushPending.value, isTrue);
+      expect(service.availableCalls, 2);
+      notify();
+      notify();
+      await tester.pump();
+      expect(service.availableCalls, 2);
+      service.failAvailable = true;
+      service.pending!.complete([offer]);
+      await pumpJobs(tester);
+      expect(service.availableCalls, 3);
+      expect(service.historyCalls, 3);
+      expect(marketplaceJobPushPending.value, isFalse);
+      expect(find.text('Aceptar e ir a buscar'), findsNothing);
+      expect(
+        find.textContaining('No pudimos actualizar los trabajos'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+      final calls = service.availableCalls;
+      notify();
+      await tester.pump();
+      expect(service.availableCalls, calls);
+    },
+  );
 
-  testWidgets('resting vehicle remains ineligible after a push',
-      (tester) async {
+  testWidgets(
+    'resume rechecks offers and acceptance shows insufficient balance',
+    (tester) async {
+      await open(tester);
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await pumpJobs(tester);
+      expect(service.availableCalls, 2);
+      expect(service.historyCalls, 2);
+      await tester.ensureVisible(find.text('Aceptar e ir a buscar'));
+      await tester.tap(find.text('Aceptar e ir a buscar'));
+      await pumpJobs(tester);
+      expect(
+        find.text(
+          'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'unverified active jobs clear offers without querying availability',
+    (tester) async {
+      await open(tester);
+      service.failActive = true;
+      notify();
+      await pumpJobs(tester);
+      expect(service.availableCalls, 1);
+      expect(marketplaceJobPushPending.value, isFalse);
+      expect(find.text('Aceptar e ir a buscar'), findsNothing);
+    },
+  );
+
+  testWidgets('resting vehicle remains ineligible after a push', (
+    tester,
+  ) async {
     service.acceptingJobs = false;
     await open(tester);
     notify();
@@ -893,8 +965,9 @@ void main() {
     expect(find.text('Aceptar e ir a buscar'), findsNothing);
   });
 
-  testWidgets('incoming push returns from history to the work map',
-      (tester) async {
+  testWidgets('incoming push returns from history to the work map', (
+    tester,
+  ) async {
     await open(tester);
     await openWorkPanel(tester, 'Historial');
     expect(find.text('Tu historial está vacío'), findsOneWidget);
@@ -902,14 +975,13 @@ void main() {
     notify();
     await pumpJobs(tester);
 
-    expect(
-        find.byKey(const ValueKey('tuktuk-work-map-home')),
-        findsOneWidget);
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
     expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
   });
 
-  testWidgets('hidden Jobs refreshes without building maps or navigating',
-      (tester) async {
+  testWidgets('hidden Jobs refreshes without building maps or navigating', (
+    tester,
+  ) async {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
@@ -919,18 +991,24 @@ void main() {
         'origin_lon': -82.4,
         'destination_lat': 23.2,
         'destination_lon': -82.5,
-      })
+      }),
     ];
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(
+      MaterialApp(
         home: Scaffold(
-            body: Stack(children: [
-      MarketplaceJobsScreen(
-        store: _Store(),
-        service: service,
-        isVisible: false,
+          body: Stack(
+            children: [
+              MarketplaceJobsScreen(
+                store: _Store(),
+                service: service,
+                isVisible: false,
+              ),
+              const Text('Otra sección'),
+            ],
+          ),
+        ),
       ),
-      const Text('Otra sección'),
-    ]))));
+    );
     await pumpJobs(tester);
     notify();
     await pumpJobs(tester);
@@ -939,5 +1017,58 @@ void main() {
     expect(find.byType(TabBar), findsNothing);
     expect(service.historyCalls, 2);
     expect(service.availableCalls, 0);
+  });
+  testWidgets('telefono pequeno: contacto visible y detalles plegables', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'en_route',
+        'next_driver_action': 'mark_pickup',
+        'origin_text': '97 Conuco, Diez de Octubre, La Habana',
+        'destination_text': 'Cadiz, El Cerro, La Habana',
+        'final_price': 2000,
+        'currency': 'CUP',
+      }),
+    ];
+    await open(tester);
+    expect(
+      find.byKey(const ValueKey('work-map-contact-customer')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
+    expect(find.text('Recogida'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('work-map-toggle-details')),
+    );
+    await tester.tap(find.byKey(const ValueKey('work-map-toggle-details')));
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('work-map-cancel-job')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('solicitud plegable conserva accion de aceptar', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await open(tester);
+    expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
+    final toggle = find.byKey(ValueKey('work-map-offer-toggle-${offer.id}'));
+    expect(toggle, findsOneWidget);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await pumpJobs(tester);
+    expect(find.text('Solicitud para ahora'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
