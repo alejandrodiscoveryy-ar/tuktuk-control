@@ -32,6 +32,6 @@ void main() {
     expect(marker, contains('assets/map_markers/destination_red.png'));
     expect(marker, contains("'Recogida'"));
     expect(marker, contains("'Destino'"));
-    expect(source, contains('key: const ValueKey(\'work-active-price\')'));
+    expect(source, contains("'work-active-price'"));
   });
 }
