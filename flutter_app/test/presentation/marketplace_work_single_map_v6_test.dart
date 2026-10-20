@@ -25,7 +25,8 @@ void main() {
     final start = jobs.indexOf('Future<void> _advanceJob(MarketplaceJob job)');
     final end = jobs.indexOf('Future<void> _cancelJob(MarketplaceJob job)', start);
     final advance = jobs.substring(start, end);
-    expect(advance, contains('await _showCustomerRatingSurvey(job.id)'));
+    expect(advance, contains('await _showCustomerRatingSurvey(job.id,'));
+    expect(advance, contains('forFinishing: true'));
     expect(advance, contains('await _refreshAfterJobMutation()'));
     expect(advance, contains('_active.isEmpty && _workPanelIndex == 0'));
     expect(advance, contains('_refreshIncome()'));
