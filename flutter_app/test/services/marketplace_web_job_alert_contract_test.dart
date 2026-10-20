@@ -33,6 +33,6 @@ void main() {
     expect(worker, contains('requireInteraction: isJob'));
     expect(worker, contains('renotify: isJob'));
     expect(worker, contains('vibrate: isJob ? [250, 100, 250]'));
-    expect(worker, contains("event.notification.close()"));
+    expect(worker, contains('event.notification.close()'));
   });
 }
