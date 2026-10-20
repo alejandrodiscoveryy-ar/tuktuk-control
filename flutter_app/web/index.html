@@ -51,35 +51,47 @@
 
       window.tuktukSetJobAlertEnabled = function (enabled) {
         jobAlertEnabled = enabled === true;
-        if (jobAlertEnabled) preloadJobSound();
+        if (jobAlertEnabled) { unlockSound(); preloadJobSound(); }
       };
 
       // TambiÃ©n desbloquea el audio si el conductor ya estaba trabajando al entrar.
       document.addEventListener('pointerdown', function () {
-        if (jobAlertEnabled) unlockSound();
+        if (jobAlertEnabled) { unlockSound(); preloadJobSound(); }
       }, {capture: true, passive: true});
       document.addEventListener('keydown', function () {
-        if (jobAlertEnabled) unlockSound();
+        if (jobAlertEnabled) { unlockSound(); preloadJobSound(); }
       }, {capture: true});
 
       var jobAudioBuffer = null;
       var jobAudioLoading = null;
       function preloadJobSound() {
-        if (jobAudioBuffer || jobAudioLoading || !audioContext) return;
+        if (jobAudioBuffer) return Promise.resolve(jobAudioBuffer);
+        if (jobAudioLoading) return jobAudioLoading;
+        if (!audioContext) return Promise.resolve(null);
         jobAudioLoading = fetch('sounds/tuktuk_nueva_carrera.mp3')
           .then(function (response) {
             if (!response.ok) throw new Error('Sound unavailable');
             return response.arrayBuffer();
           })
           .then(function (bytes) { return audioContext.decodeAudioData(bytes); })
-          .then(function (buffer) { jobAudioBuffer = buffer; })
-          .catch(function () { jobAudioLoading = null; });
+          .then(function (buffer) { jobAudioBuffer = buffer; return buffer; })
+          .catch(function () { jobAudioLoading = null; return null; });
+        return jobAudioLoading;
       }
 
       function soundForNewJob() {
         try {
           if (!audioContext || audioContext.state !== 'running') return;
-          if (!jobAudioBuffer) { preloadJobSound(); return; }
+          if (!jobAudioBuffer) {
+            preloadJobSound().then(function (buffer) {
+              if (!buffer || !jobAlertEnabled || !audioContext || audioContext.state !== 'running') return;
+              var lateSource = audioContext.createBufferSource();
+              lateSource.buffer = buffer;
+              lateSource.connect(audioContext.destination);
+              lateSource.start();
+            });
+            return;
+          }
           var source = audioContext.createBufferSource();
           source.buffer = jobAudioBuffer;
           source.connect(audioContext.destination);
