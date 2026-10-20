@@ -3513,7 +3513,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                         pickup: true,
                                         address:
                                             active.originText ??
-                                            'Sin direcciÃ³n',
+                                            'Sin dirección',
                                         expanded: _workRideDetailsExpanded,
                                       ),
                                       const SizedBox(height: 6),
@@ -3521,7 +3521,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                         pickup: false,
                                         address:
                                             active.destinationText ??
-                                            'Sin direcciÃ³n',
+                                            'Sin dirección',
                                         expanded: _workRideDetailsExpanded,
                                       ),
                                       TextButton.icon(
@@ -3988,6 +3988,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                   accepting: _acceptingJobId == job.id,
                   acceptanceLocked: _acceptingJobId != null,
                   onAccept: () => _acceptJob(job),
+                  position: 1,
+                  total: 1,
                 ),
               ),
             ),
@@ -4645,7 +4647,7 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                     ),
                     if (widget.total > 1)
                       Text(
-                        'Solicitud ${widget.position} de ${widget.total} Â· desliza para ver otras',
+                        'Solicitud ${widget.position} de ${widget.total} · desliza para ver otras',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -4711,7 +4713,7 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                     ],
                     if (job.requiredBodyType?.trim().isNotEmpty == true) ...[
                       const SizedBox(height: 6),
-                      Text('CarrocerÃ­a requerida: ${job.requiredBodyType}'),
+                      Text('Carrocería requerida: ${job.requiredBodyType}'),
                     ],
                   ],
                 ],
@@ -4754,7 +4756,7 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
               size: 18,
             ),
             label: Text(
-              _detailsExpanded ? 'Ocultar detalles' : 'MÃ¡s detalles',
+              _detailsExpanded ? 'Ocultar detalles' : 'Más detalles',
             ),
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
