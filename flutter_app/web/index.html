@@ -41,6 +41,7 @@
 
       window.tuktukPrepareJobAlertFromGesture = function () {
         unlockSound();
+        preloadJobSound();
         try {
           if ('Notification' in window && Notification.permission === 'default') {
             Promise.resolve(Notification.requestPermission()).catch(function () {});
@@ -50,6 +51,7 @@
 
       window.tuktukSetJobAlertEnabled = function (enabled) {
         jobAlertEnabled = enabled === true;
+        if (jobAlertEnabled) preloadJobSound();
       };
 
       // TambiÃ©n desbloquea el audio si el conductor ya estaba trabajando al entrar.
@@ -60,24 +62,28 @@
         if (jobAlertEnabled) unlockSound();
       }, {capture: true});
 
+      var jobAudioBuffer = null;
+      var jobAudioLoading = null;
+      function preloadJobSound() {
+        if (jobAudioBuffer || jobAudioLoading || !audioContext) return;
+        jobAudioLoading = fetch('sounds/tuktuk_nueva_carrera.mp3')
+          .then(function (response) {
+            if (!response.ok) throw new Error('Sound unavailable');
+            return response.arrayBuffer();
+          })
+          .then(function (bytes) { return audioContext.decodeAudioData(bytes); })
+          .then(function (buffer) { jobAudioBuffer = buffer; })
+          .catch(function () { jobAudioLoading = null; });
+      }
+
       function soundForNewJob() {
         try {
           if (!audioContext || audioContext.state !== 'running') return;
-          var start = audioContext.currentTime + 0.025;
-          [880, 1175, 880].forEach(function (hz, index) {
-            var oscillator = audioContext.createOscillator();
-            var volume = audioContext.createGain();
-            var begin = start + index * 0.19;
-            oscillator.type = 'sine';
-            oscillator.frequency.value = hz;
-            volume.gain.setValueAtTime(0.001, begin);
-            volume.gain.exponentialRampToValueAtTime(0.23, begin + 0.025);
-            volume.gain.exponentialRampToValueAtTime(0.001, begin + 0.17);
-            oscillator.connect(volume);
-            volume.connect(audioContext.destination);
-            oscillator.start(begin);
-            oscillator.stop(begin + 0.18);
-          });
+          if (!jobAudioBuffer) { preloadJobSound(); return; }
+          var source = audioContext.createBufferSource();
+          source.buffer = jobAudioBuffer;
+          source.connect(audioContext.destination);
+          source.start();
         } catch (_) {}
       }
 
