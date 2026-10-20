@@ -1470,7 +1470,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
-  Future<void> _showCustomerRatingSurvey(String jobId) async {
+  Future<void> _showCustomerRatingSurvey(String jobId, {bool forFinishing = false}) async {
     final noteController = TextEditingController();
     final requestUserId = widget.store.user?.id;
     ModalRoute<void>? ratingRoute;
@@ -1560,6 +1560,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           '¿Cómo fue tu experiencia durante este servicio?',
                           style: TextStyle(color: appMutedColor(context)),
                         ),
+                        if (forFinishing)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Text(
+                              'La carrera se cierra al enviar tu evaluación.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF98F7DE)),
+                            ),
+                          ),
                         const SizedBox(height: 18),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1591,8 +1599,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           controller: noteController,
                           enabled: !sending,
                           maxLength: 1000,
-                          minLines: 3,
-                          maxLines: 5,
+                          minLines: 2,
+                          maxLines: 3,
                           decoration: const InputDecoration(
                             labelText: 'Nota interna (opcional)',
                             helperText:
@@ -1628,7 +1636,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           onPressed: sending
                               ? null
                               : () => Navigator.of(sheetContext).pop(),
-                          child: const Text('Ahora no'),
+                          child: Text(forFinishing ? 'Volver a carrera' : 'Ahora no'),
                         ),
                       ],
                     ),
@@ -1674,7 +1682,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       if (finishing) {
-        await _showCustomerRatingSurvey(job.id);
+        await _showCustomerRatingSurvey(job.id, forFinishing: true);
         _ratingsLoaded = false;
         if (mounted && widget.store.user?.id == requestUserId) {
           await _refreshAfterJobMutation();
@@ -3427,10 +3435,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             right: 12,
             bottom: bottomNavInset + 12,
             child: onRide
-                ? SizedBox(
-                    height: (MediaQuery.sizeOf(context).height * .48).clamp(
-                      300.0,
-                      410.0,
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: (MediaQuery.sizeOf(context).height * .48).clamp(
+                        300.0,
+                        410.0,
+                      ),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(24),
@@ -3452,6 +3462,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                             ),
                           ),
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Row(
@@ -3502,7 +3513,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                 ],
                               ),
                               const Divider(height: 16),
-                              Expanded(
+                              Flexible(
+                                fit: FlexFit.loose,
                                 child: SingleChildScrollView(
                                   primary: false,
                                   child: Column(
@@ -3664,7 +3676,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       itemCount: _available.length,
                       itemBuilder: (context, index) {
                         final job = _available[index];
-                        return _AvailableJobCard(
+                        return Align(
+                          alignment: Alignment.bottomCenter,
+                          child: _AvailableJobCard(
                           key: ValueKey('work-map-offer-${job.id}'),
                           job: job,
                           accepting: _acceptingJobId == job.id,
@@ -3672,6 +3686,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           onAccept: () => _acceptJob(job),
                           position: index + 1,
                           total: _available.length,
+                          ),
                         );
                       },
                     ),
@@ -4621,6 +4636,7 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
     return _WorkMapGlassPanel(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -4677,7 +4693,8 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             ],
           ),
           const Divider(height: 16),
-          Expanded(
+          Flexible(
+            fit: FlexFit.loose,
             child: SingleChildScrollView(
               primary: false,
               child: Column(
