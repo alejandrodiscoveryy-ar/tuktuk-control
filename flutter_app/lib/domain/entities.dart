@@ -33,6 +33,7 @@ class DailyRecord {
     required this.date,
     required this.earnings,
     required this.odometer,
+    this.marketplaceDistanceKm,
     this.expense = 0,
     this.expenseCategory = '',
     this.batteryVoltage,
@@ -52,6 +53,8 @@ class DailyRecord {
   final DateTime date;
   final double earnings;
   final double odometer;
+  /// Distancia fuente de una carrera, independiente de su odómetro derivado.
+  final double? marketplaceDistanceKm;
   final double expense;
   final String expenseCategory;
   @HiveField(batteryVoltageHiveFieldIndex)
@@ -82,9 +85,10 @@ class DailyRecord {
         (map['chargeTo80v'] == true ? 80.0 : null);
     return DailyRecord(
       id: '${map['id']}',
-      date: DateTime.parse('${map['date']}'),
+      date: DateTime.parse('${map['dateTime'] ?? map['date']}'),
       earnings: _numFromMap(map, 'earnings'),
       odometer: _numFromMap(map, 'odometer'),
+      marketplaceDistanceKm: _optionalNum(map['marketplaceDistanceKm']),
       expense: _numFromMap(map, 'expense'),
       expenseCategory: '${map['expenseCategory'] ?? ''}',
       batteryVoltage: voltage,
@@ -104,8 +108,10 @@ class DailyRecord {
     'schemaVersion': schemaVersion,
     'id': id,
     'date': DateFormat('yyyy-MM-dd').format(date),
+    'dateTime': date.toIso8601String(),
     'earnings': earnings,
     'odometer': odometer,
+    'marketplaceDistanceKm': marketplaceDistanceKm,
     'expense': expense,
     'expenseCategory': expenseCategory,
     'batteryVoltage': batteryVoltage,
@@ -118,6 +124,29 @@ class DailyRecord {
     'vehicleId': vehicleId,
     'syncStatus': syncStatus.name,
   };
+
+  DailyRecord withMarketplaceValues({
+    double? derivedOdometer,
+    double? sourceDistanceKm,
+  }) => DailyRecord(
+    id: id,
+    date: date,
+    earnings: earnings,
+    odometer: derivedOdometer ?? odometer,
+    marketplaceDistanceKm: sourceDistanceKm ?? marketplaceDistanceKm,
+    expense: expense,
+    expenseCategory: expenseCategory,
+    batteryVoltage: batteryVoltage,
+    note: note,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    deletedAt: deletedAt,
+    deviceId: deviceId,
+    userId: userId,
+    vehicleId: vehicleId,
+    syncStatus: syncStatus,
+    schemaVersion: schemaVersion,
+  );
 
   DailyRecord withSyncInfo({
     required String deviceId,
@@ -132,6 +161,7 @@ class DailyRecord {
       date: date,
       earnings: earnings,
       odometer: odometer,
+      marketplaceDistanceKm: marketplaceDistanceKm,
       expense: expense,
       expenseCategory: expenseCategory,
       batteryVoltage: batteryVoltage,

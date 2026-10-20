@@ -407,6 +407,164 @@ class _MarketplaceOnboardingScreenState
   bool _driverSaveSucceeded = false;
   bool _vehicleSaveSucceeded = false;
 
+  // Borradores: cada campo válido se confirma en servidor por separado.
+  // Nunca se guardan bytes del carnet ni fotografías en almacenamiento local.
+  Map<String, dynamic> _registrationDrafts = {};
+  final Map<String, ({String field, String? vehicleId, Object value})>
+      _draftPending = {};
+  Timer? _draftTimer;
+  bool _draftHydrating = true;
+  bool _draftBusy = false;
+  String? _draftError;
+
+  Map<String, dynamic> get _driverDraft {
+    final raw = _registrationDrafts['driver'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : {};
+  }
+
+  Map<String, dynamic> _vehicleDraft(String? vehicleId) {
+    final raw = _registrationDrafts['vehicle:$vehicleId'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : {};
+  }
+
+  String? get _draftDriverPhotoId => _driverDraft['driver_photo_id']?.toString();
+  String? get _draftVehiclePhotoId =>
+      _vehicleDraft(_selectedVehicleId)['vehicle_photo_id']?.toString();
+
+  bool _validDraftField(String field, Object value) {
+    if (value is List<String>) return field == 'services';
+    if (value is! String) return false;
+    final text = value.trim();
+    if (field == 'name') return text.length >= 2 && text.length <= 100;
+    if (field == 'phone') return RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(text);
+    if (field == 'brand' || field == 'model') return text.isNotEmpty && text.length <= 80;
+    if (field == 'category' || field == 'propulsion') return text.isNotEmpty;
+    if (field == 'year') {
+      if (text.isEmpty) return true;
+      final year = int.tryParse(text);
+      return year != null && year >= 1900 && year <= 2200;
+    }
+    if (field == 'passengers') {
+      if (text.isEmpty) return true;
+      final count = int.tryParse(text);
+      return count != null && count >= 1 && count <= 100;
+    }
+    if (field == 'cargo_kg') {
+      if (text.isEmpty) return true;
+      final count = double.tryParse(text.replaceAll(',', '.'));
+      return count != null && count >= 0 && count <= 100000;
+    }
+    return text.length <= (field == 'registration' ? 32 : 160);
+  }
+
+  void _queueDraftField(String field, Object value, {String? vehicleId}) {
+    if (_draftHydrating || !_canEdit || _data == null ||
+        (field != 'name' && field != 'phone' && vehicleId == null &&
+         !field.contains('photo') && !field.startsWith('identity_')) ||
+        !_validDraftField(field, value)) return;
+    final key = '${vehicleId ?? 'driver'}:$field';
+    final normalized = field == 'cargo_kg' && value is String
+        ? value.replaceAll(',', '.') : value;
+    _draftPending[key] = (field: field, vehicleId: vehicleId, value: normalized);
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 700), () {
+      unawaited(_flushDraftFields());
+    });
+    if (mounted) setState(() => _draftError = null);
+  }
+
+  Future<void> _flushDraftFields() async {
+    _draftTimer?.cancel();
+    if (_draftBusy || _draftPending.isEmpty) return;
+    final batch = Map.of(_draftPending);
+    _draftPending.clear();
+    if (mounted) setState(() { _draftBusy = true; _draftError = null; });
+    var failed = false;
+    try {
+      for (final entry in batch.entries) {
+        await _service.saveRegistrationDraftField(
+          field: entry.value.field,
+          value: entry.value.value,
+          vehicleId: entry.value.vehicleId,
+        );
+        final scope = entry.value.vehicleId == null
+            ? 'driver' : 'vehicle:${entry.value.vehicleId}';
+        final current = _registrationDrafts[scope];
+        final fields = current is Map ? Map<String, dynamic>.from(current) : <String, dynamic>{};
+        fields[entry.value.field] = entry.value.value;
+        _registrationDrafts[scope] = fields;
+      }
+    } catch (_) {
+      failed = true;
+      // Los cambios hechos mientras se enviaba el lote tienen prioridad.
+      for (final entry in batch.entries) {
+        _draftPending.putIfAbsent(entry.key, () => entry.value);
+      }
+      if (mounted) _draftError = 'Hay datos pendientes de guardar. Comprueba tu conexión y reintenta.';
+    } finally {
+      if (mounted) setState(() => _draftBusy = false);
+      if (!failed && _draftPending.isNotEmpty) {
+        if (mounted) {
+          _draftTimer = Timer(const Duration(milliseconds: 700), () {
+            unawaited(_flushDraftFields());
+          });
+        } else {
+          unawaited(_flushDraftFields());
+        }
+      }
+    }
+  }
+
+  void _applyDraftFields() {
+    final driver = _driverDraft;
+    final original = _draftHydrating;
+    _draftHydrating = true;
+    try {
+      if (driver['name'] is String) _name.text = driver['name'] as String;
+      if (driver['phone'] is String) _phone.text = driver['phone'] as String;
+      _applyVehicleDraftFields(_selectedVehicleId);
+    } finally { _draftHydrating = original; }
+  }
+
+  void _applyVehicleDraftFields(String? vehicleId) {
+    final fields = _vehicleDraft(vehicleId);
+    final original = _draftHydrating;
+    _draftHydrating = true;
+    try {
+      final mapping = <String, TextEditingController>{
+        'brand': _brand, 'model': _model, 'registration': _registration,
+        'year': _year, 'passengers': _passengers, 'cargo_kg': _cargoKg,
+        'body_type': _bodyType, 'other_category': _otherCategory,
+      };
+      for (final entry in mapping.entries) {
+        final value = fields[entry.key];
+        if (value is String) entry.value.text = value;
+      }
+      if (fields['category'] is String) _selectedCategory = fields['category'] as String;
+      if (fields['propulsion'] is String) _selectedPropulsion = fields['propulsion'] as String;
+      if (fields['services'] is List) {
+        _selectedServices..clear()..addAll((fields['services'] as List).whereType<String>());
+      }
+    } finally { _draftHydrating = original; }
+  }
+
+  Map<String, String>? _draftIdentityAsset(String side) {
+    final value = _driverDraft['identity_${side}_id']?.toString();
+    if (value == null) return null;
+    for (final item in _data?.assets ?? const <MarketplaceMediaAsset>[]) {
+      if (item.id == value && item.storageBucket == 'marketplace-identity' &&
+          item.storagePath != null && item.isAvailable) {
+        return {
+          'asset_id': item.id,
+          'storage_path': item.storagePath!,
+          'storage_bucket': 'marketplace-identity',
+          'status': 'available',
+        };
+      }
+    }
+    return null;
+  }
+
   Map<String, String> _registrationErrors() {
     final issues = <String, String>{};
     if (_name.text.trim().isEmpty) {
@@ -418,6 +576,7 @@ class _MarketplaceOnboardingScreenState
     }
     if (_driverPhotoBytes == null &&
         _data?.driverPhotoAssetId == null &&
+        _draftDriverPhotoId == null &&
         _googleDriverPhotoUrl == null) {
       issues['driverPhoto'] = 'Añade una foto clara de tu rostro.';
     }
@@ -497,7 +656,8 @@ class _MarketplaceOnboardingScreenState
     if (_registration.text.trim().length > 32) {
       issues['registration'] = 'La chapa admite un máximo de 32 caracteres.';
     }
-    if (_vehiclePhotoBytes == null && vehicle.mainPhotoAssetId == null) {
+    if (_vehiclePhotoBytes == null && vehicle.mainPhotoAssetId == null &&
+        _draftVehiclePhotoId == null) {
       issues['vehiclePhoto'] = 'Añade una foto principal del vehículo.';
     }
     return issues;
@@ -542,27 +702,8 @@ class _MarketplaceOnboardingScreenState
   void _goToRegistrationStep(int nextStep) {
     if (_registrationSubmitting) return;
     if (widget.driverOnly && nextStep == 1) nextStep = 2;
-    if (nextStep > _registrationStep) {
-      final issues = _registrationErrors();
-      final relevant = nextStep == 1
-          ? issues.keys.where(
-              (key) => [
-                'name',
-                'phone',
-                'driverPhoto',
-                'identityLoad',
-                'identityFront',
-                'identityBack'
-              ].contains(key),
-            )
-          : issues.keys;
-      if (relevant.isNotEmpty) {
-        setState(() => _showFieldErrors = true);
-        _scrollRegistrationToTop();
-        toast(context, 'Revisa los campos obligatorios señalados en rojo.');
-        return;
-      }
-    }
+    // Se permite continuar con una ficha parcial. Solo Finalizar exige todos
+    // los obligatorios; los datos válidos se guardan en su borrador remoto.
     setState(() {
       _registrationStep = nextStep;
       _showFieldErrors = false;
@@ -573,6 +714,16 @@ class _MarketplaceOnboardingScreenState
 
   Future<void> _saveRegistration() async {
     if (_registrationSubmitting || !_canEdit) return;
+    // No borrar el borrador si queda un envío anterior en vuelo.
+    for (var i = 0; i < 100 && _draftBusy; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+    if (_draftBusy) { toast(context, 'Espera a que termine el guardado.'); return; }
+    await _flushDraftFields();
+    if (_draftBusy || _draftPending.isNotEmpty) {
+      toast(context, 'Hay datos pendientes de guardar. Pulsa Reintentar.');
+      return;
+    }
     final issues = _registrationErrors();
     if (issues.isNotEmpty) {
       setState(() {
@@ -641,7 +792,13 @@ class _MarketplaceOnboardingScreenState
         }
       }
       if (!mounted) return;
+      await _service.clearRegistrationDrafts(
+        vehicleId: widget.driverOnly ? null : _selectedVehicleId,
+      );
+      if (!mounted) return;
       setState(() {
+        _registrationDrafts.remove('driver');
+        _registrationDrafts.remove('vehicle:$_selectedVehicleId');
         _registrationSaved = true;
         _showFieldErrors = false;
       });
@@ -697,25 +854,31 @@ class _MarketplaceOnboardingScreenState
     super.initState();
     _service = MarketplaceService(Supabase.instance.client);
     _imagePicker = ImagePicker();
-    for (final field in [
-      _name,
-      _phone,
-      _registration,
-      _brand,
-      _model,
-      _year,
-      _passengers,
-      _cargoKg,
-      _bodyType,
-      _otherCategory,
-    ]) {
-      field.addListener(_refreshRegistrationErrors);
+    final fields = <TextEditingController, String>{
+      _name: 'name', _phone: 'phone', _registration: 'registration',
+      _brand: 'brand', _model: 'model', _year: 'year',
+      _passengers: 'passengers', _cargoKg: 'cargo_kg',
+      _bodyType: 'body_type', _otherCategory: 'other_category',
+    };
+    for (final entry in fields.entries) {
+      entry.key.addListener(() {
+        _refreshRegistrationErrors();
+        final isDriver = entry.value == 'name' || entry.value == 'phone';
+        _queueDraftField(entry.value, entry.key.text.trim(),
+          vehicleId: isDriver ? null : _selectedVehicleId);
+      });
     }
     unawaited(_load());
   }
 
   @override
   void dispose() {
+    _draftTimer?.cancel();
+    if (_draftPending.isNotEmpty && !_draftBusy) {
+      // Envío iniciado antes de desechar los controladores, sin bloquear UI.
+      // Fallos de red siempre se muestran como pendientes, no como guardados.
+      unawaited(_flushDraftFields());
+    }
     _name.dispose();
     _phone.dispose();
     _registration.dispose();
@@ -929,11 +1092,15 @@ class _MarketplaceOnboardingScreenState
 
     try {
       final data = await _service.onboarding();
+      final drafts = await _service.registrationDrafts();
       if (!mounted) return;
       setState(() {
+        _registrationDrafts = drafts;
         _data = data;
         _loading = false;
         _applyData(data);
+        _applyDraftFields();
+        _draftHydrating = false;
       });
 
       _identityRequired = kIsWeb && !data.driverProfileExists;
@@ -980,6 +1147,8 @@ class _MarketplaceOnboardingScreenState
   }
 
   void _loadVehicleFields(MarketplaceVehicle? vehicle) {
+    final original = _draftHydrating;
+    _draftHydrating = true;
     _selectedCategory = vehicle?.categoryCode;
     _selectedPropulsion = vehicle?.propulsionCode;
 
@@ -996,6 +1165,8 @@ class _MarketplaceOnboardingScreenState
     _selectedServices
       ..clear()
       ..addAll(vehicle?.services ?? const []);
+    _applyVehicleDraftFields(vehicle?.id);
+    _draftHydrating = original;
   }
 
   Future<void> _loadAccess({bool showSpinner = true}) async {
@@ -1188,12 +1359,39 @@ class _MarketplaceOnboardingScreenState
         }
       });
 
-      toast(
-        context,
-        assetKind == 'vehicle_photo'
-            ? 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción.'
-            : 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción.',
-      );
+      // Al elegir una foto, subir inmediatamente (servidor privado). Si falla,
+      // conservar la selección como pendiente en esta sesión, sin falso éxito.
+      try {
+        final isVehicle = assetKind == 'vehicle_photo';
+        final key = isVehicle ? _vehiclePhotoUploadKey! : _driverPhotoUploadKey!;
+        final vehicleId = isVehicle ? _selectedVehicleId : null;
+        if (isVehicle && vehicleId == null) throw StateError('VEHICLE_REQUIRED');
+        final asset = await _service.uploadMedia(
+          assetKind: assetKind, bytes: normalized.bytes,
+          mimeType: 'image/jpeg', extension: 'jpg', idempotencyKey: key);
+        await _service.saveRegistrationDraftField(
+          field: isVehicle ? 'vehicle_photo_id' : 'driver_photo_id',
+          value: asset.id, vehicleId: vehicleId);
+        if (!mounted || (isVehicle && vehicleId != _selectedVehicleId)) return;
+        setState(() {
+          final scope = isVehicle ? 'vehicle:$vehicleId' : 'driver';
+          final fields = isVehicle ? _vehicleDraft(vehicleId) : _driverDraft;
+          fields[isVehicle ? 'vehicle_photo_id' : 'driver_photo_id'] = asset.id;
+          _registrationDrafts[scope] = fields;
+          if (isVehicle) {
+            _vehiclePhotoBytes = null; _vehiclePhotoUploadKey = null;
+          } else {
+            _driverPhotoBytes = null; _driverPhotoUploadKey = null;
+          }
+        });
+        // Refrescar solo catálogo de assets, nunca sobreescribir campos escritos.
+        final refreshed = await _service.onboarding();
+        if (mounted) setState(() => _data = refreshed);
+        if (mounted) toast(context, 'Fotografía guardada correctamente.');
+      } catch (_) {
+        if (mounted) toast(context,
+          'Fotografía pendiente de guardar. Reintenta antes de salir.');
+      }
     } on FormatException catch (error) {
       if (mounted) {
         toast(context, error.message.toString());
@@ -1298,7 +1496,10 @@ class _MarketplaceOnboardingScreenState
       final documents = await _service.identityDocuments();
       if (!mounted) return;
       setState(() {
-        _identityDocs = documents;
+        _identityDocs = Map<String, dynamic>.from(documents);
+        for (final side in const ['front', 'back']) {
+          _identityDocs[side] ??= _draftIdentityAsset(side);
+        }
         _identityRequired = kIsWeb && documents['required'] == true;
         _identityLoaded = true;
         _identityError = null;
@@ -1333,8 +1534,28 @@ class _MarketplaceOnboardingScreenState
         _identityPending[side] = normalized.bytes;
         _identityUploadKeys[side] = _marketplaceUuidV4();
       });
-      toast(
-          context, 'Fotografia seleccionada. Se guardara con tu inscripcion.');
+      try {
+        final key = _identityUploadKeys[side]!;
+        final asset = await _service.uploadIdentityMedia(
+          side: side, bytes: normalized.bytes, idempotencyKey: key);
+        await _service.saveRegistrationDraftField(
+          field: 'identity_${side}_id', value: asset.id);
+        if (!mounted) return;
+        setState(() {
+          _identityPending.remove(side);
+          _identityUploadKeys.remove(side);
+          final draft = _driverDraft..['identity_${side}_id'] = asset.id;
+          _registrationDrafts['driver'] = draft;
+          _identityDocs[side] = {
+            'asset_id': asset.id, 'storage_path': asset.storagePath,
+            'storage_bucket': 'marketplace-identity', 'status': 'available',
+          };
+        });
+        toast(context, 'Documento privado guardado.');
+      } catch (_) {
+        if (mounted) toast(context,
+          'Foto pendiente de guardar. Reintenta antes de salir.');
+      }
     } catch (_) {
       if (mounted) {
         toast(context, 'No se pudo procesar la fotografia del carnet.');
@@ -1345,7 +1566,9 @@ class _MarketplaceOnboardingScreenState
   }
 
   Future<bool> _saveIdentityDocuments() async {
-    if (_identityPending.isEmpty) return true;
+    final front = _driverDraft['identity_front_id']?.toString();
+    final back = _driverDraft['identity_back_id']?.toString();
+    if (_identityPending.isEmpty && front == null && back == null) return true;
     final uploaded = <String, String>{};
     try {
       for (final side in const ['front', 'back']) {
@@ -1360,8 +1583,8 @@ class _MarketplaceOnboardingScreenState
         uploaded[side] = asset.id;
       }
       final saved = await _service.saveIdentityDocuments(
-        frontId: uploaded['front'],
-        backId: uploaded['back'],
+        frontId: uploaded['front'] ?? front,
+        backId: uploaded['back'] ?? back,
       );
       if (!mounted) return false;
       setState(() {
@@ -1483,7 +1706,7 @@ class _MarketplaceOnboardingScreenState
     setState(() => _saving = true);
 
     try {
-      var photoAssetId = data.driverPhotoAssetId;
+      var photoAssetId = _draftDriverPhotoId ?? data.driverPhotoAssetId;
       final pendingPhoto = _driverPhotoBytes;
 
       if (pendingPhoto != null) {
@@ -1694,7 +1917,7 @@ class _MarketplaceOnboardingScreenState
     try {
       final services = _selectedServices.toList()..sort();
 
-      var photoAssetId = vehicle.mainPhotoAssetId;
+      var photoAssetId = _draftVehiclePhotoId ?? vehicle.mainPhotoAssetId;
       final pendingPhoto = _vehiclePhotoBytes;
 
       if (pendingPhoto != null) {
@@ -2287,6 +2510,24 @@ class _MarketplaceOnboardingScreenState
                 'Completa tus datos y los del vehículo. Los campos con * son obligatorios.',
                 style: TextStyle(color: appMutedColor(context), height: 1.4),
               ),
+              const SizedBox(height: 8),
+              if (_draftBusy || _draftPending.isNotEmpty || _draftError != null)
+                Row(children: [
+                  Icon(_draftError == null ? Icons.cloud_upload_outlined : Icons.error_outline,
+                    size: 17, color: _draftError == null ? kTertiary : kDanger),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(_draftError ??
+                    (_draftBusy ? 'Guardando datos válidos…' : 'Datos pendientes de guardar'),
+                    style: const TextStyle(fontSize: 12))),
+                  if (_draftError != null)
+                    TextButton(onPressed: _draftBusy ? null : () => unawaited(_flushDraftFields()),
+                      child: const Text('Reintentar')),
+                ])
+              else
+                Text(_registrationDrafts.isEmpty
+                    ? 'Los datos válidos se guardan al escribirlos.'
+                    : 'Cambios guardados en tu cuenta.',
+                  style: const TextStyle(fontSize: 12)),
               const SizedBox(height: 16),
               LinearProgressIndicator(
                 value: (_registrationStep + 1) / 3,
@@ -2407,12 +2648,13 @@ class _MarketplaceOnboardingScreenState
                     );
                     final hasDriverPhoto = _driverPhotoBytes != null ||
                         data.driverPhotoAssetId != null ||
+                        _draftDriverPhotoId != null ||
                         _googleDriverPhotoUrl != null;
                     if (!hasDriverPhoto) return compactDriverFields;
 
                     final photo = _buildMarketplacePhotoPreview(
                       pendingBytes: _driverPhotoBytes,
-                      savedAssetId: data.driverPhotoAssetId,
+                      savedAssetId: _draftDriverPhotoId ?? data.driverPhotoAssetId,
                       vehicle: false,
                       fallbackNetworkUrl: _googleDriverPhotoUrl,
                     );
@@ -2442,11 +2684,13 @@ class _MarketplaceOnboardingScreenState
                     Icon(
                       _driverPhotoBytes == null &&
                               data.driverPhotoAssetId == null &&
+                              _draftDriverPhotoId == null &&
                               _googleDriverPhotoUrl == null
                           ? Icons.photo_camera_outlined
                           : Icons.check_circle_outline,
                       color: _driverPhotoBytes == null &&
                               data.driverPhotoAssetId == null &&
+                              _draftDriverPhotoId == null &&
                               _googleDriverPhotoUrl == null
                           ? kTertiary
                           : appPrimaryColor(context),
@@ -2455,8 +2699,8 @@ class _MarketplaceOnboardingScreenState
                     Expanded(
                       child: Text(
                         _driverPhotoBytes != null
-                            ? 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción. ${_driverPhotoLabel ?? ''}'
-                            : data.driverPhotoAssetId != null
+                            ? 'Foto seleccionada, pendiente de guardar. ${_driverPhotoLabel ?? ''}'
+                            : (_draftDriverPhotoId ?? data.driverPhotoAssetId) != null
                                 ? 'Foto del conductor guardada'
                                 : _googleDriverPhotoUrl != null
                                     ? 'Usaremos tu foto de Google como foto inicial. Puedes cambiarla.'
@@ -2481,6 +2725,7 @@ class _MarketplaceOnboardingScreenState
                     icon: const Icon(Icons.add_a_photo_outlined),
                     label: Text(
                       data.driverPhotoAssetId == null &&
+                              _draftDriverPhotoId == null &&
                               _driverPhotoBytes == null &&
                               _googleDriverPhotoUrl == null
                           ? 'Añadir foto'
@@ -2732,6 +2977,9 @@ class _MarketplaceOnboardingScreenState
                                       } else {
                                         _selectedServices.remove(service.code);
                                       }
+                                      _queueDraftField('services',
+                                        _selectedServices.toList()..sort(),
+                                        vehicleId: _selectedVehicleId);
                                     });
                                   }
                                 : null,
@@ -2936,6 +3184,8 @@ class _MarketplaceOnboardingScreenState
                                           _passengers.clear();
                                         }
                                         _selectedCategory = value;
+                                        if (value != null) _queueDraftField('category', value,
+                                          vehicleId: _selectedVehicleId);
                                       })
                                   : null,
                             ),
@@ -2977,7 +3227,11 @@ class _MarketplaceOnboardingScreenState
                             }).toList(),
                             onChanged: _canEdit
                                 ? (value) => setState(
-                                      () => _selectedPropulsion = value,
+                                      () {
+                                        _selectedPropulsion = value;
+                                        if (value != null) _queueDraftField('propulsion', value,
+                                          vehicleId: _selectedVehicleId);
+                                      },
                                     )
                                 : null,
                           ),
@@ -3075,10 +3329,11 @@ class _MarketplaceOnboardingScreenState
                     },
                   ),
                   if (_vehiclePhotoBytes != null ||
-                      vehicle?.mainPhotoAssetId != null) ...[
+                      vehicle?.mainPhotoAssetId != null ||
+                      _draftVehiclePhotoId != null) ...[
                     _buildMarketplacePhotoPreview(
                       pendingBytes: _vehiclePhotoBytes,
-                      savedAssetId: vehicle?.mainPhotoAssetId,
+                      savedAssetId: _draftVehiclePhotoId ?? vehicle?.mainPhotoAssetId,
                       vehicle: true,
                     ),
                     const SizedBox(height: 10),
@@ -3087,11 +3342,13 @@ class _MarketplaceOnboardingScreenState
                     children: [
                       Icon(
                         _vehiclePhotoBytes == null &&
-                                vehicle?.mainPhotoAssetId == null
+                                vehicle?.mainPhotoAssetId == null &&
+                              _draftVehiclePhotoId == null
                             ? Icons.directions_car_outlined
                             : Icons.check_circle_outline,
                         color: _vehiclePhotoBytes == null &&
-                                vehicle?.mainPhotoAssetId == null
+                                vehicle?.mainPhotoAssetId == null &&
+                              _draftVehiclePhotoId == null
                             ? kTertiary
                             : appPrimaryColor(context),
                       ),
@@ -3099,8 +3356,8 @@ class _MarketplaceOnboardingScreenState
                       Expanded(
                         child: Text(
                           _vehiclePhotoBytes != null
-                              ? 'Foto seleccionada. Se subirá al pulsar Guardar mi inscripción. ${_vehiclePhotoLabel ?? ''}'
-                              : vehicle?.mainPhotoAssetId == null
+                              ? 'Foto seleccionada, pendiente de guardar. ${_vehiclePhotoLabel ?? ''}'
+                              : (_draftVehiclePhotoId ?? vehicle?.mainPhotoAssetId) == null
                                   ? 'Foto principal del vehículo pendiente'
                                   : 'Foto principal del vehículo guardada',
                         ),
@@ -3124,6 +3381,7 @@ class _MarketplaceOnboardingScreenState
                       icon: const Icon(Icons.add_photo_alternate_outlined),
                       label: Text(
                         vehicle?.mainPhotoAssetId == null &&
+                                _draftVehiclePhotoId == null &&
                                 _vehiclePhotoBytes == null
                             ? 'Añadir foto del vehículo'
                             : 'Cambiar foto del vehículo',

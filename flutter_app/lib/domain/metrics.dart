@@ -17,6 +17,14 @@ class Metrics {
       records.fold(0.0, (sum, r) => sum + r.expense) +
       maintenanceRecords.fold(0.0, (sum, r) => sum + (r.cost ?? 0));
   double get netEarnings => totalEarnings - totalExpenses;
+
+  /// Distancia de carreras reales ya reconciliadas. No depende de que haya
+  /// lectura manual inicial; 0 + 20 + 10 significa 30 km de trabajos.
+  double get marketplaceWorkedKm => records.where((r) =>
+      !r.isDeleted && r.isMarketplaceJobIncome &&
+      r.marketplaceDistanceKm != null && r.marketplaceDistanceKm!.isFinite &&
+      r.marketplaceDistanceKm! >= 0).fold<double>(0.0,
+          (sum, r) => sum + r.marketplaceDistanceKm!);
   int get chargeEvents =>
       records.where((record) => record.batteryVoltage != null).length;
   List<DailyRecord> get earningsWithoutOdometer => records

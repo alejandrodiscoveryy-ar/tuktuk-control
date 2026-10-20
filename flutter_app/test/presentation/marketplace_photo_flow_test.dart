@@ -91,8 +91,10 @@ void main() {
   });
 
   test('UI explains when conductor and vehicle photos are uploaded', () {
-    expect(onboarding, contains('Se subirá al pulsar Guardar mi inscripción.'));
-    expect(onboarding, contains('Se subirá al pulsar Guardar mi inscripción.'));
+    expect(onboarding, contains('await _service.uploadMedia('));
+    expect(onboarding, contains("field: isVehicle ? 'vehicle_photo_id' : 'driver_photo_id'"));
+    expect(onboarding, contains('Fotografía guardada correctamente.'));
+    expect(onboarding, contains('Fotografía pendiente de guardar. Reintenta antes de salir.'));
     expect(onboarding, contains('MarketplacePhotoException'));
     expect(onboarding, contains('StorageException'));
   });

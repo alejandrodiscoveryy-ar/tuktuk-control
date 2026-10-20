@@ -991,6 +991,28 @@ class MarketplaceService {
         'get_my_marketplace_onboarding_v2',
       ).then(MarketplaceOnboarding.fromMap);
 
+  /// Borrador remoto privado. La activación sigue en los RPC definitivos.
+  Future<Map<String, dynamic>> registrationDrafts() =>
+      _one('get_my_marketplace_registration_drafts');
+
+  Future<void> saveRegistrationDraftField({
+    required String field,
+    required Object value,
+    String? vehicleId,
+  }) async {
+    await _one('save_my_marketplace_registration_draft_field', {
+      'target_vehicle_id': vehicleId,
+      'target_field': field,
+      'target_value': value,
+    });
+  }
+
+  Future<void> clearRegistrationDrafts({String? vehicleId}) async {
+    await _client.rpc('clear_my_marketplace_registration_drafts', params: {
+      'target_vehicle_id': vehicleId,
+    });
+  }
+
   Future<MarketplaceOnboarding> saveDriver(Map<String, dynamic> params) => _one(
         'save_my_marketplace_driver_onboarding',
         params,
