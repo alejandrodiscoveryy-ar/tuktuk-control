@@ -19,6 +19,8 @@ void prepareMarketplaceWebJobAlertActivation() =>
 
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
+const tuktukJobNotificationChannelId = 'tuktuk_nuevas_carreras_v1';
+const tuktukJobNotificationChannelName = 'Nuevas carreras';
 const tuktukWebVapidKey =
     'BF-az4NW8nREYEw-RvnBOfQ2wrJGttOjBhR_PD0SKWEKDHWqWvFBLdmka5e_0d-_Mptdrpxxfy1aF-FFPQpvfEE';
 const tuktukWebMessagingServiceWorker = 'firebase-messaging-sw.js';
@@ -156,6 +158,15 @@ class PushNotificationService {
     description: 'Notificaciones generales de TukTuk Conductor',
     importance: Importance.high,
   );
+  static const _jobChannel = AndroidNotificationChannel(
+    tuktukJobNotificationChannelId,
+    tuktukJobNotificationChannelName,
+    description: 'Avisos audibles de nuevas carreras disponibles',
+    importance: Importance.high,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
+    enableVibration: true,
+  );
 
   final FirebaseMessaging? _messagingOverride;
   final FlutterLocalNotificationsPlugin _localNotifications;
@@ -196,6 +207,10 @@ class PushNotificationService {
             .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>()
             ?.createNotificationChannel(_channel);
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(_jobChannel);
       }
 
       // A denied permission is a valid user choice and never blocks the app.
@@ -268,15 +283,27 @@ class PushNotificationService {
       id: message.messageId?.hashCode ?? message.hashCode,
       title: title,
       body: body,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          tuktukNotificationChannelId,
-          tuktukNotificationChannelName,
-          channelDescription: 'Notificaciones generales de TukTuk Conductor',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: 'ic_stat_tuktuk',
-        ),
+      notificationDetails: NotificationDetails(
+        android: marketplaceJobIdFromPush(message.data) != null
+            ? const AndroidNotificationDetails(
+                tuktukJobNotificationChannelId,
+                tuktukJobNotificationChannelName,
+                channelDescription: 'Avisos audibles de nuevas carreras disponibles',
+                importance: Importance.high,
+                priority: Priority.high,
+                icon: 'ic_stat_tuktuk',
+                playSound: true,
+                sound: RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
+                enableVibration: true,
+              )
+            : const AndroidNotificationDetails(
+                tuktukNotificationChannelId,
+                tuktukNotificationChannelName,
+                channelDescription: 'Notificaciones generales de TukTuk Conductor',
+                importance: Importance.high,
+                priority: Priority.high,
+                icon: 'ic_stat_tuktuk',
+              ),
       ),
       payload: encodePushMessageData(message.data),
     );
