@@ -1018,6 +1018,79 @@ void main() {
     expect(service.historyCalls, 2);
     expect(service.availableCalls, 0);
   });
+  testWidgets('oferta: precio fijo y marcador verde/rojo al abrir detalles', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    service.availableJobs = [
+      const MarketplaceAvailableJob(
+        id: 'precio-visible',
+        serviceCode: 'passenger',
+        finalPrice: 3100,
+        currency: 'CUP',
+        originText: '97 Conuco, Diez de Octubre, La Habana, Cuba',
+        destinationText: 'San Indalecio, Diez de Octubre, La Habana, Cuba',
+      ),
+    ];
+    await open(tester);
+    final price = find.byKey(
+      const ValueKey('work-map-offer-price-precio-visible'),
+    );
+    final accept = find.byKey(
+      const ValueKey('work-map-offer-accept-precio-visible'),
+    );
+    expect(price, findsOneWidget);
+    expect(accept, findsOneWidget);
+    expect(find.text('Recogida'), findsOneWidget);
+    expect(find.text('Destino'), findsOneWidget);
+    expect(tester.getTopLeft(price).dy, lessThan(tester.getTopLeft(accept).dy));
+
+    final toggle = find.byKey(
+      const ValueKey('work-map-offer-toggle-precio-visible'),
+    );
+    await tester.tap(toggle);
+    await pumpJobs(tester);
+    expect(find.text('Solicitud para ahora'), findsOneWidget);
+    expect(price, findsOneWidget);
+    expect(accept, findsOneWidget);
+    expect(tester.getTopLeft(price).dy, lessThan(tester.getTopLeft(accept).dy));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('varias ofertas: pasar de ficha sin separar precio de aceptar', (
+    tester,
+  ) async {
+    service.availableJobs = [
+      offer,
+      const MarketplaceAvailableJob(
+        id: 'segundo-precio',
+        serviceCode: 'passenger',
+        finalPrice: 4300,
+        currency: 'CUP',
+        originText: 'A',
+        destinationText: 'B',
+      ),
+    ];
+    await open(tester);
+    final pager = find.byKey(const ValueKey('work-map-offers-pager'));
+    expect(pager, findsOneWidget);
+    await tester.drag(pager, const Offset(-600, 0));
+    await pumpJobs(tester);
+    expect(
+      find.byKey(const ValueKey('work-map-offer-price-segundo-precio')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('work-map-offer-accept-segundo-precio')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('telefono pequeno: contacto visible y detalles plegables', (
     tester,
   ) async {
