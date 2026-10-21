@@ -80,4 +80,21 @@ void main() {
     expect(saved.withMarketplaceValues(derivedOdometer: 510).earnings, original.earnings);
     expect(saved.withSyncInfo(deviceId: 'other').marketplaceDistanceKm, 14.5);
   });
+  test('recalculo inactivo no modifica registros manuales', () {
+    final personal = manual('personal', 7, 547, earnings: 420);
+    final automatico = job('auto', 8, 15)
+        .withMarketplaceValues(derivedOdometer: 562);
+    final deleted = DailyRecord.fromMap({
+      ...automatico.toMap(),
+      'deletedAt': DateTime.utc(2026, 10, 9).toIso8601String(),
+    });
+
+    expect(marketplaceRebaseNeedsUpdate(personal, 1000), isFalse);
+    expect(marketplaceRebaseNeedsUpdate(automatico, 562), isFalse);
+    expect(marketplaceRebaseNeedsUpdate(automatico, 563), isTrue);
+    expect(marketplaceRebaseNeedsUpdate(deleted, 563), isFalse);
+    expect(personal.odometer, 547);
+    expect(personal.earnings, 420);
+    expect(marketplaceRebasedOdometers([personal]), isEmpty);
+  });
 }

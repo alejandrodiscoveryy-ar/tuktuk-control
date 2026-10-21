@@ -61,6 +61,11 @@ double marketplaceIncomeOdometerFromHistory({
   return previousOdometer + tripDistance;
 }
 
+bool marketplaceRebaseNeedsUpdate(DailyRecord record, double targetOdometer) =>
+    !record.isDeleted &&
+    record.isMarketplaceJobIncome &&
+    (record.odometer - targetOdometer).abs() >= 0.000001;
+
 ExchangeRateDirection exchangeRateDirectionFor(
   double? previousRate,
   double currentRate,
@@ -1705,14 +1710,14 @@ class RecordStore extends ChangeNotifier {
     final timeline = _allDailyRecords.where((r) =>
         r.userId == ownerId && r.vehicleId == vehicleId && !r.isDeleted);
     final rebased = marketplaceRebasedOdometers(timeline);
+    var hasChanges = false;
     for (final entry in rebased.entries) {
       if (_disposed || activeUserId != ownerId) return;
       final raw = _box.get(entry.key);
       if (raw is! Map) continue;
       final current = DailyRecord.fromMap(raw);
       if (current.userId != ownerId || current.vehicleId != vehicleId ||
-          current.isDeleted || !current.isMarketplaceJobIncome ||
-          (current.odometer - entry.value).abs() < 0.000001) {
+          !marketplaceRebaseNeedsUpdate(current, entry.value)) {
         continue;
       }
       final fixed = current.withMarketplaceValues(derivedOdometer: entry.value)
@@ -1731,9 +1736,13 @@ class RecordStore extends ChangeNotifier {
         previousPayload: Map<String, dynamic>.from(raw),
         rollbackOnLicenseRejection: true,
       );
+      hasChanges = true;
     }
-    _load();
-    unawaitedSync();
+    // Evitar peticiones recursivas cuando el recalculo no modifico nada.
+    if (hasChanges) {
+      _load();
+      unawaitedSync();
+    }
   }
 
   Future<void> save(DailyRecord record) async {
