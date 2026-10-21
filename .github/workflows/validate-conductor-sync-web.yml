@@ -1,0 +1,45 @@
+name: Check conductor sync fix and web build
+on:
+  pull_request:
+    paths:
+      - 'flutter_app/lib/data/record_store.dart'
+      - 'flutter_app/test/domain/marketplace_mixed_odometer_test.dart'
+      - '.github/workflows/validate-conductor-sync-web.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    name: Test and compile isolated web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - name: Install packages
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Prepare web branding
+        working-directory: flutter_app
+        run: dart run tool/sync_project_branding.dart --web
+      - name: Analyze
+        working-directory: flutter_app
+        run: flutter analyze --no-fatal-infos
+      - name: Run sync and manual record regression tests
+        working-directory: flutter_app
+        run: |
+          flutter test test/domain/marketplace_mixed_odometer_test.dart
+          flutter test test/domain/sync_test.dart
+          flutter test test/presentation/marketplace_records_read_only_test.dart
+      - name: Compile web, without publishing it
+        working-directory: flutter_app
+        run: flutter build web --release --base-href /tuktuk/app/ --no-tree-shake-icons
+      - name: Preserve web build for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuktuk-sync-fix-web
+          path: flutter_app/build/web
+          retention-days: 5
