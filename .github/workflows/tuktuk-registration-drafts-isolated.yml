@@ -1,0 +1,36 @@
+name: TUKTUK registration drafts isolated DB tests
+on:
+  pull_request:
+    paths:
+      - 'flutter_app/supabase/migrations/20261020230000_marketplace_registration_drafts.sql'
+      - 'flutter_app/supabase/tests/marketplace_registration_drafts_integration.py'
+      - '.github/workflows/tuktuk-registration-drafts-isolated.yml'
+permissions:
+  contents: read
+jobs:
+  postgres-drafts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: drafts_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd=pg_isready
+          --health-interval 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/drafts_disposable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated Postgres client
+        run: python -m pip install 'psycopg[binary]==3.2.10'
+      - name: Apply draft migration to disposable database and check ownership/RLS
+        run: python flutter_app/supabase/tests/marketplace_registration_drafts_integration.py

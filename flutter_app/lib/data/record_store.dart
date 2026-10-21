@@ -2,6 +2,38 @@ part of '../main.dart';
 
 enum ExchangeRateDirection { up, down, same }
 
+/// Proyección pura. Las lecturas manuales son absolutas; solo los trabajos
+/// con distancia fuente válida generan odómetros derivados. Jamás reescribe
+/// ingresos ni inventa distancias a partir de lecturas manuales.
+Map<String, double> marketplaceRebasedOdometers(Iterable<DailyRecord> records) {
+  final timeline = records.where((r) => !r.isDeleted).toList()
+    ..sort((a, b) {
+      final order = a.date.compareTo(b.date);
+      if (order != 0) return order;
+      // Una anotación manual del día es referencia antes de las carreras
+      // cuando no se dispone de una hora específica en su fecha.
+      if (a.isMarketplaceJobIncome != b.isMarketplaceJobIncome) {
+        return a.isMarketplaceJobIncome ? 1 : -1;
+      }
+      return a.id.compareTo(b.id);
+    });
+  var baseline = 0.0;
+  final values = <String, double>{};
+  for (final record in timeline) {
+    if (!record.isMarketplaceJobIncome) {
+      if (record.odometer > 0 && record.odometer.isFinite) {
+        baseline = record.odometer;
+      }
+      continue;
+    }
+    final km = record.marketplaceDistanceKm;
+    if (km == null || !km.isFinite || km < 0) continue;
+    baseline += km;
+    values[record.id] = baseline;
+  }
+  return values;
+}
+
 double marketplaceIncomeOdometerFromHistory({
   required Iterable<DailyRecord> records,
   double? distanceKm,
@@ -1620,12 +1652,20 @@ class RecordStore extends ChangeNotifier {
         if (existing.userId != ownerId) {
           throw StateError('MARKETPLACE_INCOME_OWNER_MISMATCH');
         }
+        var fixed = existing;
         if (existing.vehicleId != vehicleId) {
-          await _saveDailyRecord(
-            existing.withSyncInfo(deviceId: deviceId, vehicleId: vehicleId),
-            preserveVehicle: true,
-          );
+          fixed = fixed.withSyncInfo(deviceId: deviceId, vehicleId: vehicleId);
         }
+        // Solo completar distancia fuente antigua ausente: no cambiar precio.
+        if (fixed.marketplaceDistanceKm == null &&
+            distanceKm != null && distanceKm.isFinite && distanceKm >= 0) {
+          fixed = fixed.withMarketplaceValues(sourceDistanceKm: distanceKm);
+        }
+        if (fixed.vehicleId != existing.vehicleId ||
+            fixed.marketplaceDistanceKm != existing.marketplaceDistanceKm) {
+          await _saveDailyRecord(fixed, preserveVehicle: true);
+        }
+        await _rebaseMarketplaceVehicleOdometers(ownerId, vehicleId);
         return;
       }
     }
@@ -1643,13 +1683,57 @@ class RecordStore extends ChangeNotifier {
       date: completed,
       earnings: amount,
       odometer: odometer,
-      note: 'Trabajo TUKTUK',
+      marketplaceDistanceKm: distanceKm != null &&
+              distanceKm.isFinite && distanceKm >= 0
+          ? distanceKm
+          : null,
+      note: 'Trabajo TUKTUK (automático)',
       deviceId: deviceId,
       userId: activeUserId,
       vehicleId: vehicleId,
     );
 
     await _saveDailyRecord(record, preserveVehicle: true);
+    await _rebaseMarketplaceVehicleOdometers(ownerId, vehicleId);
+  }
+
+  /// Recalcula únicamente odómetros automáticos de UN vehículo. Se guardan
+  /// con su clave estable y pasan por la cola de sincronización ordinaria.
+  Future<void> _rebaseMarketplaceVehicleOdometers(
+      String ownerId, String vehicleId) async {
+    if (_disposed || activeUserId != ownerId) return;
+    final timeline = _allDailyRecords.where((r) =>
+        r.userId == ownerId && r.vehicleId == vehicleId && !r.isDeleted);
+    final rebased = marketplaceRebasedOdometers(timeline);
+    for (final entry in rebased.entries) {
+      if (_disposed || activeUserId != ownerId) return;
+      final raw = _box.get(entry.key);
+      if (raw is! Map) continue;
+      final current = DailyRecord.fromMap(raw);
+      if (current.userId != ownerId || current.vehicleId != vehicleId ||
+          current.isDeleted || !current.isMarketplaceJobIncome ||
+          (current.odometer - entry.value).abs() < 0.000001) {
+        continue;
+      }
+      final fixed = current.withMarketplaceValues(derivedOdometer: entry.value)
+          .withSyncInfo(
+            deviceId: deviceId,
+            syncStatus: SyncStatus.pending,
+            updatedAt: DateTime.now(),
+          );
+      await _box.put(fixed.id, fixed.toMap());
+      await _syncQueue.enqueue(
+        entityType: SyncEntityType.dailyRecord,
+        entityId: fixed.id,
+        action: SyncAction.upsert,
+        userId: ownerId,
+        vehicleId: vehicleId,
+        previousPayload: Map<String, dynamic>.from(raw),
+        rollbackOnLicenseRejection: true,
+      );
+    }
+    _load();
+    unawaitedSync();
   }
 
   Future<void> save(DailyRecord record) async {
@@ -1685,6 +1769,10 @@ class RecordStore extends ChangeNotifier {
           previousRaw is Map ? Map<String, dynamic>.from(previousRaw) : null,
       rollbackOnLicenseRejection: true,
     );
+    if (!record.isMarketplaceJobIncome) {
+      await _rebaseMarketplaceVehicleOdometers(
+        normalized.userId, normalized.vehicleId);
+    }
     _load();
     unawaitedSync();
   }
@@ -1715,6 +1803,11 @@ class RecordStore extends ChangeNotifier {
         previousPayload: Map<String, dynamic>.from(raw),
         rollbackOnLicenseRejection: true,
       );
+    }
+    if (raw is Map) {
+      final previous = DailyRecord.fromMap(raw);
+      await _rebaseMarketplaceVehicleOdometers(
+        previous.userId, previous.vehicleId);
     }
     _load();
     unawaitedSync();
@@ -2098,6 +2191,11 @@ class RecordStore extends ChangeNotifier {
       pageCount++;
     }
 
+    // Tras importar lecturas remotas, recalcular antes del siguiente push.
+    for (final vehicle in vehicles) {
+      if (_disposed || activeUserId != currentUser.id) return;
+      await _rebaseMarketplaceVehicleOdometers(currentUser.id, vehicle.id);
+    }
     final pendingBatch = _syncQueue.pendingForUser(currentUser.id, limit: 500);
     final report = await _syncCoordinator.pushPending(
       userId: currentUser.id,

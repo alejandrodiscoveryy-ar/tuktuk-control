@@ -404,7 +404,7 @@ void main() {
     expect(income.userId, store.activeUserId);
     expect(income.earnings, 100);
     expect(income.odometer, 15);
-    expect(income.date, DateTime(2026, 10, 8));
+    expect(income.date, completed);
     expect(box.keys.where((key) => key == income.id).length, 1);
     expect(DailyRecord.fromMap(box.get(previous.id) as Map).earnings, 75);
     await store.ensureMarketplaceJobIncome(

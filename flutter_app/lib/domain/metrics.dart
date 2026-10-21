@@ -17,6 +17,14 @@ class Metrics {
       records.fold(0.0, (sum, r) => sum + r.expense) +
       maintenanceRecords.fold(0.0, (sum, r) => sum + (r.cost ?? 0));
   double get netEarnings => totalEarnings - totalExpenses;
+
+  /// Distancia de carreras reales ya reconciliadas. No depende de que haya
+  /// lectura manual inicial; 0 + 20 + 10 significa 30 km de trabajos.
+  double get marketplaceWorkedKm => records.where((r) =>
+      !r.isDeleted && r.isMarketplaceJobIncome &&
+      r.marketplaceDistanceKm != null && r.marketplaceDistanceKm!.isFinite &&
+      r.marketplaceDistanceKm! >= 0).fold<double>(0.0,
+          (sum, r) => sum + r.marketplaceDistanceKm!);
   int get chargeEvents =>
       records.where((record) => record.batteryVoltage != null).length;
   List<DailyRecord> get earningsWithoutOdometer => records
@@ -42,9 +50,10 @@ class Metrics {
   }
 
   double get totalDistance {
-    if (withOdometer.length < 2) return 0;
+    if (withOdometer.length < 2) return marketplaceWorkedKm;
     final values = withOdometer.map((record) => record.odometer);
-    return max(0, values.reduce(max) - values.reduce(min));
+    return max(marketplaceWorkedKm,
+        max(0.0, values.reduce(max) - values.reduce(min)));
   }
 
   double get todayEarnings {
@@ -70,11 +79,13 @@ class Metrics {
   double get currentCycleNet => currentCycleEarnings - currentCycleExpenses;
 
   double get currentCycleDistance {
-    final days = [...currentCycleRecords.where((record) => record.odometer > 0)]
+    final cycle = currentCycleRecords;
+    final worked = Metrics(cycle).marketplaceWorkedKm;
+    final days = [...cycle.where((record) => record.odometer > 0)]
       ..sort(_compareRecordsAsc);
-    if (days.length < 2) return 0;
+    if (days.length < 2) return worked;
     final values = days.map((record) => record.odometer);
-    return max(0, values.reduce(max) - values.reduce(min));
+    return max(worked, max(0.0, values.reduce(max) - values.reduce(min)));
   }
 
   double get averageDailyEarnings {
