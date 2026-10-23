@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -125,7 +124,9 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
     if (_busy ||
         controller == null ||
         !controller.value.isInitialized ||
-        viewport == null) return;
+        viewport == null) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       final photo = await controller.takePicture();
@@ -198,7 +199,7 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
                       }
                       _lastViewport = size;
                       final previewSize =
-                          ready ? controller!.value.previewSize : null;
+                          ready ? controller.value.previewSize : null;
                       final previewAspect = ready && previewSize != null
                           ? previewSize.height / previewSize.width
                           : 0.5625;
@@ -215,7 +216,7 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
                                 child: SizedBox(
                                   width: 1000 * previewAspect,
                                   height: 1000,
-                                  child: CameraPreview(controller!),
+                                  child: CameraPreview(controller),
                                 ),
                               ),
                             )
