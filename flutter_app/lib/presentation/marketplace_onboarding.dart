@@ -1304,6 +1304,15 @@ class _MarketplaceOnboardingScreenState
         assetKind == 'vehicle_photo' ? 'vehicle' : 'identity-$identitySide',
       );
     }
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        source == ImageSource.camera &&
+        assetKind == 'identity_document') {
+      return identity_capture.captureGuidedMarketplaceIdentityPhoto(
+        context,
+        identitySide ?? 'front',
+      );
+    }
     final picked = await _imagePicker.pickImage(
       source: source,
       maxWidth: assetKind == 'identity_document' ? 2400 : 2048,

@@ -30,6 +30,7 @@ import 'services/referral_link_listener.dart';
 import 'services/referral_share.dart';
 import 'services/project_identity_runtime.dart';
 import 'services/marketplace_guided_capture.dart' as guided_capture;
+import 'services/marketplace_identity_capture.dart' as identity_capture;
 import 'domain/marketplace_vehicle_capacity_policy.dart';
 
 part 'domain/entities.dart';
