@@ -158,6 +158,61 @@ void main() {
     expect(box.get(record.id), isNotNull);
   });
 
+  test('pendiente de revision no activa alerta roja ni elimina ingresos manuales',
+      () async {
+    const jobId = '88888888-8888-4888-8888-888888888888';
+    final automatic = DailyRecord(
+      id: 'marketplace-job-$jobId',
+      date: DateTime.utc(2026, 10, 10),
+      earnings: 140,
+      odometer: 20,
+      userId: store.activeUserId,
+      vehicleId: store.activeVehicleId,
+    );
+    final manual = DailyRecord(
+      id: 'registro-manual-que-no-se-toca',
+      date: DateTime.utc(2026, 10, 11),
+      earnings: 777,
+      odometer: 35,
+      userId: store.activeUserId,
+      vehicleId: store.activeVehicleId,
+    );
+    final box = Hive.box('daily_records');
+    await box.put(automatic.id, automatic.toMap());
+    await box.put(manual.id, manual.toMap());
+    final service = _IncomeService();
+
+    // Sin confirmacion del servidor: preservar en cuarentena sin alarmar.
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.marketplaceIncomeReconciliationError, isNull);
+    expect(store.marketplaceIncomePendingVerificationCount, 1);
+    expect(box.get(automatic.id), isNotNull);
+    expect(DailyRecord.fromMap(box.get(manual.id) as Map).earnings, 777);
+    expect(store.records.where((r) => r.id == manual.id).length, 1);
+    expect(store.records.where((r) => r.id == automatic.id), isEmpty);
+
+    // Un fallo real SI se informa y mantiene intactos todos los registros.
+    service.fail = true;
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.marketplaceIncomeReconciliationError,
+        contains('No se pudieron conciliar algunos ingresos'));
+    expect(DailyRecord.fromMap(box.get(manual.id) as Map).earnings, 777);
+    service.fail = false;
+
+    // Si el servidor confirma viaje real, el ingreso automatico reaparece.
+    service.verification[jobId] = {
+      'job_id': jobId,
+      'status': 'settled',
+      'is_test': false,
+      'is_deleted': false,
+    };
+    await store.reconcileMarketplaceIncomes(service);
+    expect(store.marketplaceIncomeReconciliationError, isNull);
+    expect(store.marketplaceIncomePendingVerificationCount, 0);
+    expect(store.records.where((r) => r.id == automatic.id).length, 1);
+    expect(DailyRecord.fromMap(box.get(manual.id) as Map).earnings, 777);
+  });
+
   test('elimina localmente solo pruebas borradas confirmadas', () async {
     const jobId = '55555555-5555-4555-8555-555555555555';
     final record = DailyRecord(

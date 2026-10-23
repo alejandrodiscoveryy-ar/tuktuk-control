@@ -1165,6 +1165,11 @@ class RecordStore extends ChangeNotifier {
     return raw is List ? raw.whereType<String>().toSet() : <String>{};
   }
 
+  /// Permite auditar los ingresos automaticos locales aun sin mostrar un error
+  /// al conductor. La cuarentena permanece hasta comprobacion del servidor.
+  int get marketplaceIncomePendingVerificationCount =>
+      _marketplaceSuppressedIncomeIds(activeUserId).length;
+
   void _load() {
     final ownerId = activeUserId;
     final vehicleId = activeVehicle?.id;
@@ -1459,10 +1464,10 @@ class RecordStore extends ChangeNotifier {
     await _meta.put(cursorKey, offset == jobIds.length ? 0 : offset);
     if (_disposed || activeUserId != ownerId) return;
     _load();
-    if (suppression.isNotEmpty) {
-      marketplaceIncomeReconciliationError =
-          'Hay ingresos antiguos pendientes de validación. Los registros se conservaron.';
-    }
+    // Los ingresos en revision siguen almacenados y fuera de los totales
+    // hasta validarlos. La revision pendiente no es un error de sincronizacion
+    // ni requiere una accion en el menu del conductor.
+    // Los fallos reales se informan desde _reconcileMarketplaceIncomes.
   }
 
   Future<void> reconcileMarketplaceIncomes(MarketplaceService service) =>
