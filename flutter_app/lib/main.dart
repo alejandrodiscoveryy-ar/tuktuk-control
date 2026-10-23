@@ -105,6 +105,10 @@ const kCardGradientBottom = Color(0xFF0D141D);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Android 15/16: dibujar borde a borde; SafeArea protege los controles.
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
   final referralAppLinks = kIsWeb ? null : AppLinks();
   for (final locale in ['es', 'en', 'pt', 'fr']) {
     await initializeDateFormatting(locale);
