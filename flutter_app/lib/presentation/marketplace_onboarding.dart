@@ -1134,20 +1134,10 @@ class _MarketplaceOnboardingScreenState
         widget.initialVehicleId ??
         widget.store.activeVehicle?.id;
 
-    MarketplaceVehicle? vehicle;
-
-    if (preferred != null) {
-      for (final candidate in data.vehicles) {
-        if (candidate.id == preferred) {
-          vehicle = candidate;
-          break;
-        }
-      }
-    }
-
-    if (vehicle == null && data.vehicles.isNotEmpty) {
-      vehicle = data.vehicles.first;
-    }
+    final vehicle = marketplaceSingleOperationalVehicle(
+      data.vehicles,
+      preferredId: preferred,
+    );
 
     _selectedVehicleId = vehicle?.id;
     _loadVehicleFields(vehicle);
@@ -1796,6 +1786,12 @@ class _MarketplaceOnboardingScreenState
 
   Future<void> _createVehicle() async {
     if (!_canEdit || _data == null) return;
+    // En versiones que aun muestran el boton, no crear otro vehiculo.
+    // Nunca descartar fotos o campos sin guardar del vehiculo existente.
+    if (_data!.vehicles.isNotEmpty) {
+      toast(context, 'Ya tienes un vehiculo para Trabajos. Completa su ficha.');
+      return;
+    }
 
     final unsavedName = _name.text;
     final unsavedPhone = _phone.text;
@@ -2834,22 +2830,24 @@ class _MarketplaceOnboardingScreenState
                         ),
                       ),
                 ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _canEdit ? _createVehicle : null,
-                    icon: const Icon(Icons.add_circle_outline),
-                    label: const Text('Añadir vehículo'),
+                if (data.vehicles.isEmpty) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _canEdit ? _createVehicle : null,
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('Registrar mi vehículo'),
+                    ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 12),
                 if (data.vehicles.isEmpty)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Todavía no tienes vehículos. Pulsa Añadir vehículo y luego completa sus datos y fotografías.',
+                        'Todavía no tienes un vehículo para Trabajos. Pulsa Registrar mi vehículo y completa sus datos y fotografías.',
                       ),
                       if (_registrationError('vehicleId') != null)
                         Text(

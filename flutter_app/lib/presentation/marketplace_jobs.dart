@@ -971,21 +971,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted || widget.store.user?.id != userId) return;
       _updateMarketplaceDriverProfileNeedsSetup(onboarding);
 
-      String? vehicleId = _selectedVehicleId;
-
-      if (vehicleId == null ||
-          !onboarding.vehicles.any((vehicle) => vehicle.id == vehicleId)) {
-        final preferredId = widget.store.activeVehicle?.id;
-
-        if (preferredId != null &&
-            onboarding.vehicles.any((vehicle) => vehicle.id == preferredId)) {
-          vehicleId = preferredId;
-        } else if (onboarding.vehicles.isNotEmpty) {
-          vehicleId = onboarding.vehicles.first.id;
-        } else {
-          vehicleId = null;
-        }
-      }
+      // Dar prioridad al vehiculo verdaderamente habilitado para carreras.
+      // No seleccionar un borrador si ya hay otro vehiculo operativo.
+      final vehicleId = marketplaceSingleOperationalVehicle(
+        onboarding.vehicles,
+        preferredId: _selectedVehicleId ?? widget.store.activeVehicle?.id,
+      )?.id;
 
       if (!mounted) return;
 

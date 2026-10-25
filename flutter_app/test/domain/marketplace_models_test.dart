@@ -61,6 +61,44 @@ void main() {
     });
   });
 
+  group('Marketplace: un conductor, un vehículo operativo', () {
+    const incomplete = MarketplaceVehicle(
+      id: 'primary-incomplete',
+      services: [],
+      onboardingComplete: false,
+      isActive: false,
+      isAvailable: false,
+      marketplaceStatus: 'incomplete',
+    );
+    const complete = MarketplaceVehicle(
+      id: 'marketplace-ready',
+      services: ['passenger'],
+      onboardingComplete: true,
+      isActive: true,
+      isAvailable: false,
+      marketplaceStatus: 'active',
+    );
+
+    test('prioriza el vehículo activo frente al borrador preferido', () {
+      final selected = marketplaceSingleOperationalVehicle(
+        [incomplete, complete],
+        preferredId: incomplete.id,
+      );
+      expect(selected?.id, complete.id);
+    });
+
+    test('reutiliza el único vehículo aunque esté incompleto', () {
+      expect(
+        marketplaceSingleOperationalVehicle([incomplete])?.id,
+        incomplete.id,
+      );
+    });
+
+    test('no inventa un vehículo si todavía no existe ninguno', () {
+      expect(marketplaceSingleOperationalVehicle([]), isNull);
+    });
+  });
+
   group('MarketplaceOnboarding', () {
     test('parsea conductor, vehículo, catálogos y assets', () {
       final onboarding = MarketplaceOnboarding.fromMap({

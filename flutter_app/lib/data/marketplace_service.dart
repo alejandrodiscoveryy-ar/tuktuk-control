@@ -211,6 +211,26 @@ class MarketplaceVehicle {
       );
 }
 
+// Un unico vehiculo operativo en Trabajos. Conserva historicos sin ofrecerlos
+// como nuevas opciones de activacion durante el onboarding.
+MarketplaceVehicle? marketplaceSingleOperationalVehicle(
+  List<MarketplaceVehicle> vehicles, {
+  String? preferredId,
+}) {
+  MarketplaceVehicle? active;
+  MarketplaceVehicle? preferred;
+  for (final vehicle in vehicles) {
+    if (vehicle.id == preferredId) preferred = vehicle;
+    if (active == null &&
+        vehicle.isActive &&
+        vehicle.onboardingComplete &&
+        vehicle.marketplaceStatus == 'active') {
+      active = vehicle;
+    }
+  }
+  return active ?? preferred ?? (vehicles.isEmpty ? null : vehicles.first);
+}
+
 class MarketplaceOnboarding {
   const MarketplaceOnboarding({
     required this.driverProfileExists,
