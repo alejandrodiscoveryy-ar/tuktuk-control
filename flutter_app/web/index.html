@@ -99,6 +99,21 @@
         } catch (_) {}
       }
 
+      // The preview only tests foreground multimedia audio. It does not
+      // bypass Android silent mode or certify locked-screen notifications.
+      window.tuktukPlayJobAlertSoundTest = function () {
+        unlockSound();
+        preloadJobSound().then(function (buffer) {
+          try {
+            if (!buffer || !audioContext || audioContext.state !== 'running') return;
+            var source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            source.start();
+          } catch (_) {}
+        });
+      };
+
       function showOnScreen(body) {
         try {
           var banner = document.getElementById('tuktuk-new-job-alert');

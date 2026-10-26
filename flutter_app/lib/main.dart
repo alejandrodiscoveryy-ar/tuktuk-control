@@ -55,6 +55,7 @@ part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
+part 'presentation/marketplace_web_alert_setup.dart';
 part 'presentation/marketplace_driver_permissions.dart';
 part 'presentation/marketplace_customer.dart';
 part 'presentation/marketplace_customer_booking_flow.dart';

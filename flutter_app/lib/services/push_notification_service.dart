@@ -17,6 +17,9 @@ void configureMarketplaceWebJobAlerts(bool enabled) =>
 void prepareMarketplaceWebJobAlertActivation() =>
     prepareWebJobAlertFromGesture();
 
+// A voluntary audible preview: never a guarantee of background sound on Android.
+void playMarketplaceWebJobSoundTest() => playWebJobSoundTest();
+
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukJobNotificationChannelId = 'tuktuk_nuevas_carreras_v1';

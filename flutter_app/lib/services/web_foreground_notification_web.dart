@@ -13,6 +13,17 @@ external void _setJobAlertEnabled(JSBoolean enabled);
 @JS('tuktukPrepareJobAlertFromGesture')
 external void _prepareJobAlertFromGesture();
 
+@JS('tuktukPlayJobAlertSoundTest')
+external void _playWebJobSoundTest();
+
+void playWebJobSoundTest() {
+  try {
+    _playWebJobSoundTest();
+  } catch (_) {
+    // Testing audible volume is optional; the user controls device sound.
+  }
+}
+
 void setWebJobAlertEnabled(bool enabled) {
   try {
     _setJobAlertEnabled(enabled.toJS);
