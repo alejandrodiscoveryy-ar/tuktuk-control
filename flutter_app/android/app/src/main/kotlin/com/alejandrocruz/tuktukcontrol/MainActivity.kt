@@ -15,6 +15,16 @@ class MainActivity : FlutterActivity() {
         private const val GET_INSTALL_REFERRER = "getInstallReferrer"
     }
 
+    override fun onStart() {
+        super.onStart()
+        DriverFloatingShortcut.hostVisibilityChanged(true)
+    }
+
+    override fun onStop() {
+        DriverFloatingShortcut.hostVisibilityChanged(false)
+        super.onStop()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         DriverAlertDiagnostics.register(this, flutterEngine)

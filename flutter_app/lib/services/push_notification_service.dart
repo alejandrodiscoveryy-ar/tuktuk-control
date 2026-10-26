@@ -55,7 +55,8 @@ String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
   if (data['kind']?.toString() != 'marketplace_job_available') return null;
   final jobId = data['job_id']?.toString();
   return jobId != null &&
-          RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', caseSensitive: false)
+          RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+                  caseSensitive: false)
               .hasMatch(jobId)
       ? jobId
       : null;
@@ -69,7 +70,8 @@ String? marketplaceJobIdFromUrl(Uri uri) => marketplaceJobIdFromPush({
 int appShellIndexAfterAuthentication({
   required int currentIndex,
   required String? marketplaceJobId,
-}) => marketplaceJobId == null ? 0 : currentIndex;
+}) =>
+    marketplaceJobId == null ? 0 : currentIndex;
 
 @visibleForTesting
 Uri? appUpdateUri(Map<String, dynamic> data) {
@@ -207,6 +209,19 @@ class PushNotificationService {
     enableVibration: true,
   );
 
+  // Canal nuevo para no reutilizar una configuracion sonora antigua.
+  // El backend debe migrarse de forma coordinada antes de emplearlo
+  // para las notificaciones recibidas con la app bloqueada.
+  static const _jobChannelV2 = AndroidNotificationChannel(
+    'tuktuk_nuevas_carreras_v2',
+    'Nuevas carreras (sonido oficial)',
+    description: 'Avisos de nuevas carreras con sonido TukTuk',
+    importance: Importance.high,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
+    enableVibration: true,
+  );
+
   final FirebaseMessaging? _messagingOverride;
   final FlutterLocalNotificationsPlugin _localNotifications;
   final StreamController<String> _tokenRefreshController =
@@ -250,6 +265,10 @@ class PushNotificationService {
             .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>()
             ?.createNotificationChannel(_jobChannel);
+        await _localNotifications
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(_jobChannelV2);
       }
 
       // A denied permission is a valid user choice and never blocks the app.
@@ -325,20 +344,23 @@ class PushNotificationService {
       notificationDetails: NotificationDetails(
         android: marketplaceJobIdFromPush(message.data) != null
             ? const AndroidNotificationDetails(
-                tuktukJobNotificationChannelId,
-                tuktukJobNotificationChannelName,
-                channelDescription: 'Avisos audibles de nuevas carreras disponibles',
+                'tuktuk_nuevas_carreras_v2',
+                'Nuevas carreras (sonido oficial)',
+                channelDescription:
+                    'Avisos audibles de nuevas carreras disponibles',
                 importance: Importance.high,
                 priority: Priority.high,
                 icon: 'ic_stat_tuktuk',
                 playSound: true,
-                sound: RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
+                sound:
+                    RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
                 enableVibration: true,
               )
             : const AndroidNotificationDetails(
                 tuktukNotificationChannelId,
                 tuktukNotificationChannelName,
-                channelDescription: 'Notificaciones generales de TukTuk Conductor',
+                channelDescription:
+                    'Notificaciones generales de TukTuk Conductor',
                 importance: Importance.high,
                 priority: Priority.high,
                 icon: 'ic_stat_tuktuk',

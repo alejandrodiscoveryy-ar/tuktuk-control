@@ -1,7 +1,6 @@
 part of '../main.dart';
 
-/// Native Android: direct Settings shortcuts and observable recheck.
-/// The driver must explicitly grant permissions; this screen never overrides them.
+/// Pantalla breve: solo se muestra el requisito pendiente.
 class MarketplaceAndroidAlertSetupDialog extends StatefulWidget {
   const MarketplaceAndroidAlertSetupDialog({
     required this.initialStatus,
@@ -20,10 +19,11 @@ class MarketplaceAndroidAlertSetupDialog extends StatefulWidget {
 }
 
 class _MarketplaceAndroidAlertSetupDialogState
-    extends State<MarketplaceAndroidAlertSetupDialog> with WidgetsBindingObserver {
+    extends State<MarketplaceAndroidAlertSetupDialog>
+    with WidgetsBindingObserver {
   AndroidDriverAlertStatus? _status;
   bool _checking = false;
-  String _feedback = 'Corrige el requisito y pulsa Comprobar de nuevo.';
+  String? _feedback;
 
   @override
   void initState() {
@@ -48,106 +48,97 @@ class _MarketplaceAndroidAlertSetupDialogState
   Future<void> _refreshReadiness() async {
     if (_checking) return;
     setState(() => _checking = true);
-    bool succeeded = false;
+
+    bool ready = false;
     try {
-      succeeded = await widget.recheck();
+      ready = await widget.recheck();
     } catch (_) {
-      succeeded = false;
+      ready = false;
     }
+
     if (!mounted) return;
-    if (succeeded) {
+
+    if (ready) {
       Navigator.of(context).pop(true);
       return;
     }
+
     final status = await AndroidDriverAlertBridge.inspect();
     if (!mounted) return;
+
     setState(() {
       _status = status;
       _checking = false;
-      _feedback = status?.problem ??
-          'No se pudo comprobar el dispositivo. Comprueba Internet e inténtalo otra vez.';
+      _feedback = status?.ready == true
+          ? 'No pudimos conectar las alertas. Revisa Internet y reintenta.'
+          : null;
     });
   }
 
-  Future<void> _open(String action) async {
-    final opened = await widget.openSettings(action);
+  Future<void> _resolve() async {
+    if (_status?.ready == true) {
+      await _refreshReadiness();
+      return;
+    }
+
+    final opened = await widget.openSettings(
+      _status?.settingsAction ?? 'openAppNotifications',
+    );
+
     if (!mounted) return;
+
     if (!opened) {
-      setState(() => _feedback = 'Android no pudo abrir esos ajustes. Ábrelos desde Ajustes del teléfono.');
+      setState(() {
+        _feedback = 'Abre los ajustes de notificaciones del teléfono.';
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = _status;
+    final message = _feedback ??
+        (_status?.ready == true
+            ? 'Revisa la conexión y vuelve a intentarlo.'
+            : _status?.problem ??
+                'Activa las notificaciones para recibir carreras.');
+
     return AlertDialog(
-      title: const Text('Prepara las alertas para trabajar'),
-      content: SizedBox(
-        width: 350,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('TUKTUK comprobará los avisos antes de declarar tu vehículo disponible.'),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.notifications_active_outlined,
-                    color: status?.appNotifications == true ? const Color(0xFF43E4BB) : Colors.orange),
-                title: const Text('Notificaciones'),
-                subtitle: Text(status?.appNotifications == true ? 'Autorizadas' : 'Requieren revisión'),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.campaign_outlined,
-                    color: status?.channelAudible == true ? const Color(0xFF43E4BB) : Colors.orange),
-                title: const Text('Canal Nuevas carreras'),
-                subtitle: Text(status?.channelAudible == true ? 'Canal sonoro preparado' : 'Silenciado o sin verificar'),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.volume_up_outlined,
-                    color: status?.soundAudible == true ? const Color(0xFF43E4BB) : Colors.orange),
-                title: const Text('Sonido del teléfono'),
-                subtitle: Text(status?.soundAudible == true
-                    ? 'Volumen y modo de sonido preparados'
-                    : 'Comprueba volumen, silencio y No molestar'),
-              ),
-              const SizedBox(height: 6),
-              Text(status?.problem ?? 'No fue posible leer la configuración de Android.'),
-              const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: _checking ? null : () => unawaited(_open(status?.settingsAction ?? 'openAppNotifications')),
-                icon: const Icon(Icons.settings_outlined),
-                label: Text(status?.primaryAction ?? 'Abrir ajustes de notificaciones'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _checking ? null : () => unawaited(_open('openSoundSettings')),
-                icon: const Icon(Icons.volume_up_outlined),
-                label: const Text('Revisar volumen y No molestar'),
-              ),
-              const SizedBox(height: 12),
-              Text(_feedback, style: const TextStyle(fontSize: 12, color: Color(0xFFFFC47B))),
-              const SizedBox(height: 8),
-              const Text('Ninguna comprobación garantiza la entrega de cada carrera. '
-                  'La prueba de recepción real se hará con el Samsung bloqueado.',
-                  style: TextStyle(fontSize: 11)),
-            ],
+      title: const Text('Activa las alertas de carreras'),
+      content: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.notifications_active_outlined,
+            color: Colors.orange,
+            size: 28,
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message),
+          ),
+        ],
       ),
       actions: [
         TextButton(
           onPressed: _checking ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Seguir descansando'),
+          child: const Text('Ahora no'),
         ),
-        FilledButton(
-          onPressed: _checking ? null : () => unawaited(_refreshReadiness()),
-          child: _checking
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Comprobar de nuevo'),
+        FilledButton.icon(
+          onPressed: _checking ? null : () => unawaited(_resolve()),
+          icon: _checking
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.settings_outlined),
+          label: Text(
+            _checking
+                ? 'Comprobando'
+                : _status?.ready == true
+                    ? 'Reintentar'
+                    : 'Abrir ajustes',
+          ),
         ),
       ],
     );

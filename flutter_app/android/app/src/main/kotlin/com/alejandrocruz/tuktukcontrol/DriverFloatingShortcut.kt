@@ -31,6 +31,14 @@ internal object DriverFloatingShortcut {
 
     private var pendingOpenJobs = false
     private var flutterChannel: MethodChannel? = null
+    private var hostVisible = true
+
+    fun hostVisibilityChanged(visible: Boolean) {
+        hostVisible = visible
+        DriverFloatingShortcutService.updateOverlayVisibility(!visible)
+    }
+
+    fun hostIsVisible(): Boolean = hostVisible
 
     fun register(activity: Activity, engine: FlutterEngine) {
         val channel = MethodChannel(
@@ -121,11 +129,17 @@ class DriverFloatingShortcutService : Service() {
     companion object {
         private const val CHANNEL_ID = "tuktuk_boton_flotante"
         private const val NOTIFICATION_ID = 7091
+        private var activeService: DriverFloatingShortcutService? = null
+
+        fun updateOverlayVisibility(shouldShow: Boolean) {
+            activeService?.setBubbleVisible(shouldShow)
+        }
     }
 
     private var manager: WindowManager? = null
     private var bubble: FrameLayout? = null
     private var badge: TextView? = null
+    private var latestCount = 0
     private var params: WindowManager.LayoutParams? = null
 
     private fun dp(value: Int): Int =
@@ -137,6 +151,7 @@ class DriverFloatingShortcutService : Service() {
         super.onCreate()
 
         try {
+            activeService = this
             startPersistentNotification()
 
             if (!Settings.canDrawOverlays(this)) {
@@ -144,7 +159,7 @@ class DriverFloatingShortcutService : Service() {
                 return
             }
 
-            createBubble()
+            setBubbleVisible(!DriverFloatingShortcut.hostIsVisible())
         } catch (_: Exception) {
             stopSelf()
         }
@@ -160,8 +175,11 @@ class DriverFloatingShortcutService : Service() {
             return START_NOT_STICKY
         }
 
-        val count = intent?.getIntExtra("count", 0) ?: 0
-        updateBadge(count.coerceIn(0, 99))
+        latestCount = (intent?.getIntExtra("count", 0) ?: 0)
+            .coerceIn(0, 99)
+
+        setBubbleVisible(!DriverFloatingShortcut.hostIsVisible())
+        updateBadge(latestCount)
 
         return START_NOT_STICKY
     }
@@ -221,6 +239,29 @@ class DriverFloatingShortcutService : Service() {
         }
     }
 
+    private fun setBubbleVisible(visible: Boolean) {
+        if (visible) {
+            if (bubble == null && Settings.canDrawOverlays(this)) {
+                createBubble()
+                updateBadge(latestCount)
+            }
+        } else {
+            removeBubble()
+        }
+    }
+
+    private fun removeBubble() {
+        bubble?.let { view ->
+            try {
+                manager?.removeView(view)
+            } catch (_: Exception) {
+            }
+        }
+
+        bubble = null
+        badge = null
+    }
+
     private fun createBubble() {
         val wm = getSystemService(
             Context.WINDOW_SERVICE
@@ -237,7 +278,12 @@ class DriverFloatingShortcutService : Service() {
 
         val logo = ImageView(this).apply {
             setImageResource(R.mipmap.ic_launcher_round)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.rgb(12, 38, 48))
+            }
+            clipToOutline = true
             setPadding(0, 0, 0, 0)
         }
 
@@ -365,15 +411,9 @@ class DriverFloatingShortcutService : Service() {
     }
 
     override fun onDestroy() {
-        bubble?.let { view ->
-            try {
-                manager?.removeView(view)
-            } catch (_: Exception) {
-            }
-        }
+        if (activeService === this) activeService = null
 
-        bubble = null
-        badge = null
+        removeBubble()
         manager = null
         params = null
 
