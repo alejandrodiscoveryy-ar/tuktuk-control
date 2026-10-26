@@ -281,6 +281,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _acceptingJobId;
   String? _busyJobId;
   bool _updatingAvailability = false;
+  bool _webAlertVerified = false;
   MarketplaceWorkAccess? _workAccess;
 
   Timer? _operationalLocationTimer;
@@ -1283,6 +1284,67 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  Future<bool> _verifyWebJobAlerts() async {
+    if (!kIsWeb) return true;
+    final userId = widget.store.user?.id;
+    if (userId == null) return false;
+
+    final result = await verifyMarketplaceWebAlertReadiness(
+      checkPermission: () async =>
+          (await FirebaseMessaging.instance.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+          )).authorizationStatus,
+      requestToken: () => getPushTokenSafely(
+        isWeb: true,
+        getToken: ({vapidKey, serviceWorkerScriptPath}) =>
+            FirebaseMessaging.instance.getToken(
+          vapidKey: vapidKey,
+          serviceWorkerScriptPath: serviceWorkerScriptPath,
+        ),
+      ),
+      registerToken: (token) => SupabasePushDeviceTokenRepository(
+        Supabase.instance.client,
+      ).register(
+        userId: userId,
+        token: token,
+        platform: 'web',
+        now: DateTime.now().toUtc(),
+      ),
+    );
+
+    if (!mounted) return false;
+    setState(() {
+      _webAlertVerified = result == MarketplaceWebAlertReadiness.ready;
+    });
+    if (_webAlertVerified) return true;
+
+    final detail = switch (result) {
+      MarketplaceWebAlertReadiness.notificationsBlocked =>
+        'Permite las notificaciones de este sitio en el navegador y vuelve a comprobar.',
+      MarketplaceWebAlertReadiness.tokenUnavailable =>
+        'No fue posible activar las notificaciones push de este navegador. Comprueba la conexion y vuelve a intentar.',
+      MarketplaceWebAlertReadiness.registrationFailed =>
+        'Las notificaciones estan permitidas, pero TUKTUK no pudo registrar este dispositivo. Comprueba la conexion y vuelve a intentar.',
+      MarketplaceWebAlertReadiness.ready => '',
+    };
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Alertas de trabajo sin verificar'),
+        content: Text('$detail\n\nNo activaremos Trabajar hasta superar esta comprobacion.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+    return false;
+  }
+
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
     final vehicle = _vehicleById(_selectedVehicleId);
 
@@ -1297,6 +1359,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     setState(() => _updatingAvailability = true);
 
     try {
+      // WebApp: no declarar Trabajando sin permiso y token push registrado.
+      // Android se verificara en su APK despues de aprobar las pruebas web.
+      if (acceptingJobs && kIsWeb && !(await _verifyWebJobAlerts())) return;
+      if (!mounted) return;
+
       final updated = await _service.setAcceptingJobs(
         vehicle.id,
         acceptingJobs,
@@ -1310,6 +1377,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
         if (!acceptingJobs) {
           _available = const [];
+          _webAlertVerified = false;
         }
       });
 
@@ -3416,6 +3484,39 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             ],
           ),
         ),
+        if (kIsWeb && available && !onRide && !_webAlertVerified)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 96,
+            child: Material(
+              color: const Color(0xF03E2D20),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                key: const ValueKey('work-web-alert-check'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: _updatingAvailability
+                    ? null
+                    : () => unawaited(_verifyWebJobAlerts()),
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.notification_important_outlined,
+                          color: Color(0xFFFFC47B)),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Alertas de trabajo sin verificar. Toca para comprobar.',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (!onRide && _workMapVisual != null)
           Positioned(
             right: 12,

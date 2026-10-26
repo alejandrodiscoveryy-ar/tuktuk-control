@@ -129,7 +129,6 @@ typedef PushTokenGetter = Future<String?> Function({
   String? serviceWorkerScriptPath,
 });
 
-@visibleForTesting
 Future<String?> getPushTokenSafely({
   required bool isWeb,
   required PushTokenGetter getToken,
@@ -142,6 +141,43 @@ Future<String?> getPushTokenSafely({
   } catch (_) {
     return null;
   }
+}
+
+enum MarketplaceWebAlertReadiness {
+  ready,
+  notificationsBlocked,
+  tokenUnavailable,
+  registrationFailed,
+}
+
+Future<MarketplaceWebAlertReadiness> verifyMarketplaceWebAlertReadiness({
+  required Future<AuthorizationStatus> Function() checkPermission,
+  required Future<String?> Function() requestToken,
+  required Future<void> Function(String token) registerToken,
+}) async {
+  try {
+    if (await checkPermission() != AuthorizationStatus.authorized) {
+      return MarketplaceWebAlertReadiness.notificationsBlocked;
+    }
+  } catch (_) {
+    return MarketplaceWebAlertReadiness.notificationsBlocked;
+  }
+
+  String? token;
+  try {
+    token = await requestToken();
+  } catch (_) {
+    return MarketplaceWebAlertReadiness.tokenUnavailable;
+  }
+  if (token == null || token.trim().isEmpty) {
+    return MarketplaceWebAlertReadiness.tokenUnavailable;
+  }
+  try {
+    await registerToken(token);
+  } catch (_) {
+    return MarketplaceWebAlertReadiness.registrationFailed;
+  }
+  return MarketplaceWebAlertReadiness.ready;
 }
 
 class PushNotificationService {

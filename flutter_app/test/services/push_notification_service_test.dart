@@ -1,4 +1,5 @@
 import 'package:control_tuk_tuk/services/push_notification_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -29,6 +30,46 @@ void main() {
     expect(marketplaceJobPushPending.value, isFalse);
     expect(marketplaceJobRefreshRequests.value, revision);
   });
+  test('alertas web: solo habilita trabajar tras registrar token', () async {
+    String? registered;
+    final result = await verifyMarketplaceWebAlertReadiness(
+      checkPermission: () async => AuthorizationStatus.authorized,
+      requestToken: () async => 'token-web',
+      registerToken: (token) async { registered = token; },
+    );
+    expect(result, MarketplaceWebAlertReadiness.ready);
+    expect(registered, 'token-web');
+  });
+
+  test('alertas web: permiso denegado impide registrar token', () async {
+    var tokenRequests = 0;
+    final result = await verifyMarketplaceWebAlertReadiness(
+      checkPermission: () async => AuthorizationStatus.denied,
+      requestToken: () async { tokenRequests++; return 'token'; },
+      registerToken: (_) async {},
+    );
+    expect(result, MarketplaceWebAlertReadiness.notificationsBlocked);
+    expect(tokenRequests, 0);
+  });
+
+  test('alertas web: token vacio bloquea activacion', () async {
+    final result = await verifyMarketplaceWebAlertReadiness(
+      checkPermission: () async => AuthorizationStatus.authorized,
+      requestToken: () async => null,
+      registerToken: (_) async { fail('No se debe registrar token vacio'); },
+    );
+    expect(result, MarketplaceWebAlertReadiness.tokenUnavailable);
+  });
+
+  test('alertas web: falla de registro bloquea activacion', () async {
+    final result = await verifyMarketplaceWebAlertReadiness(
+      checkPermission: () async => AuthorizationStatus.authorized,
+      requestToken: () async => 'token-web',
+      registerToken: (_) async { throw StateError('Red no disponible'); },
+    );
+    expect(result, MarketplaceWebAlertReadiness.registrationFailed);
+  });
+
   test('permiso rechazado no interrumpe el inicio de la aplicación', () async {
     await expectLater(
       requestPushPermissionSafely(() async {
