@@ -93,7 +93,9 @@ class AndroidDriverAlertBridge {
       'openJobChannel',
       'openSoundSettings',
       'openLocationSettings',
-    }.contains(action)) return false;
+    }.contains(action)) {
+      return false;
+    }
     try {
       return await _channel.invokeMethod<bool>(action) ?? false;
     } on PlatformException {

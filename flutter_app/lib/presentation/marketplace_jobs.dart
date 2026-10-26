@@ -1410,7 +1410,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (acceptingJobs && kIsWeb && !(await _verifyWebJobAlerts())) return;
       if (acceptingJobs && !kIsWeb &&
           defaultTargetPlatform == TargetPlatform.android &&
-          !(await _verifyAndroidJobAlerts())) return;
+          !(await _verifyAndroidJobAlerts())) {
+        return;
+      }
       if (!mounted) return;
 
       final updated = await _service.setAcceptingJobs(
