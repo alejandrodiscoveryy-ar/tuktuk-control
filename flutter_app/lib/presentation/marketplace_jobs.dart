@@ -1284,10 +1284,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
-  Future<bool> _verifyWebJobAlerts() async {
-    if (!kIsWeb) return true;
+  Future<MarketplaceWebAlertReadiness> _checkWebJobAlerts() async {
     final userId = widget.store.user?.id;
-    if (userId == null) return false;
+    if (userId == null) {
+      return MarketplaceWebAlertReadiness.registrationFailed;
+    }
 
     final result = await verifyMarketplaceWebAlertReadiness(
       checkPermission: () async =>
@@ -1314,35 +1315,30 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       ),
     );
 
-    if (!mounted) return false;
-    setState(() {
-      _webAlertVerified = result == MarketplaceWebAlertReadiness.ready;
-    });
-    if (_webAlertVerified) return true;
+    if (mounted) {
+      setState(() {
+        _webAlertVerified = result == MarketplaceWebAlertReadiness.ready;
+      });
+    }
+    return result;
+  }
 
-    final detail = switch (result) {
-      MarketplaceWebAlertReadiness.notificationsBlocked =>
-        'Permite las notificaciones de este sitio en el navegador y vuelve a comprobar.',
-      MarketplaceWebAlertReadiness.tokenUnavailable =>
-        'No fue posible activar las notificaciones push de este navegador. Comprueba la conexion y vuelve a intentar.',
-      MarketplaceWebAlertReadiness.registrationFailed =>
-        'Las notificaciones estan permitidas, pero TUKTUK no pudo registrar este dispositivo. Comprueba la conexion y vuelve a intentar.',
-      MarketplaceWebAlertReadiness.ready => '',
-    };
-    await showDialog<void>(
+  Future<bool> _verifyWebJobAlerts() async {
+    if (!kIsWeb) return true;
+    final result = await _checkWebJobAlerts();
+    if (!mounted) return false;
+    if (result == MarketplaceWebAlertReadiness.ready) return true;
+
+    final recovered = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Alertas de trabajo sin verificar'),
-        content: Text('$detail\n\nNo activaremos Trabajar hasta superar esta comprobacion.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Entendido'),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (dialogContext) => MarketplaceWebAlertSetupDialog(
+        initialStatus: result,
+        recheck: _checkWebJobAlerts,
+        playSound: playMarketplaceWebJobSoundTest,
       ),
     );
-    return false;
+    return mounted && recovered == true;
   }
 
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
