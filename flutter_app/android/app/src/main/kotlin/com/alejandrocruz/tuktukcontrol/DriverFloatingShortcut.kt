@@ -232,18 +232,13 @@ class DriverFloatingShortcutService : Service() {
 
         val root = FrameLayout(this)
 
-        val background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.rgb(12, 34, 42))
-            setStroke(dp(2), Color.rgb(45, 212, 163))
-        }
-
-        root.background = background
+        // Utilizar el icono circular original sin borde adicional.
+        root.background = null
 
         val logo = ImageView(this).apply {
             setImageResource(R.mipmap.ic_launcher_round)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setPadding(0, 0, 0, 0)
         }
 
         root.addView(

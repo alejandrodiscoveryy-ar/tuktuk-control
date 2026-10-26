@@ -25,6 +25,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'services/push_notification_service.dart';
 import 'services/android_driver_alerts.dart';
+import 'services/android_floating_button.dart';
 import 'services/push_token_registration_coordinator.dart';
 import 'services/install_referrer_service.dart';
 import 'services/referral_link_listener.dart';

@@ -11,6 +11,32 @@ String marketplaceAcceptErrorMessage(Object error) {
   return 'No se pudo aceptar el trabajo. Puede que ya no esté disponible. Comprueba tu conexión y vuelve a intentarlo.';
 }
 
+const _marketplaceFloatingSettingKey =
+    'marketplace_floating_button_enabled_v1';
+
+final ValueNotifier<bool> _marketplaceDriverWorking =
+    ValueNotifier<bool>(false);
+
+bool get _marketplaceFloatingPreference =>
+    AndroidFloatingButtonBridge.supported &&
+    Hive.isBoxOpen(_metaBox) &&
+    Hive.box(_metaBox).get(_marketplaceFloatingSettingKey) == true;
+
+Future<void> _syncMarketplaceFloatingShortcut() async {
+  if (!AndroidFloatingButtonBridge.supported) return;
+
+  final show = _marketplaceFloatingPreference &&
+      _marketplaceDriverWorking.value;
+
+  final count = marketplaceJobPushPending.value
+      ? max(1, _marketplaceAvailableJobCount.value)
+      : _marketplaceAvailableJobCount.value;
+
+  await AndroidFloatingButtonBridge.setVisible(
+    visible: show,
+    count: count,
+  );
+}
 final ValueNotifier<int> _marketplaceAvailableJobCount = ValueNotifier<int>(0);
 final ValueNotifier<bool> _marketplaceJobsNeedAttention = ValueNotifier<bool>(
   false,
@@ -281,6 +307,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _acceptingJobId;
   String? _busyJobId;
   bool _updatingAvailability = false;
+  bool _floatingOptedIn = false;
+  bool _requestingFloatingPermission = false;
   bool _webAlertVerified = false;
   MarketplaceWorkAccess? _workAccess;
 
@@ -301,6 +329,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void initState() {
     super.initState();
+    _floatingOptedIn = _marketplaceFloatingPreference;
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
@@ -396,6 +425,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _operationalLifecycleState = state;
+
+    if (state == AppLifecycleState.resumed) {
+      if (_requestingFloatingPermission) {
+        _requestingFloatingPermission = false;
+        unawaited(_completeFloatingPermissionRequest());
+      } else {
+        unawaited(_syncMarketplaceFloatingShortcut());
+      }
+    }
 
     if (state == AppLifecycleState.resumed) {
       _refreshAvailability();
@@ -949,6 +987,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (widget.store.user == null) {
       if (!mounted) return;
       configureMarketplaceWebJobAlerts(false);
+      _marketplaceDriverWorking.value = false;
 
       _stopOperationalLocationSampling();
       _updateMarketplaceDriverProfileNeedsSetup(null);
@@ -988,12 +1027,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       });
 
       if (_marketplaceDriverNeedsSetup(onboarding)) {
+        _marketplaceDriverWorking.value = false;
         _stopOperationalLocationSampling();
         _setMarketplaceAvailableJobCount(0);
         setState(() => _loading = false);
         return;
       }
       await _loadWorkAccess(vehicleId);
+
+      final workingVehicle = _vehicleById(vehicleId);
+      _marketplaceDriverWorking.value =
+          _vehicleReadyForWork(workingVehicle) &&
+          workingVehicle?.acceptingJobs == true;
 
       await Future.wait([
         _loadScope('active'),
@@ -1391,6 +1436,63 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return mounted && recovered == true;
   }
 
+  Future<void> _enableFloatingShortcut() async {
+    await Hive.box(_metaBox).put(_marketplaceFloatingSettingKey, true);
+
+    if (!mounted) return;
+
+    setState(() => _floatingOptedIn = true);
+    await _syncMarketplaceFloatingShortcut();
+  }
+
+  Future<void> _completeFloatingPermissionRequest() async {
+    if (!mounted) return;
+
+    if (await AndroidFloatingButtonBridge.canDraw()) {
+      await _enableFloatingShortcut();
+    } else if (mounted) {
+      toast(
+        context,
+        'El botón flotante sigue desactivado. '
+        'Puedes habilitarlo desde Trabajo.',
+      );
+    }
+  }
+
+  Future<void> _toggleFloatingShortcut() async {
+    if (!AndroidFloatingButtonBridge.supported) return;
+
+    if (_floatingOptedIn) {
+      await Hive.box(_metaBox).put(_marketplaceFloatingSettingKey, false);
+
+      if (!mounted) return;
+
+      setState(() => _floatingOptedIn = false);
+      await _syncMarketplaceFloatingShortcut();
+      return;
+    }
+
+    if (!await AndroidFloatingButtonBridge.canDraw()) {
+      if (!mounted) return;
+
+      _requestingFloatingPermission = true;
+
+      final opened =
+          await AndroidFloatingButtonBridge.openPermission();
+
+      if (!opened && mounted) {
+        _requestingFloatingPermission = false;
+
+        toast(
+          context,
+          'No se pudieron abrir los permisos del botón flotante.',
+        );
+      }
+      return;
+    }
+
+    await _enableFloatingShortcut();
+  }
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
     final vehicle = _vehicleById(_selectedVehicleId);
 
@@ -1433,6 +1535,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       });
 
       configureMarketplaceWebJobAlerts(acceptingJobs);
+      _marketplaceDriverWorking.value = acceptingJobs;
       await _loadWorkAccess(vehicle.id);
 
       if (!mounted) return;
@@ -3535,7 +3638,51 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             ],
           ),
         ),
-        if (kIsWeb && available && !onRide && !_webAlertVerified)
+        if (AndroidFloatingButtonBridge.supported)
+          Positioned(
+            left: 12,
+            top: 88,
+            child: Material(
+              color: const Color(0xE8122630),
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                key: const ValueKey('tuktuk-floating-shortcut-toggle'),
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => unawaited(_toggleFloatingShortcut()),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _floatingOptedIn
+                            ? Icons.touch_app_rounded
+                            : Icons.touch_app_outlined,
+                        color: _floatingOptedIn
+                            ? kPrimary
+                            : Colors.white70,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        _floatingOptedIn
+                            ? 'Botón flotante: sí'
+                            : 'Botón flotante: no',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),        if (kIsWeb && available && !onRide && !_webAlertVerified)
           Positioned(
             left: 12,
             right: 12,
