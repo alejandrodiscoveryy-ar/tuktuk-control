@@ -35,7 +35,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Prepara las alertas de trabajo'), findsOneWidget);
     expect(find.text('Seguir descansando'), findsOneWidget);
-    expect(find.text('Solicitar permiso / comprobar'), findsOneWidget);
+    expect(find.text('Comprobar de nuevo'), findsOneWidget);
+    await tester.tap(find.text('Comprobar de nuevo'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('siguen bloqueadas'), findsOneWidget);
     await tester.tap(find.text('Seguir descansando'));
     await tester.pumpAndSettle();
     expect(answer, false);
