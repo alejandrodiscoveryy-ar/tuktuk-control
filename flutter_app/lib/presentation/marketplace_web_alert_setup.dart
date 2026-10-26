@@ -23,6 +23,7 @@ class _MarketplaceWebAlertSetupDialogState
     extends State<MarketplaceWebAlertSetupDialog> {
   late MarketplaceWebAlertReadiness _status;
   bool _checking = false;
+  String? _retryFeedback;
 
   @override
   void initState() {
@@ -73,6 +74,15 @@ class _MarketplaceWebAlertSetupDialogState
     setState(() {
       _status = next;
       _checking = false;
+      _retryFeedback = switch (next) {
+        MarketplaceWebAlertReadiness.notificationsBlocked =>
+          'Las notificaciones siguen bloqueadas. Abre los ajustes de Chrome, permite www.vrixora.com y comprueba otra vez.',
+        MarketplaceWebAlertReadiness.tokenUnavailable =>
+          'No se obtuvo el token de notificaciones. Comprueba la conexion y vuelve a intentar.',
+        MarketplaceWebAlertReadiness.registrationFailed =>
+          'No se confirmo el registro del dispositivo. Comprueba Internet e intenta de nuevo.',
+        MarketplaceWebAlertReadiness.ready => null,
+      };
     });
   }
 
@@ -143,6 +153,14 @@ class _MarketplaceWebAlertSetupDialogState
               ),
               const SizedBox(height: 8),
               Text(_instructions),
+              if (_status == MarketplaceWebAlertReadiness.notificationsBlocked)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Importante: la webapp no puede abrir ni conceder un permiso ya bloqueado por Chrome. Debes autorizarlo en los ajustes y regresar.',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
               const SizedBox(height: 14),
               const Text(
                 'Sonido del telefono: comprueba que no esta en silencio, '
@@ -168,6 +186,15 @@ class _MarketplaceWebAlertSetupDialogState
         ),
       ),
       actions: [
+        if (_retryFeedback != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              _retryFeedback!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: Color(0xFFFFC47B)),
+            ),
+          ),
         TextButton(
           onPressed: _checking ? null : () => Navigator.of(context).pop(false),
           child: const Text('Seguir descansando'),
@@ -180,11 +207,7 @@ class _MarketplaceWebAlertSetupDialogState
                   width: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text(
-                  _status == MarketplaceWebAlertReadiness.notificationsBlocked
-                      ? 'Solicitar permiso / comprobar'
-                      : 'Comprobar de nuevo',
-                ),
+              : const Text('Comprobar de nuevo'),
         ),
       ],
     );
