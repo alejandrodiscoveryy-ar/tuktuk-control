@@ -553,6 +553,39 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _setMarketplaceJobsVisible(index == 2);
     _marketplacePushJobId.addListener(_openMarketplacePush);
+    _marketplaceDriverWorking.addListener(_refreshFloatingShortcut);
+    _marketplaceAvailableJobCount.addListener(_refreshFloatingShortcut);
+    marketplaceJobPushPending.addListener(_refreshFloatingShortcut);
+    store.addListener(_stopFloatingOnLogout);
+
+    AndroidFloatingButtonBridge.setOpenJobsHandler(_openFloatingJobs);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_checkInitialFloatingIntent());
+    });
+  }
+
+  void _refreshFloatingShortcut() {
+    unawaited(_syncMarketplaceFloatingShortcut());
+  }
+
+  void _stopFloatingOnLogout() {
+    if (store.user == null && _marketplaceDriverWorking.value) {
+      _marketplaceDriverWorking.value = false;
+    }
+  }
+
+  void _openFloatingJobs() {
+    if (!mounted) return;
+
+    _setMarketplaceJobsVisible(true);
+    setState(() => index = 2);
+  }
+
+  Future<void> _checkInitialFloatingIntent() async {
+    if (await AndroidFloatingButtonBridge.consumeOpenJobs()) {
+      _openFloatingJobs();
+    }
   }
 
   void _openMarketplacePush() {
@@ -566,6 +599,11 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _marketplacePushJobId.removeListener(_openMarketplacePush);
+    _marketplaceDriverWorking.removeListener(_refreshFloatingShortcut);
+    _marketplaceAvailableJobCount.removeListener(_refreshFloatingShortcut);
+    marketplaceJobPushPending.removeListener(_refreshFloatingShortcut);
+    store.removeListener(_stopFloatingOnLogout);
+    AndroidFloatingButtonBridge.setOpenJobsHandler(null);
     super.dispose();
   }
 
