@@ -35,6 +35,8 @@ Future<void> _syncMarketplaceFloatingShortcut() async {
   await AndroidFloatingButtonBridge.setVisible(
     visible: show,
     count: count,
+    attention: marketplaceJobPushPending.value ||
+        _marketplaceJobsNeedAttention.value,
   );
 }
 final ValueNotifier<int> _marketplaceAvailableJobCount = ValueNotifier<int>(0);

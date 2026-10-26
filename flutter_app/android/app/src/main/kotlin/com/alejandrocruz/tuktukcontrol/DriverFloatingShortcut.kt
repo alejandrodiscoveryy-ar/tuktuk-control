@@ -1,5 +1,6 @@
 package com.alejandrocruz.tuktukcontrol
 
+import android.animation.ObjectAnimator
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,7 +14,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -86,6 +89,10 @@ internal object DriverFloatingShortcut {
                                     .coerceIn(0, 99)
 
                             service.putExtra("count", count)
+                            service.putExtra(
+                                "attention",
+                                call.argument<Boolean>("attention") ?: false
+                            )
 
                             if (Build.VERSION.SDK_INT >= 26) {
                                 activity.startForegroundService(service)
@@ -139,8 +146,23 @@ class DriverFloatingShortcutService : Service() {
     private var manager: WindowManager? = null
     private var bubble: FrameLayout? = null
     private var badge: TextView? = null
+    private var haloView: View? = null
+    private var haloDrawable: GradientDrawable? = null
+    private var haloPulse: ObjectAnimator? = null
     private var latestCount = 0
+    private var nativeJobNotificationCount = 0
+    private var needsAttention = false
+    private var haloHadNewJob = false
     private var params: WindowManager.LayoutParams? = null
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val checkNotifications = object : Runnable {
+        override fun run() {
+            if (bubble == null) return
+            inspectOwnJobNotifications()
+            handler.postDelayed(this, 4_000L)
+        }
+    }
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
@@ -177,9 +199,11 @@ class DriverFloatingShortcutService : Service() {
 
         latestCount = (intent?.getIntExtra("count", 0) ?: 0)
             .coerceIn(0, 99)
+        needsAttention = intent?.getBooleanExtra("attention", false) ?: needsAttention
 
         setBubbleVisible(!DriverFloatingShortcut.hostIsVisible())
-        updateBadge(latestCount)
+        updateHaloColor()
+        updateBadge(maxOf(latestCount, nativeJobNotificationCount))
 
         return START_NOT_STICKY
     }
@@ -240,17 +264,74 @@ class DriverFloatingShortcutService : Service() {
     }
 
     private fun setBubbleVisible(visible: Boolean) {
-        if (visible) {
-            if (bubble == null && Settings.canDrawOverlays(this)) {
-                createBubble()
-                updateBadge(latestCount)
-            }
+        if (visible && Settings.canDrawOverlays(this)) {
+            if (bubble == null) createBubble()
+            handler.removeCallbacks(checkNotifications)
+            inspectOwnJobNotifications()
+            handler.postDelayed(checkNotifications, 4_000L)
         } else {
             removeBubble()
         }
     }
 
+    // Android expone solo las notificaciones de esta misma aplicacion.
+    // Esto permite actualizar el halo incluso con Flutter en segundo plano,
+    // sin otro permiso y sin consultar Internet.
+    private fun inspectOwnJobNotifications() {
+        nativeJobNotificationCount = if (Build.VERSION.SDK_INT >= 26) {
+            try {
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.activeNotifications.count { item ->
+                    val channelId = item.notification.channelId
+                    channelId == "tuktuk_nuevas_carreras_v1" ||
+                        channelId == "tuktuk_nuevas_carreras_v2"
+                }
+            } catch (_: Exception) {
+                0
+            }
+        } else {
+            0
+        }
+        updateHaloColor()
+        updateBadge(maxOf(latestCount, nativeJobNotificationCount))
+    }
+
+    private fun updateHaloColor() {
+        val hasNewJob = needsAttention || nativeJobNotificationCount > 0
+        val ringColor = when {
+            hasNewJob -> Color.rgb(255, 107, 75)  // Coral: nueva carrera sin revisar.
+            latestCount > 0 -> Color.rgb(255, 195, 76) // Dorado: hay carreras.
+            else -> Color.rgb(48, 217, 200) // Turquesa: disponible, sin avisos.
+        }
+        haloDrawable?.setStroke(dp(3), ringColor)
+        haloView?.invalidate()
+
+        if (hasNewJob && !haloHadNewJob) {
+            val ring = haloView
+            if (ring != null) {
+                haloPulse?.cancel()
+                haloPulse = ObjectAnimator.ofFloat(
+                    ring, View.ALPHA, 1f, 0.55f, 1f
+                ).apply {
+                    duration = 950L
+                    repeatCount = 2
+                    start()
+                }
+            }
+        } else if (!hasNewJob) {
+            haloPulse?.cancel()
+            haloView?.alpha = 1f
+        }
+        haloHadNewJob = hasNewJob
+    }
+
     private fun removeBubble() {
+        handler.removeCallbacks(checkNotifications)
+        haloPulse?.cancel()
+        haloPulse = null
+        haloView = null
+        haloDrawable = null
+        haloHadNewJob = false
         bubble?.let { view ->
             try {
                 manager?.removeView(view)
@@ -269,14 +350,26 @@ class DriverFloatingShortcutService : Service() {
 
         manager = wm
 
-        val size = dp(66)
+        val size = dp(70)
 
         val root = FrameLayout(this)
-
-        // Utilizar el icono circular original sin borde adicional.
         root.background = null
 
+        val ringBackground = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.rgb(12, 38, 48))
+            setStroke(dp(3), Color.rgb(48, 217, 200))
+        }
+        val ring = View(this).apply {
+            background = ringBackground
+            elevation = dp(2).toFloat()
+        }
+        root.addView(ring, FrameLayout.LayoutParams(size, size))
+        haloView = ring
+        haloDrawable = ringBackground
+
         val logo = ImageView(this).apply {
+            elevation = dp(3).toFloat()
             setImageResource(R.mipmap.ic_launcher_round)
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = GradientDrawable().apply {
@@ -289,10 +382,13 @@ class DriverFloatingShortcutService : Service() {
 
         root.addView(
             logo,
-            FrameLayout.LayoutParams(size, size)
+            FrameLayout.LayoutParams(
+                size - dp(10), size - dp(10), Gravity.CENTER
+            )
         )
 
         val counter = TextView(this).apply {
+            elevation = dp(4).toFloat()
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             textSize = 11f
