@@ -24,6 +24,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import 'services/push_notification_service.dart';
+import 'services/android_driver_alerts.dart';
 import 'services/push_token_registration_coordinator.dart';
 import 'services/install_referrer_service.dart';
 import 'services/referral_link_listener.dart';
@@ -55,6 +56,7 @@ part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
+part 'presentation/marketplace_android_alert_setup.dart';
 part 'presentation/marketplace_web_alert_setup.dart';
 part 'presentation/marketplace_driver_permissions.dart';
 part 'presentation/marketplace_customer.dart';

@@ -1341,6 +1341,56 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return mounted && recovered == true;
   }
 
+  Future<bool> _checkAndroidJobAlerts() async {
+    // Native Android only. Never activates Working until the device can
+    // present audible alerts and Firebase has an active registered token.
+    try {
+      final permission = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (permission.authorizationStatus != AuthorizationStatus.authorized) {
+        return false;
+      }
+      final status = await AndroidDriverAlertBridge.inspect();
+      if (status?.ready != true) return false;
+      final userId = widget.store.user?.id;
+      if (userId == null) return false;
+      final token = await FirebaseMessaging.instance.getToken().timeout(
+        const Duration(seconds: 12),
+      );
+      if (token == null || token.isEmpty) return false;
+      await SupabasePushDeviceTokenRepository(Supabase.instance.client).register(
+        userId: userId,
+        token: token,
+        platform: 'android',
+        now: DateTime.now().toUtc(),
+      ).timeout(const Duration(seconds: 12));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _verifyAndroidJobAlerts() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return true;
+    if (await _checkAndroidJobAlerts()) return true;
+    if (!mounted) return false;
+    final initialStatus = await AndroidDriverAlertBridge.inspect();
+    if (!mounted) return false;
+    final recovered = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => MarketplaceAndroidAlertSetupDialog(
+        initialStatus: initialStatus,
+        recheck: _checkAndroidJobAlerts,
+        openSettings: AndroidDriverAlertBridge.openSettings,
+      ),
+    );
+    return mounted && recovered == true;
+  }
+
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
     final vehicle = _vehicleById(_selectedVehicleId);
 
@@ -1358,6 +1408,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       // WebApp: no declarar Trabajando sin permiso y token push registrado.
       // Android se verificara en su APK despues de aprobar las pruebas web.
       if (acceptingJobs && kIsWeb && !(await _verifyWebJobAlerts())) return;
+      if (acceptingJobs && !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          !(await _verifyAndroidJobAlerts())) return;
       if (!mounted) return;
 
       final updated = await _service.setAcceptingJobs(
