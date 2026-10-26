@@ -256,7 +256,7 @@ class DriverFloatingShortcutService : Service() {
             setTextColor(Color.WHITE)
             textSize = 11f
 
-            background = GradientDrawable().apply {
+            this.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.rgb(255, 150, 35))
             }
