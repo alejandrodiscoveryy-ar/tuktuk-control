@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         DriverAlertDiagnostics.register(this, flutterEngine)
+        DriverFloatingShortcut.register(this, flutterEngine)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             REFERRAL_CHANNEL,
@@ -30,6 +31,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        DriverFloatingShortcut.handleIntent(intent)
+    }
     private fun readInstallReferrer(result: MethodChannel.Result) {
         val client = try {
             InstallReferrerClient.newBuilder(this).build()
