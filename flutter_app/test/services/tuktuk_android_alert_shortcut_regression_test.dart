@@ -38,7 +38,7 @@ void main() {
   test('audio oficial protegido y canal anterior conservado', () {
     final keep = File(
       'android/app/src/main/res/raw/'
-      'com.alejandrocruz.tuktukcontrol.keep.xml',
+      'tuktuk_sound_keep.xml',
     ).readAsStringSync();
 
     final push = File(
