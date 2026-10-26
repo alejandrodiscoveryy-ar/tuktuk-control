@@ -45,6 +45,21 @@ class SupabasePushDeviceTokenRepository implements PushDeviceTokenRepository {
       },
       onConflict: 'project_id,token',
     );
+    // El canal V2 ya se crea antes de registrar el token (main.dart).
+    // Si la migracion del backend aun no existe, se conserva V1 y
+    // la inscripcion principal NO falla.
+    if (platform == 'android') {
+      try {
+        await _client
+            .from('push_device_tokens')
+            .update({'job_alert_channel_version': 2})
+            .eq('project_id', tuktukSupabaseProjectId)
+            .eq('user_id', userId)
+            .eq('token', token);
+      } catch (_) {
+        // Despliegue compatible con servidores anteriores.
+      }
+    }
   }
 
   @override

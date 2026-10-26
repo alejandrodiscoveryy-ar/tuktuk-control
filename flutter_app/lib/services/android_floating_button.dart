@@ -51,6 +51,15 @@ class AndroidFloatingButtonBridge {
     }
   }
 
+  static Future<bool> acknowledgeJobs() async {
+    if (!supported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('acknowledgeJobs') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> consumeOpenJobs() async {
     if (!supported) return false;
 

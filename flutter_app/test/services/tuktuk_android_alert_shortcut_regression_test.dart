@@ -63,20 +63,37 @@ void main() {
     final shell = File('lib/presentation/screens.dart').readAsStringSync();
 
     expect(native, contains('inspectOwnJobNotifications()'));
-    expect(native, contains('nm.activeNotifications.count'));
+    expect(native, contains('currentJobNotificationKeys()'));
+    expect(native, contains('previousUnseenNotificationKeys'));
+    expect(native, contains('acknowledgedNotificationKeys'));
     expect(native, contains('tuktuk_nuevas_carreras_v1'));
     expect(native, contains('tuktuk_nuevas_carreras_v2'));
     expect(native, contains('Color.rgb(48, 217, 200)'));
     expect(native, contains('Color.rgb(255, 195, 76)'));
     expect(native, contains('Color.rgb(255, 107, 75)'));
     expect(native, contains('ObjectAnimator.ofFloat'));
+    expect(native, contains('anotherNewJob || !haloHadNewJob'));
+    expect(native, contains('acknowledgeCurrentJobs()'));
     expect(native, contains('handler.removeCallbacks(checkNotifications)'));
     expect(bridge, contains("'attention': attention"));
-    expect(jobs, contains('attention: marketplaceJobPushPending.value'));
+    expect(jobs,
+        matches(RegExp(r'attention:\s*marketplaceJobPushPending\.value')));
     expect(
         shell,
         contains(
           '_marketplaceJobsNeedAttention.addListener(_refreshFloatingShortcut)',
         ));
+  });
+  test('capacidad V2 registrada sin perjudicar backend antiguo', () {
+    final tokens = File(
+      'lib/services/push_token_registration_coordinator.dart',
+    ).readAsStringSync();
+    final diagnostic = File(
+      'android/app/src/main/kotlin/com/alejandrocruz/'
+      'tuktukcontrol/DriverAlertDiagnostics.kt',
+    ).readAsStringSync();
+    expect(tokens, contains("'job_alert_channel_version': 2"));
+    expect(tokens, contains('} catch (_) {'));
+    expect(diagnostic, contains('tuktuk_nuevas_carreras_v2'));
   });
 }

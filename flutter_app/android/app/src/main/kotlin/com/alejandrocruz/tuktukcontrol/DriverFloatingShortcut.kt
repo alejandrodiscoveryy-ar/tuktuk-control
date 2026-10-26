@@ -104,6 +104,11 @@ internal object DriverFloatingShortcut {
                         }
                     }
 
+                    "acknowledgeJobs" -> {
+                        DriverFloatingShortcutService.acknowledgeCurrentJobs()
+                        result.success(true)
+                    }
+
                     "consumeOpenJobs" -> {
                         val requested = pendingOpenJobs ||
                             activity.intent?.getBooleanExtra(
@@ -141,6 +146,10 @@ class DriverFloatingShortcutService : Service() {
         fun updateOverlayVisibility(shouldShow: Boolean) {
             activeService?.setBubbleVisible(shouldShow)
         }
+
+        fun acknowledgeCurrentJobs() {
+            activeService?.acknowledgeCurrentJobs()
+        }
     }
 
     private var manager: WindowManager? = null
@@ -151,6 +160,8 @@ class DriverFloatingShortcutService : Service() {
     private var haloPulse: ObjectAnimator? = null
     private var latestCount = 0
     private var nativeJobNotificationCount = 0
+    private val acknowledgedNotificationKeys = mutableSetOf<String>()
+    private var previousUnseenNotificationKeys = emptySet<String>()
     private var needsAttention = false
     private var haloHadNewJob = false
     private var params: WindowManager.LayoutParams? = null
@@ -274,29 +285,46 @@ class DriverFloatingShortcutService : Service() {
         }
     }
 
-    // Android expone solo las notificaciones de esta misma aplicacion.
-    // Esto permite actualizar el halo incluso con Flutter en segundo plano,
-    // sin otro permiso y sin consultar Internet.
-    private fun inspectOwnJobNotifications() {
-        nativeJobNotificationCount = if (Build.VERSION.SDK_INT >= 26) {
-            try {
-                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.activeNotifications.count { item ->
-                    val channelId = item.notification.channelId
-                    channelId == "tuktuk_nuevas_carreras_v1" ||
-                        channelId == "tuktuk_nuevas_carreras_v2"
-                }
-            } catch (_: Exception) {
-                0
-            }
-        } else {
-            0
+    // La clave y fecha de publicacion diferencian una segunda carrera de
+    // una notificacion antigua que Android todavia conserva en el panel.
+    private fun currentJobNotificationKeys(): Set<String> {
+        if (Build.VERSION.SDK_INT < 26) return emptySet()
+        return try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.activeNotifications.filter { item ->
+                val channelId = item.notification.channelId
+                channelId == "tuktuk_nuevas_carreras_v1" ||
+                    channelId == "tuktuk_nuevas_carreras_v2"
+            }.map { item -> "${item.key}:${item.postTime}" }.toSet()
+        } catch (_: Exception) {
+            emptySet()
         }
+    }
+
+    // El conductor abre Trabajos: deja de avisar sobre esos mensajes,
+    // aunque permanezcan en la cortina de notificaciones de Android.
+    private fun acknowledgeCurrentJobs() {
+        acknowledgedNotificationKeys.addAll(currentJobNotificationKeys())
+        nativeJobNotificationCount = 0
+        previousUnseenNotificationKeys = emptySet()
+        needsAttention = false
         updateHaloColor()
+        updateBadge(latestCount)
+    }
+
+    // Sin permiso adicional ni consultas de red; solo avisos de esta app.
+    private fun inspectOwnJobNotifications() {
+        val current = currentJobNotificationKeys()
+        acknowledgedNotificationKeys.retainAll(current)
+        val unseen = current - acknowledgedNotificationKeys
+        val anotherNewJob = (unseen - previousUnseenNotificationKeys).isNotEmpty()
+        previousUnseenNotificationKeys = unseen
+        nativeJobNotificationCount = unseen.size
+        updateHaloColor(anotherNewJob)
         updateBadge(maxOf(latestCount, nativeJobNotificationCount))
     }
 
-    private fun updateHaloColor() {
+    private fun updateHaloColor(anotherNewJob: Boolean = false) {
         val hasNewJob = needsAttention || nativeJobNotificationCount > 0
         val ringColor = when {
             hasNewJob -> Color.rgb(255, 107, 75)  // Coral: nueva carrera sin revisar.
@@ -306,7 +334,7 @@ class DriverFloatingShortcutService : Service() {
         haloDrawable?.setStroke(dp(3), ringColor)
         haloView?.invalidate()
 
-        if (hasNewJob && !haloHadNewJob) {
+        if (hasNewJob && (anotherNewJob || !haloHadNewJob)) {
             val ring = haloView
             if (ring != null) {
                 haloPulse?.cancel()

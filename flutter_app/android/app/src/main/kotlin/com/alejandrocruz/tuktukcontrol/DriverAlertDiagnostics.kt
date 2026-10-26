@@ -18,7 +18,8 @@ import io.flutter.plugin.common.MethodChannel
  */
 internal object DriverAlertDiagnostics {
     private const val CHANNEL = "com.alejandrocruz.tuktukcontrol/driver_alerts"
-    private const val JOB_CHANNEL = "tuktuk_nuevas_carreras_v1"
+    // La app nueva usa V2; las versiones antiguas siguen usando V1.
+    private const val JOB_CHANNEL = "tuktuk_nuevas_carreras_v2"
 
     fun register(activity: Activity, engine: FlutterEngine) {
         MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
