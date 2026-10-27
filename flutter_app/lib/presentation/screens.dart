@@ -555,6 +555,7 @@ class _AppShellState extends State<AppShell> {
     _marketplacePushJobId.addListener(_openMarketplacePush);
     _marketplaceDriverWorking.addListener(_refreshFloatingShortcut);
     _marketplaceAvailableJobCount.addListener(_refreshFloatingShortcut);
+    _marketplaceJobsNeedAttention.addListener(_refreshFloatingShortcut);
     marketplaceJobPushPending.addListener(_refreshFloatingShortcut);
     store.addListener(_stopFloatingOnLogout);
 
@@ -601,6 +602,7 @@ class _AppShellState extends State<AppShell> {
     _marketplacePushJobId.removeListener(_openMarketplacePush);
     _marketplaceDriverWorking.removeListener(_refreshFloatingShortcut);
     _marketplaceAvailableJobCount.removeListener(_refreshFloatingShortcut);
+    _marketplaceJobsNeedAttention.removeListener(_refreshFloatingShortcut);
     marketplaceJobPushPending.removeListener(_refreshFloatingShortcut);
     store.removeListener(_stopFloatingOnLogout);
     AndroidFloatingButtonBridge.setOpenJobsHandler(null);

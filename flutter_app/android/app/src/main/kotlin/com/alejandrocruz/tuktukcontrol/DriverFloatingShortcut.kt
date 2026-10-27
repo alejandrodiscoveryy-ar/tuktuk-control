@@ -1,5 +1,6 @@
 package com.alejandrocruz.tuktukcontrol
 
+import android.animation.ObjectAnimator
 import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,7 +14,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -31,6 +34,14 @@ internal object DriverFloatingShortcut {
 
     private var pendingOpenJobs = false
     private var flutterChannel: MethodChannel? = null
+    private var hostVisible = true
+
+    fun hostVisibilityChanged(visible: Boolean) {
+        hostVisible = visible
+        DriverFloatingShortcutService.updateOverlayVisibility(!visible)
+    }
+
+    fun hostIsVisible(): Boolean = hostVisible
 
     fun register(activity: Activity, engine: FlutterEngine) {
         val channel = MethodChannel(
@@ -78,6 +89,10 @@ internal object DriverFloatingShortcut {
                                     .coerceIn(0, 99)
 
                             service.putExtra("count", count)
+                            service.putExtra(
+                                "attention",
+                                call.argument<Boolean>("attention") ?: false
+                            )
 
                             if (Build.VERSION.SDK_INT >= 26) {
                                 activity.startForegroundService(service)
@@ -87,6 +102,11 @@ internal object DriverFloatingShortcut {
 
                             result.success(true)
                         }
+                    }
+
+                    "acknowledgeJobs" -> {
+                        DriverFloatingShortcutService.acknowledgeCurrentJobs()
+                        result.success(true)
                     }
 
                     "consumeOpenJobs" -> {
@@ -121,12 +141,39 @@ class DriverFloatingShortcutService : Service() {
     companion object {
         private const val CHANNEL_ID = "tuktuk_boton_flotante"
         private const val NOTIFICATION_ID = 7091
+        private var activeService: DriverFloatingShortcutService? = null
+
+        fun updateOverlayVisibility(shouldShow: Boolean) {
+            activeService?.setBubbleVisible(shouldShow)
+        }
+
+        fun acknowledgeCurrentJobs() {
+            activeService?.acknowledgeCurrentJobs()
+        }
     }
 
     private var manager: WindowManager? = null
     private var bubble: FrameLayout? = null
     private var badge: TextView? = null
+    private var haloView: View? = null
+    private var haloDrawable: GradientDrawable? = null
+    private var haloPulse: ObjectAnimator? = null
+    private var latestCount = 0
+    private var nativeJobNotificationCount = 0
+    private val acknowledgedNotificationKeys = mutableSetOf<String>()
+    private var previousUnseenNotificationKeys = emptySet<String>()
+    private var needsAttention = false
+    private var haloHadNewJob = false
     private var params: WindowManager.LayoutParams? = null
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val checkNotifications = object : Runnable {
+        override fun run() {
+            if (bubble == null) return
+            inspectOwnJobNotifications()
+            handler.postDelayed(this, 4_000L)
+        }
+    }
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
@@ -137,6 +184,7 @@ class DriverFloatingShortcutService : Service() {
         super.onCreate()
 
         try {
+            activeService = this
             startPersistentNotification()
 
             if (!Settings.canDrawOverlays(this)) {
@@ -144,7 +192,7 @@ class DriverFloatingShortcutService : Service() {
                 return
             }
 
-            createBubble()
+            setBubbleVisible(!DriverFloatingShortcut.hostIsVisible())
         } catch (_: Exception) {
             stopSelf()
         }
@@ -160,8 +208,13 @@ class DriverFloatingShortcutService : Service() {
             return START_NOT_STICKY
         }
 
-        val count = intent?.getIntExtra("count", 0) ?: 0
-        updateBadge(count.coerceIn(0, 99))
+        latestCount = (intent?.getIntExtra("count", 0) ?: 0)
+            .coerceIn(0, 99)
+        needsAttention = intent?.getBooleanExtra("attention", false) ?: needsAttention
+
+        setBubbleVisible(!DriverFloatingShortcut.hostIsVisible())
+        updateHaloColor()
+        updateBadge(maxOf(latestCount, nativeJobNotificationCount))
 
         return START_NOT_STICKY
     }
@@ -221,6 +274,103 @@ class DriverFloatingShortcutService : Service() {
         }
     }
 
+    private fun setBubbleVisible(visible: Boolean) {
+        if (visible && Settings.canDrawOverlays(this)) {
+            if (bubble == null) createBubble()
+            handler.removeCallbacks(checkNotifications)
+            inspectOwnJobNotifications()
+            handler.postDelayed(checkNotifications, 4_000L)
+        } else {
+            removeBubble()
+        }
+    }
+
+    // La clave y fecha de publicacion diferencian una segunda carrera de
+    // una notificacion antigua que Android todavia conserva en el panel.
+    private fun currentJobNotificationKeys(): Set<String> {
+        if (Build.VERSION.SDK_INT < 26) return emptySet()
+        return try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.activeNotifications.filter { item ->
+                val channelId = item.notification.channelId
+                channelId == "tuktuk_nuevas_carreras_v1" ||
+                    channelId == "tuktuk_nuevas_carreras_v2"
+            }.map { item -> "${item.key}:${item.postTime}" }.toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    // El conductor abre Trabajos: deja de avisar sobre esos mensajes,
+    // aunque permanezcan en la cortina de notificaciones de Android.
+    private fun acknowledgeCurrentJobs() {
+        acknowledgedNotificationKeys.addAll(currentJobNotificationKeys())
+        nativeJobNotificationCount = 0
+        previousUnseenNotificationKeys = emptySet()
+        needsAttention = false
+        updateHaloColor()
+        updateBadge(latestCount)
+    }
+
+    // Sin permiso adicional ni consultas de red; solo avisos de esta app.
+    private fun inspectOwnJobNotifications() {
+        val current = currentJobNotificationKeys()
+        acknowledgedNotificationKeys.retainAll(current)
+        val unseen = current - acknowledgedNotificationKeys
+        val anotherNewJob = (unseen - previousUnseenNotificationKeys).isNotEmpty()
+        previousUnseenNotificationKeys = unseen
+        nativeJobNotificationCount = unseen.size
+        updateHaloColor(anotherNewJob)
+        updateBadge(maxOf(latestCount, nativeJobNotificationCount))
+    }
+
+    private fun updateHaloColor(anotherNewJob: Boolean = false) {
+        val hasNewJob = needsAttention || nativeJobNotificationCount > 0
+        val ringColor = when {
+            hasNewJob -> Color.rgb(255, 107, 75)  // Coral: nueva carrera sin revisar.
+            latestCount > 0 -> Color.rgb(255, 195, 76) // Dorado: hay carreras.
+            else -> Color.rgb(48, 217, 200) // Turquesa: disponible, sin avisos.
+        }
+        haloDrawable?.setStroke(dp(3), ringColor)
+        haloView?.invalidate()
+
+        if (hasNewJob && (anotherNewJob || !haloHadNewJob)) {
+            val ring = haloView
+            if (ring != null) {
+                haloPulse?.cancel()
+                haloPulse = ObjectAnimator.ofFloat(
+                    ring, View.ALPHA, 1f, 0.55f, 1f
+                ).apply {
+                    duration = 950L
+                    repeatCount = 2
+                    start()
+                }
+            }
+        } else if (!hasNewJob) {
+            haloPulse?.cancel()
+            haloView?.alpha = 1f
+        }
+        haloHadNewJob = hasNewJob
+    }
+
+    private fun removeBubble() {
+        handler.removeCallbacks(checkNotifications)
+        haloPulse?.cancel()
+        haloPulse = null
+        haloView = null
+        haloDrawable = null
+        haloHadNewJob = false
+        bubble?.let { view ->
+            try {
+                manager?.removeView(view)
+            } catch (_: Exception) {
+            }
+        }
+
+        bubble = null
+        badge = null
+    }
+
     private fun createBubble() {
         val wm = getSystemService(
             Context.WINDOW_SERVICE
@@ -228,25 +378,45 @@ class DriverFloatingShortcutService : Service() {
 
         manager = wm
 
-        val size = dp(66)
+        val size = dp(70)
 
         val root = FrameLayout(this)
-
-        // Utilizar el icono circular original sin borde adicional.
         root.background = null
 
+        val ringBackground = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.rgb(12, 38, 48))
+            setStroke(dp(3), Color.rgb(48, 217, 200))
+        }
+        val ring = View(this).apply {
+            background = ringBackground
+            elevation = dp(2).toFloat()
+        }
+        root.addView(ring, FrameLayout.LayoutParams(size, size))
+        haloView = ring
+        haloDrawable = ringBackground
+
         val logo = ImageView(this).apply {
+            elevation = dp(3).toFloat()
             setImageResource(R.mipmap.ic_launcher_round)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.rgb(12, 38, 48))
+            }
+            clipToOutline = true
             setPadding(0, 0, 0, 0)
         }
 
         root.addView(
             logo,
-            FrameLayout.LayoutParams(size, size)
+            FrameLayout.LayoutParams(
+                size - dp(10), size - dp(10), Gravity.CENTER
+            )
         )
 
         val counter = TextView(this).apply {
+            elevation = dp(4).toFloat()
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             textSize = 11f
@@ -365,15 +535,9 @@ class DriverFloatingShortcutService : Service() {
     }
 
     override fun onDestroy() {
-        bubble?.let { view ->
-            try {
-                manager?.removeView(view)
-            } catch (_: Exception) {
-            }
-        }
+        if (activeService === this) activeService = null
 
-        bubble = null
-        badge = null
+        removeBubble()
         manager = null
         params = null
 

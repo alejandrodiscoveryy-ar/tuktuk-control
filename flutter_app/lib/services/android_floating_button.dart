@@ -32,6 +32,7 @@ class AndroidFloatingButtonBridge {
   static Future<bool> setVisible({
     required bool visible,
     int count = 0,
+    bool attention = false,
   }) async {
     if (!supported) return false;
 
@@ -41,9 +42,19 @@ class AndroidFloatingButtonBridge {
             <String, dynamic>{
               'visible': visible,
               'count': count.clamp(0, 99),
+              'attention': attention,
             },
           ) ??
           false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> acknowledgeJobs() async {
+    if (!supported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('acknowledgeJobs') ?? false;
     } catch (_) {
       return false;
     }
