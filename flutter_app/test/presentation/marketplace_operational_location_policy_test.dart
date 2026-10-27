@@ -54,15 +54,51 @@ void main() {
         MarketplaceOperationalLocationPolicy.heartbeatInterval(
           activeService: false,
         ),
-        const Duration(minutes: 4),
+        const Duration(seconds: 90),
       );
       expect(
         MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
           activeService: false,
         ),
-        200,
+        75,
       );
     });
+
+    test('Android sigue enviando ubicacion estando disponible', () {
+      expect(
+        MarketplaceOperationalLocationPolicy.usesContinuousStream(
+          isAndroid: true,
+          activeService: false,
+        ),
+        isTrue,
+      );
+      expect(
+        MarketplaceOperationalLocationPolicy.streamInterval(
+          activeService: false,
+        ),
+        const Duration(seconds: 45),
+      );
+    });
+
+    test(
+      'el navegador no finge seguimiento continuo cuando esta disponible',
+      () {
+        expect(
+          MarketplaceOperationalLocationPolicy.usesContinuousStream(
+            isAndroid: false,
+            activeService: false,
+          ),
+          isFalse,
+        );
+        expect(
+          MarketplaceOperationalLocationPolicy.usesContinuousStream(
+            isAndroid: false,
+            activeService: true,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('en web usa posicion actual cuando el conductor esta disponible', () {
       expect(
