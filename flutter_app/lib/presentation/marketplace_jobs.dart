@@ -11,21 +11,28 @@ String marketplaceAcceptErrorMessage(Object error) {
   return 'No se pudo aceptar el trabajo. Puede que ya no esté disponible. Comprueba tu conexión y vuelve a intentarlo.';
 }
 
-const _marketplaceFloatingSettingKey = 'marketplace_floating_button_enabled_v1';
-
 final ValueNotifier<bool> _marketplaceDriverWorking =
     ValueNotifier<bool>(false);
 
-bool get _marketplaceFloatingPreference =>
-    AndroidFloatingButtonBridge.supported &&
-    Hive.isBoxOpen(_metaBox) &&
-    Hive.box(_metaBox).get(_marketplaceFloatingSettingKey) == true;
+// El estado Trabajar controla el acceso rapido, sin otro interruptor.
+bool marketplaceFloatingVisible({
+  required bool isAndroid,
+  required bool working,
+}) => isAndroid && working;
+
+bool marketplaceFloatingPermissionRequired({
+  required bool isAndroid,
+  required bool working,
+  required bool canDraw,
+}) => isAndroid && working && !canDraw;
 
 Future<void> _syncMarketplaceFloatingShortcut() async {
   if (!AndroidFloatingButtonBridge.supported) return;
 
-  final show =
-      _marketplaceFloatingPreference && _marketplaceDriverWorking.value;
+  final show = marketplaceFloatingVisible(
+    isAndroid: AndroidFloatingButtonBridge.supported,
+    working: _marketplaceDriverWorking.value,
+  );
 
   final count = marketplaceJobPushPending.value
       ? max(1, _marketplaceAvailableJobCount.value)
@@ -225,9 +232,9 @@ bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
 
 class MarketplaceOperationalLocationPolicy {
   static const availableSampleInterval = Duration(minutes: 2);
-  static const availableHeartbeatInterval = Duration(seconds: 90);
+  static const availableHeartbeatInterval = Duration(seconds: 120);
   static const activeSampleInterval = Duration(seconds: 15);
-  static const availableStreamInterval = Duration(seconds: 45);
+  static const availableStreamInterval = Duration(seconds: 60);
   static const activeHeartbeatInterval = Duration(seconds: 30);
 
   static const availableDistanceMeters = 75.0;
@@ -270,6 +277,20 @@ class MarketplaceOperationalLocationPolicy {
 
   static LocationAccuracy accuracy({required bool activeService}) =>
       activeService ? LocationAccuracy.high : LocationAccuracy.medium;
+
+  // No enviar coordenadas atrasadas por cortes de red, cache o sensores.
+  // El margen de 5 s tolera pequeñas diferencias de reloj entre capas.
+  static bool isFreshStreamFix({
+    required DateTime capturedAt,
+    required DateTime nowUtc,
+    required bool activeService,
+  }) {
+    final age = nowUtc.toUtc().difference(capturedAt.toUtc());
+    final maxAge = activeService
+        ? const Duration(seconds: 45)
+        : const Duration(minutes: 2);
+    return age >= const Duration(seconds: -5) && age <= maxAge;
+  }
 }
 
 class MarketplaceJobsScreen extends StatefulWidget {
@@ -324,7 +345,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _acceptingJobId;
   String? _busyJobId;
   bool _updatingAvailability = false;
-  bool _floatingOptedIn = false;
   bool _requestingFloatingPermission = false;
   bool _webAlertVerified = false;
   MarketplaceWorkAccess? _workAccess;
@@ -349,7 +369,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void initState() {
     super.initState();
-    _floatingOptedIn = _marketplaceFloatingPreference;
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
@@ -636,6 +655,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _activeOperationalLocationPublishInFlight = true;
     try {
       final nowUtc = DateTime.now().toUtc();
+      if (!MarketplaceOperationalLocationPolicy.isFreshStreamFix(
+        capturedAt: position.timestamp,
+        nowUtc: nowUtc,
+        activeService: activeService,
+      )) {
+        return;
+      }
       final lastPosition = _lastOperationalPosition;
       final lastSentAt = _lastOperationalSentAt;
       final distanceMeters = lastPosition == null
@@ -687,6 +713,30 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
+  // Reintentar solo con actividad visible: Android impide iniciar ciertos
+  // servicios de ubicacion desde segundo plano. No usar sondeos constantes.
+  void _scheduleOperationalLocationStreamRetry({required bool activeService}) {
+    if (!mounted ||
+        _operationalLifecycleState != AppLifecycleState.resumed ||
+        !_canPublishOperationalLocation()) {
+      return;
+    }
+    _operationalLocationTimer?.cancel();
+    _operationalLocationTimer = Timer(
+      MarketplaceOperationalLocationPolicy.failureRetryDelay(
+        activeService: activeService,
+      ),
+      () {
+        _operationalLocationTimer = null;
+        if (mounted &&
+            _operationalLifecycleState == AppLifecycleState.resumed &&
+            _canPublishOperationalLocation()) {
+          _syncOperationalLocationSampling();
+        }
+      },
+    );
+  }
+
   Future<void> _ensureOperationalLocationStream({
     bool requestPermission = false,
   }) async {
@@ -719,7 +769,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final generation = ++_operationalLocationStreamGeneration;
     var syncChangedState = false;
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) return;
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _scheduleOperationalLocationStreamRetry(activeService: activeService);
+        return;
+      }
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied &&
@@ -751,20 +804,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       void onStreamClosed() {
         if (_activeOperationalLocationSubscription != subscription) return;
         _stopOperationalLocationSampling();
-        // No iniciar un nuevo Foreground Service desde el segundo plano.
-        if (mounted &&
-            _operationalLifecycleState == AppLifecycleState.resumed &&
-            _canPublishOperationalLocation()) {
-          _operationalLocationTimer = Timer(
-            MarketplaceOperationalLocationPolicy.failureRetryDelay(
-              activeService: activeService,
-            ),
-            () {
-              _operationalLocationTimer = null;
-              _syncOperationalLocationSampling();
-            },
-          );
-        }
+        // Si estamos en segundo plano, recuperar al volver a primer plano.
+        _scheduleOperationalLocationStreamRetry(activeService: activeService);
       }
 
       subscription = stream.listen(
@@ -780,19 +821,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _activeOperationalLocationSubscription = subscription;
       _operationalLocationStreamActiveService = activeService;
     } catch (_) {
-      if (mounted &&
-          _operationalLifecycleState == AppLifecycleState.resumed &&
-          _canPublishOperationalLocation()) {
-        _operationalLocationTimer = Timer(
-          MarketplaceOperationalLocationPolicy.failureRetryDelay(
-            activeService: activeService,
-          ),
-          () {
-            _operationalLocationTimer = null;
-            _syncOperationalLocationSampling();
-          },
-        );
-      }
+      _scheduleOperationalLocationStreamRetry(activeService: activeService);
     } finally {
       _operationalLocationStreamStarting = false;
       if (syncChangedState &&
@@ -1555,63 +1584,74 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return mounted && recovered == true;
   }
 
-  Future<void> _enableFloatingShortcut() async {
-    await Hive.box(_metaBox).put(_marketplaceFloatingSettingKey, true);
-
-    if (!mounted) return;
-
-    setState(() => _floatingOptedIn = true);
-    await _syncMarketplaceFloatingShortcut();
-  }
-
   Future<void> _completeFloatingPermissionRequest() async {
-    if (!mounted) return;
+    if (!mounted || !_marketplaceDriverWorking.value) return;
 
     if (await AndroidFloatingButtonBridge.canDraw()) {
-      await _enableFloatingShortcut();
+      // Android ya autorizo el permiso. No pedir un segundo toque.
+      await _syncMarketplaceFloatingShortcut();
     } else if (mounted) {
       toast(
         context,
-        'El botón flotante sigue desactivado. '
-        'Puedes habilitarlo desde Trabajo.',
+        'TukTuk sigue trabajando. Activa "Mostrar sobre otras apps" '
+        'cuando quieras utilizar el acceso rápido.',
       );
     }
   }
 
-  Future<void> _toggleFloatingShortcut() async {
-    if (!AndroidFloatingButtonBridge.supported) return;
+  Future<void> _offerAutomaticFloatingShortcut() async {
+    if (!AndroidFloatingButtonBridge.supported ||
+        !mounted ||
+        !_marketplaceDriverWorking.value ||
+        _requestingFloatingPermission) {
+      return;
+    }
 
-    if (_floatingOptedIn) {
-      await Hive.box(_metaBox).put(_marketplaceFloatingSettingKey, false);
-
-      if (!mounted) return;
-
-      setState(() => _floatingOptedIn = false);
+    final canDraw = await AndroidFloatingButtonBridge.canDraw();
+    if (!mounted || !_marketplaceDriverWorking.value) return;
+    if (!marketplaceFloatingPermissionRequired(
+      isAndroid: AndroidFloatingButtonBridge.supported,
+      working: _marketplaceDriverWorking.value,
+      canDraw: canDraw,
+    )) {
       await _syncMarketplaceFloatingShortcut();
       return;
     }
 
-    if (!await AndroidFloatingButtonBridge.canDraw()) {
-      if (!mounted) return;
-
-      _requestingFloatingPermission = true;
-
-      final opened = await AndroidFloatingButtonBridge.openPermission();
-
-      if (!opened && mounted) {
-        _requestingFloatingPermission = false;
-
-        toast(
-          context,
-          'No se pudieron abrir los permisos del botón flotante.',
-        );
-      }
+    // Android no permite conceder este permiso sin la accion del usuario.
+    final autorizar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Activa el botón rápido de TukTuk'),
+        content: const Text(
+          'Al minimizar TukTuk, verás un acceso flotante para volver '
+          'a tus carreras.\n\n'
+          'Pulsa "Activar" y habilita "Mostrar sobre otras aplicaciones" '
+          'en los ajustes de Android. Solo tendrás que hacerlo una vez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || !_marketplaceDriverWorking.value || autorizar != true) {
       return;
     }
 
-    await _enableFloatingShortcut();
+    _requestingFloatingPermission = true;
+    final abierto = await AndroidFloatingButtonBridge.openPermission();
+    if (!abierto && mounted) {
+      _requestingFloatingPermission = false;
+      toast(context, 'No se pudieron abrir los permisos del botón flotante.');
+    }
   }
-
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
     final vehicle = _vehicleById(_selectedVehicleId);
 
@@ -1693,6 +1733,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           'Estás trabajando. Ya puedes recibir nuevas solicitudes.',
         );
 
+        // Con permiso previo aparece automaticamente; sin permiso, guia una vez.
+        unawaited(_offerAutomaticFloatingShortcut());
         await _loadAvailable();
       } else {
         _setMarketplaceAvailableJobCount(0);
@@ -3779,49 +3821,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             ],
           ),
         ),
-        if (AndroidFloatingButtonBridge.supported)
-          Positioned(
-            left: 12,
-            top: 88,
-            child: Material(
-              color: const Color(0xE8122630),
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                key: const ValueKey('tuktuk-floating-shortcut-toggle'),
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => unawaited(_toggleFloatingShortcut()),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _floatingOptedIn
-                            ? Icons.touch_app_rounded
-                            : Icons.touch_app_outlined,
-                        color: _floatingOptedIn ? kPrimary : Colors.white70,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        _floatingOptedIn
-                            ? 'Botón flotante: sí'
-                            : 'Botón flotante: no',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
         if (kIsWeb && available && !onRide && !_webAlertVerified)
           Positioned(
             left: 12,
