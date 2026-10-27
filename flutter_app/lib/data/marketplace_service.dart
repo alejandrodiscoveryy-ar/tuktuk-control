@@ -1020,6 +1020,12 @@ class MarketplaceService {
     required Object value,
     String? vehicleId,
   }) async {
+    if (field == 'identity_document_type') {
+      await _one('save_my_marketplace_identity_document_type_draft', {
+        'target_document_type': value,
+      });
+      return;
+    }
     await _one('save_my_marketplace_registration_draft_field', {
       'target_vehicle_id': vehicleId,
       'target_field': field,
@@ -1044,11 +1050,19 @@ class MarketplaceService {
   Future<Map<String, dynamic>> saveIdentityDocuments({
     String? frontId,
     String? backId,
+    String? documentType,
   }) =>
-      _one('save_my_marketplace_identity_documents', {
-        'target_front_asset_id': frontId,
-        'target_back_asset_id': backId,
-      });
+      documentType == null
+          // Compatibilidad con documentos opcionales de perfiles anteriores.
+          ? _one('save_my_marketplace_identity_documents', {
+              'target_front_asset_id': frontId,
+              'target_back_asset_id': backId,
+            })
+          : _one('save_my_marketplace_identity_documents_v2', {
+              'target_front_asset_id': frontId,
+              'target_back_asset_id': backId,
+              'target_document_type': documentType,
+            });
 
   Future<MarketplaceMediaAsset> uploadIdentityMedia({
     required String side,
