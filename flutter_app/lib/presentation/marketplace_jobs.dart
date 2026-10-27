@@ -765,11 +765,43 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             },
           );
         }
-      },
-      onDone: () {
-        _activeOperationalLocationSubscription = null;
-      },
-    );
+      }
+
+      subscription = stream.listen(
+        (position) => unawaited(
+          _publishStreamingOperationalPosition(
+            position,
+            activeService: activeService,
+          ),
+        ),
+        onError: (_) => onStreamClosed(),
+        onDone: onStreamClosed,
+      );
+      _activeOperationalLocationSubscription = subscription;
+      _operationalLocationStreamActiveService = activeService;
+    } catch (_) {
+      if (mounted &&
+          _operationalLifecycleState == AppLifecycleState.resumed &&
+          _canPublishOperationalLocation()) {
+        _operationalLocationTimer = Timer(
+          MarketplaceOperationalLocationPolicy.failureRetryDelay(
+            activeService: activeService,
+          ),
+          () {
+            _operationalLocationTimer = null;
+            _syncOperationalLocationSampling();
+          },
+        );
+      }
+    } finally {
+      _operationalLocationStreamStarting = false;
+      if (syncChangedState &&
+          mounted &&
+          _operationalLifecycleState == AppLifecycleState.resumed &&
+          _canPublishOperationalLocation()) {
+        _syncOperationalLocationSampling();
+      }
+    }
   }
 
   void _scheduleNextOperationalLocationSample({Duration? overrideDelay}) {
