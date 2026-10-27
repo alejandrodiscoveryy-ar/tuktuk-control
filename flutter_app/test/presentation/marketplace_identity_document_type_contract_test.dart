@@ -25,6 +25,7 @@ void main() {
     expect(service, contains('save_my_marketplace_identity_document_type_draft'));
     expect(sql, contains('identity_document_type text'));
     expect(sql, contains('DOCUMENT_PHOTOS_MUST_BE_REPLACED'));
+    expect(sql, contains("d.identity_document_type in ('national_id', 'driver_license')"));
     expect(sql, contains('IDENTITY_DOCUMENT_BOTH_SIDES_REQUIRED'));
     expect(sql, contains('actor uuid := auth.uid()'));
     expect(sql, contains('revoke all on function'));

@@ -216,3 +216,87 @@ revoke all on function public.save_my_marketplace_identity_documents_v2(uuid,uui
   from public, anon;
 grant execute on function public.save_my_marketplace_identity_documents_v2(uuid,uuid,text)
   to authenticated;
+
+-- GATE_PR106_DOCUMENT_TYPE_REQUIRED
+-- Mantiene la exencion antigua identity_docs_required=false; para nuevos,
+-- bloquea toda activacion/aceptacion sin elegir tipo y aportar ambas fotos.
+-- Misma firma original: preserva los llamadores de Trabajos.
+create or replace function app_private.marketplace_onboarding_requirements_complete(
+  target_user_id uuid,
+  target_vehicle_id text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select target_user_id is not null
+     and target_vehicle_id is not null
+     and exists (
+       select 1
+       from public.profiles p
+       join public.driver_profiles d on d.user_id=p.id
+       join public.projects project on project.id=d.project_id
+        and project.slug='tuktuk-control'
+       join public.media_assets dp on dp.project_id=d.project_id
+        and dp.id=d.photo_asset_id and dp.owner_user_id=d.user_id
+        and dp.status='available'
+       join public.driver_vehicle_assignments a on a.project_id=d.project_id
+        and a.driver_user_id=d.user_id and a.vehicle_id=target_vehicle_id
+        and a.is_active
+       join public.vehicles v on v.project_id=d.project_id and v.id=a.vehicle_id
+        and v.deleted_at is null and v.marketplace_status<>'suspended'
+       join public.media_assets vp on vp.project_id=v.project_id
+        and vp.id=v.main_photo_asset_id and vp.owner_user_id=v.owner_user_id
+        and vp.status='available'
+       where d.user_id=target_user_id
+         and d.status<>'suspended' and d.suspended_at is null
+         and nullif(btrim(p.display_name),'') is not null
+         and p.phone ~ '^[+][1-9][0-9]{7,14}$'
+         and nullif(btrim(v.category_code),'') is not null
+         and nullif(btrim(v.propulsion_code),'') is not null
+         and nullif(btrim(v.brand),'') is not null
+         and nullif(btrim(v.model),'') is not null
+         and exists (
+           select 1 from public.vehicle_services vs
+           join public.service_types st on st.project_id=vs.project_id
+            and st.code=vs.service_code and st.active
+           where vs.project_id=v.project_id and vs.vehicle_id=v.id and vs.enabled
+         )
+         and (
+           not exists (
+             select 1 from public.vehicle_services vs
+             where vs.project_id=v.project_id and vs.vehicle_id=v.id
+               and vs.enabled and vs.service_code in ('passenger','tourism')
+           ) or coalesce(v.passenger_capacity,0)>0
+         )
+         and (
+           not exists (
+             select 1 from public.vehicle_services vs
+             where vs.project_id=v.project_id and vs.vehicle_id=v.id
+               and vs.enabled and vs.service_code='cargo'
+           ) or greatest(
+             coalesce(v.cargo_capacity_kg,0),coalesce(v.cargo_volume_m3,0),
+             coalesce(v.cargo_length_cm,0),coalesce(v.cargo_width_cm,0),
+             coalesce(v.cargo_height_cm,0)
+           )>0
+         )
+         and (
+           d.identity_docs_required=false or (
+             d.identity_document_type in ('national_id', 'driver_license') and
+             exists (
+               select 1 from public.media_assets f
+               where f.project_id=d.project_id and f.id=d.identity_front_asset_id
+                 and f.owner_user_id=d.user_id and f.asset_kind='identity_front'
+                 and f.storage_bucket='marketplace-identity' and f.status='available'
+             ) and exists (
+               select 1 from public.media_assets b
+               where b.project_id=d.project_id and b.id=d.identity_back_asset_id
+                 and b.owner_user_id=d.user_id and b.asset_kind='identity_back'
+                 and b.storage_bucket='marketplace-identity' and b.status='available'
+             )
+           )
+         )
+     );
+$$;

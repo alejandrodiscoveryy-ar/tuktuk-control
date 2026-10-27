@@ -75,3 +75,7 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/referral_validation_disposable
         run: python flutter_app/supabase/tests/claim_push_notification_batch_integration.py
+      - name: PR106 identity document SQL integration on isolated PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/referral_validation_disposable
+        run: python flutter_app/supabase/tests/marketplace_identity_document_type_integration.py
