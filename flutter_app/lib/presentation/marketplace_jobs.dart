@@ -11,21 +11,28 @@ String marketplaceAcceptErrorMessage(Object error) {
   return 'No se pudo aceptar el trabajo. Puede que ya no esté disponible. Comprueba tu conexión y vuelve a intentarlo.';
 }
 
-const _marketplaceFloatingSettingKey = 'marketplace_floating_button_enabled_v1';
-
 final ValueNotifier<bool> _marketplaceDriverWorking =
     ValueNotifier<bool>(false);
 
-bool get _marketplaceFloatingPreference =>
-    AndroidFloatingButtonBridge.supported &&
-    Hive.isBoxOpen(_metaBox) &&
-    Hive.box(_metaBox).get(_marketplaceFloatingSettingKey) == true;
+// El estado Trabajar controla el acceso rapido, sin otro interruptor.
+bool marketplaceFloatingVisible({
+  required bool isAndroid,
+  required bool working,
+}) => isAndroid && working;
+
+bool marketplaceFloatingPermissionRequired({
+  required bool isAndroid,
+  required bool working,
+  required bool canDraw,
+}) => isAndroid && working && !canDraw;
 
 Future<void> _syncMarketplaceFloatingShortcut() async {
   if (!AndroidFloatingButtonBridge.supported) return;
 
-  final show =
-      _marketplaceFloatingPreference && _marketplaceDriverWorking.value;
+  final show = marketplaceFloatingVisible(
+    isAndroid: AndroidFloatingButtonBridge.supported,
+    working: _marketplaceDriverWorking.value,
+  );
 
   final count = marketplaceJobPushPending.value
       ? max(1, _marketplaceAvailableJobCount.value)
@@ -225,11 +232,12 @@ bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
 
 class MarketplaceOperationalLocationPolicy {
   static const availableSampleInterval = Duration(minutes: 2);
-  static const availableHeartbeatInterval = Duration(minutes: 4);
+  static const availableHeartbeatInterval = Duration(seconds: 120);
   static const activeSampleInterval = Duration(seconds: 15);
+  static const availableStreamInterval = Duration(seconds: 60);
   static const activeHeartbeatInterval = Duration(seconds: 30);
 
-  static const availableDistanceMeters = 200.0;
+  static const availableDistanceMeters = 75.0;
   static const activeDistanceMeters = 15.0;
 
   static bool isActiveServiceStatus(String status) {
@@ -242,6 +250,15 @@ class MarketplaceOperationalLocationPolicy {
 
   static Duration sampleInterval({required bool activeService}) =>
       activeService ? activeSampleInterval : availableSampleInterval;
+
+  static Duration streamInterval({required bool activeService}) =>
+      activeService ? activeSampleInterval : availableStreamInterval;
+
+  // El navegador solo se actualiza mientras esta vivo; Android usa servicio GPS.
+  static bool usesContinuousStream({
+    required bool isAndroid,
+    required bool activeService,
+  }) => isAndroid || activeService;
 
   static Duration heartbeatInterval({required bool activeService}) =>
       activeService ? activeHeartbeatInterval : availableHeartbeatInterval;
@@ -260,6 +277,20 @@ class MarketplaceOperationalLocationPolicy {
 
   static LocationAccuracy accuracy({required bool activeService}) =>
       activeService ? LocationAccuracy.high : LocationAccuracy.medium;
+
+  // No enviar coordenadas atrasadas por cortes de red, cache o sensores.
+  // El margen de 5 s tolera pequeñas diferencias de reloj entre capas.
+  static bool isFreshStreamFix({
+    required DateTime capturedAt,
+    required DateTime nowUtc,
+    required bool activeService,
+  }) {
+    final age = nowUtc.toUtc().difference(capturedAt.toUtc());
+    final maxAge = activeService
+        ? const Duration(seconds: 45)
+        : const Duration(minutes: 2);
+    return age >= const Duration(seconds: -5) && age <= maxAge;
+  }
 }
 
 class MarketplaceJobsScreen extends StatefulWidget {
@@ -314,13 +345,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _acceptingJobId;
   String? _busyJobId;
   bool _updatingAvailability = false;
-  bool _floatingOptedIn = false;
   bool _requestingFloatingPermission = false;
   bool _webAlertVerified = false;
   MarketplaceWorkAccess? _workAccess;
 
   Timer? _operationalLocationTimer;
   StreamSubscription<Position>? _activeOperationalLocationSubscription;
+  bool? _operationalLocationStreamActiveService;
+  bool _operationalLocationStreamStarting = false;
+  int _operationalLocationStreamGeneration = 0;
   bool _activeOperationalLocationPublishInFlight = false;
   bool _operationalLocationInFlight = false;
   AppLifecycleState _operationalLifecycleState = AppLifecycleState.resumed;
@@ -336,7 +369,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void initState() {
     super.initState();
-    _floatingOptedIn = _marketplaceFloatingPreference;
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
@@ -364,8 +396,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   @override
   void dispose() {
-    _operationalLocationTimer?.cancel();
-    _activeOperationalLocationSubscription?.cancel();
+    _stopOperationalLocationSampling();
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
@@ -448,9 +479,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         immediate: true,
         requestPermission: widget.isVisible,
       );
-    } else if (_operationalActiveJob() == null) {
+    } else if (_operationalActiveJob() == null &&
+        !_availableForegroundLocationRunning) {
+      // En navegador (o sin servicio GPS iniciado) no simular presencia.
       _stopOperationalLocationSampling();
     } else {
+      // Si Android ya inicio el servicio visible, seguir en segundo plano.
       _operationalLocationTimer?.cancel();
       _operationalLocationTimer = null;
     }
@@ -509,6 +543,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return _vehicleById(_selectedVehicleId);
   }
 
+  bool get _androidOperationalLocation =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  bool get _availableForegroundLocationRunning =>
+      _androidOperationalLocation &&
+      _activeOperationalLocationSubscription != null &&
+      _operationalLocationStreamActiveService == false;
+
   bool _canPublishOperationalLocation() {
     if (widget.store.user == null) return false;
 
@@ -517,7 +559,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final activeJob = _operationalActiveJob();
 
     if (_operationalLifecycleState != AppLifecycleState.resumed &&
-        activeJob == null) {
+        activeJob == null &&
+        !_availableForegroundLocationRunning) {
       return false;
     }
 
@@ -535,39 +578,63 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   void _stopOperationalLocationSampling() {
+    // Invalida arranques asincronos al descansar, cerrar sesion o cambiar modo.
+    _operationalLocationStreamGeneration++;
     _operationalLocationTimer?.cancel();
     _operationalLocationTimer = null;
     _activeOperationalLocationSubscription?.cancel();
     _activeOperationalLocationSubscription = null;
+    _operationalLocationStreamActiveService = null;
   }
 
-  LocationSettings _activeOperationalLocationSettings() {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  LocationSettings _activeOperationalLocationSettings({
+    required bool activeService,
+  }) {
+    if (_androidOperationalLocation) {
       return AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
-        intervalDuration: const Duration(seconds: 15),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'TUKTUK · servicio activo',
-          notificationText:
-              'Compartiendo tu ubicación durante el servicio en curso.',
-          notificationChannelName: 'Servicio activo TUKTUK',
-          enableWakeLock: true,
-          setOngoing: true,
+        accuracy: activeService
+            ? LocationAccuracy.high
+            : LocationAccuracy.medium,
+        // No filtrar por distancia: permitir heartbeat aun con vehiculo quieto.
+        distanceFilter: activeService ? 10 : 0,
+        intervalDuration: MarketplaceOperationalLocationPolicy.streamInterval(
+          activeService: activeService,
         ),
+        foregroundNotificationConfig: activeService
+            ? const ForegroundNotificationConfig(
+                notificationTitle: 'TUKTUK · servicio activo',
+                notificationText:
+                    'Compartiendo tu ubicación durante el servicio en curso.',
+                notificationChannelName: 'Servicio activo TUKTUK',
+                enableWakeLock: true,
+                setOngoing: true,
+              )
+            : const ForegroundNotificationConfig(
+                notificationTitle: 'TUKTUK · trabajando',
+                notificationText:
+                    'Compartiendo tu ubicación mientras estás en Trabajar.',
+                notificationChannelName: 'Jornada activa TUKTUK',
+                enableWakeLock: false,
+                setOngoing: true,
+              ),
       );
     }
 
-    return const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10,
+    return LocationSettings(
+      accuracy: activeService ? LocationAccuracy.high : LocationAccuracy.medium,
+      distanceFilter: activeService ? 10 : 0,
     );
   }
 
-  Future<void> _publishActiveOperationalPosition(Position position) async {
+  Future<void> _publishStreamingOperationalPosition(
+    Position position, {
+    required bool activeService,
+  }) async {
+    final currentActiveService = _operationalActiveJob() != null;
     if (_activeOperationalLocationPublishInFlight ||
         !_canPublishOperationalLocation() ||
-        _operationalActiveJob() == null) {
+        currentActiveService != activeService ||
+        _operationalLocationStreamActiveService != activeService) {
       return;
     }
 
@@ -588,6 +655,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _activeOperationalLocationPublishInFlight = true;
     try {
       final nowUtc = DateTime.now().toUtc();
+      if (!MarketplaceOperationalLocationPolicy.isFreshStreamFix(
+        capturedAt: position.timestamp,
+        nowUtc: nowUtc,
+        activeService: activeService,
+      )) {
+        return;
+      }
       final lastPosition = _lastOperationalPosition;
       final lastSentAt = _lastOperationalSentAt;
       final distanceMeters = lastPosition == null
@@ -599,14 +673,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               longitude,
             );
 
-      final heartbeatDue = lastSentAt == null ||
+      final heartbeatDue =
+          lastSentAt == null ||
           nowUtc.difference(lastSentAt) >=
               MarketplaceOperationalLocationPolicy.heartbeatInterval(
-                activeService: true,
+                activeService: activeService,
               );
-      final movementDue = distanceMeters >=
+      final movementDue =
+          distanceMeters >=
           MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
-            activeService: true,
+            activeService: activeService,
           );
 
       if (lastPosition == null || heartbeatDue || movementDue) {
@@ -631,68 +707,130 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _lastOperationalSentAt = nowUtc;
       }
     } catch (_) {
-      // El stream permanece vivo y vuelve a intentar con la siguiente posición.
+      // Sin cobertura no se inventa ubicacion; reintentar con la siguiente muestra.
     } finally {
       _activeOperationalLocationPublishInFlight = false;
     }
   }
 
-  Future<void> _ensureActiveOperationalLocationStream({
-    bool requestPermission = false,
-  }) async {
-    if (_activeOperationalLocationSubscription != null ||
-        !_canPublishOperationalLocation() ||
-        _operationalActiveJob() == null) {
+  // Reintentar solo con actividad visible: Android impide iniciar ciertos
+  // servicios de ubicacion desde segundo plano. No usar sondeos constantes.
+  void _scheduleOperationalLocationStreamRetry({required bool activeService}) {
+    if (!mounted ||
+        _operationalLifecycleState != AppLifecycleState.resumed ||
+        !_canPublishOperationalLocation()) {
       return;
     }
-
-    if (!await Geolocator.isLocationServiceEnabled()) return;
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied &&
-        requestPermission &&
-        widget.isVisible) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return;
-    }
-
-    if (!_canPublishOperationalLocation() || _operationalActiveJob() == null) {
-      return;
-    }
-
-    final stream = Geolocator.getPositionStream(
-      locationSettings: _activeOperationalLocationSettings(),
-    );
-
-    _activeOperationalLocationSubscription = stream.listen(
-      (position) => unawaited(_publishActiveOperationalPosition(position)),
-      onError: (_) {
-        final subscription = _activeOperationalLocationSubscription;
-        _activeOperationalLocationSubscription = null;
-        subscription?.cancel();
-
+    _operationalLocationTimer?.cancel();
+    _operationalLocationTimer = Timer(
+      MarketplaceOperationalLocationPolicy.failureRetryDelay(
+        activeService: activeService,
+      ),
+      () {
+        _operationalLocationTimer = null;
         if (mounted &&
-            _operationalActiveJob() != null &&
+            _operationalLifecycleState == AppLifecycleState.resumed &&
             _canPublishOperationalLocation()) {
-          _operationalLocationTimer?.cancel();
-          _operationalLocationTimer = Timer(
-            MarketplaceOperationalLocationPolicy.failureRetryDelay(
-              activeService: true,
-            ),
-            () {
-              _operationalLocationTimer = null;
-              _syncOperationalLocationSampling();
-            },
-          );
+          _syncOperationalLocationSampling();
         }
       },
-      onDone: () {
-        _activeOperationalLocationSubscription = null;
-      },
     );
+  }
+
+  Future<void> _ensureOperationalLocationStream({
+    bool requestPermission = false,
+  }) async {
+    if (_operationalLocationStreamStarting ||
+        !_canPublishOperationalLocation()) {
+      return;
+    }
+
+    final activeService = _operationalActiveJob() != null;
+    if (!MarketplaceOperationalLocationPolicy.usesContinuousStream(
+      isAndroid: _androidOperationalLocation,
+      activeService: activeService,
+    )) {
+      return;
+    }
+
+    if (_activeOperationalLocationSubscription != null &&
+        _operationalLocationStreamActiveService == activeService) {
+      return;
+    }
+
+    // Android 12+ exige iniciar el FGS de ubicacion con actividad visible.
+    if (_operationalLifecycleState != AppLifecycleState.resumed) return;
+
+    if (_activeOperationalLocationSubscription != null) {
+      _stopOperationalLocationSampling();
+    }
+
+    _operationalLocationStreamStarting = true;
+    final generation = ++_operationalLocationStreamGeneration;
+    var syncChangedState = false;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _scheduleOperationalLocationStreamRetry(activeService: activeService);
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied &&
+          requestPermission &&
+          widget.isVisible) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      if (!mounted ||
+          generation != _operationalLocationStreamGeneration ||
+          _operationalLifecycleState != AppLifecycleState.resumed ||
+          !_canPublishOperationalLocation() ||
+          (_operationalActiveJob() != null) != activeService) {
+        syncChangedState = true;
+        return;
+      }
+
+      final stream = Geolocator.getPositionStream(
+        locationSettings: _activeOperationalLocationSettings(
+          activeService: activeService,
+        ),
+      );
+
+      late final StreamSubscription<Position> subscription;
+      void onStreamClosed() {
+        if (_activeOperationalLocationSubscription != subscription) return;
+        _stopOperationalLocationSampling();
+        // Si estamos en segundo plano, recuperar al volver a primer plano.
+        _scheduleOperationalLocationStreamRetry(activeService: activeService);
+      }
+
+      subscription = stream.listen(
+        (position) => unawaited(
+          _publishStreamingOperationalPosition(
+            position,
+            activeService: activeService,
+          ),
+        ),
+        onError: (_) => onStreamClosed(),
+        onDone: onStreamClosed,
+      );
+      _activeOperationalLocationSubscription = subscription;
+      _operationalLocationStreamActiveService = activeService;
+    } catch (_) {
+      _scheduleOperationalLocationStreamRetry(activeService: activeService);
+    } finally {
+      _operationalLocationStreamStarting = false;
+      if (syncChangedState &&
+          mounted &&
+          _operationalLifecycleState == AppLifecycleState.resumed &&
+          _canPublishOperationalLocation()) {
+        _syncOperationalLocationSampling();
+      }
+    }
   }
 
   void _scheduleNextOperationalLocationSample({Duration? overrideDelay}) {
@@ -721,20 +859,26 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       return;
     }
 
-    if (_operationalActiveJob() != null) {
+    final activeService = _operationalActiveJob() != null;
+    if (MarketplaceOperationalLocationPolicy.usesContinuousStream(
+      isAndroid: _androidOperationalLocation,
+      activeService: activeService,
+    )) {
       _operationalLocationTimer?.cancel();
       _operationalLocationTimer = null;
+      if (_activeOperationalLocationSubscription != null &&
+          _operationalLocationStreamActiveService != activeService) {
+        _stopOperationalLocationSampling();
+      }
       unawaited(
-        _ensureActiveOperationalLocationStream(
-          requestPermission: requestPermission,
-        ),
+        _ensureOperationalLocationStream(requestPermission: requestPermission),
       );
       return;
     }
 
+    // Web disponible: conserva muestreo original; no simular GPS en background.
     if (_activeOperationalLocationSubscription != null) {
-      _activeOperationalLocationSubscription?.cancel();
-      _activeOperationalLocationSubscription = null;
+      _stopOperationalLocationSampling();
     }
 
     if (immediate && !_operationalLocationInFlight) {
@@ -1440,63 +1584,74 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return mounted && recovered == true;
   }
 
-  Future<void> _enableFloatingShortcut() async {
-    await Hive.box(_metaBox).put(_marketplaceFloatingSettingKey, true);
-
-    if (!mounted) return;
-
-    setState(() => _floatingOptedIn = true);
-    await _syncMarketplaceFloatingShortcut();
-  }
-
   Future<void> _completeFloatingPermissionRequest() async {
-    if (!mounted) return;
+    if (!mounted || !_marketplaceDriverWorking.value) return;
 
     if (await AndroidFloatingButtonBridge.canDraw()) {
-      await _enableFloatingShortcut();
+      // Android ya autorizo el permiso. No pedir un segundo toque.
+      await _syncMarketplaceFloatingShortcut();
     } else if (mounted) {
       toast(
         context,
-        'El botón flotante sigue desactivado. '
-        'Puedes habilitarlo desde Trabajo.',
+        'TukTuk sigue trabajando. Activa "Mostrar sobre otras apps" '
+        'cuando quieras utilizar el acceso rápido.',
       );
     }
   }
 
-  Future<void> _toggleFloatingShortcut() async {
-    if (!AndroidFloatingButtonBridge.supported) return;
+  Future<void> _offerAutomaticFloatingShortcut() async {
+    if (!AndroidFloatingButtonBridge.supported ||
+        !mounted ||
+        !_marketplaceDriverWorking.value ||
+        _requestingFloatingPermission) {
+      return;
+    }
 
-    if (_floatingOptedIn) {
-      await Hive.box(_metaBox).put(_marketplaceFloatingSettingKey, false);
-
-      if (!mounted) return;
-
-      setState(() => _floatingOptedIn = false);
+    final canDraw = await AndroidFloatingButtonBridge.canDraw();
+    if (!mounted || !_marketplaceDriverWorking.value) return;
+    if (!marketplaceFloatingPermissionRequired(
+      isAndroid: AndroidFloatingButtonBridge.supported,
+      working: _marketplaceDriverWorking.value,
+      canDraw: canDraw,
+    )) {
       await _syncMarketplaceFloatingShortcut();
       return;
     }
 
-    if (!await AndroidFloatingButtonBridge.canDraw()) {
-      if (!mounted) return;
-
-      _requestingFloatingPermission = true;
-
-      final opened = await AndroidFloatingButtonBridge.openPermission();
-
-      if (!opened && mounted) {
-        _requestingFloatingPermission = false;
-
-        toast(
-          context,
-          'No se pudieron abrir los permisos del botón flotante.',
-        );
-      }
+    // Android no permite conceder este permiso sin la accion del usuario.
+    final autorizar = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Activa el botón rápido de TukTuk'),
+        content: const Text(
+          'Al minimizar TukTuk, verás un acceso flotante para volver '
+          'a tus carreras.\n\n'
+          'Pulsa "Activar" y habilita "Mostrar sobre otras aplicaciones" '
+          'en los ajustes de Android. Solo tendrás que hacerlo una vez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || !_marketplaceDriverWorking.value || autorizar != true) {
       return;
     }
 
-    await _enableFloatingShortcut();
+    _requestingFloatingPermission = true;
+    final abierto = await AndroidFloatingButtonBridge.openPermission();
+    if (!abierto && mounted) {
+      _requestingFloatingPermission = false;
+      toast(context, 'No se pudieron abrir los permisos del botón flotante.');
+    }
   }
-
   Future<void> _setAcceptingJobs(bool acceptingJobs) async {
     final vehicle = _vehicleById(_selectedVehicleId);
 
@@ -1519,6 +1674,29 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           defaultTargetPlatform == TargetPlatform.android &&
           !(await _verifyAndroidJobAlerts())) {
         return;
+      }
+      if (!mounted) return;
+
+      if (acceptingJobs &&
+          !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.android) {
+        if (!await Geolocator.isLocationServiceEnabled()) {
+          if (mounted) {
+            toast(context, 'Activa el GPS para aparecer disponible en TukTuk.');
+          }
+          return;
+        }
+        var gpsPermission = await Geolocator.checkPermission();
+        if (gpsPermission == LocationPermission.denied) {
+          gpsPermission = await Geolocator.requestPermission();
+        }
+        if (gpsPermission == LocationPermission.denied ||
+            gpsPermission == LocationPermission.deniedForever) {
+          if (mounted) {
+            toast(context, 'Concede permiso de ubicacion para trabajar.');
+          }
+          return;
+        }
       }
       if (!mounted) return;
 
@@ -1555,6 +1733,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           'Estás trabajando. Ya puedes recibir nuevas solicitudes.',
         );
 
+        // Con permiso previo aparece automaticamente; sin permiso, guia una vez.
+        unawaited(_offerAutomaticFloatingShortcut());
         await _loadAvailable();
       } else {
         _setMarketplaceAvailableJobCount(0);
@@ -3641,49 +3821,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             ],
           ),
         ),
-        if (AndroidFloatingButtonBridge.supported)
-          Positioned(
-            left: 12,
-            top: 88,
-            child: Material(
-              color: const Color(0xE8122630),
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                key: const ValueKey('tuktuk-floating-shortcut-toggle'),
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => unawaited(_toggleFloatingShortcut()),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _floatingOptedIn
-                            ? Icons.touch_app_rounded
-                            : Icons.touch_app_outlined,
-                        color: _floatingOptedIn ? kPrimary : Colors.white70,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 7),
-                      Text(
-                        _floatingOptedIn
-                            ? 'Botón flotante: sí'
-                            : 'Botón flotante: no',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
         if (kIsWeb && available && !onRide && !_webAlertVerified)
           Positioned(
             left: 12,

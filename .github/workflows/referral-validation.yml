@@ -9,6 +9,12 @@ on:
       - 'flutter_app/supabase/functions/referral-redirect/**'
       - '.github/workflows/referral-validation.yml'
   workflow_dispatch:
+    inputs:
+      allow_apk_debug:
+        description: 'Compilar APK debug solo con autorizacion expresa'
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -38,9 +44,13 @@ jobs:
             https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/28c4cfefc2ae38cfe84575c7aacc113c401d073f/supabase/functions/marketplace-customer-gateway/index.ts \
             -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
       - run: flutter test --no-pub
+      # Prohibido compilar APK automaticamente por cambios en un PR.
+      # Solo se habilita en workflow_dispatch con el permiso booleano explicito.
       - name: Prepare fake Firebase configuration for compilation only
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_apk_debug == true }}
         run: cp test/fixtures/google-services.debug.json android/app/google-services.json
       - name: Compile debug only (no production signing or publication)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_apk_debug == true }}
         run: flutter build apk --debug --no-pub
   backend:
     runs-on: ubuntu-latest

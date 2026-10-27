@@ -54,15 +54,51 @@ void main() {
         MarketplaceOperationalLocationPolicy.heartbeatInterval(
           activeService: false,
         ),
-        const Duration(minutes: 4),
+        const Duration(seconds: 120),
       );
       expect(
         MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
           activeService: false,
         ),
-        200,
+        75,
       );
     });
+
+    test('Android sigue enviando ubicacion estando disponible', () {
+      expect(
+        MarketplaceOperationalLocationPolicy.usesContinuousStream(
+          isAndroid: true,
+          activeService: false,
+        ),
+        isTrue,
+      );
+      expect(
+        MarketplaceOperationalLocationPolicy.streamInterval(
+          activeService: false,
+        ),
+        const Duration(seconds: 60),
+      );
+    });
+
+    test(
+      'el navegador no finge seguimiento continuo cuando esta disponible',
+      () {
+        expect(
+          MarketplaceOperationalLocationPolicy.usesContinuousStream(
+            isAndroid: false,
+            activeService: false,
+          ),
+          isFalse,
+        );
+        expect(
+          MarketplaceOperationalLocationPolicy.usesContinuousStream(
+            isAndroid: false,
+            activeService: true,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('en web usa posicion actual cuando el conductor esta disponible', () {
       expect(
@@ -100,6 +136,23 @@ void main() {
         ),
         const Duration(seconds: 30),
       );
+    });
+
+    test('descarta fixes retrasados o con reloj futuro', () {
+      final now = DateTime.utc(2026, 10, 27, 18, 0, 0);
+      bool recent(int ageSeconds, {required bool activeService}) =>
+          MarketplaceOperationalLocationPolicy.isFreshStreamFix(
+            capturedAt: now.subtract(Duration(seconds: ageSeconds)),
+            nowUtc: now,
+            activeService: activeService,
+          );
+
+      expect(recent(110, activeService: false), isTrue);
+      expect(recent(130, activeService: false), isFalse);
+      expect(recent(40, activeService: true), isTrue);
+      expect(recent(50, activeService: true), isFalse);
+      expect(recent(-5, activeService: false), isTrue);
+      expect(recent(-6, activeService: false), isFalse);
     });
 
     test('usa seguimiento mas frecuente durante servicio activo', () {

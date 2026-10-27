@@ -2974,13 +2974,7 @@ class _ReferralCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      store.referralProgram?.isRegistrationWalletLicense == true
-                          ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} promocionales cuando tu referido complete su perfil de conductor y active Trabajos.'
-                          : store.referralProgram?.isWalletReward == true
-                              ? 'Gana ${store.referralProgram!.rewardAmount.toStringAsFixed(0)} ${store.referralProgram!.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido.'
-                              : store.referralProgram == null
-                                  ? 'Consulta tus recompensas por invitar conductores.'
-                                  : 'Gana ${store.referralProgram!.rewardDays} días por cada referido.',
+                      'Comparte tu código o enlace con otros conductores.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -3076,7 +3070,7 @@ class _ReferralCard extends StatelessWidget {
         program.isRegistrationWalletLicense
             ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} promocionales por cada conductor referido válido'
             : program.isWalletReward
-                ? 'Gana ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional cuando tu referido complete su primer trabajo válido'
+                ? 'Recibes ${program.rewardAmount.toStringAsFixed(0)} ${program.rewardCurrency} de saldo promocional por cada referido que cumpla la condición'
                 : 'Gana ${program.rewardDays} días por cada referido',
         style: const TextStyle(
           color: _referralAccent,
@@ -3292,10 +3286,7 @@ class _ReferralEntryTile extends StatelessWidget {
     final rewardState = rewarded
         ? '$rewardLabel acreditados'
         : 'Pendiente del primer trabajo válido';
-    final detail = [
-      if (registered.isNotEmpty) registered,
-      rewardState,
-    ].join(' · ');
+
     final imageUrl = entry.avatarUrl;
     const fallbackIcon = Icon(
       Icons.person_outline,
@@ -3304,7 +3295,7 @@ class _ReferralEntryTile extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(
               alpha:
@@ -3332,7 +3323,7 @@ class _ReferralEntryTile extends StatelessWidget {
                     ),
                   ),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3340,46 +3331,41 @@ class _ReferralEntryTile extends StatelessWidget {
               children: [
                 Text(
                   entry.name,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 3),
+                if (registered.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    registered,
+                    style: TextStyle(color: appMutedColor(context), fontSize: 11),
+                  ),
+                ],
+                const SizedBox(height: 6),
                 Text(
-                  detail,
+                  rewardState,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: appMutedColor(context), fontSize: 11),
+                  style: TextStyle(
+                    color: rewarded ? _referralAccent : appMutedColor(context),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
+                if (entry.rewardMonths > 0) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    '+${entry.rewardMonths} meses · histórico',
+                    style: const TextStyle(
+                      color: _referralAccent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
             ),
-          ),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                rewarded ? '+$rewardLabel' : 'Pendiente',
-                style: const TextStyle(
-                  color: _referralAccent,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-              Text(
-                entry.rewardMonths > 0
-                    ? '+${entry.rewardMonths} meses · histórico'
-                    : (rewarded
-                        ? 'Saldo promocional'
-                        : 'Primer trabajo válido'),
-                style: const TextStyle(
-                  color: _referralAccent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 11,
-                ),
-              ),
-            ],
           ),
         ],
       ),
