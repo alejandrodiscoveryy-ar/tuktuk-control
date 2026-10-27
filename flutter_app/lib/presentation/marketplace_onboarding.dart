@@ -348,6 +348,7 @@ class _MarketplaceOnboardingScreenState
   Map<String, dynamic> _identityDocs = {};
   bool _identityLoaded = false;
   bool _identityRequired = false;
+  bool _identityTypeRequired = false;
   String? _identityDocumentType;
   final Map<String, String?> _identitySavedPhotoIds = {};
   String? _identityError;
@@ -605,7 +606,7 @@ class _MarketplaceOnboardingScreenState
     final changingType = savedType != null &&
         _identityDocumentType != null && savedType != _identityDocumentType;
     if (_identityRequired || changingType) {
-      if (_identityRequired && _identityDocumentType == null) {
+      if (_identityTypeRequired && _identityDocumentType == null) {
         issues['identityType'] = 'Selecciona carné de identidad o licencia de conducción.';
       }
       if (!_identityLoaded) {
@@ -1549,6 +1550,7 @@ class _MarketplaceOnboardingScreenState
           _identityDocs[side] ??= _draftIdentityAsset(side);
         }
         _identityRequired = documents['required'] == true;
+        _identityTypeRequired = documents['document_type_required'] == true;
         _identityLoaded = true;
         _identityError = null;
       });
@@ -2827,7 +2829,7 @@ class _MarketplaceOnboardingScreenState
                   style: TextStyle(fontSize: 12, color: appMutedColor(context)),
                 ),
                 const SizedBox(height: 12),
-                Text('Tipo de documento${_identityRequired ? ' *' : ''}',
+                Text('Tipo de documento${_identityTypeRequired ? ' *' : ''}',
                     style: const TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Wrap(

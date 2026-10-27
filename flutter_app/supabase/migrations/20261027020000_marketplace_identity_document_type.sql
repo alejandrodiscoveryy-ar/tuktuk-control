@@ -3,6 +3,21 @@
 alter table public.driver_profiles
   add column if not exists identity_document_type text;
 
+-- Los conductores existentes se eximen del NUEVO tipo sin quitar la
+-- exigencia de ambas fotografias que ya tuvieran en su perfil.
+-- La columna se crea nullable, se marca false SOLO a filas existentes y,
+-- finalmente, pasa a true por defecto para altas posteriores.
+-- Reejecutar esta migracion no cambia false/true ya asignados.
+alter table public.driver_profiles
+  add column if not exists identity_document_type_required boolean;
+update public.driver_profiles
+set identity_document_type_required = false
+where identity_document_type_required is null;
+alter table public.driver_profiles
+  alter column identity_document_type_required set default true;
+alter table public.driver_profiles
+  alter column identity_document_type_required set not null;
+
 do $$
 begin
   if not exists (
@@ -55,6 +70,14 @@ begin
       select d.identity_document_type
       from public.driver_profiles d
       where d.project_id = pid and d.user_id = actor
+    ),
+    'document_type_required', coalesce(
+      (
+        select d.identity_document_type_required
+        from public.driver_profiles d
+        where d.project_id = pid and d.user_id = actor
+      ),
+      true
     ),
     'required', coalesce(
       (
@@ -218,8 +241,8 @@ grant execute on function public.save_my_marketplace_identity_documents_v2(uuid,
   to authenticated;
 
 -- GATE_PR106_DOCUMENT_TYPE_REQUIRED
--- Mantiene la exencion antigua identity_docs_required=false; para nuevos,
--- bloquea toda activacion/aceptacion sin elegir tipo y aportar ambas fotos.
+-- Exime del tipo a perfiles ya existentes al migrar; las fotos conservan
+-- el requisito anterior. Las altas posteriores deben elegir el tipo.
 -- Misma firma original: preserva los llamadores de Trabajos.
 create or replace function app_private.marketplace_onboarding_requirements_complete(
   target_user_id uuid,
@@ -284,7 +307,8 @@ as $$
          )
          and (
            d.identity_docs_required=false or (
-             d.identity_document_type in ('national_id', 'driver_license') and
+             (d.identity_document_type_required = false or
+              d.identity_document_type in ('national_id', 'driver_license')) and
              exists (
                select 1 from public.media_assets f
                where f.project_id=d.project_id and f.id=d.identity_front_asset_id

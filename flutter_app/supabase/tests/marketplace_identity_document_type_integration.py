@@ -139,6 +139,22 @@ with psycopg.connect(target_url, autocommit=True) as db:
         cur.execute(new)
         cur.execute(new)  # Idempotencia para CI y despliegues controlados.
         assert gate_result(OLD,'old-vehicle') is True, 'LEGACY_DRIVER_REGRESSION'
+        # FIRST ya existia al migrar y tenia dos fotos: NO debe perder acceso.
+        assert gate_result(FIRST,'new-vehicle') is True, 'EXISTING_DRIVER_WITH_PHOTOS_WAS_BLOCKED'
+        cur.execute('''select identity_document_type_required from public.driver_profiles
+                       where user_id=%s''',(FIRST,))
+        assert cur.fetchone()[0] is False, 'EXISTING_DRIVER_NOT_GRANDFATHERED'
+        # Perfil realmente creado DESPUES de la migracion: por defecto true.
+        cur.execute('''insert into public.driver_profiles
+                       (project_id,user_id,status,identity_docs_required)
+                       values (%s,%s,'active',true)''',(PROJECT,STRANGER))
+        cur.execute('''select identity_document_type_required from public.driver_profiles
+                       where user_id=%s''',(STRANGER,))
+        assert cur.fetchone()[0] is True, 'NEW_DRIVER_TYPE_NOT_REQUIRED_BY_DEFAULT'
+        # Simular la misma regla para FIRST, que posee un recorrido completo
+        # del registro, con dos fotos e identificadores de prueba.
+        cur.execute('''update public.driver_profiles
+                       set identity_document_type_required=true where user_id=%s''',(FIRST,))
         assert gate_result(FIRST,'new-vehicle') is False, 'NEW_DRIVER_WITHOUT_TYPE_CAN_WORK'
         # Volver al onboarding incompleto, sin usar datos reales.
         cur.execute('''update public.driver_profiles
@@ -182,6 +198,10 @@ with psycopg.connect(target_url, autocommit=True) as db:
                   (A_FRONT2,A_BACK2,'driver_license'))
         assert saved['document_type'] == 'driver_license' and gate_result(FIRST,'new-vehicle')
         assert gate_result(OLD,'old-vehicle'), 'OLD_DRIVER_MUST_REMAIN_ALLOWED'
+        # La marca de excepcion de los inscritos antiguos persiste.
+        cur.execute('''select identity_document_type_required from public.driver_profiles
+                       where user_id=%s''',(OLD,))
+        assert cur.fetchone()[0] is False, 'LEGACY_DRIVER_TYPE_REQUIREMENT_REGRESSION'
         old_docs=rpc(OLD,'select public.get_my_marketplace_identity_documents()')
         assert old_docs['required'] is False and old_docs['document_type'] is None, 'OLD_DRIVER_DOC_TYPE_CHANGED'
         assert rpc(STRANGER,'select public.get_my_marketplace_identity_documents()')['front'] is None
