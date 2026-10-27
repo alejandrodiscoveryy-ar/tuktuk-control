@@ -348,6 +348,9 @@ class _MarketplaceOnboardingScreenState
   Map<String, dynamic> _identityDocs = {};
   bool _identityLoaded = false;
   bool _identityRequired = false;
+  bool _identityTypeRequired = false;
+  String? _identityDocumentType;
+  final Map<String, String?> _identitySavedPhotoIds = {};
   String? _identityError;
 
   Uint8List? _vehiclePhotoBytes;
@@ -435,6 +438,9 @@ class _MarketplaceOnboardingScreenState
     if (value is List<String>) return field == 'services';
     if (value is! String) return false;
     final text = value.trim();
+    if (field == 'identity_document_type') {
+      return text == 'national_id' || text == 'driver_license';
+    }
     if (field == 'name') return text.length >= 2 && text.length <= 100;
     if (field == 'phone') return RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(text);
     if (field == 'brand' || field == 'model') return text.isNotEmpty && text.length <= 80;
@@ -567,6 +573,20 @@ class _MarketplaceOnboardingScreenState
     return null;
   }
 
+  bool _identityPhotoValid(String side) {
+    final stored = _identityDocs[side];
+    final hasPhoto = _identityPending.containsKey(side) ||
+        (stored is Map && stored['status'] == 'available') ||
+        _draftIdentityAsset(side) != null;
+    if (!hasPhoto) return false;
+    final savedType = _identityDocs['document_type']?.toString();
+    if (savedType == null || savedType == _identityDocumentType) return true;
+    // No reutilizar las fotos verificadas del tipo anterior.
+    if (_identityPending.containsKey(side)) return true;
+    final draftId = _driverDraft['identity_${side}_id']?.toString();
+    return draftId != null && draftId != _identitySavedPhotoIds[side];
+  }
+
   Map<String, String> _registrationErrors() {
     final issues = <String, String>{};
     if (_name.text.trim().isEmpty) {
@@ -582,18 +602,25 @@ class _MarketplaceOnboardingScreenState
         _googleDriverPhotoUrl == null) {
       issues['driverPhoto'] = 'Añade una foto clara de tu rostro.';
     }
-    if (_identityRequired) {
+    final savedType = _identityDocs['document_type']?.toString();
+    final changingType = savedType != null &&
+        _identityDocumentType != null && savedType != _identityDocumentType;
+    if (_identityRequired || changingType) {
+      if (_identityTypeRequired && _identityDocumentType == null) {
+        issues['identityType'] = 'Selecciona carné de identidad o licencia de conducción.';
+      }
       if (!_identityLoaded) {
-        issues['identityLoad'] =
-            'No se pudo validar tu documentacion. Actualiza.';
+        issues['identityLoad'] = 'No se pudo validar tu documentación. Actualiza.';
       }
-      if (!_identityPending.containsKey('front') &&
-          _identityDocs['front'] == null) {
-        issues['identityFront'] = 'Agrega una foto delantera del carnet.';
+      if (!_identityPhotoValid('front')) {
+        issues['identityFront'] = changingType
+            ? 'Al cambiar de documento, fotografía de nuevo su parte delantera.'
+            : 'Agrega una foto delantera del documento elegido.';
       }
-      if (!_identityPending.containsKey('back') &&
-          _identityDocs['back'] == null) {
-        issues['identityBack'] = 'Agrega una foto trasera del carnet.';
+      if (!_identityPhotoValid('back')) {
+        issues['identityBack'] = changingType
+            ? 'Al cambiar de documento, fotografía de nuevo su parte trasera.'
+            : 'Agrega una foto trasera del documento elegido.';
       }
     }
     if (widget.driverOnly) return issues;
@@ -739,6 +766,7 @@ class _MarketplaceOnboardingScreenState
             'name',
             'phone',
             'driverPhoto',
+            'identityType',
             'identityLoad',
             'identityFront',
             'identityBack'
@@ -1110,7 +1138,7 @@ class _MarketplaceOnboardingScreenState
         _draftHydrating = false;
       });
 
-      _identityRequired = kIsWeb && !data.driverProfileExists;
+      _identityRequired = !data.driverProfileExists;
       await _loadIdentityDocuments();
       if (!widget.driverOnly) await _loadAccess();
       if (widget.managementSection == MarketplaceManagementSection.wallet) {
@@ -1507,10 +1535,22 @@ class _MarketplaceOnboardingScreenState
       if (!mounted) return;
       setState(() {
         _identityDocs = Map<String, dynamic>.from(documents);
+        final savedType = documents['document_type']?.toString();
+        final draftType = _driverDraft['identity_document_type']?.toString();
+        _identityDocumentType = (draftType == 'national_id' ||
+                draftType == 'driver_license')
+            ? draftType
+            : (savedType == 'national_id' || savedType == 'driver_license')
+                ? savedType
+                : null;
         for (final side in const ['front', 'back']) {
+          final saved = documents[side];
+          _identitySavedPhotoIds[side] =
+              saved is Map ? saved['asset_id']?.toString() : null;
           _identityDocs[side] ??= _draftIdentityAsset(side);
         }
-        _identityRequired = kIsWeb && documents['required'] == true;
+        _identityRequired = documents['required'] == true;
+        _identityTypeRequired = documents['document_type_required'] == true;
         _identityLoaded = true;
         _identityError = null;
       });
@@ -1569,7 +1609,7 @@ class _MarketplaceOnboardingScreenState
       }
     } catch (_) {
       if (mounted) {
-        toast(context, 'No se pudo procesar la fotografia del carnet.');
+        toast(context, 'No se pudo procesar la fotografía del documento.');
       }
     } finally {
       if (mounted) setState(() => _processingPhoto = false);
@@ -1579,7 +1619,10 @@ class _MarketplaceOnboardingScreenState
   Future<bool> _saveIdentityDocuments() async {
     final front = _driverDraft['identity_front_id']?.toString();
     final back = _driverDraft['identity_back_id']?.toString();
-    if (_identityPending.isEmpty && front == null && back == null) return true;
+    if (_identityPending.isEmpty && front == null && back == null &&
+        _identityDocumentType == _identityDocs['document_type']) {
+      return true;
+    }
     final uploaded = <String, String>{};
     try {
       for (final side in const ['front', 'back']) {
@@ -1596,10 +1639,16 @@ class _MarketplaceOnboardingScreenState
       final saved = await _service.saveIdentityDocuments(
         frontId: uploaded['front'] ?? front,
         backId: uploaded['back'] ?? back,
+        documentType: _identityDocumentType,
       );
       if (!mounted) return false;
       setState(() {
         _identityDocs = saved;
+        for (final side in const ['front', 'back']) {
+          final asset = saved[side];
+          _identitySavedPhotoIds[side] =
+              asset is Map ? asset['asset_id']?.toString() : null;
+        }
         _identityLoaded = true;
         _identityError = null;
         for (final side in uploaded.keys) {
@@ -2614,6 +2663,7 @@ class _MarketplaceOnboardingScreenState
                       'name',
                       'phone',
                       'driverPhoto',
+                      'identityType',
                       'identityLoad',
                       'identityFront',
                       'identityBack'
@@ -2768,23 +2818,58 @@ class _MarketplaceOnboardingScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Carné de identidad',
+                const Text('Carné de identidad o licencia de conducción',
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 Text(
                   _identityRequired
-                      ? 'Sube las fotografias de ambas caras para completar tu inscripcion.'
-                      : 'Puedes agregar las dos fotografias de tu carnet cuando quieras.',
+                      ? 'Sube fotografías de ambas caras del carné o la licencia para completar tu inscripción.'
+                      : 'Los conductores inscritos anteriormente pueden completar sus documentos aquí.',
                   style: TextStyle(fontSize: 12, color: appMutedColor(context)),
+                ),
+                const SizedBox(height: 12),
+                Text('Tipo de documento${_identityTypeRequired ? ' *' : ''}',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    for (final kind in const ['national_id', 'driver_license'])
+                      ChoiceChip(
+                        label: Text(kind == 'national_id'
+                            ? 'Carné de identidad' : 'Licencia de conducción'),
+                        selected: _identityDocumentType == kind,
+                        onSelected: _canEdit && !_registrationSubmitting
+                            ? (selected) {
+                                if (!selected) return;
+                                setState(() {
+                                  _identityDocumentType = kind;
+                                  _registrationSaved = false;
+                                });
+                                _queueDraftField('identity_document_type', kind);
+                              }
+                            : null,
+                      ),
+                  ],
                 ),
                 if (_identityError != null)
                   Text(_identityError!, style: const TextStyle(color: kDanger)),
                 if (_showFieldErrors)
                   for (final issue in _registrationErrors().entries)
-                    if (['identityLoad', 'identityFront', 'identityBack']
+                    if (['identityType', 'identityLoad', 'identityFront', 'identityBack']
                         .contains(issue.key))
                       Text(issue.value, style: const TextStyle(color: kDanger)),
+                if (_identityDocs['document_type'] != null &&
+                    _identityDocumentType != _identityDocs['document_type'])
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Cambiaste el tipo de documento. Debes volver a fotografiar ambas caras.',
+                      style: TextStyle(fontSize: 12, color: kDanger),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 _identityDocumentTile('front', 'Parte delantera'),
                 const SizedBox(height: 14),
@@ -2818,6 +2903,7 @@ class _MarketplaceOnboardingScreenState
                       'name',
                       'phone',
                       'driverPhoto',
+                      'identityType',
                       'identityLoad',
                       'identityFront',
                       'identityBack'
