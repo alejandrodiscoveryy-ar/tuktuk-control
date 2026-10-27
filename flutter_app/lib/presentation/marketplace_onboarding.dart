@@ -589,11 +589,11 @@ class _MarketplaceOnboardingScreenState
       }
       if (!_identityPending.containsKey('front') &&
           _identityDocs['front'] == null) {
-        issues['identityFront'] = 'Agrega una foto delantera del carnet.';
+        issues['identityFront'] = 'Agrega una foto delantera del carné de identidad o licencia de conducción.';
       }
       if (!_identityPending.containsKey('back') &&
           _identityDocs['back'] == null) {
-        issues['identityBack'] = 'Agrega una foto trasera del carnet.';
+        issues['identityBack'] = 'Agrega una foto trasera del carné de identidad o licencia de conducción.';
       }
     }
     if (widget.driverOnly) return issues;
@@ -1110,7 +1110,7 @@ class _MarketplaceOnboardingScreenState
         _draftHydrating = false;
       });
 
-      _identityRequired = kIsWeb && !data.driverProfileExists;
+      _identityRequired = !data.driverProfileExists;
       await _loadIdentityDocuments();
       if (!widget.driverOnly) await _loadAccess();
       if (widget.managementSection == MarketplaceManagementSection.wallet) {
@@ -1510,7 +1510,7 @@ class _MarketplaceOnboardingScreenState
         for (final side in const ['front', 'back']) {
           _identityDocs[side] ??= _draftIdentityAsset(side);
         }
-        _identityRequired = kIsWeb && documents['required'] == true;
+        _identityRequired = documents['required'] == true;
         _identityLoaded = true;
         _identityError = null;
       });
@@ -1569,7 +1569,7 @@ class _MarketplaceOnboardingScreenState
       }
     } catch (_) {
       if (mounted) {
-        toast(context, 'No se pudo procesar la fotografia del carnet.');
+        toast(context, 'No se pudo procesar la fotografía del documento.');
       }
     } finally {
       if (mounted) setState(() => _processingPhoto = false);
@@ -2768,14 +2768,14 @@ class _MarketplaceOnboardingScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Carné de identidad',
+                const Text('Carné de identidad o licencia de conducción',
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 Text(
                   _identityRequired
-                      ? 'Sube las fotografias de ambas caras para completar tu inscripcion.'
-                      : 'Puedes agregar las dos fotografias de tu carnet cuando quieras.',
+                      ? 'Sube fotografías de ambas caras del carné o la licencia para completar tu inscripción.'
+                      : 'Los conductores inscritos anteriormente pueden completar sus documentos aquí.',
                   style: TextStyle(fontSize: 12, color: appMutedColor(context)),
                 ),
                 if (_identityError != null)
