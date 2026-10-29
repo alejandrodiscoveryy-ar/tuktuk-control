@@ -75,7 +75,9 @@ class _AppUpdateRelease {
         url.userInfo.isNotEmpty) return null;
     final build = map['latest_build'];
     final latestBuild = build is num ? build.toInt() : int.tryParse('$build');
-    if (latestBuild == null || latestBuild <= 0) return null;
+    if (latestBuild == null || latestBuild <= 0) {
+      return null;
+    }
     return _AppUpdateRelease(
       latestVersion: '${map['latest_version'] ?? ''}'.trim(),
       latestBuild: latestBuild,
