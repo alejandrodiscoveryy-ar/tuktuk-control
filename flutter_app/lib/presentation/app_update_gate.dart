@@ -72,7 +72,9 @@ class _AppUpdateRelease {
     if (map['enabled'] != true) return null;
     final url = Uri.tryParse('${map['download_url'] ?? ''}');
     if (url == null || url.scheme != 'https' || url.host.isEmpty ||
-        url.userInfo.isNotEmpty) return null;
+        url.userInfo.isNotEmpty) {
+      return null;
+    }
     final build = map['latest_build'];
     final latestBuild = build is num ? build.toInt() : int.tryParse('$build');
     if (latestBuild == null || latestBuild <= 0) {
