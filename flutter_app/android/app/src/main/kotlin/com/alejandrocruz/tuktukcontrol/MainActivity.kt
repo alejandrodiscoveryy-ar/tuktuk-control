@@ -13,6 +13,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val REFERRAL_CHANNEL = "com.alejandrocruz.tuktukcontrol/referrals"
         private const val GET_INSTALL_REFERRER = "getInstallReferrer"
+        private const val UPDATE_CHANNEL = "com.alejandrocruz.tuktukcontrol/version"
     }
 
     override fun onStart() {
@@ -29,6 +30,33 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         DriverAlertDiagnostics.register(this, flutterEngine)
         DriverFloatingShortcut.register(this, flutterEngine)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            UPDATE_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "getInstalledVersion") {
+                try {
+                    val pkg = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        packageManager.getPackageInfo(
+                            packageName,
+                            android.content.pm.PackageManager.PackageInfoFlags.of(0)
+                        )
+                    } else {
+                        packageManager.getPackageInfo(packageName, 0)
+                    }
+                    val number = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        pkg.longVersionCode
+                    } else {
+                        pkg.versionCode.toLong()
+                    }
+                    result.success(mapOf("name" to (pkg.versionName ?: ""), "build" to number))
+                } catch (error: Exception) {
+                    result.error("VERSION_UNAVAILABLE", error.message, null)
+                }
+            } else {
+                result.notImplemented()
+            }
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             REFERRAL_CHANNEL,
