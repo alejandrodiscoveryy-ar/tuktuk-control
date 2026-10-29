@@ -69,6 +69,7 @@ part 'presentation/marketplace_customer_tracking.dart';
 part 'services/sync_coordinator.dart';
 part 'presentation/screens.dart';
 part 'presentation/widgets.dart';
+part 'presentation/app_update_gate.dart';
 
 const _recordsBox = 'daily_records';
 const _maintenanceRecordsBox = 'maintenance_records';
@@ -241,7 +242,7 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
           themeMode: themeMode,
           theme: buildAppTheme(Brightness.light),
           darkTheme: buildAppTheme(Brightness.dark),
-          home: AppShell(store: store),
+          home: AppUpdateGate(child: AppShell(store: store)),
         );
       },
     );
