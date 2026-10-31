@@ -1041,6 +1041,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
         _lastOperationalPosition = position;
         _lastOperationalSentAt = nowUtc;
+        if (mounted && kIsWeb) setState(() {});
 
         // Una consulta iniciada antes del nuevo GPS puede devolver cero
         // ofertas. Al publicar correctamente la ubicacion, reconsultar
@@ -3845,6 +3846,44 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       Expanded(
                         child: Text(
                           'Alertas de trabajo sin verificar. Toca para comprobar.',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        // Web: alertar si "Trabajar" no tiene ubicacion confirmada reciente.
+        // Este aviso no modifica el estado ni crea coordenadas ficticias.
+        if (kIsWeb && available && !onRide &&
+            (_lastOperationalSentAt == null ||
+             DateTime.now().toUtc().difference(_lastOperationalSentAt!) >
+                 const Duration(minutes: 5)))
+          Positioned(
+            left: 12,
+            right: 12,
+            top: _webAlertVerified ? 96 : 166,
+            child: Material(
+              color: const Color(0xF03E3020),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                key: const ValueKey('work-gps-readiness-warning'),
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _syncOperationalLocationSampling(
+                  immediate: true,
+                  requestPermission: true,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.gps_off_rounded, color: Color(0xFFFFC47B)),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'GPS sin confirmar. Toca para comprobar ubicación y permisos; sin GPS reciente no aparecerás en el radar.',
                           style: TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
