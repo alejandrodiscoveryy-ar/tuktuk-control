@@ -512,7 +512,7 @@ void main() {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
-        'status': 'en_route',
+        'status': 'pickup',
         'final_price': 100,
       }),
     ];

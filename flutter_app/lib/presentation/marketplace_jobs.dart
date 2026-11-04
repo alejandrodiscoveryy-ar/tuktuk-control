@@ -125,7 +125,7 @@ String _marketplaceJobStatusLabel(String status) {
   return switch (status) {
     'accepted' => 'Aceptado',
     'en_route' => 'En camino',
-    'pickup' => 'En recogida',
+    'pickup' => 'Llegada confirmada',
     'in_progress' => 'En curso',
     'completed' => 'Completado · pendiente de liquidación',
     'settled' => 'Liquidado',
@@ -170,7 +170,7 @@ String _marketplaceJobStatusMessage(String status) {
   return switch (status) {
     'accepted' => 'Servicio aceptado · prepárate para salir',
     'en_route' => 'Vas camino al punto de recogida',
-    'pickup' => 'Estás en el punto de recogida',
+    'pickup' => 'Aviso enviado al cliente · continúa al destino',
     'in_progress' => 'Servicio en curso hacia el destino',
     'completed' => 'Servicio finalizado · pendiente de liquidación',
     'settled' => 'Servicio completado y liquidado',
@@ -212,7 +212,7 @@ String _marketplaceJobBillingLabel(MarketplaceJob job) {
 String? _marketplaceJobActionLabel(String? action) {
   return switch (action) {
     'start_en_route' => 'Salir hacia el cliente',
-    'mark_pickup' => 'Confirmar recogida',
+    'mark_pickup' => 'Avisar al cliente',
     'start_service' => 'Iniciar servicio',
     'complete_service' => 'Completar servicio',
     _ => null,
@@ -220,7 +220,6 @@ String? _marketplaceJobActionLabel(String? action) {
 }
 
 bool _marketplaceJobCanFinish(MarketplaceJob job) =>
-    job.status == 'en_route' ||
     job.status == 'pickup' ||
     job.status == 'in_progress';
 
@@ -2083,7 +2082,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (_busyJobId != null ||
         action == null ||
-        (!finishing && action != 'start_en_route')) {
+        (!finishing && action != 'start_en_route' && action != 'mark_pickup')) {
       return;
     }
 
@@ -2113,6 +2112,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _operationKeys.remove(keyName);
       if (!mounted) return;
       await _refreshAfterJobMutation();
+      if (mounted && action == 'mark_pickup') {
+        toast(context, 'Llegada confirmada: el cliente recibirá el aviso.');
+      }
     } catch (error) {
       if (!mounted) return;
 
@@ -3789,6 +3791,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final canStart = active != null &&
         active.status == 'accepted' &&
         active.nextAction == 'start_en_route';
+    final canNotify = active != null &&
+        active.status == 'en_route' &&
+        active.nextAction == 'mark_pickup';
     final canCancel = active != null && _marketplaceJobCanDriverCancel(active);
     final busy = active != null && _busyJobId == active.id;
     final photo = _googleProfilePhotoUrl(widget.store.user);
@@ -4069,7 +4074,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                   ),
                                 ),
                               ),
-                              if (canFinish || canStart) ...[
+                              if (canFinish || canStart || canNotify) ...[
                                 SizedBox(
                                   width: double.infinity,
                                   height: 48,
@@ -4088,14 +4093,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                           )
                                         : Icon(
                                             canFinish
-                                                ? Icons
-                                                    .check_circle_outline_rounded
-                                                : Icons.navigation_rounded,
+                                                ? Icons.check_circle_outline_rounded
+                                                : canNotify
+                                                    ? Icons.volume_up_rounded
+                                                    : Icons.navigation_rounded,
                                           ),
                                     label: Text(
                                       canFinish
                                           ? 'Finalizar carrera'
-                                          : 'Salir hacia el cliente',
+                                          : canNotify
+                                              ? 'Avisar al cliente · hacer sonar claxon'
+                                              : 'Salir hacia el cliente',
                                     ),
                                   ),
                                 ),
@@ -4572,6 +4580,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                         scope == 'history' ? null : () => _contactJob(job),
                     onAdvance: scope == 'active' &&
                             (_marketplaceJobCanFinish(job) ||
+                                (job.status == 'en_route' &&
+                                    job.nextAction == 'mark_pickup') ||
                                 (job.status == 'accepted' &&
                                     job.nextAction == 'start_en_route'))
                         ? () => _advanceJob(job)
