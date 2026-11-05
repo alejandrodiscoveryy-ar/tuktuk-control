@@ -358,6 +358,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   AppLifecycleState _operationalLifecycleState = AppLifecycleState.resumed;
   Position? _lastOperationalPosition;
   DateTime? _lastOperationalSentAt;
+  DateTime? _lastArrivalStateSyncAt;
 
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
@@ -704,6 +705,27 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         );
         _lastOperationalPosition = position;
         _lastOperationalSentAt = nowUtc;
+
+        final approaching = _active.where((job) =>
+          job.status == 'en_route' &&
+          job.vehicleId == vehicle.id &&
+          job.originLat != null &&
+          job.originLon != null).toList();
+
+        if (activeService &&
+            approaching.isNotEmpty &&
+            position.accuracy <= 35 &&
+            Geolocator.distanceBetween(
+              latitude, longitude,
+              approaching.first.originLat!,
+              approaching.first.originLon!,
+            ) <= 140 &&
+            (_lastArrivalStateSyncAt == null ||
+             nowUtc.difference(_lastArrivalStateSyncAt!) >=
+               const Duration(seconds: 20))) {
+          _lastArrivalStateSyncAt = nowUtc;
+          unawaited(_refreshAfterJobMutation().catchError((_) {}));
+        }
       }
     } catch (_) {
       // Sin cobertura no se inventa ubicacion; reintentar con la siguiente muestra.
@@ -2127,6 +2149,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         );
         await _refreshAfterJobMutation();
       } else {
+        if (action == 'mark_pickup') {
+          try {
+            await _refreshAfterJobMutation();
+            if (!mounted) return;
+            if (_active.any((latest) =>
+              latest.id == job.id &&
+              (latest.status == 'pickup' ||
+               latest.status == 'in_progress'))) {
+              toast(context, 'La llegada ya estaba confirmada por GPS.');
+              return;
+            }
+          } catch (_) {}
+        }
         toast(
           context,
           'No se pudo actualizar el trabajo. '
