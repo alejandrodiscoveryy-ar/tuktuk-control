@@ -512,7 +512,7 @@ void main() {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
-        'status': 'en_route',
+        'status': 'pickup',
         'final_price': 100,
       }),
     ];
@@ -713,7 +713,7 @@ void main() {
       );
       expect(find.text('Aceptado'), findsNothing);
       expect(find.text('Recogida'), findsOneWidget);
-      expect(find.text('Finalizar carrera'), findsOneWidget);
+      expect(find.text('Avisar al cliente · hacer sonar claxon'), findsOneWidget);
     },
   );
 
@@ -736,7 +736,7 @@ void main() {
     await open(tester);
     expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
 
-    expect(find.text('En recogida'), findsOneWidget);
+    expect(find.text('Llegada confirmada'), findsOneWidget);
     expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
     expect(find.text('Recogida'), findsOneWidget);
     expect(find.text('Finalizar carrera'), findsOneWidget);
@@ -748,8 +748,8 @@ void main() {
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': offer.id,
-        'status': 'en_route',
-        'next_driver_action': 'mark_pickup',
+        'status': 'pickup',
+        'next_driver_action': 'start_service',
         'service_code': 'passenger',
         'origin_text': 'Origen de prueba',
         'destination_text': 'Destino de prueba',
@@ -788,7 +788,7 @@ void main() {
       service.active = [
         MarketplaceJob.fromMap({
           'job_id': offer.id,
-          'status': 'en_route',
+          'status': 'pickup',
           'final_price': 100,
         }),
       ];
@@ -805,7 +805,7 @@ void main() {
       await tester.tap(find.text('Enviar evaluación'));
       await pumpJobs(tester);
       expect(store.incomes, isEmpty);
-      expect(service.active.single.status, 'en_route');
+      expect(service.active.single.status, 'pickup');
       service.failRating = false;
       await tester.tap(find.text('Enviar evaluación'));
       await pumpJobs(tester);
