@@ -110,9 +110,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFF2DD4A3),
             ),
             title: const Text('Conviértete en conductor'),
-            subtitle: const Text(
-              'Configura tu perfil de conductor y el vehículo que usarás para recibir solicitudes.',
-            ),
+
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
@@ -146,11 +144,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
                     ),
                   ),
             title: Text(tr('Cuenta y sincronización')),
-            subtitle: Text(
-              store.user == null
-                  ? tr('Inicia sesión y administra tu cuenta.')
-                  : tr('Cuenta y sincronización'),
-            ),
+
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               _openPage(
@@ -169,7 +163,6 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFFFFB547),
             ),
             title: Text(tr('Soporte y pagos')),
-            subtitle: Text(tr('Pagos y soporte')),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
@@ -197,13 +190,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFF9A7BFF),
             ),
             title: Text(tr('Referidos')),
-            subtitle: Text(
-              store.referralProgram?.isRegistrationWalletLicense == true
-                  ? 'Invita y gana saldo promocional por conductores referidos válidos.'
-                  : store.referralProgram?.isWalletReward == true
-                  ? 'Invita y gana saldo promocional cuando tus referidos completen su primer trabajo válido.'
-                  : 'Invita a otros conductores y consulta tus premios.',
-            ),
+
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
               if (store.user != null) {
