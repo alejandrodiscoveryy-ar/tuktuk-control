@@ -321,6 +321,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   bool _workMapFallback = false;
 
   MarketplaceOnboarding? _onboarding;
+  String? _workOnboardingUserId;
+  String? _workDriverPhotoKey;
+  Future<Uint8List>? _workDriverPhotoRequest;
   String? _selectedVehicleId;
   List<MarketplaceAvailableJob> _available = const [];
   List<MarketplaceJob> _active = const [];
@@ -1163,6 +1166,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _setMarketplaceAvailableJobCount(0);
 
       setState(() {
+        _onboarding = null;
+        _workOnboardingUserId = null;
+        _workDriverPhotoKey = null;
+        _workDriverPhotoRequest = null;
         _loading = false;
         _error = 'Inicia sesión con Google para ver Trabajos.';
       });
@@ -1191,6 +1198,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       setState(() {
         _onboarding = onboarding;
+        _workOnboardingUserId = userId;
         _selectedVehicleId = vehicleId;
         _available = const [];
       });
@@ -3331,16 +3339,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               shape: BoxShape.circle,
             ),
             clipBehavior: Clip.antiAlias,
-            child: photo == null
-                ? const Icon(Icons.person_outline_rounded, color: kPrimary)
-                : Image.network(
-                    photo,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.person_outline_rounded,
-                      color: kPrimary,
-                    ),
-                  ),
+            child: _workDriverAvatarImage(
+              googlePhoto: photo,
+              size: 48,
+              fallbackIcon: Icons.person_outline_rounded,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -3569,6 +3572,78 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  // La foto privada del conductor se muestra antes que el avatar Google.
+  // Se reutiliza la descarga y solo se invalida cuando cambia el asset o la cuenta.
+  Future<Uint8List>? _registeredWorkDriverPhoto() {
+    final userId = widget.store.user?.id;
+    final photoId = _onboarding?.driverPhotoAssetId;
+    if (userId == null ||
+        _workOnboardingUserId != userId ||
+        photoId == null) {
+      _workDriverPhotoKey = null;
+      _workDriverPhotoRequest = null;
+      return null;
+    }
+
+    for (final asset in _onboarding?.assets ?? const <MarketplaceMediaAsset>[]) {
+      if (asset.id != photoId) continue;
+      if (!asset.isAvailable ||
+          asset.storageBucket != 'marketplace-media' ||
+          asset.storagePath == null ||
+          asset.storagePath!.isEmpty) {
+        break;
+      }
+      final cacheKey = '$userId:$photoId:${asset.storagePath}';
+      if (_workDriverPhotoKey != cacheKey) {
+        _workDriverPhotoKey = cacheKey;
+        _workDriverPhotoRequest = Supabase.instance.client.storage
+            .from('marketplace-media')
+            .download(asset.storagePath!);
+      }
+      return _workDriverPhotoRequest;
+    }
+
+    _workDriverPhotoKey = null;
+    _workDriverPhotoRequest = null;
+    return null;
+  }
+
+  Widget _workDriverAvatarImage({
+    required String? googlePhoto,
+    required double size,
+    required IconData fallbackIcon,
+  }) {
+    Widget fallback() => googlePhoto == null
+        ? Icon(fallbackIcon, color: kPrimary)
+        : Image.network(
+            googlePhoto,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+            errorBuilder: (_, __, ___) => Icon(fallbackIcon, color: kPrimary),
+          );
+
+    final savedPhoto = _registeredWorkDriverPhoto();
+    if (savedPhoto == null) return fallback();
+    return FutureBuilder<Uint8List>(
+      future: savedPhoto,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          return Image.memory(
+            snapshot.data!,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback(),
+          );
+        }
+        // Mientras carga o falla el archivo privado, usar Google y luego icono.
+        return fallback();
+      },
+    );
+  }
+
   // TUKTUK Trabajo V3: avatar y estado premium sobre la cartografia.
   Widget _workPremiumAvatar(String? photo) {
     return Tooltip(
@@ -3598,13 +3673,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             onTap: () => setState(() => _workDrawerOpen = true),
             child: Padding(
               padding: const EdgeInsets.all(4),
-              child: CircleAvatar(
-                radius: 22,
-                backgroundColor: kSurfaceHigh,
-                backgroundImage: photo == null ? null : NetworkImage(photo),
-                child: photo == null
-                    ? const Icon(Icons.directions_car_rounded, color: kTertiary)
-                    : null,
+              child: ClipOval(
+                child: SizedBox.square(
+                  dimension: 44,
+                  child: _workDriverAvatarImage(
+                    googlePhoto: photo,
+                    size: 44,
+                    fallbackIcon: Icons.person_outline_rounded,
+                  ),
+                ),
               ),
             ),
           ),
