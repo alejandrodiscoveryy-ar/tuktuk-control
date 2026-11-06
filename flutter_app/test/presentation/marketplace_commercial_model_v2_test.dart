@@ -46,7 +46,8 @@ void main() {
       expect(screens, isNot(contains("'+100 CUP'")));
       expect(screens, contains('primer trabajo válido'));
       expect(screens, contains('program.rewardAmount'));
-      expect(shell, contains('primer trabajo válido'));
+      expect(shell, isNot(contains('subtitle:')));
+      expect(shell, contains("title: Text(tr('Referidos'))"));
     });
 
     test('trial_free se presenta como promoción inicial', () {

@@ -713,7 +713,7 @@ void main() {
       );
       expect(find.text('Aceptado'), findsNothing);
       expect(find.text('Recogida'), findsOneWidget);
-      expect(find.text('Avisar al cliente · hacer sonar claxon'), findsOneWidget);
+      expect(find.text('Tocar claxon'), findsOneWidget);
     },
   );
 
@@ -866,7 +866,7 @@ void main() {
     expect(find.byKey(const ValueKey('tuktuk-work-map-home')), findsOneWidget);
     expect(find.text('Vehículo activo'), findsNothing);
     expect(find.text('Trabajando'), findsNothing);
-    final action = find.text('Salir hacia el cliente');
+    final action = find.text('Tocar claxon');
     expect(action, findsOneWidget);
     expect(find.byKey(const ValueKey('work-map-advance-job')), findsOneWidget);
     final routeText = find.textContaining('Origen de prueba');

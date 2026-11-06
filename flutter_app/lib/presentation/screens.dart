@@ -3117,12 +3117,25 @@ class _ReferralCard extends StatelessWidget {
           style: TextStyle(color: kTertiary, fontSize: 12),
         ),
         TextButton.icon(
-          onPressed: store.retryPendingReferralClaim,
+          onPressed: () async {
+            await store.retryPendingReferralClaim();
+            if (!context.mounted) return;
+            if (store.referralClaimMessage ==
+                'No puedes usar tu propio código de invitación.') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('No puedes usar tu propio código de invitación.'),
+                ),
+              );
+            }
+          },
           icon: const Icon(Icons.refresh, size: 18),
           label: const Text('Reintentar código'),
         ),
       ],
-      if (store.referralClaimMessage != null)
+      if (store.referralClaimMessage != null &&
+          store.referralClaimMessage !=
+              'No puedes usar tu propio código de invitación.')
         Text(
           store.referralClaimMessage!,
           style: const TextStyle(color: kTertiary),

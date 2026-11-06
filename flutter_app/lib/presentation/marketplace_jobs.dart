@@ -211,8 +211,8 @@ String _marketplaceJobBillingLabel(MarketplaceJob job) {
 
 String? _marketplaceJobActionLabel(String? action) {
   return switch (action) {
-    'start_en_route' => 'Salir hacia el cliente',
-    'mark_pickup' => 'Avisar al cliente',
+    'start_en_route' => 'Tocar claxon',
+    'mark_pickup' => 'Tocar claxon',
     'start_service' => 'Iniciar servicio',
     'complete_service' => 'Completar servicio',
     _ => null,
@@ -362,6 +362,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
+  final Set<String> _autoEnRouteInFlight = <String>{};
   final Set<String> _ratedHistoryJobs = {};
   final Map<String, MarketplaceCustomerContact> _contacts = {};
   final Map<String, MarketplaceJobCancellationDetail> _cancellationDetails = {};
@@ -1390,6 +1391,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       });
 
       if (scope == 'active') {
+        for (final job in jobs) {
+          if (job.status == 'accepted' &&
+              job.nextAction == 'start_en_route') {
+            unawaited(_ensureEnRouteInternally(job));
+          }
+        }
         _syncOperationalLocationSampling(
           immediate: true,
           requestPermission: widget.isVisible,
@@ -1873,6 +1880,29 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return created;
   }
 
+  // Paso interno, nunca visible. Necesario para que la proximidad GPS
+  // y el claxon manual compartan el mismo estado del servidor.
+  Future<void> _ensureEnRouteInternally(MarketplaceJob job) async {
+    if (job.status != 'accepted' ||
+        job.nextAction != 'start_en_route' ||
+        !_autoEnRouteInFlight.add(job.id)) {
+      return;
+    }
+    final keyName = '${job.id}:start_en_route';
+    try {
+      await _service.advance(job.id, 'start_en_route',
+          _operationKey(job.id, 'start_en_route'));
+      _operationKeys.remove(keyName);
+      if (mounted) await _loadScope('active');
+    } catch (_) {
+      // Un fallo de red no bloquea la carrera ni oculta el claxon manual.
+      // La actualizacion de Trabajos puede reintentarlo mas adelante.
+    } finally {
+      _autoEnRouteInFlight.remove(job.id);
+      if (mounted) setState(() {});
+    }
+  }
+
   Future<void> _refreshAfterJobMutation() async {
     await _load();
   }
@@ -2100,11 +2130,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   Future<void> _advanceJob(MarketplaceJob job) async {
     final finishing = _marketplaceJobCanFinish(job);
-    final action = finishing ? 'finish_service' : job.nextAction;
+    final canNotify = (job.status == 'accepted' &&
+            job.nextAction == 'start_en_route') ||
+        (job.status == 'en_route' && job.nextAction == 'mark_pickup');
+    final action = finishing ? 'finish_service' : 'mark_pickup';
 
-    if (_busyJobId != null ||
-        action == null ||
-        (!finishing && action != 'start_en_route' && action != 'mark_pickup')) {
+    if (_busyJobId != null || _autoEnRouteInFlight.contains(job.id) ||
+        (!finishing && !canNotify)) {
       return;
     }
 
@@ -2128,6 +2160,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           await _refreshIncome();
         }
         return;
+      }
+      if (job.status == 'accepted') {
+        final startKeyName = '${job.id}:start_en_route';
+        await _service.advance(job.id, 'start_en_route',
+            _operationKey(job.id, 'start_en_route'));
+        _operationKeys.remove(startKeyName);
       }
       await _service.advance(job.id, action, key);
       if (widget.store.user?.id != requestUserId) return;
@@ -3823,14 +3861,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final active = _active.isNotEmpty ? _active.first : null;
     final onRide = active != null;
     final canFinish = active != null && _marketplaceJobCanFinish(active);
-    final canStart = active != null &&
-        active.status == 'accepted' &&
-        active.nextAction == 'start_en_route';
     final canNotify = active != null &&
-        active.status == 'en_route' &&
-        active.nextAction == 'mark_pickup';
+        ((active.status == 'accepted' &&
+                active.nextAction == 'start_en_route') ||
+            (active.status == 'en_route' &&
+                active.nextAction == 'mark_pickup'));
     final canCancel = active != null && _marketplaceJobCanDriverCancel(active);
-    final busy = active != null && _busyJobId == active.id;
+    final busy = active != null &&
+        (_busyJobId == active.id || _autoEnRouteInFlight.contains(active.id));
     final photo = _googleProfilePhotoUrl(widget.store.user);
     final bottomNavInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
@@ -4109,7 +4147,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                   ),
                                 ),
                               ),
-                              if (canFinish || canStart || canNotify) ...[
+                              if (canFinish || canNotify) ...[
                                 SizedBox(
                                   width: double.infinity,
                                   height: 48,
@@ -4129,16 +4167,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                         : Icon(
                                             canFinish
                                                 ? Icons.check_circle_outline_rounded
-                                                : canNotify
-                                                    ? Icons.volume_up_rounded
-                                                    : Icons.navigation_rounded,
+                                                : Icons.volume_up_rounded,
                                           ),
                                     label: Text(
                                       canFinish
                                           ? 'Finalizar carrera'
-                                          : canNotify
-                                              ? 'Avisar al cliente · hacer sonar claxon'
-                                              : 'Salir hacia el cliente',
+                                          : 'Tocar claxon',
                                     ),
                                   ),
                                 ),
@@ -4170,7 +4204,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                   ),
                                 ),
                               ),
-                              if (!canFinish && !canStart && !canCancel)
+                              if (!canFinish && !canNotify && !canCancel)
                                 TextButton(
                                   onPressed: () => _openWorkPanel(0),
                                   child: const Text(
@@ -4609,7 +4643,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                     job: job,
                     scope: scope,
                     cancellationDetail: _cancellationDetails[job.id],
-                    busy: _busyJobId == job.id,
+                    busy: _busyJobId == job.id ||
+                        _autoEnRouteInFlight.contains(job.id),
                     showMap: scope == 'active',
                     onContact:
                         scope == 'history' ? null : () => _contactJob(job),
