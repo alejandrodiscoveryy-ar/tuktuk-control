@@ -1885,7 +1885,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _ensureEnRouteInternally(MarketplaceJob job) async {
     if (job.status != 'accepted' ||
         job.nextAction != 'start_en_route' ||
-        !_autoEnRouteInFlight.add(job.id)) return;
+        !_autoEnRouteInFlight.add(job.id)) {
+      return;
+    }
     final keyName = '${job.id}:start_en_route';
     try {
       await _service.advance(job.id, 'start_en_route',
