@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final src = File('lib/presentation/marketplace_jobs.dart').readAsStringSync();
   test('El boton avisa al cliente y reutiliza mark_pickup', () {
-    expect(src, contains("'mark_pickup' => 'Avisar al cliente'"));
+    expect(src, contains("'mark_pickup' => 'Tocar claxon'"));
     expect(src, contains("final action = finishing ? 'finish_service' : 'mark_pickup';"));
     expect(src, contains('if (canFinish || canNotify)'));
     expect(src, contains("? 'Finalizar carrera'"));
