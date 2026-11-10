@@ -2519,7 +2519,9 @@ class RecordStore extends ChangeNotifier {
             localVehicleId: record.vehicleId,
             localStatus: record.syncStatus,
             stillQueued: Hive.box(_syncQueueBox).containsKey(operation.id),
-          )) return;
+          )) {
+            return;
+          }
           await _box.put(
             record.id,
             record
@@ -2538,7 +2540,9 @@ class RecordStore extends ChangeNotifier {
             localVehicleId: record.vehicleId,
             localStatus: record.syncStatus,
             stillQueued: Hive.box(_syncQueueBox).containsKey(operation.id),
-          )) return;
+          )) {
+            return;
+          }
           await _maintenanceBox.put(
             record.id,
             record
@@ -2557,7 +2561,9 @@ class RecordStore extends ChangeNotifier {
             localVehicleId: vehicle.id,
             localStatus: vehicle.syncStatus,
             stillQueued: Hive.box(_syncQueueBox).containsKey(operation.id),
-          )) return;
+          )) {
+            return;
+          }
           await _meta.put(
             'vehicle:${vehicle.id}',
             vehicle
