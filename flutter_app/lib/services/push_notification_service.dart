@@ -88,9 +88,13 @@ Uri? appUpdateUri(Map<String, dynamic> data) {
   final actionUrl = data['action_url']?.toString().trim();
   final configuredUri =
       actionUrl == null || actionUrl.isEmpty ? null : Uri.tryParse(actionUrl);
-  return configuredUri?.hasScheme == true
-      ? configuredUri
-      : Uri.parse(tuktukGooglePlayUrl);
+  // Nunca abrir protocolos arbitrarios procedentes de un payload push.
+  // Ante un enlace no HTTPS, mantener la ficha oficial como salida segura.
+  final safeHttpsUrl = configuredUri != null &&
+      configuredUri.scheme == 'https' &&
+      configuredUri.host.isNotEmpty &&
+      configuredUri.userInfo.isEmpty;
+  return safeHttpsUrl ? configuredUri : Uri.parse(tuktukGooglePlayUrl);
 }
 
 Future<void> openPushMessageAction(
