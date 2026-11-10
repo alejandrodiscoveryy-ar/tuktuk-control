@@ -1,11 +1,9 @@
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:geolocator/geolocator.dart' show LocationAccuracy, Position;
 
 // Contrato GPS independiente de widgets, servicios y datos del conductor.
 // Mantiene los umbrales existentes; no cambia frecuencia, permisos o llamadas.
 enum MarketplaceGpsIssue { locationDisabled, permissionDenied, deliveryFailed }
 
-@visibleForTesting
 bool marketplaceGpsNeedsAttention({
   required bool locationExpected,
   required DateTime? lastConfirmedAt,
@@ -79,6 +77,7 @@ class MarketplaceOperationalLocationPolicy {
         : const Duration(minutes: 2);
     return age >= const Duration(seconds: -5) && age <= maxAge;
   }
+
   // Validaciones puras reutilizables por el muestreo web y Android.
   static double? safeMetric(
     double value, {
@@ -98,7 +97,6 @@ class MarketplaceOperationalLocationPolicy {
         position.accuracy >= 0 &&
         position.accuracy <= 500;
   }
-
 }
 
 // El texto permanece fuera de la pantalla; no modifica el estado GPS.
