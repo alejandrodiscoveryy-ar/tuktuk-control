@@ -56,3 +56,17 @@ cursores de descarga persistentes y superar pruebas de aislamiento de datos.
 
 Google Drive continuará siendo un servicio de respaldo y restauración, no la
 base de datos principal.
+
+## Refactor incremental de GPS (noviembre de 2026)
+
+La pantalla de carreras (`presentation/marketplace_jobs.dart`) concentra UI,
+seguimiento GPS, estados de carrera y notificaciones. El primer paso del
+refactor mueve a una biblioteca Dart independiente
+(`services/marketplace_operational_gps_policy.dart`) las políticas puras
+sobre frescura, intervalos, distancias, métricas y mensajes GPS.
+
+Este paso conserva frecuencias, parámetros, widgets y contratos remotos
+existentes. La máquina de estado, suscripciones de ubicación, publicación de
+coordenadas y reintentos permanecen en la pantalla hasta una fase posterior
+con pruebas de integración dedicadas. No reemplazar en bloque los 35 módulos
+`part` de `main.dart` sin un plan de migración y pruebas por etapa.
