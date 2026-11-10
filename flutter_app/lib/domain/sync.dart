@@ -59,6 +59,7 @@ class SyncOperation {
     required this.createdAt,
     required this.updatedAt,
     this.attempts = 0,
+    this.revision = 1,
     this.lastError,
     this.previousPayload,
     this.rollbackOnLicenseRejection = false,
@@ -73,6 +74,8 @@ class SyncOperation {
   final DateTime createdAt;
   final DateTime updatedAt;
   final int attempts;
+  /// Revision monotona de la operación local. No depende del reloj del móvil.
+  final int revision;
   final String? lastError;
   final Map<String, dynamic>? previousPayload;
   final bool rollbackOnLicenseRejection;
@@ -91,6 +94,7 @@ class SyncOperation {
         createdAt: DateTime.parse('${map['createdAt']}'),
         updatedAt: DateTime.parse('${map['updatedAt']}'),
         attempts: (map['attempts'] as num?)?.toInt() ?? 0,
+        revision: (map['revision'] as num?)?.toInt() ?? 1,
         lastError: map['lastError'] == null ? null : '${map['lastError']}',
         previousPayload: map['previousPayload'] is Map
             ? Map<String, dynamic>.from(map['previousPayload'] as Map)
@@ -108,6 +112,7 @@ class SyncOperation {
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
         'attempts': attempts,
+        'revision': revision,
         'lastError': lastError,
         'previousPayload': previousPayload,
         'rollbackOnLicenseRejection': rollbackOnLicenseRejection,
@@ -127,6 +132,7 @@ class SyncOperation {
       createdAt: createdAt,
       updatedAt: DateTime.now(),
       attempts: attempts,
+      revision: revision + 1,
       lastError: lastError,
       previousPayload: previousPayload,
       rollbackOnLicenseRejection: rollbackOnLicenseRejection,
@@ -136,6 +142,11 @@ class SyncOperation {
 
 abstract final class SyncQueuePolicy {
   static bool canComplete(SyncOperation sent, SyncOperation current) =>
+      sent.id == current.id &&
+      sent.revision == current.revision &&
+      sent.userId == current.userId &&
+      sent.vehicleId == current.vehicleId &&
+      sent.action == current.action &&
       !current.updatedAt.isAfter(sent.updatedAt);
 
   static SyncOperation consolidate(
@@ -152,11 +163,41 @@ abstract final class SyncQueuePolicy {
       vehicleId: incoming.vehicleId,
       createdAt: existing.createdAt,
       updatedAt: incoming.updatedAt,
+      revision: existing.revision + 1,
       previousPayload: existing.previousPayload ?? incoming.previousPayload,
       rollbackOnLicenseRejection: existing.rollbackOnLicenseRejection ||
           incoming.rollbackOnLicenseRejection,
     );
   }
+}
+
+abstract final class SyncPayloadOwnership {
+  /// No subir a la cuenta activa datos locales que pertenecen a otra cuenta
+  /// o que ya fueron reasignados a otro vehículo o identificador.
+  static bool matches(
+    SyncOperation operation,
+    Map<String, dynamic> payload,
+  ) =>
+      payload['id']?.toString() == operation.entityId &&
+      payload['userId']?.toString() == operation.userId &&
+      payload['vehicleId']?.toString() == operation.vehicleId &&
+      operation.userId.isNotEmpty &&
+      operation.vehicleId.isNotEmpty;
+}
+
+abstract final class SyncReceiptPolicy {
+  /// Un acuse antiguo no debe cambiar el estado de una edición nueva.
+  static bool canMarkSynced({
+    required SyncOperation operation,
+    required String localUserId,
+    required String localVehicleId,
+    required SyncStatus localStatus,
+    required bool stillQueued,
+  }) =>
+      !stillQueued &&
+      localStatus == SyncStatus.pending &&
+      localUserId == operation.userId &&
+      localVehicleId == operation.vehicleId;
 }
 
 abstract interface class SyncQueueRepository {

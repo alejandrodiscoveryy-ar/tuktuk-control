@@ -136,6 +136,92 @@ void main() {
     expect(SyncQueuePolicy.canComplete(sent, sent), isTrue);
   });
 
+  test('revision de cola se conserva en almacenamiento y migra datos antiguos', () {
+    final current = operation();
+    expect(current.revision, 1);
+    final restored = SyncOperation.fromMap(current.toMap());
+    expect(restored.revision, 1);
+    final legacy = Map<String, dynamic>.from(current.toMap())
+      ..remove('revision');
+    expect(SyncOperation.fromMap(legacy).revision, 1);
+  });
+
+  test('edicion durante el envio no se confirma aunque cambie el reloj', () {
+    final sent = operation(updatedAt: DateTime.utc(2026, 7, 15, 12));
+    final incoming = operation(updatedAt: DateTime.utc(2026, 7, 15, 11));
+    final edited = SyncQueuePolicy.consolidate(sent, incoming);
+    expect(edited.revision, sent.revision + 1);
+    expect(edited.updatedAt.isBefore(sent.updatedAt), isTrue);
+    expect(SyncQueuePolicy.canComplete(sent, edited), isFalse);
+    expect(SyncQueuePolicy.canComplete(sent, sent), isTrue);
+  });
+
+  test('reclasificar el propietario no permite completar acuse antiguo', () {
+    final sent = operation();
+    final reassigned = sent.reassign(
+      userId: 'new-user',
+      vehicleId: 'new-vehicle',
+    );
+    expect(reassigned.revision, greaterThan(sent.revision));
+    expect(SyncQueuePolicy.canComplete(sent, reassigned), isFalse);
+  });
+
+  test('al subir un registro se valida cuenta vehículo e identificador', () {
+    final sent = operation();
+    final payload = <String, dynamic>{
+      'id': sent.entityId,
+      'userId': sent.userId,
+      'vehicleId': sent.vehicleId,
+    };
+    expect(SyncPayloadOwnership.matches(sent, payload), isTrue);
+    expect(
+      SyncPayloadOwnership.matches(sent, {...payload, 'userId': 'stranger'}),
+      isFalse,
+    );
+    expect(
+      SyncPayloadOwnership.matches(sent, {...payload, 'vehicleId': 'other'}),
+      isFalse,
+    );
+    expect(
+      SyncPayloadOwnership.matches(sent, {...payload, 'id': 'other'}),
+      isFalse,
+    );
+  });
+
+  test('acuse antiguo no marca sincronizada una edición pendiente', () {
+    final sent = operation();
+    expect(
+      SyncReceiptPolicy.canMarkSynced(
+        operation: sent,
+        localUserId: sent.userId,
+        localVehicleId: sent.vehicleId,
+        localStatus: SyncStatus.pending,
+        stillQueued: true,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncReceiptPolicy.canMarkSynced(
+        operation: sent,
+        localUserId: 'other',
+        localVehicleId: sent.vehicleId,
+        localStatus: SyncStatus.pending,
+        stillQueued: false,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncReceiptPolicy.canMarkSynced(
+        operation: sent,
+        localUserId: sent.userId,
+        localVehicleId: sent.vehicleId,
+        localStatus: SyncStatus.pending,
+        stillQueued: false,
+      ),
+      isTrue,
+    );
+  });
+
   test('la propiedad pendiente puede migrarse a la cuenta Google', () {
     final local = operation();
 
@@ -387,9 +473,15 @@ class _MemoryQueue implements SyncQueueRepository {
   Future<Set<String>> completeIfUnchanged(
     Iterable<SyncOperation> operations,
   ) async {
-    final ids = operations.map((operation) => operation.id).toSet();
+    final ids = <String>{};
+    for (final sent in operations) {
+      final index = this.operations.indexWhere((item) => item.id == sent.id);
+      if (index < 0) continue;
+      if (!SyncQueuePolicy.canComplete(sent, this.operations[index])) continue;
+      this.operations.removeAt(index);
+      ids.add(sent.id);
+    }
     completed.addAll(ids);
-    this.operations.removeWhere((item) => ids.contains(item.id));
     return ids;
   }
 

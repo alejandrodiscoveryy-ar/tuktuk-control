@@ -2505,11 +2505,21 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _markEntitySynced(SyncOperation operation) async {
+    // Una nueva edición puede aparecer justo después de recibir el acuse.
+    // Comprobar la cola de nuevo antes de marcar el registro como sincronizado.
+    if (Hive.box(_syncQueueBox).containsKey(operation.id)) return;
     switch (operation.entityType) {
       case SyncEntityType.dailyRecord:
         final raw = _box.get(operation.entityId);
         if (raw is Map) {
           final record = DailyRecord.fromMap(raw);
+          if (!SyncReceiptPolicy.canMarkSynced(
+            operation: operation,
+            localUserId: record.userId,
+            localVehicleId: record.vehicleId,
+            localStatus: record.syncStatus,
+            stillQueued: Hive.box(_syncQueueBox).containsKey(operation.id),
+          )) return;
           await _box.put(
             record.id,
             record
@@ -2522,6 +2532,13 @@ class RecordStore extends ChangeNotifier {
         final raw = _maintenanceBox.get(operation.entityId);
         if (raw is Map) {
           final record = MaintenanceRecord.fromMap(raw);
+          if (!SyncReceiptPolicy.canMarkSynced(
+            operation: operation,
+            localUserId: record.userId,
+            localVehicleId: record.vehicleId,
+            localStatus: record.syncStatus,
+            stillQueued: Hive.box(_syncQueueBox).containsKey(operation.id),
+          )) return;
           await _maintenanceBox.put(
             record.id,
             record
@@ -2534,6 +2551,13 @@ class RecordStore extends ChangeNotifier {
         final raw = _meta.get('vehicle:${operation.entityId}');
         if (raw is Map) {
           final vehicle = VehicleProfile.fromMap(raw);
+          if (!SyncReceiptPolicy.canMarkSynced(
+            operation: operation,
+            localUserId: vehicle.userId,
+            localVehicleId: vehicle.id,
+            localStatus: vehicle.syncStatus,
+            stillQueued: Hive.box(_syncQueueBox).containsKey(operation.id),
+          )) return;
           await _meta.put(
             'vehicle:${vehicle.id}',
             vehicle
