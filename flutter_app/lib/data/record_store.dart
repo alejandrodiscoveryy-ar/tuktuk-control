@@ -2188,10 +2188,9 @@ class RecordStore extends ChangeNotifier {
   Future<void> _recoverMissingLocalSyncQueue(String userId) async {
     if (_disposed || user?.id != userId) return;
 
-    final queued = _syncQueue
-        .pendingForUser(userId, limit: 100000)
-        .map((operation) => operation.id)
-        .toSet();
+    // Considerar todas las claves, también las de otra cuenta en el móvil:
+    // nunca reemplazar una operación ajena con el mismo ID.
+    final queued = Hive.box(_syncQueueBox).keys.whereType<String>().toSet();
 
     final local = <SyncQueueRecoveryCandidate>[
       for (final record in _allDailyRecords)
@@ -2283,13 +2282,14 @@ class RecordStore extends ChangeNotifier {
       batchSize: 500,
       maxBatches: 4,
       onCompletedBatch: (operations) async {
+        // Una sola lectura de la cola por lote; evita una búsqueda completa
+        // por cada uno de los cientos de registros enviados.
+        final stillQueued = Hive.box(_syncQueueBox)
+            .keys.whereType<String>().toSet();
         for (final operation in operations) {
           if (_disposed || user?.id != currentUser.id) return;
-          // Si el usuario editó de nuevo el registro, no marcarlo sincronizado.
-          if (_syncQueue.pendingForUser(currentUser.id, limit: 100000)
-              .any((pending) => pending.id == operation.id)) {
-            continue;
-          }
+          // Si se editó otra vez, seguirá en la cola y no pasa a 'synced'.
+          if (stillQueued.contains(operation.id)) continue;
           await _markEntitySynced(operation);
         }
       },
