@@ -1,0 +1,75 @@
+name: Test-only Android backup APK (2026-11-10)
+on:
+  push:
+    branches:
+      - test/android-backup-apk-20261110
+permissions:
+  contents: read
+jobs:
+  build-test-apk:
+    name: Compile isolated DEBUG APK, without deployment
+    if: ${{ github.ref == 'refs/heads/test/android-backup-apk-20261110' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout the exact isolated branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify test source stays based on approved main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor ba8907938374f98b332513175eae77e6e2d7fdbf HEAD
+          test "$(git branch --show-current)" = "" || true
+          test "$GITHUB_REF_NAME" = "test/android-backup-apk-20261110"
+          echo "TEST_ONLY_SOURCE_SHA=$GITHUB_SHA"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Flutter 3.44.4
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Sync Android branding
+        working-directory: flutter_app
+        run: dart run tool/sync_project_branding.dart --android
+      - name: Check backup safety tests
+        working-directory: flutter_app
+        run: flutter test --no-pub test/services/android_backup_security_contract_test.dart
+      - name: Provide a fake Firebase config for build only
+        working-directory: flutter_app
+        run: cp test/fixtures/google-services.debug.json android/app/google-services.json
+      - name: Build debug APK only, without production credentials
+        working-directory: flutter_app
+        run: flutter build apk --debug --no-pub
+      - name: Inspect final Android Manifest and APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST="$(find flutter_app/build -type f -path '*merged_manifest*' -name AndroidManifest.xml | head -n 1)"
+          if [ -z "$MANIFEST" ]; then
+            MANIFEST="$(find flutter_app/build -type f -path '*merged_manifests*' -name AndroidManifest.xml | head -n 1)"
+          fi
+          test -n "$MANIFEST"
+          grep -Eq 'allowBackup="false"' "$MANIFEST"
+          grep -q '@xml/tuktuk_legacy_backup_rules' flutter_app/android/app/src/main/AndroidManifest.xml
+          grep -q '@xml/tuktuk_data_extraction_rules' flutter_app/android/app/src/main/AndroidManifest.xml
+          test -s flutter_app/build/app/outputs/flutter-apk/app-debug.apk
+          echo "MERGED_ANDROID_MANIFEST=$MANIFEST"
+          sha256sum flutter_app/build/app/outputs/flutter-apk/app-debug.apk
+          echo "TEST_APK_BUILD_AND_MANIFEST=OK"
+      - name: Store test APK as private Actions artifact (7 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuktuk-conductor-debug-backup-safety-20261110
+          path: flutter_app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error

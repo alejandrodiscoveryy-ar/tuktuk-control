@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/tuktuk_legacy_backup_rules"
+        android:dataExtractionRules="@xml/tuktuk_data_extraction_rules"
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
