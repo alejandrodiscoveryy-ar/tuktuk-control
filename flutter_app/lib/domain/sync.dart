@@ -4,6 +4,50 @@ enum SyncEntityType { dailyRecord, maintenance, vehicle, settings }
 
 enum SyncAction { upsert, delete }
 
+/// Dato local ya persistido que puede necesitar reconstruir su cola tras
+/// un cierre entre guardar en Hive y encolar la operación remota.
+class SyncQueueRecoveryCandidate {
+  const SyncQueueRecoveryCandidate({
+    required this.entityType,
+    required this.entityId,
+    required this.userId,
+    required this.vehicleId,
+    required this.status,
+    required this.deleted,
+  });
+
+  final SyncEntityType entityType;
+  final String entityId;
+  final String userId;
+  final String vehicleId;
+  final SyncStatus status;
+  final bool deleted;
+
+  String get operationId => '${entityType.name}:$entityId';
+  SyncAction get action => deleted ? SyncAction.delete : SyncAction.upsert;
+}
+
+abstract final class SyncQueueRecoveryPolicy {
+  static Iterable<SyncQueueRecoveryCandidate> missing({
+    required String userId,
+    required Iterable<SyncQueueRecoveryCandidate> local,
+    required Set<String> queuedIds,
+  }) sync* {
+    for (final candidate in local) {
+      if (candidate.status != SyncStatus.pending ||
+          candidate.userId != userId ||
+          candidate.entityId.isEmpty ||
+          candidate.vehicleId.isEmpty ||
+          queuedIds.contains(candidate.operationId)) {
+        continue;
+      }
+      // Evitar que dos versiones del mismo registro creen dos operaciones.
+      queuedIds.add(candidate.operationId);
+      yield candidate;
+    }
+  }
+}
+
 class SyncOperation {
   const SyncOperation({
     required this.id,

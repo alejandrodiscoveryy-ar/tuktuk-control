@@ -20,6 +20,73 @@ void main() {
     );
   }
 
+  test('reconstruye solo los cambios locales realmente pendientes', () {
+    SyncQueueRecoveryCandidate candidate(
+      String id, {
+      String owner = 'user-1',
+      String vehicle = 'vehicle-1',
+      SyncStatus status = SyncStatus.pending,
+      bool deleted = false,
+    }) =>
+        SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.dailyRecord,
+          entityId: id,
+          userId: owner,
+          vehicleId: vehicle,
+          status: status,
+          deleted: deleted,
+        );
+
+    final queue = <String>{'dailyRecord:already-queued'};
+    final found = SyncQueueRecoveryPolicy.missing(
+      userId: 'user-1',
+      queuedIds: queue,
+      local: [
+        candidate('offline-1'),
+        candidate('offline-delete', deleted: true),
+        candidate('already-queued'),
+        candidate('synced', status: SyncStatus.synced),
+        candidate('other-user', owner: 'user-2'),
+        candidate('no-vehicle', vehicle: ''),
+        candidate('offline-1'),
+      ],
+    ).toList();
+
+    expect(found.map((item) => item.entityId),
+        ['offline-1', 'offline-delete']);
+    expect(found.last.action, SyncAction.delete);
+    expect(queue, containsAll([
+      'dailyRecord:offline-1',
+      'dailyRecord:offline-delete',
+    ]));
+  });
+
+  test('datos sin cambiar y datos de otro usuario no se reencolan', () {
+    final items = SyncQueueRecoveryPolicy.missing(
+      userId: 'user-1',
+      queuedIds: <String>{},
+      local: [
+        const SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.vehicle,
+          entityId: 'old-vehicle',
+          userId: 'user-1',
+          vehicleId: 'old-vehicle',
+          status: SyncStatus.localOnly,
+          deleted: false,
+        ),
+        const SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.maintenance,
+          entityId: 'other-maintenance',
+          userId: 'user-2',
+          vehicleId: 'other-vehicle',
+          status: SyncStatus.pending,
+          deleted: false,
+        ),
+      ],
+    ).toList();
+    expect(items, isEmpty);
+  });
+
   test('SyncOperation conserva todos sus campos al serializar', () {
     final original = operation();
 
