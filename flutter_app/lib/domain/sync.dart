@@ -180,7 +180,10 @@ abstract final class SyncPayloadOwnership {
   ) =>
       payload['id']?.toString() == operation.entityId &&
       payload['userId']?.toString() == operation.userId &&
-      payload['vehicleId']?.toString() == operation.vehicleId &&
+      // VehicleProfile.toMap no incluye vehicleId: su id es el vehículo.
+      (operation.entityType == SyncEntityType.vehicle
+          ? operation.vehicleId == operation.entityId
+          : payload['vehicleId']?.toString() == operation.vehicleId) &&
       operation.userId.isNotEmpty &&
       operation.vehicleId.isNotEmpty;
 }

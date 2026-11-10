@@ -188,6 +188,35 @@ void main() {
     );
   });
 
+  test('vehículo usa su id propio aunque no tenga campo vehicleId', () {
+    final source = operation();
+    final vehicleOperation = SyncOperation(
+      id: 'vehicle:vehicle-1',
+      entityType: SyncEntityType.vehicle,
+      entityId: 'vehicle-1',
+      action: SyncAction.upsert,
+      userId: source.userId,
+      vehicleId: 'vehicle-1',
+      createdAt: source.createdAt,
+      updatedAt: source.updatedAt,
+    );
+    // VehicleProfile.toMap contiene id y userId, no vehicleId.
+    expect(
+      SyncPayloadOwnership.matches(vehicleOperation, {
+        'id': 'vehicle-1',
+        'userId': 'user-1',
+      }),
+      isTrue,
+    );
+    expect(
+      SyncPayloadOwnership.matches(vehicleOperation, {
+        'id': 'vehicle-1',
+        'userId': 'stranger',
+      }),
+      isFalse,
+    );
+  });
+
   test('acuse antiguo no marca sincronizada una edición pendiente', () {
     final sent = operation();
     expect(
