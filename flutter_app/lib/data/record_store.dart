@@ -2183,10 +2183,75 @@ class RecordStore extends ChangeNotifier {
     }
   }
 
+  /// Repara la ventana de caída entre persistir un dato y añadirlo a la cola.
+  /// No altera registros ya sincronizados, otros usuarios ni archivos remotos.
+  Future<void> _recoverMissingLocalSyncQueue(String userId) async {
+    if (_disposed || user?.id != userId) return;
+
+    // Considerar todas las claves, también las de otra cuenta en el móvil:
+    // nunca reemplazar una operación ajena con el mismo ID.
+    final queued = Hive.box(_syncQueueBox).keys.whereType<String>().toSet();
+
+    final local = <SyncQueueRecoveryCandidate>[
+      for (final record in _allDailyRecords)
+        SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.dailyRecord,
+          entityId: record.id,
+          userId: record.userId,
+          vehicleId: record.vehicleId,
+          status: record.syncStatus,
+          deleted: record.isDeleted,
+        ),
+      for (final record in _allMaintenanceRecords)
+        SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.maintenance,
+          entityId: record.id,
+          userId: record.userId,
+          vehicleId: record.vehicleId,
+          status: record.syncStatus,
+          deleted: record.isDeleted,
+        ),
+    ];
+
+    for (final key in _meta.keys) {
+      if (key is! String || !key.startsWith('vehicle:')) continue;
+      final raw = _meta.get(key);
+      if (raw is! Map) continue;
+      final vehicle = VehicleProfile.fromMap(raw);
+      if (key != 'vehicle:${vehicle.id}') continue;
+      local.add(
+        SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.vehicle,
+          entityId: vehicle.id,
+          userId: vehicle.userId,
+          vehicleId: vehicle.id,
+          status: vehicle.syncStatus,
+          deleted: vehicle.isDeleted,
+        ),
+      );
+    }
+
+    for (final missing in SyncQueueRecoveryPolicy.missing(
+      userId: userId,
+      local: local,
+      queuedIds: queued,
+    )) {
+      if (_disposed || user?.id != userId) return;
+      await _syncQueue.enqueue(
+        entityType: missing.entityType,
+        entityId: missing.entityId,
+        action: missing.action,
+        userId: userId,
+        vehicleId: missing.vehicleId,
+      );
+    }
+  }
+
   Future<void> _synchronizeWithSupabase({bool fullRefresh = false}) async {
     final currentUser = user;
     if (currentUser == null) return;
     await _ensureRemoteProfile();
+    await _recoverMissingLocalSyncQueue(currentUser.id);
     final cursorKey = 'supabaseCursor:${currentUser.id}';
     var cursor = fullRefresh ? null : _meta.get(cursorKey)?.toString();
     var pageCount = 0;
@@ -2210,19 +2275,35 @@ class RecordStore extends ChangeNotifier {
       if (_disposed || activeUserId != currentUser.id) return;
       await _rebaseMarketplaceVehicleOdometers(currentUser.id, vehicle.id);
     }
-    final pendingBatch = _syncQueue.pendingForUser(currentUser.id, limit: 500);
-    final report = await _syncCoordinator.pushPending(
+    // Multiples lotes permiten vaciar colas grandes al recuperar cobertura.
+    // El límite evita una tarea incontrolada; si quedan datos, continúa después.
+    final report = await _syncCoordinator.pushPendingBatches(
       userId: currentUser.id,
       batchSize: 500,
+      maxBatches: 4,
+      onCompletedBatch: (operations) async {
+        // Una sola lectura de la cola por lote; evita una búsqueda completa
+        // por cada uno de los cientos de registros enviados.
+        final stillQueued = Hive.box(_syncQueueBox)
+            .keys.whereType<String>().toSet();
+        for (final operation in operations) {
+          if (_disposed || user?.id != currentUser.id) return;
+          // Si se editó otra vez, seguirá en la cola y no pasa a 'synced'.
+          if (stillQueued.contains(operation.id)) continue;
+          await _markEntitySynced(operation);
+        }
+      },
     );
-    for (final operation in pendingBatch) {
-      if (report.completedOperationIds.contains(operation.id)) {
-        await _markEntitySynced(operation);
-      }
-    }
     _load();
     if (report.failed > 0 && !report.blockedByLicense) {
       throw const TemporarySyncException('remote push failed');
+    }
+    if (report.skippedBecauseUnconfigured ||
+        (report.pendingRemaining && report.completed == 0)) {
+      throw const TemporarySyncException('sync pending without progress');
+    }
+    if (report.pendingRemaining) {
+      _syncRequestedWhileRunning = true;
     }
   }
 

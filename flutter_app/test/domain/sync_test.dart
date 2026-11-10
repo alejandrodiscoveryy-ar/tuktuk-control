@@ -20,6 +20,73 @@ void main() {
     );
   }
 
+  test('reconstruye solo los cambios locales realmente pendientes', () {
+    SyncQueueRecoveryCandidate candidate(
+      String id, {
+      String owner = 'user-1',
+      String vehicle = 'vehicle-1',
+      SyncStatus status = SyncStatus.pending,
+      bool deleted = false,
+    }) =>
+        SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.dailyRecord,
+          entityId: id,
+          userId: owner,
+          vehicleId: vehicle,
+          status: status,
+          deleted: deleted,
+        );
+
+    final queue = <String>{'dailyRecord:already-queued'};
+    final found = SyncQueueRecoveryPolicy.missing(
+      userId: 'user-1',
+      queuedIds: queue,
+      local: [
+        candidate('offline-1'),
+        candidate('offline-delete', deleted: true),
+        candidate('already-queued'),
+        candidate('synced', status: SyncStatus.synced),
+        candidate('other-user', owner: 'user-2'),
+        candidate('no-vehicle', vehicle: ''),
+        candidate('offline-1'),
+      ],
+    ).toList();
+
+    expect(found.map((item) => item.entityId),
+        ['offline-1', 'offline-delete']);
+    expect(found.last.action, SyncAction.delete);
+    expect(queue, containsAll([
+      'dailyRecord:offline-1',
+      'dailyRecord:offline-delete',
+    ]));
+  });
+
+  test('datos sin cambiar y datos de otro usuario no se reencolan', () {
+    final items = SyncQueueRecoveryPolicy.missing(
+      userId: 'user-1',
+      queuedIds: <String>{},
+      local: [
+        const SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.vehicle,
+          entityId: 'old-vehicle',
+          userId: 'user-1',
+          vehicleId: 'old-vehicle',
+          status: SyncStatus.localOnly,
+          deleted: false,
+        ),
+        const SyncQueueRecoveryCandidate(
+          entityType: SyncEntityType.maintenance,
+          entityId: 'other-maintenance',
+          userId: 'user-2',
+          vehicleId: 'other-vehicle',
+          status: SyncStatus.pending,
+          deleted: false,
+        ),
+      ],
+    ).toList();
+    expect(items, isEmpty);
+  });
+
   test('SyncOperation conserva todos sus campos al serializar', () {
     final original = operation();
 
@@ -136,6 +203,73 @@ void main() {
     expect(queue.failed['dailyRecord:record-2'], 'conflict');
   });
 
+  test('mas de 500 cambios se envian en lotes hasta vaciar la cola', () async {
+    final operations = List.generate(1001, (i) => operationFor('batch-$i'));
+    final queue = _MemoryQueue(operations);
+    final gateway = _AcceptingGateway();
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+    var marked = 0;
+
+    final report = await coordinator.pushPendingBatches(
+      userId: 'user-1',
+      batchSize: 500,
+      maxBatches: 4,
+      onCompletedBatch: (items) async => marked += items.length,
+    );
+
+    expect(gateway.batchSizes, [500, 500, 1]);
+    expect(marked, 1001);
+    expect(report.completed, 1001);
+    expect(report.pendingRemaining, isFalse);
+    expect(queue.pendingForUser('user-1'), isEmpty);
+  });
+
+  test('cola extensa no bloquea; queda pendiente para proxima ronda', () async {
+    final queue = _MemoryQueue(
+      List.generate(1250, (i) => operationFor('long-$i')),
+    );
+    final gateway = _AcceptingGateway();
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+    final first = await coordinator.pushPendingBatches(
+      userId: 'user-1',
+      batchSize: 250,
+      maxBatches: 3,
+      onCompletedBatch: (_) async {},
+    );
+    expect(first.completed, 750);
+    expect(first.pendingRemaining, isTrue);
+    expect(queue.pendingForUser('user-1', limit: 1000), hasLength(500));
+    final second = await coordinator.pushPendingBatches(
+      userId: 'user-1',
+      batchSize: 250,
+      maxBatches: 3,
+      onCompletedBatch: (_) async {},
+    );
+    expect(second.completed, 500);
+    expect(second.pendingRemaining, isFalse);
+    expect(gateway.batchSizes, [250, 250, 250, 250, 250]);
+  });
+
+  test('fallo temporal en lote conserva datos no confirmados', () async {
+    final queue = _MemoryQueue(
+      List.generate(4, (i) => operationFor('fail-$i')),
+    );
+    final gateway = _AcceptingGateway(failOnCall: 2);
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+    final report = await coordinator.pushPendingBatches(
+      userId: 'user-1',
+      batchSize: 2,
+      maxBatches: 4,
+      onCompletedBatch: (_) async {},
+    );
+    expect(report.completed, 2);
+    expect(report.failed, 2);
+    expect(report.pendingRemaining, isTrue);
+    expect(gateway.batchSizes, [2, 2]);
+    expect(queue.pendingForUser('user-1', limit: 10), hasLength(2));
+    expect(queue.failed, hasLength(2));
+  });
+
   test('SyncCoordinator no procesa cuando el gateway no está configurado',
       () async {
     final queue = _MemoryQueue([operation()]);
@@ -244,7 +378,9 @@ class _MemoryQueue implements SyncQueueRepository {
 
   @override
   Future<void> complete(Iterable<String> operationIds) async {
-    completed.addAll(operationIds);
+    final ids = operationIds.toSet();
+    completed.addAll(ids);
+    operations.removeWhere((item) => ids.contains(item.id));
   }
 
   @override
@@ -253,6 +389,7 @@ class _MemoryQueue implements SyncQueueRepository {
   ) async {
     final ids = operations.map((operation) => operation.id).toSet();
     completed.addAll(ids);
+    this.operations.removeWhere((item) => ids.contains(item.id));
     return ids;
   }
 
@@ -294,6 +431,34 @@ class _FakeGateway implements RemoteSyncGateway {
   }) async {
     return const RemotePullResult(changes: [], nextCursor: null);
   }
+}
+
+class _AcceptingGateway implements RemoteSyncGateway {
+  _AcceptingGateway({this.failOnCall});
+
+  final int? failOnCall;
+  final List<int> batchSizes = [];
+
+  @override
+  bool get isConfigured => true;
+
+  @override
+  Future<RemotePushResult> push(List<SyncOperation> operations) async {
+    batchSizes.add(operations.length);
+    if (batchSizes.length == failOnCall) {
+      throw const TemporarySyncException('offline during upload');
+    }
+    return RemotePushResult(
+      acceptedOperationIds: operations.map((op) => op.id).toSet(),
+    );
+  }
+
+  @override
+  Future<RemotePullResult> pull({
+    required String userId,
+    String? cursor,
+    int limit = 250,
+  }) async => const RemotePullResult(changes: [], nextCursor: null);
 }
 
 class _LicenseBlockedGateway implements RemoteSyncGateway {

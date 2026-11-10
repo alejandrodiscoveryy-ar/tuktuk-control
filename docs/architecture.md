@@ -83,3 +83,12 @@ La pantalla de carreras mantiene las decisiones de jornada, suscripciones,
 reintentos, claxon y confirmación de envío. La refactorización no cambia
 frecuencias, distancias, permisos ni contratos con Supabase. Cualquier extracción
 posterior del ciclo de vida requiere pruebas separadas de reconexión real.
+
+## Sincronización por lotes tras reconexión (noviembre de 2026)
+
+El coordinador envía hasta cuatro lotes de 500 operaciones por ejecución. Si
+quedan cambios, solicita otra ronda sin perder los pendientes. Se detiene ante
+errores o falta de progreso y conserva la cola para un reintento escalonado.
+Los cambios aceptados se marcan como enviados después de cada lote, protegiendo
+las ediciones concurrentes. La política mantiene las garantías de aislamiento
+por usuario y el acceso remoto existente; no cambia el esquema de Supabase.
