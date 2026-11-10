@@ -34,6 +34,11 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         rejected[operation.id] = 'El registro local ya no existe';
         continue;
       }
+      if (!SyncPayloadOwnership.matches(operation, payload)) {
+        rejected[operation.id] =
+            'El registro local no coincide con el propietario o vehículo.';
+        continue;
+      }
       final updatedAt =
           DateTime.tryParse('${payload['updatedAt']}') ?? operation.updatedAt;
       rows.add({

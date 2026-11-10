@@ -116,6 +116,7 @@ class SyncQueueStore implements SyncQueueRepository {
         createdAt: operation.createdAt,
         updatedAt: DateTime.now(),
         attempts: operation.attempts + 1,
+        revision: operation.revision,
         lastError: error,
         previousPayload: operation.previousPayload,
         rollbackOnLicenseRejection: operation.rollbackOnLicenseRejection,
