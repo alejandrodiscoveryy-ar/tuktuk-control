@@ -30,6 +30,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - name: Set up Flutter 3.44.4
         uses: subosito/flutter-action@v2
         with:
@@ -51,21 +52,22 @@ jobs:
       - name: Build debug APK only, without production credentials
         working-directory: flutter_app
         run: flutter build apk --debug --no-pub
-      - name: Inspect final Android Manifest and APK
+      - name: Inspect final APK's COMPILED Android Manifest
         shell: bash
         run: |
           set -euo pipefail
-          MANIFEST="$(find flutter_app/build -type f -path '*merged_manifest*' -name AndroidManifest.xml | head -n 1)"
-          if [ -z "$MANIFEST" ]; then
-            MANIFEST="$(find flutter_app/build -type f -path '*merged_manifests*' -name AndroidManifest.xml | head -n 1)"
-          fi
-          test -n "$MANIFEST"
-          grep -Eq 'allowBackup="false"' "$MANIFEST"
-          grep -q '@xml/tuktuk_legacy_backup_rules' flutter_app/android/app/src/main/AndroidManifest.xml
-          grep -q '@xml/tuktuk_data_extraction_rules' flutter_app/android/app/src/main/AndroidManifest.xml
-          test -s flutter_app/build/app/outputs/flutter-apk/app-debug.apk
-          echo "MERGED_ANDROID_MANIFEST=$MANIFEST"
-          sha256sum flutter_app/build/app/outputs/flutter-apk/app-debug.apk
+          APK="flutter_app/build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK"
+          ANDROID_BUILD_TOOLS="${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools"
+          AAPT="$(find "$ANDROID_BUILD_TOOLS" -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)"
+          test -x "$AAPT"
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml > "$RUNNER_TEMP/tuktuk-compiled-manifest.txt"
+          grep 'allowBackup' "$RUNNER_TEMP/tuktuk-compiled-manifest.txt"
+          grep 'fullBackupContent' "$RUNNER_TEMP/tuktuk-compiled-manifest.txt"
+          grep 'dataExtractionRules' "$RUNNER_TEMP/tuktuk-compiled-manifest.txt"
+          grep -Eq 'allowBackup.*0x0([[:space:]]|$)' "$RUNNER_TEMP/tuktuk-compiled-manifest.txt"
+          echo "PACKAGED_MANIFEST_BACKUP_PROTECTION=OK"
+          sha256sum "$APK"
           echo "TEST_APK_BUILD_AND_MANIFEST=OK"
       - name: Store test APK as private Actions artifact (7 days)
         uses: actions/upload-artifact@v4
