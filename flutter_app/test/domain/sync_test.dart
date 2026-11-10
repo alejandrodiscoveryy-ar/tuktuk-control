@@ -217,6 +217,20 @@ void main() {
     );
   });
 
+  test('acuse confirmado marca registros históricos localOnly ya enviados', () {
+    final sent = operation();
+    expect(
+      SyncReceiptPolicy.canMarkSynced(
+        operation: sent,
+        localUserId: sent.userId,
+        localVehicleId: sent.vehicleId,
+        localStatus: SyncStatus.localOnly,
+        stillQueued: false,
+      ),
+      isTrue,
+    );
+  });
+
   test('acuse antiguo no marca sincronizada una edición pendiente', () {
     final sent = operation();
     expect(

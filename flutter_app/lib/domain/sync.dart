@@ -198,7 +198,8 @@ abstract final class SyncReceiptPolicy {
     required bool stillQueued,
   }) =>
       !stillQueued &&
-      localStatus == SyncStatus.pending &&
+      (localStatus == SyncStatus.pending ||
+          localStatus == SyncStatus.localOnly) &&
       localUserId == operation.userId &&
       localVehicleId == operation.vehicleId;
 }
