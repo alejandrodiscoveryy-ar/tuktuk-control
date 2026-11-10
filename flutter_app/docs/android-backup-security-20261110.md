@@ -1,36 +1,52 @@
-# Seguridad local: respaldos Android — TUKTUK Conductor
+# Seguridad de copias Android — TUKTUK Conductor
 
-## Riesgo y alcance
+## Alcance
 
-La aplicación usa cajas Hive para registros de jornada, mantenimiento, cola de
-sincronización y metadatos, incluidos identificadores o tokens de notificaciones.
-La inicialización actual no configura cifrado de esas cajas. Android permite por
-defecto que datos privados entren en copias automáticas y transferencias a otro
-dispositivo, según versión y fabricante.
+TUKTUK conserva registros de jornada, mantenimiento, cola de sincronización y
+metadatos en cajas Hive. La inicialización actual no cifra esas cajas. Las
+copias automáticas de Android pueden trasladar datos privados sin que el
+usuario los sincronice con su cuenta.
 
-## Endurecimiento propuesto
+## Protección propuesta
 
-- `android:allowBackup="false"` impide la copia automática habitual.
-- Android 11 y anteriores: `fullBackupContent` excluye datos privados.
-- Android 12+: `dataExtractionRules` excluye explícitamente datos privados de
-  la copia en nube y de la transferencia entre dispositivos.
-- No afecta el inicio de sesión, GPS, carreras, mensajería, claxon o servicios remotos.
-- No cifra aún las cajas existentes ni borra datos instalados.
-- La exportación y restauración MANUAL de respaldos JSON/CSV en la aplicación
-  permanece disponible. No confundir con respaldo automático del sistema Android.
+- Manifest: `android:allowBackup="false"`.
+- Android 11 o anterior: `fullBackupContent` excluye los dominios privados.
+- Android 12 o posterior: `dataExtractionRules` excluye esos dominios tanto
+  del respaldo de nube como de la transferencia directa entre móviles.
+- Se enumeran de forma explícita los dominios `root`, `file`, `database`,
+  `sharedpref`, `device_root`, `device_file`, `device_database`,
+  `device_sharedpref` y `external`, como defensa en profundidad.
+- No modifica ni elimina cajas Hive de instalaciones existentes; no altera
+  red, GPS, carreras, mensajes, claxon o servicios remotos.
+- La exportación y restauración *manual* de respaldos en la aplicación siguen
+  disponibles. La exportación JSON contiene información potencialmente
+  sensible y debe guardarse en un lugar seguro.
 
-## Impacto de producto que debe aprobar el propietario
+## Consecuencias para el conductor
 
-Al reinstalar o cambiar de teléfono, los datos exclusivamente locales ya no
-se restaurarán automáticamente por Android. El conductor necesitará iniciar
-sesión y recuperar lo sincronizado, o usar un respaldo manual válido para
-información que solo esté en el dispositivo. Verificar funcionamiento real en
-una futura compilación APK autorizada antes de su distribución.
+Al reinstalar o cambiar de móvil ya no puede depender de la restauración
+**automática de Android** para datos que nunca llegaron al servidor. Debe
+iniciar sesión y recuperar datos sincronizados; si aún tiene datos locales
+sin sincronizar, debe conservar el dispositivo original y sincronizar primero
+cuando recupere internet. Una restauración por JSON requiere un respaldo válido.
 
-## Evidencia
+## Evidencia y límites de verificación
 
-Guía oficial Android:
-https://developer.android.com/identity/data/autobackup
+- La WebApp ya superó una prueba manual de guardar sin conexión, sincronizar
+  al reconectar y recuperar datos con la misma cuenta en otro entorno.
+- Estas pruebas **no verifican** reglas de backup integradas en el APK de
+  Android ni restauración del almacenamiento nativo Hive.
+- Antes de distribuir una nueva APK, se requiere una compilación autorizada
+  de prueba, revisión del Manifest fusionado y prueba en Android real de
+  actualización sin pérdida de datos y recuperación con Google.
+- `allowBackup=false` por sí solo no desactiva todas las transferencias
+  directas en todos los dispositivos Android 12+; por eso se definen reglas
+  específicas para transferencia y nube.
+- La exclusión de respaldos no cifra el almacenamiento en uso ni impide el
+  acceso físico al dispositivo desbloqueado. El cifrado seguro debe
+  analizarse por separado con un plan de migración compatible.
+- Para transferencias cruzadas Android/iOS de versiones recientes, revisar
+  reglas dedicadas si se desarrolla una aplicación iOS; no está habilitada
+  ni verificada como funcionalidad de este producto.
 
-La protección de la copia de seguridad NO sustituye una futura migración de
-almacenamiento sensible hacia cifrado y gestión segura de claves en Android.
+Documentación oficial: https://developer.android.com/identity/data/autobackup
