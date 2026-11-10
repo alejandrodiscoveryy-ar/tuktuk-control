@@ -171,6 +171,35 @@ abstract final class SyncQueuePolicy {
   }
 }
 
+
+abstract final class SyncMultiDeviceConflictPolicy {
+  /// Nunca reemplace en silencio un cambio no enviado por una versión
+  /// almacenada desde otro dispositivo. El servidor conserva su versión y el
+  /// registro local permanece intacto para una resolución explícita.
+  static bool shouldKeepBoth({
+    required bool hasQueuedLocalChange,
+    required SyncStatus localStatus,
+    required String localUserId,
+    required String localDeviceId,
+    required String remoteUserId,
+    required String remoteDeviceId,
+  }) =>
+      hasQueuedLocalChange &&
+      localStatus == SyncStatus.pending &&
+      localUserId.isNotEmpty &&
+      localUserId == remoteUserId &&
+      localDeviceId.isNotEmpty &&
+      remoteDeviceId.isNotEmpty &&
+      localDeviceId != remoteDeviceId;
+}
+
+class SyncMultiDeviceConflictException implements Exception {
+  const SyncMultiDeviceConflictException();
+
+  @override
+  String toString() => 'SYNC_MULTI_DEVICE_CONFLICT';
+}
+
 abstract final class SyncPayloadOwnership {
   /// No subir a la cuenta activa datos locales que pertenecen a otra cuenta
   /// o que ya fueron reasignados a otro vehículo o identificador.

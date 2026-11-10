@@ -1973,6 +1973,12 @@ class RecordStore extends ChangeNotifier {
           DateTime.now().toIso8601String(),
         );
       }
+    } on SyncMultiDeviceConflictException {
+      // Se conserva la copia local y la versión remota. No forzar reintentos
+      // automáticos rápidos ni informar erróneamente que no hay internet.
+      syncMessage =
+          'Conflicto entre dispositivos. Los registros locales siguen guardados. '
+          'Exporta un respaldo JSON antes de resolverlo.';
     } catch (_) {
       syncMessage = 'Sin conexion. Los cambios permanecen guardados';
       _scheduleSyncRetry();
@@ -2068,6 +2074,12 @@ class RecordStore extends ChangeNotifier {
       }
 
       await syncNow();
+    } on SyncMultiDeviceConflictException {
+      if (_disposed) return;
+      syncMessage =
+          'Conflicto entre dispositivos. Tus registros locales no se han borrado. '
+          'Exporta un respaldo JSON para conservarlos.';
+      notifyListeners();
     } catch (_) {
       if (_disposed) return;
       syncMessage = 'Sin conexion. Trabajando con los datos locales';
@@ -2374,6 +2386,42 @@ class RecordStore extends ChangeNotifier {
     for (final change in changes) {
       if (change.userId != currentUser.id) continue;
       final operationId = '${change.entityType.name}:${change.entityId}';
+
+      // Los cambios locales todavía no enviados no se sustituyen con versiones
+      // de otro teléfono. La cola y ambas versiones quedan intactas.
+      final queuedRaw = Hive.box(_syncQueueBox).get(operationId);
+      final queued = queuedRaw is Map
+          ? SyncOperation.fromMap(queuedRaw)
+          : null;
+      if (queued?.userId == currentUser.id) {
+        Map? localRaw;
+        switch (change.entityType) {
+          case SyncEntityType.dailyRecord:
+            localRaw = _box.get(change.entityId);
+            break;
+          case SyncEntityType.maintenance:
+            localRaw = _maintenanceBox.get(change.entityId);
+            break;
+          case SyncEntityType.vehicle:
+            localRaw = _meta.get('vehicle:${change.entityId}');
+            break;
+          case SyncEntityType.settings:
+            break;
+        }
+        if (localRaw is Map) {
+          final local = Map<String, dynamic>.from(localRaw);
+          if (SyncMultiDeviceConflictPolicy.shouldKeepBoth(
+            hasQueuedLocalChange: true,
+            localStatus: _syncStatusFromMap(local['syncStatus']),
+            localUserId: '${local['userId'] ?? ''}',
+            localDeviceId: '${local['deviceId'] ?? ''}',
+            remoteUserId: change.userId,
+            remoteDeviceId: change.deviceId,
+          )) {
+            throw const SyncMultiDeviceConflictException();
+          }
+        }
+      }
       switch (change.entityType) {
         case SyncEntityType.dailyRecord:
           final remote = DailyRecord.fromMap(change.payload);

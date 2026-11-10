@@ -265,6 +265,86 @@ void main() {
     );
   });
 
+  test('conserva versiones local y remota ante ediciones desde otro móvil', () {
+    expect(
+      SyncMultiDeviceConflictPolicy.shouldKeepBoth(
+        hasQueuedLocalChange: true,
+        localStatus: SyncStatus.pending,
+        localUserId: 'account-1',
+        localDeviceId: 'phone-a',
+        remoteUserId: 'account-1',
+        remoteDeviceId: 'phone-b',
+      ),
+      isTrue,
+    );
+  });
+
+  test('no bloquea restauración normal ni reintento desde el mismo dispositivo', () {
+    bool conflicts({
+      required bool pending,
+      required SyncStatus status,
+      required String localDevice,
+      required String remoteDevice,
+      String localUser = 'account-1',
+      String remoteUser = 'account-1',
+    }) =>
+        SyncMultiDeviceConflictPolicy.shouldKeepBoth(
+          hasQueuedLocalChange: pending,
+          localStatus: status,
+          localUserId: localUser,
+          localDeviceId: localDevice,
+          remoteUserId: remoteUser,
+          remoteDeviceId: remoteDevice,
+        );
+
+    expect(
+      conflicts(
+        pending: false,
+        status: SyncStatus.pending,
+        localDevice: 'phone-a',
+        remoteDevice: 'phone-b',
+      ),
+      isFalse,
+    );
+    expect(
+      conflicts(
+        pending: true,
+        status: SyncStatus.synced,
+        localDevice: 'phone-a',
+        remoteDevice: 'phone-b',
+      ),
+      isFalse,
+    );
+    expect(
+      conflicts(
+        pending: true,
+        status: SyncStatus.pending,
+        localDevice: 'phone-a',
+        remoteDevice: 'phone-a',
+      ),
+      isFalse,
+    );
+    expect(
+      conflicts(
+        pending: true,
+        status: SyncStatus.pending,
+        localDevice: 'phone-a',
+        remoteDevice: 'phone-b',
+        remoteUser: 'other-account',
+      ),
+      isFalse,
+    );
+    expect(
+      conflicts(
+        pending: true,
+        status: SyncStatus.pending,
+        localDevice: '',
+        remoteDevice: 'phone-b',
+      ),
+      isFalse,
+    );
+  });
+
   test('la propiedad pendiente puede migrarse a la cuenta Google', () {
     final local = operation();
 
