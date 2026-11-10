@@ -285,6 +285,7 @@ class SyncRunReport {
     required this.completed,
     required this.failed,
     this.skippedBecauseUnconfigured = false,
+    this.pendingRemaining = false,
     this.completedOperationIds = const {},
     this.blockedByLicense = false,
     this.blockedOperationIds = const {},
@@ -294,6 +295,7 @@ class SyncRunReport {
   final int completed;
   final int failed;
   final bool skippedBecauseUnconfigured;
+  final bool pendingRemaining;
   final Set<String> completedOperationIds;
   final bool blockedByLicense;
   final Set<String> blockedOperationIds;

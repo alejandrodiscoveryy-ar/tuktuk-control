@@ -2210,19 +2210,34 @@ class RecordStore extends ChangeNotifier {
       if (_disposed || activeUserId != currentUser.id) return;
       await _rebaseMarketplaceVehicleOdometers(currentUser.id, vehicle.id);
     }
-    final pendingBatch = _syncQueue.pendingForUser(currentUser.id, limit: 500);
-    final report = await _syncCoordinator.pushPending(
+    // Multiples lotes permiten vaciar colas grandes al recuperar cobertura.
+    // El límite evita una tarea incontrolada; si quedan datos, continúa después.
+    final report = await _syncCoordinator.pushPendingBatches(
       userId: currentUser.id,
       batchSize: 500,
+      maxBatches: 4,
+      onCompletedBatch: (operations) async {
+        for (final operation in operations) {
+          if (_disposed || user?.id != currentUser.id) return;
+          // Si el usuario editó de nuevo el registro, no marcarlo sincronizado.
+          if (_syncQueue.pendingForUser(currentUser.id, limit: 100000)
+              .any((pending) => pending.id == operation.id)) {
+            continue;
+          }
+          await _markEntitySynced(operation);
+        }
+      },
     );
-    for (final operation in pendingBatch) {
-      if (report.completedOperationIds.contains(operation.id)) {
-        await _markEntitySynced(operation);
-      }
-    }
     _load();
     if (report.failed > 0 && !report.blockedByLicense) {
       throw const TemporarySyncException('remote push failed');
+    }
+    if (report.skippedBecauseUnconfigured ||
+        (report.pendingRemaining && report.completed == 0)) {
+      throw const TemporarySyncException('sync pending without progress');
+    }
+    if (report.pendingRemaining) {
+      _syncRequestedWhileRunning = true;
     }
   }
 
