@@ -4105,15 +4105,15 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 borderRadius: BorderRadius.circular(14),
                 onTap: _retryOperationalGpsCheck,
                 child: Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   child: Row(
                     children: [
-                      Icon(Icons.gps_off_rounded, color: Color(0xFFFFC47B)),
-                      SizedBox(width: 10),
+                      const Icon(Icons.gps_off_rounded, color: Color(0xFFFFC47B)),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           gpsWarningText,
-                          style: TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
                     ],
