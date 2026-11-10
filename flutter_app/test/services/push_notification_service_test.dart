@@ -128,6 +128,31 @@ void main() {
     );
   });
 
+  test('app_update rechaza protocolos inseguros y credenciales en URL', () {
+    for (final url in [
+      'http://example.com/descarga',
+      'intent://example.com/#Intent;scheme=https;end',
+      'javascript:alert(1)',
+      'file:///sdcard/Download/actualizacion.apk',
+      'https://usuario:clave@example.com/descarga',
+      'https://',
+    ]) {
+      expect(
+        appUpdateUri({'kind': 'app_update', 'action_url': url}),
+        Uri.parse(tuktukGooglePlayUrl),
+        reason: 'No debe abrir: $url',
+      );
+    }
+  });
+
+  test('app_update mantiene los enlaces HTTPS validos', () {
+    const url = 'https://play.google.com/store/apps/details?id=ejemplo';
+    expect(
+      appUpdateUri({'kind': 'app_update', 'action_url': url}),
+      Uri.parse(url),
+    );
+  });
+
   test('app_update sin action_url usa la ficha oficial como fallback',
       () async {
     Uri? openedUri;
