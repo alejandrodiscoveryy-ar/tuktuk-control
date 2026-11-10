@@ -295,6 +295,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   int _operationalLocationStreamGeneration = 0;
   bool _activeOperationalLocationPublishInFlight = false;
   bool _operationalLocationInFlight = false;
+  late final MarketplaceOperationalGpsIo _operationalGpsIo;
   AppLifecycleState _operationalLifecycleState = AppLifecycleState.resumed;
   Position? _lastOperationalPosition;
   DateTime? _lastOperationalSentAt;
@@ -315,6 +316,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _tabController = TabController(length: 5, vsync: this);
     _tabController.addListener(_onMarketplaceTabChanged);
     _service = widget.service ?? MarketplaceService(Supabase.instance.client);
+    _operationalGpsIo = MarketplaceOperationalGpsIo(
+      sender: (payload) => _service.updateDriverOperationalLocation(
+        vehicleId: payload.vehicleId,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        accuracyM: payload.accuracyM,
+        headingDegrees: payload.headingDegrees,
+        speedMps: payload.speedMps,
+        capturedAt: payload.capturedAt,
+      ),
+    );
     unawaited(_prepareWorkMap());
     _operationalLifecycleState =
         WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
@@ -564,45 +576,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _operationalLocationStreamActiveService = null;
   }
 
-  LocationSettings _activeOperationalLocationSettings({
-    required bool activeService,
-  }) {
-    if (_androidOperationalLocation) {
-      return AndroidSettings(
-        accuracy: activeService
-            ? LocationAccuracy.high
-            : LocationAccuracy.medium,
-        // No filtrar por distancia: permitir heartbeat aun con vehiculo quieto.
-        distanceFilter: activeService ? 10 : 0,
-        intervalDuration: MarketplaceOperationalLocationPolicy.streamInterval(
-          activeService: activeService,
-        ),
-        foregroundNotificationConfig: activeService
-            ? const ForegroundNotificationConfig(
-                notificationTitle: 'TUKTUK · servicio activo',
-                notificationText:
-                    'Compartiendo tu ubicación durante el servicio en curso.',
-                notificationChannelName: 'Servicio activo TUKTUK',
-                enableWakeLock: true,
-                setOngoing: true,
-              )
-            : const ForegroundNotificationConfig(
-                notificationTitle: 'TUKTUK · trabajando',
-                notificationText:
-                    'Compartiendo tu ubicación mientras estás en Trabajar.',
-                notificationChannelName: 'Jornada activa TUKTUK',
-                enableWakeLock: false,
-                setOngoing: true,
-              ),
-      );
-    }
-
-    return LocationSettings(
-      accuracy: activeService ? LocationAccuracy.high : LocationAccuracy.medium,
-      distanceFilter: activeService ? 10 : 0,
-    );
-  }
-
   Future<void> _publishStreamingOperationalPosition(
     Position position, {
     required bool activeService,
@@ -618,16 +591,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final vehicle = _operationalLocationVehicle();
     if (vehicle == null) return;
 
+    if (!_operationalGpsIo.validCoordinates(position)) return;
     final latitude = position.latitude;
     final longitude = position.longitude;
-    if (!latitude.isFinite ||
-        latitude < -90 ||
-        latitude > 90 ||
-        !longitude.isFinite ||
-        longitude < -180 ||
-        longitude > 180) {
-      return;
-    }
 
     _activeOperationalLocationPublishInFlight = true;
     try {
@@ -639,46 +605,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       )) {
         return;
       }
-      final lastPosition = _lastOperationalPosition;
-      final lastSentAt = _lastOperationalSentAt;
-      final distanceMeters = lastPosition == null
-          ? double.infinity
-          : Geolocator.distanceBetween(
-              lastPosition.latitude,
-              lastPosition.longitude,
-              latitude,
-              longitude,
-            );
-
-      final heartbeatDue =
-          lastSentAt == null ||
-          nowUtc.difference(lastSentAt) >=
-              MarketplaceOperationalLocationPolicy.heartbeatInterval(
-                activeService: activeService,
-              );
-      final movementDue =
-          distanceMeters >=
-          MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
-            activeService: activeService,
-          );
-
-      if (lastPosition == null || heartbeatDue || movementDue) {
-        await _service.updateDriverOperationalLocation(
+      if (_operationalGpsIo.shouldPublish(
+        position: position,
+        lastPosition: _lastOperationalPosition,
+        lastSentAt: _lastOperationalSentAt,
+        nowUtc: nowUtc,
+        activeService: activeService,
+      )) {
+        await _operationalGpsIo.publishPosition(
           vehicleId: vehicle.id,
-          latitude: latitude,
-          longitude: longitude,
-          accuracyM: MarketplaceOperationalLocationPolicy.safeMetric(
-            position.accuracy,
-            min: 0,
-            max: 5000,
-          ),
-          headingDegrees: MarketplaceOperationalLocationPolicy.safeMetric(
-            position.heading,
-            min: 0,
-            max: 359.999,
-          ),
-          speedMps: MarketplaceOperationalLocationPolicy.safeMetric(position.speed, min: 0, max: 100),
-          capturedAt: position.timestamp,
+          position: position,
         );
         _markOperationalGpsPublished(position, nowUtc);
 
@@ -767,21 +703,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final generation = ++_operationalLocationStreamGeneration;
     var syncChangedState = false;
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        _setOperationalGpsIssue(MarketplaceGpsIssue.locationDisabled);
-        _scheduleOperationalLocationStreamRetry(activeService: activeService);
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied &&
-          requestPermission &&
-          widget.isVisible) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _setOperationalGpsIssue(MarketplaceGpsIssue.permissionDenied);
+      final accessIssue = await _operationalGpsIo.checkAccess(
+        requestPermission: requestPermission && widget.isVisible,
+      );
+      if (accessIssue != null) {
+        _setOperationalGpsIssue(accessIssue);
+        if (accessIssue == MarketplaceGpsIssue.locationDisabled) {
+          _scheduleOperationalLocationStreamRetry(activeService: activeService);
+        }
         return;
       }
 
@@ -794,10 +723,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         return;
       }
 
-      final stream = Geolocator.getPositionStream(
-        locationSettings: _activeOperationalLocationSettings(
-          activeService: activeService,
-        ),
+      final stream = _operationalGpsIo.positionStream(
+        isAndroid: _androidOperationalLocation,
+        activeService: activeService,
       );
 
       late final StreamSubscription<Position> subscription;
@@ -897,33 +825,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
-  Future<Position> _readOperationalPosition({
-    required bool activeService,
-  }) async {
-    final nowUtc = DateTime.now().toUtc();
-
-    if (MarketplaceOperationalLocationPolicy.shouldReadLastKnownPosition(
-      activeService: activeService,
-      isWeb: kIsWeb,
-    )) {
-      final cached = await Geolocator.getLastKnownPosition();
-      if (cached != null && MarketplaceOperationalLocationPolicy.cachedPositionUsable(cached, nowUtc)) {
-        return cached;
-      }
-    }
-
-    return Geolocator.getCurrentPosition(
-      locationSettings: LocationSettings(
-        accuracy: MarketplaceOperationalLocationPolicy.accuracy(
-          activeService: activeService,
-        ),
-        timeLimit: activeService
-            ? const Duration(seconds: 10)
-            : const Duration(seconds: 8),
-      ),
-    );
-  }
-
   Future<void> _sampleOperationalLocation({
     bool requestPermission = false,
   }) async {
@@ -941,88 +842,35 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _operationalLocationInFlight = true;
 
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        _setOperationalGpsIssue(MarketplaceGpsIssue.locationDisabled);
+      final accessIssue = await _operationalGpsIo.checkAccess(
+        requestPermission: requestPermission && widget.isVisible,
+      );
+      if (accessIssue != null) {
+        _setOperationalGpsIssue(accessIssue);
         shouldReschedule = false;
         return;
       }
-
-      var permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied &&
-          requestPermission &&
-          widget.isVisible) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _setOperationalGpsIssue(MarketplaceGpsIssue.permissionDenied);
-        shouldReschedule = false;
-        return;
-      }
-
-      final position = await _readOperationalPosition(
+      final position = await _operationalGpsIo.readPosition(
         activeService: activeService,
+        isWeb: kIsWeb,
       );
 
       if (!mounted || !_canPublishOperationalLocation()) return;
 
-      final latitude = position.latitude;
-      final longitude = position.longitude;
-
-      if (!latitude.isFinite ||
-          latitude < -90 ||
-          latitude > 90 ||
-          !longitude.isFinite ||
-          longitude < -180 ||
-          longitude > 180) {
-        return;
-      }
+      if (!_operationalGpsIo.validCoordinates(position)) return;
 
       final nowUtc = DateTime.now().toUtc();
-      final lastPosition = _lastOperationalPosition;
-      final lastSentAt = _lastOperationalSentAt;
-
-      final distanceMeters = lastPosition == null
-          ? double.infinity
-          : Geolocator.distanceBetween(
-              lastPosition.latitude,
-              lastPosition.longitude,
-              latitude,
-              longitude,
-            );
-
-      final heartbeatDue = lastSentAt == null ||
-          nowUtc.difference(lastSentAt) >=
-              MarketplaceOperationalLocationPolicy.heartbeatInterval(
-                activeService: activeService,
-              );
-
-      final movementDue = distanceMeters >=
-          MarketplaceOperationalLocationPolicy.distanceThresholdMeters(
-            activeService: activeService,
-          );
-
-      if (lastPosition == null || heartbeatDue || movementDue) {
-        await _service.updateDriverOperationalLocation(
+      if (_operationalGpsIo.shouldPublish(
+        position: position,
+        lastPosition: _lastOperationalPosition,
+        lastSentAt: _lastOperationalSentAt,
+        nowUtc: nowUtc,
+        activeService: activeService,
+      )) {
+        await _operationalGpsIo.publishPosition(
           vehicleId: vehicle.id,
-          latitude: latitude,
-          longitude: longitude,
-          accuracyM: MarketplaceOperationalLocationPolicy.safeMetric(
-            position.accuracy,
-            min: 0,
-            max: 5000,
-          ),
-          headingDegrees: MarketplaceOperationalLocationPolicy.safeMetric(
-            position.heading,
-            min: 0,
-            max: 359.999,
-          ),
-          speedMps: MarketplaceOperationalLocationPolicy.safeMetric(position.speed, min: 0, max: 100),
-          capturedAt: position.timestamp,
+          position: position,
         );
-
         _markOperationalGpsPublished(position, nowUtc);
         if (mounted && kIsWeb) setState(() {});
 
