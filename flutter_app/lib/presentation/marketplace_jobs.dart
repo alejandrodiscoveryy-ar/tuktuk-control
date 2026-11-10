@@ -229,6 +229,21 @@ bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
       job.status == 'pickup';
 }
 
+enum MarketplaceGpsIssue { locationDisabled, permissionDenied, deliveryFailed }
+
+@visibleForTesting
+bool marketplaceGpsNeedsAttention({
+  required bool locationExpected,
+  required DateTime? lastConfirmedAt,
+  required DateTime nowUtc,
+  required bool hasFailure,
+}) {
+  if (!locationExpected) return false;
+  if (hasFailure || lastConfirmedAt == null) return true;
+  final age = nowUtc.toUtc().difference(lastConfirmedAt.toUtc());
+  return age.isNegative || age > const Duration(minutes: 5);
+}
+
 class MarketplaceOperationalLocationPolicy {
   static const availableSampleInterval = Duration(minutes: 2);
   static const availableHeartbeatInterval = Duration(seconds: 120);
@@ -362,6 +377,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Position? _lastOperationalPosition;
   DateTime? _lastOperationalSentAt;
   DateTime? _lastArrivalStateSyncAt;
+  MarketplaceGpsIssue? _operationalGpsIssue;
+  Timer? _operationalGpsReadinessTimer;
 
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
@@ -401,6 +418,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   @override
   void dispose() {
     _stopOperationalLocationSampling();
+    _operationalGpsReadinessTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
@@ -581,6 +599,39 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return vehicle.acceptingJobs || activeJob != null;
   }
 
+  void _setOperationalGpsIssue(MarketplaceGpsIssue issue) {
+    if (!mounted || _operationalGpsIssue == issue) return;
+    setState(() => _operationalGpsIssue = issue);
+  }
+
+  void _markOperationalGpsPublished(Position position, DateTime nowUtc) {
+    if (!mounted) return;
+    final needsRefresh = marketplaceGpsNeedsAttention(
+      locationExpected: true,
+      lastConfirmedAt: _lastOperationalSentAt,
+      nowUtc: nowUtc,
+      hasFailure: _operationalGpsIssue != null,
+    );
+    _lastOperationalPosition = position;
+    _lastOperationalSentAt = nowUtc;
+    _operationalGpsIssue = null;
+    _operationalGpsReadinessTimer?.cancel();
+    // Si cesan los envíos, advertir aunque el stream siga abierto.
+    _operationalGpsReadinessTimer = Timer(
+      const Duration(minutes: 5, seconds: 1),
+      () {
+        if (mounted && _canPublishOperationalLocation()) setState(() {});
+      },
+    );
+    if (needsRefresh) setState(() {});
+  }
+
+  void _retryOperationalGpsCheck() {
+    // Android necesita reiniciar su stream; Web usa una lectura inmediata.
+    if (_androidOperationalLocation) _stopOperationalLocationSampling();
+    _syncOperationalLocationSampling(immediate: true, requestPermission: true);
+  }
+
   void _stopOperationalLocationSampling() {
     // Invalida arranques asincronos al descansar, cerrar sesion o cambiar modo.
     _operationalLocationStreamGeneration++;
@@ -707,8 +758,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           speedMps: _safeOperationalMetric(position.speed, min: 0, max: 100),
           capturedAt: position.timestamp,
         );
-        _lastOperationalPosition = position;
-        _lastOperationalSentAt = nowUtc;
+        _markOperationalGpsPublished(position, nowUtc);
 
         final approaching = _active.where((job) =>
           job.status == 'en_route' &&
@@ -732,6 +782,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
+      _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
       // Sin cobertura no se inventa ubicacion; reintentar con la siguiente muestra.
     } finally {
       _activeOperationalLocationPublishInFlight = false;
@@ -795,6 +846,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     var syncChangedState = false;
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.locationDisabled);
         _scheduleOperationalLocationStreamRetry(activeService: activeService);
         return;
       }
@@ -807,6 +859,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.permissionDenied);
         return;
       }
 
@@ -828,6 +881,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       late final StreamSubscription<Position> subscription;
       void onStreamClosed() {
         if (_activeOperationalLocationSubscription != subscription) return;
+        _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
         _stopOperationalLocationSampling();
         // Si estamos en segundo plano, recuperar al volver a primer plano.
         _scheduleOperationalLocationStreamRetry(activeService: activeService);
@@ -846,6 +900,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _activeOperationalLocationSubscription = subscription;
       _operationalLocationStreamActiveService = activeService;
     } catch (_) {
+      _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
       _scheduleOperationalLocationStreamRetry(activeService: activeService);
     } finally {
       _operationalLocationStreamStarting = false;
@@ -985,6 +1040,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.locationDisabled);
         shouldReschedule = false;
         return;
       }
@@ -999,6 +1055,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.permissionDenied);
         shouldReschedule = false;
         return;
       }
@@ -1064,8 +1121,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           capturedAt: position.timestamp,
         );
 
-        _lastOperationalPosition = position;
-        _lastOperationalSentAt = nowUtc;
+        _markOperationalGpsPublished(position, nowUtc);
         if (mounted && kIsWeb) setState(() {});
 
         // Una consulta iniciada antes del nuevo GPS puede devolver cero
@@ -1084,6 +1140,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
+      _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
       // Un fallo transitorio de GPS/red no debe detener el seguimiento.
       // Reintentamos con backoff para no castigar batería ni datos móviles.
       retryDelay = MarketplaceOperationalLocationPolicy.failureRetryDelay(
@@ -1100,8 +1157,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   Future<void> _clearOperationalLocationBestEffort() async {
     _stopOperationalLocationSampling();
+    _operationalGpsReadinessTimer?.cancel();
     _lastOperationalPosition = null;
     _lastOperationalSentAt = null;
+    _operationalGpsIssue = null;
 
     try {
       await _service.clearDriverOperationalLocation();
@@ -1493,6 +1552,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _changeVehicle(String? vehicleId) async {
     if (vehicleId == null || vehicleId == _selectedVehicleId) return;
 
+    _operationalGpsReadinessTimer?.cancel();
+    _lastOperationalPosition = null;
+    _lastOperationalSentAt = null;
+    _operationalGpsIssue = null;
     setState(() {
       _selectedVehicleId = vehicleId;
       _available = const [];
@@ -3947,6 +4010,21 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final busy = active != null &&
         (_busyJobId == active.id || _autoEnRouteInFlight.contains(active.id));
     final photo = _googleProfilePhotoUrl(widget.store.user);
+    final gpsNeedsAttention = marketplaceGpsNeedsAttention(
+      locationExpected: available || onRide,
+      lastConfirmedAt: _lastOperationalSentAt,
+      nowUtc: DateTime.now().toUtc(),
+      hasFailure: _operationalGpsIssue != null,
+    );
+    final gpsWarningText = switch (_operationalGpsIssue) {
+      MarketplaceGpsIssue.locationDisabled =>
+        'GPS desactivado. Activa la ubicación y toca para comprobar.',
+      MarketplaceGpsIssue.permissionDenied =>
+        'TUKTUK no tiene permiso GPS. Autorízalo para compartir tu ubicación.',
+      MarketplaceGpsIssue.deliveryFailed =>
+        'Ubicación sin confirmar. Comprueba tu conexión y toca para reintentar.',
+      null => 'GPS sin confirmar. Toca para comprobar la ubicación.',
+    };
     final bottomNavInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
       key: const ValueKey('tuktuk-work-map-home'),
@@ -4010,27 +4088,23 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               ),
             ),
           ),
-        // Web: alertar si "Trabajar" no tiene ubicacion confirmada reciente.
-        // Este aviso no modifica el estado ni crea coordenadas ficticias.
-        if (kIsWeb && available && !onRide &&
-            (_lastOperationalSentAt == null ||
-             DateTime.now().toUtc().difference(_lastOperationalSentAt!) >
-                 const Duration(minutes: 5)))
+        // Web y Android: no confundir Trabajando con GPS confirmado.
+        // No cambia el estado ni las reglas de asignacion del servidor.
+        if (gpsNeedsAttention)
           Positioned(
             left: 12,
             right: 12,
-            top: _webAlertVerified ? 96 : 166,
+            top: kIsWeb && available && !onRide && !_webAlertVerified
+                ? 166
+                : 96,
             child: Material(
               color: const Color(0xF03E3020),
               borderRadius: BorderRadius.circular(14),
               child: InkWell(
                 key: const ValueKey('work-gps-readiness-warning'),
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => _syncOperationalLocationSampling(
-                  immediate: true,
-                  requestPermission: true,
-                ),
-                child: const Padding(
+                onTap: _retryOperationalGpsCheck,
+                child: Padding(
                   padding: EdgeInsets.all(12),
                   child: Row(
                     children: [
@@ -4038,7 +4112,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'GPS sin confirmar. Toca para comprobar ubicación y permisos; sin GPS reciente no aparecerás en el radar.',
+                          gpsWarningText,
                           style: TextStyle(color: Colors.white, fontSize: 12),
                         ),
                       ),
