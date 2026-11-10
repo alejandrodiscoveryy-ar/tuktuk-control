@@ -24,6 +24,9 @@ const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukJobNotificationChannelId = 'tuktuk_nuevas_carreras_v1';
 const tuktukJobNotificationChannelName = 'Nuevas carreras';
+const tuktukJobNotificationChannelV2Id = 'tuktuk_nuevas_carreras_v2';
+const tuktukJobNotificationChannelV2Name =
+    'Nuevas carreras (sonido oficial)';
 const tuktukWebVapidKey =
     'BF-az4NW8nREYEw-RvnBOfQ2wrJGttOjBhR_PD0SKWEKDHWqWvFBLdmka5e_0d-_Mptdrpxxfy1aF-FFPQpvfEE';
 const tuktukWebMessagingServiceWorker = 'firebase-messaging-sw.js';
@@ -61,6 +64,12 @@ String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
       ? jobId
       : null;
 }
+
+@visibleForTesting
+String notificationChannelForPush(Map<String, dynamic> data) =>
+    marketplaceJobIdFromPush(data) == null
+        ? tuktukNotificationChannelId
+        : tuktukJobNotificationChannelV2Id;
 
 String? marketplaceJobIdFromUrl(Uri uri) => marketplaceJobIdFromPush({
       'kind': 'marketplace_job_available',
@@ -213,8 +222,8 @@ class PushNotificationService {
   // El backend debe migrarse de forma coordinada antes de emplearlo
   // para las notificaciones recibidas con la app bloqueada.
   static const _jobChannelV2 = AndroidNotificationChannel(
-    'tuktuk_nuevas_carreras_v2',
-    'Nuevas carreras (sonido oficial)',
+    tuktukJobNotificationChannelV2Id,
+    tuktukJobNotificationChannelV2Name,
     description: 'Avisos de nuevas carreras con sonido TukTuk',
     importance: Importance.high,
     playSound: true,
@@ -342,10 +351,11 @@ class PushNotificationService {
       title: title,
       body: body,
       notificationDetails: NotificationDetails(
-        android: marketplaceJobIdFromPush(message.data) != null
+        android: notificationChannelForPush(message.data) ==
+                tuktukJobNotificationChannelV2Id
             ? const AndroidNotificationDetails(
-                'tuktuk_nuevas_carreras_v2',
-                'Nuevas carreras (sonido oficial)',
+                tuktukJobNotificationChannelV2Id,
+                tuktukJobNotificationChannelV2Name,
                 channelDescription:
                     'Avisos audibles de nuevas carreras disponibles',
                 importance: Importance.high,

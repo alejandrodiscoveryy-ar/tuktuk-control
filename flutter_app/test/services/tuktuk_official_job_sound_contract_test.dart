@@ -14,6 +14,8 @@ void main() {
     expect(web, contains('source.buffer = jobAudioBuffer'));
     expect(push, contains('tuktuk_nuevas_carreras_v1'));
     expect(push, contains("RawResourceAndroidNotificationSound('tuktuk_nueva_carrera')"));
-    expect(push, contains('marketplaceJobIdFromPush(message.data) != null'));
+    // La selección ahora se centraliza y se prueba por comportamiento.
+    expect(push, contains('notificationChannelForPush(message.data)'));
+    expect(push, contains('tuktuk_nuevas_carreras_v2'));
   });
 }
