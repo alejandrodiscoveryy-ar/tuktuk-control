@@ -70,3 +70,16 @@ existentes. La máquina de estado, suscripciones de ubicación, publicación de
 coordenadas y reintentos permanecen en la pantalla hasta una fase posterior
 con pruebas de integración dedicadas. No reemplazar en bloque los 35 módulos
 `part` de `main.dart` sin un plan de migración y pruebas por etapa.
+
+## Fase 2 — Entrada y salida del GPS (noviembre de 2026)
+
+El nuevo módulo `services/marketplace_operational_gps_io.dart` contiene el
+acceso al sensor (GPS), la comprobación de permisos, la selección de una lectura
+reciente y la decisión de enviar coordenadas por distancia o tiempo. Convierte
+los datos del sensor a un payload saneado y delega la entrega al servicio remoto.
+El dispositivo y el emisor son inyectables para pruebas sin llamadas de red.
+
+La pantalla de carreras mantiene las decisiones de jornada, suscripciones,
+reintentos, claxon y confirmación de envío. La refactorización no cambia
+frecuencias, distancias, permisos ni contratos con Supabase. Cualquier extracción
+posterior del ciclo de vida requiere pruebas separadas de reconexión real.
