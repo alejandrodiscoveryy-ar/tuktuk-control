@@ -1,4 +1,4 @@
-import 'package:control_tuk_tuk/main.dart';
+import 'package:control_tuk_tuk/services/marketplace_operational_gps_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

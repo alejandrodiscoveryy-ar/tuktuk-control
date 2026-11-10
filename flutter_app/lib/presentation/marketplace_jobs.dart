@@ -229,84 +229,6 @@ bool _marketplaceJobCanDriverCancel(MarketplaceJob job) {
       job.status == 'pickup';
 }
 
-enum MarketplaceGpsIssue { locationDisabled, permissionDenied, deliveryFailed }
-
-@visibleForTesting
-bool marketplaceGpsNeedsAttention({
-  required bool locationExpected,
-  required DateTime? lastConfirmedAt,
-  required DateTime nowUtc,
-  required bool hasFailure,
-}) {
-  if (!locationExpected) return false;
-  if (hasFailure || lastConfirmedAt == null) return true;
-  final age = nowUtc.toUtc().difference(lastConfirmedAt.toUtc());
-  return age.isNegative || age > const Duration(minutes: 5);
-}
-
-class MarketplaceOperationalLocationPolicy {
-  static const availableSampleInterval = Duration(minutes: 2);
-  static const availableHeartbeatInterval = Duration(seconds: 120);
-  static const activeSampleInterval = Duration(seconds: 15);
-  static const availableStreamInterval = Duration(seconds: 60);
-  static const activeHeartbeatInterval = Duration(seconds: 30);
-
-  static const availableDistanceMeters = 75.0;
-  static const activeDistanceMeters = 15.0;
-
-  static bool isActiveServiceStatus(String status) {
-    return status == 'accepted' ||
-        status == 'en_route' ||
-        status == 'pickup' ||
-        status == 'in_progress' ||
-        status == 'incident';
-  }
-
-  static Duration sampleInterval({required bool activeService}) =>
-      activeService ? activeSampleInterval : availableSampleInterval;
-
-  static Duration streamInterval({required bool activeService}) =>
-      activeService ? activeSampleInterval : availableStreamInterval;
-
-  // El navegador solo se actualiza mientras esta vivo; Android usa servicio GPS.
-  static bool usesContinuousStream({
-    required bool isAndroid,
-    required bool activeService,
-  }) => isAndroid || activeService;
-
-  static Duration heartbeatInterval({required bool activeService}) =>
-      activeService ? activeHeartbeatInterval : availableHeartbeatInterval;
-
-  static Duration failureRetryDelay({required bool activeService}) =>
-      activeService ? const Duration(seconds: 30) : const Duration(minutes: 5);
-
-  static double distanceThresholdMeters({required bool activeService}) =>
-      activeService ? activeDistanceMeters : availableDistanceMeters;
-
-  static bool shouldReadLastKnownPosition({
-    required bool activeService,
-    required bool isWeb,
-  }) =>
-      !activeService && !isWeb;
-
-  static LocationAccuracy accuracy({required bool activeService}) =>
-      activeService ? LocationAccuracy.high : LocationAccuracy.medium;
-
-  // No enviar coordenadas atrasadas por cortes de red, cache o sensores.
-  // El margen de 5 s tolera pequeñas diferencias de reloj entre capas.
-  static bool isFreshStreamFix({
-    required DateTime capturedAt,
-    required DateTime nowUtc,
-    required bool activeService,
-  }) {
-    final age = nowUtc.toUtc().difference(capturedAt.toUtc());
-    final maxAge = activeService
-        ? const Duration(seconds: 45)
-        : const Duration(minutes: 2);
-    return age >= const Duration(seconds: -5) && age <= maxAge;
-  }
-}
-
 class MarketplaceJobsScreen extends StatefulWidget {
   const MarketplaceJobsScreen({
     required this.store,
@@ -745,17 +667,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           vehicleId: vehicle.id,
           latitude: latitude,
           longitude: longitude,
-          accuracyM: _safeOperationalMetric(
+          accuracyM: MarketplaceOperationalLocationPolicy.safeMetric(
             position.accuracy,
             min: 0,
             max: 5000,
           ),
-          headingDegrees: _safeOperationalMetric(
+          headingDegrees: MarketplaceOperationalLocationPolicy.safeMetric(
             position.heading,
             min: 0,
             max: 359.999,
           ),
-          speedMps: _safeOperationalMetric(position.speed, min: 0, max: 100),
+          speedMps: MarketplaceOperationalLocationPolicy.safeMetric(position.speed, min: 0, max: 100),
           capturedAt: position.timestamp,
         );
         _markOperationalGpsPublished(position, nowUtc);
@@ -975,26 +897,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
-  double? _safeOperationalMetric(
-    double value, {
-    required double min,
-    required double max,
-  }) {
-    if (!value.isFinite || value < min || value > max) return null;
-    return value;
-  }
-
-  bool _cachedPositionUsable(Position position, DateTime nowUtc) {
-    final timestamp = position.timestamp.toUtc();
-    final age = nowUtc.difference(timestamp);
-
-    return !age.isNegative &&
-        age <= const Duration(seconds: 90) &&
-        position.accuracy.isFinite &&
-        position.accuracy >= 0 &&
-        position.accuracy <= 500;
-  }
-
   Future<Position> _readOperationalPosition({
     required bool activeService,
   }) async {
@@ -1005,7 +907,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       isWeb: kIsWeb,
     )) {
       final cached = await Geolocator.getLastKnownPosition();
-      if (cached != null && _cachedPositionUsable(cached, nowUtc)) {
+      if (cached != null && MarketplaceOperationalLocationPolicy.cachedPositionUsable(cached, nowUtc)) {
         return cached;
       }
     }
@@ -1107,17 +1009,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           vehicleId: vehicle.id,
           latitude: latitude,
           longitude: longitude,
-          accuracyM: _safeOperationalMetric(
+          accuracyM: MarketplaceOperationalLocationPolicy.safeMetric(
             position.accuracy,
             min: 0,
             max: 5000,
           ),
-          headingDegrees: _safeOperationalMetric(
+          headingDegrees: MarketplaceOperationalLocationPolicy.safeMetric(
             position.heading,
             min: 0,
             max: 359.999,
           ),
-          speedMps: _safeOperationalMetric(position.speed, min: 0, max: 100),
+          speedMps: MarketplaceOperationalLocationPolicy.safeMetric(position.speed, min: 0, max: 100),
           capturedAt: position.timestamp,
         );
 
@@ -4016,15 +3918,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       nowUtc: DateTime.now().toUtc(),
       hasFailure: _operationalGpsIssue != null,
     );
-    final gpsWarningText = switch (_operationalGpsIssue) {
-      MarketplaceGpsIssue.locationDisabled =>
-        'GPS desactivado. Activa la ubicación y toca para comprobar.',
-      MarketplaceGpsIssue.permissionDenied =>
-        'TUKTUK no tiene permiso GPS. Autorízalo para compartir tu ubicación.',
-      MarketplaceGpsIssue.deliveryFailed =>
-        'Ubicación sin confirmar. Comprueba tu conexión y toca para reintentar.',
-      null => 'GPS sin confirmar. Toca para comprobar la ubicación.',
-    };
+    final gpsWarningText = marketplaceGpsWarningMessage(_operationalGpsIssue);
     final bottomNavInset = MediaQuery.paddingOf(context).bottom;
     return Stack(
       key: const ValueKey('tuktuk-work-map-home'),

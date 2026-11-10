@@ -1,4 +1,4 @@
-import 'package:control_tuk_tuk/main.dart';
+import 'package:control_tuk_tuk/services/marketplace_operational_gps_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -153,6 +153,24 @@ void main() {
       expect(recent(50, activeService: true), isFalse);
       expect(recent(-5, activeService: false), isTrue);
       expect(recent(-6, activeService: false), isFalse);
+    });
+
+    test('valida metricas GPS sin aceptar NaN ni valores negativos', () {
+      expect(MarketplaceOperationalLocationPolicy.safeMetric(20, min: 0, max: 5000), 20);
+      expect(MarketplaceOperationalLocationPolicy.safeMetric(-1, min: 0, max: 5000), isNull);
+      expect(MarketplaceOperationalLocationPolicy.safeMetric(double.nan, min: 0, max: 5000), isNull);
+      expect(MarketplaceOperationalLocationPolicy.safeMetric(5001, min: 0, max: 5000), isNull);
+    });
+
+    test('cada incidencia GPS conserva el mensaje original', () {
+      expect(marketplaceGpsWarningMessage(null),
+          'GPS sin confirmar. Toca para comprobar la ubicación.');
+      expect(marketplaceGpsWarningMessage(MarketplaceGpsIssue.locationDisabled),
+          contains('GPS desactivado'));
+      expect(marketplaceGpsWarningMessage(MarketplaceGpsIssue.permissionDenied),
+          contains('permiso GPS'));
+      expect(marketplaceGpsWarningMessage(MarketplaceGpsIssue.deliveryFailed),
+          contains('Comprueba tu conexión'));
     });
 
     test('usa seguimiento mas frecuente durante servicio activo', () {
