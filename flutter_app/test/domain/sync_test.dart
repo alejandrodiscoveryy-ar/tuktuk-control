@@ -315,6 +315,17 @@ void main() {
       ),
       isFalse,
     );
+    // Registros anteriores pueden seguir como localOnly mientras su
+    // primera operación de sincronización todavía está encolada.
+    expect(
+      conflicts(
+        pending: true,
+        status: SyncStatus.localOnly,
+        localDevice: 'phone-a',
+        remoteDevice: 'phone-b',
+      ),
+      isTrue,
+    );
     expect(
       conflicts(
         pending: true,

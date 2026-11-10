@@ -185,7 +185,7 @@ abstract final class SyncMultiDeviceConflictPolicy {
     required String remoteDeviceId,
   }) =>
       hasQueuedLocalChange &&
-      localStatus == SyncStatus.pending &&
+      localStatus != SyncStatus.synced &&
       localUserId.isNotEmpty &&
       localUserId == remoteUserId &&
       localDeviceId.isNotEmpty &&
