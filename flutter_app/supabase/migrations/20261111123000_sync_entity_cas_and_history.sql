@@ -8,18 +8,44 @@ alter table public.sync_entities
 create or replace function app_private.sync_entities_bump_version()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = ''
-as $$
+as $
 begin
+  -- También protege escrituras directas de APK existentes.
+  -- La fecha de EDICIÓN, no el momento de sincronizar, decide.
+  if new.updated_at > pg_catalog.clock_timestamp() + interval '10 minutes' then
+    raise exception 'DEVICE_CLOCK_TOO_FAR_AHEAD' using errcode = '22023';
+  end if;
+
   if tg_op = 'INSERT' then
     new.server_version := 1;
   else
+    if new.updated_at <= old.updated_at and (
+      public.sync_entity_business_payload(new.entity_type, new.payload)
+        is distinct from
+      public.sync_entity_business_payload(old.entity_type, old.payload)
+      or new.vehicle_id is distinct from old.vehicle_id
+      or new.deleted_at is distinct from old.deleted_at
+    ) then
+      -- Una APK antigua cree que el upsert se completó; conservar su
+      -- intento rechazado para poder recuperarlo sin borrar la versión nueva.
+      insert into app_private.sync_entities_history(
+        user_id, entity_type, entity_id, vehicle_id, server_version,
+        device_id, payload, updated_at, deleted_at, event_kind
+      ) values (
+        new.user_id, new.entity_type, new.entity_id, new.vehicle_id,
+        old.server_version, new.device_id, new.payload, new.updated_at,
+        new.deleted_at, 'older_edit_rejected'
+      );
+      return null;
+    end if;
     new.server_version := old.server_version + 1;
   end if;
   return new;
 end;
-$$;
+$;
+revoke all on function app_private.sync_entities_bump_version() from public, anon, authenticated;
 
 drop trigger if exists zz_sync_entities_bump_version on public.sync_entities;
 create trigger zz_sync_entities_bump_version
@@ -39,6 +65,7 @@ create table if not exists app_private.sync_entities_history (
   payload jsonb not null,
   updated_at timestamptz not null,
   deleted_at timestamptz,
+  event_kind text not null default 'superseded',
   captured_at timestamptz not null default clock_timestamp()
 );
 create index if not exists sync_entities_history_owner_entity_idx
@@ -57,11 +84,11 @@ begin
     or old.vehicle_id is distinct from new.vehicle_id then
     insert into app_private.sync_entities_history(
       user_id, entity_type, entity_id, vehicle_id, server_version,
-      device_id, payload, updated_at, deleted_at
+      device_id, payload, updated_at, deleted_at, event_kind
     ) values(
       old.user_id, old.entity_type, old.entity_id, old.vehicle_id,
       old.server_version, old.device_id, old.payload, old.updated_at,
-      old.deleted_at
+      old.deleted_at, 'superseded'
     );
   end if;
   return null;
