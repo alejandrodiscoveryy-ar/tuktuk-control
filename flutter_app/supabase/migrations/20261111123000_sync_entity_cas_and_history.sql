@@ -130,6 +130,8 @@ declare
   v_op_id text;
   v_accepted jsonb := '[]'::jsonb;
   v_conflicts jsonb := '[]'::jsonb;
+  v_remote_wins jsonb := '[]'::jsonb;
+  v_auto_winner text;
 begin
   if v_user is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
@@ -197,7 +199,7 @@ begin
       from public.sync_entities
       where user_id = v_user and entity_type = v_type and entity_id = v_id;
 
-    -- Un reintento cuyo acuse se perdió no produce una segunda escritura.
+    -- Reintento idéntico: el acuse perdido no duplica la escritura.
     if found and v_remote.vehicle_id = v_vehicle
       and public.sync_entity_business_payload(v_type,v_remote.payload) =
           public.sync_entity_business_payload(v_type,v_payload) then
@@ -206,23 +208,61 @@ begin
           'id', v_op_id, 'server_version', v_remote.server_version
         )
       );
-    else
-      v_conflicts := v_conflicts || pg_catalog.jsonb_build_array(
+      continue;
+    end if;
+
+    -- Última MODIFICACIÓN real (no último dispositivo en sincronizar).
+    -- Las fechas de teléfono en el futuro no pueden ganar automáticamente.
+    -- Sin base previa, nunca desplazar una fila existente por un blind insert.
+    -- El UPDATE condicional cierra la carrera entre comparar y sobrescribir.
+    if found and v_previous is not null
+      and v_updated > v_remote.updated_at
+      and v_updated <= pg_catalog.clock_timestamp() + interval '10 minutes' then
+      update public.sync_entities
+      set vehicle_id = v_vehicle, device_id = v_device,
+          payload = v_payload, updated_at = v_updated, deleted_at = v_deleted
+      where user_id = v_user and entity_type = v_type and entity_id = v_id
+        and updated_at < v_updated
+        and server_version = v_remote.server_version
+      returning server_version into v_version;
+      if v_version is not null then
+        v_accepted := v_accepted || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object('id', v_op_id, 'server_version', v_version)
+        );
+        continue;
+      end if;
+      -- Un tercero pudo actualizar durante el intento: volver a leer.
+      select payload, vehicle_id, device_id, updated_at, deleted_at, server_version
+        into v_remote
+        from public.sync_entities
+        where user_id = v_user and entity_type = v_type and entity_id = v_id;
+    end if;
+
+    -- Gana el servidor. El cliente guarda su copia local ANTES de confirmar
+    -- la operación y aplica la remota sin pedirle decisión al conductor.
+    if found then
+      v_remote_wins := v_remote_wins || pg_catalog.jsonb_build_array(
         pg_catalog.jsonb_build_object(
           'id', v_op_id,
-          'server_version', case when found then v_remote.server_version else null end,
-          'remote_payload', case when found then v_remote.payload else null end,
-          'remote_vehicle_id', case when found then v_remote.vehicle_id else null end,
-          'remote_device_id', case when found then v_remote.device_id else null end,
-          'remote_updated_at', case when found then v_remote.updated_at else null end,
-          'remote_deleted_at', case when found then v_remote.deleted_at else null end
+          'server_version', v_remote.server_version,
+          'remote_payload', v_remote.payload,
+          'remote_vehicle_id', v_remote.vehicle_id,
+          'remote_device_id', v_remote.device_id,
+          'remote_updated_at', v_remote.updated_at,
+          'remote_deleted_at', v_remote.deleted_at
         )
+      );
+    else
+      v_conflicts := v_conflicts || pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object('id', v_op_id, 'server_version', null)
       );
     end if;
   end loop;
 
   return pg_catalog.jsonb_build_object(
-    'accepted', v_accepted, 'conflicts', v_conflicts
+    'accepted', v_accepted,
+    'remote_wins', v_remote_wins,
+    'conflicts', v_conflicts
   );
 end;
 $$;
