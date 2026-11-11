@@ -2582,7 +2582,9 @@ class RecordStore extends ChangeNotifier {
             '${_meta.get('settingsUpdatedAt')}',
           );
           if (!forced &&
-              !_remoteWins(localUpdatedAt, deviceId, null, change)) break;
+              !_remoteWins(localUpdatedAt, deviceId, null, change)) {
+            break;
+          }
           applied = true;
           await _meta.putAll({
             'maintenanceIntervalKm':
