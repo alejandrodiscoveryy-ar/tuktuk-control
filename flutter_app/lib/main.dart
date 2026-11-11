@@ -59,6 +59,7 @@ part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
+part 'presentation/marketplace_work_map_primitives.dart';
 part 'presentation/marketplace_android_alert_setup.dart';
 part 'presentation/marketplace_web_alert_setup.dart';
 part 'presentation/marketplace_driver_permissions.dart';
