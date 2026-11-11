@@ -2411,49 +2411,57 @@ class RecordStore extends ChangeNotifier {
       final queuedRaw = Hive.box(_syncQueueBox).get(operationId);
       final queued = queuedRaw is Map ? SyncOperation.fromMap(queuedRaw) : null;
       if (queued != null && queued.userId == currentUser.id) {
-        Map? localRaw;
+        Map<String, dynamic>? localPayload;
         switch (change.entityType) {
           case SyncEntityType.dailyRecord:
-            localRaw = _box.get(change.entityId);
+            final raw = _box.get(change.entityId);
+            if (raw is Map) localPayload = Map<String, dynamic>.from(raw);
             break;
           case SyncEntityType.maintenance:
-            localRaw = _maintenanceBox.get(change.entityId);
+            final raw = _maintenanceBox.get(change.entityId);
+            if (raw is Map) localPayload = Map<String, dynamic>.from(raw);
             break;
           case SyncEntityType.vehicle:
-            localRaw = _meta.get('vehicle:${change.entityId}');
+            final raw = _meta.get('vehicle:${change.entityId}');
+            if (raw is Map) localPayload = Map<String, dynamic>.from(raw);
             break;
           case SyncEntityType.settings:
-            // El formato del respaldo anterior de preferencias es distinto
-            // al payload remoto. No mezclar durante una edición pendiente.
-            continue;
+            localPayload = _payloadForOperation(queued);
+            break;
         }
 
-        if (localRaw is Map &&
-            localRaw['userId']?.toString() == currentUser.id &&
+        final sameOwner = localPayload?['userId']?.toString() == currentUser.id;
+        final sameVehicle = queued.vehicleId == change.vehicleId &&
             (change.entityType == SyncEntityType.vehicle ||
-                localRaw['vehicleId']?.toString() == change.vehicleId)) {
-          final conflictKey = 'syncConflict:${currentUser.id}:$operationId';
-          final localPayload = Map<String, dynamic>.from(localRaw);
-          if (!_meta.containsKey(conflictKey) &&
-              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
-                entityType: change.entityType,
-                previousPayload: queued.previousPayload,
-                remotePayload: change.payload,
-              )) {
-            await _meta.put(conflictKey, <String, dynamic>{
-              'operationId': operationId,
-              'entityId': change.entityId,
-              'entityType': change.entityType.name,
-              'userId': currentUser.id,
-              'vehicleId': change.vehicleId,
-              'savedAt': DateTime.now().toUtc().toIso8601String(),
-              'localPayload': localPayload,
-              'remotePayload': Map<String, dynamic>.from(change.payload),
-              'localOperation': queued.toMap(),
-            });
-          }
-          continue;
+                localPayload?['vehicleId']?.toString() == change.vehicleId);
+        final diverged = !sameOwner ||
+            !sameVehicle ||
+            localPayload == null ||
+            SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+              entityType: change.entityType,
+              previousPayload: queued.previousPayload,
+              localPayload: localPayload,
+              remotePayload: change.payload,
+            );
+        final conflictKey = 'syncConflict:${currentUser.id}:$operationId';
+        if (diverged && !_meta.containsKey(conflictKey)) {
+          await _meta.put(conflictKey, <String, dynamic>{
+            'operationId': operationId,
+            'entityId': change.entityId,
+            'entityType': change.entityType.name,
+            'userId': currentUser.id,
+            'vehicleId': change.vehicleId,
+            'savedAt': DateTime.now().toUtc().toIso8601String(),
+            // Nunca exportar los datos de una cuenta distinta.
+            'localPayload': sameOwner ? localPayload : null,
+            'remotePayload': Map<String, dynamic>.from(change.payload),
+            'localOperation': queued.toMap(),
+            'ownershipMismatch': !sameOwner || !sameVehicle,
+          });
         }
+        // Una edición pendiente jamás es borrada por pull; solo el acuse
+        // del push puede retirarla de la cola.
+        continue;
       }
       switch (change.entityType) {
         case SyncEntityType.dailyRecord:
