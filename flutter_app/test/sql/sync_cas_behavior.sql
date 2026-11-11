@@ -19,6 +19,8 @@ declare
   result jsonb;
   current_payload jsonb;
   current_version bigint;
+  seq_before bigint;
+  seq_after bigint;
 begin
   p0 := jsonb_build_object('id','row1','userId',u,
     'vehicleId','vehicle-one','note','A',
@@ -111,6 +113,28 @@ begin
   from public.sync_entities where user_id=u::uuid and entity_id='row1';
   if current_payload->>'note' <> 'LEGACY_NEWER' or current_version <> 4 then
     raise exception 'LEGACY_LATEST_FAILED: %, %', current_payload,current_version;
+  end if;
+
+  -- Un registro editado tiempo atrás y sincronizado mucho después
+  -- debe tener un cursor NUEVO. No puede perderse por el reloj del móvil.
+  select server_seq into seq_before from public.sync_entities
+  where user_id=u::uuid and entity_id='row1';
+  result := public.sync_entities_push_cas(jsonb_build_array(
+    jsonb_build_object('entity_type','dailyRecord',
+      'entity_id','row-late', 'vehicle_id','vehicle-one',
+      'device_id','phone-offline', 'updated_at',t0,
+      'payload', jsonb_build_object(
+        'id','row-late','userId',u,'vehicleId','vehicle-one',
+        'note','OFFLINE_EARLIER','updatedAt',t0::text))
+  ));
+  if jsonb_array_length(result->'accepted') <> 1 then
+    raise exception 'LATE_SYNC_CREATION_FAILED: %',result;
+  end if;
+  select server_seq into seq_after from public.sync_entities
+  where user_id=u::uuid and entity_id='row-late';
+  if seq_after <= seq_before then
+    raise exception 'CURSOR_SKIPS_LATE_OFFLINE_EDIT: % <= %',
+      seq_after,seq_before;
   end if;
 end
 $test$;
