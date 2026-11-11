@@ -3,7 +3,39 @@
 -- IMPORTANTE: no desplegar la WebApp que usa esta RPC antes de esta migración.
 
 alter table public.sync_entities
-  add column if not exists server_version bigint not null default 1;
+  add column if not exists server_version bigint not null default 1,
+  add column if not exists server_seq bigint not null default 0;
+
+-- Los registros heredados comienzan en secuencia 0, sin UPDATE masivo ni
+-- disparar lógica de negocio existente sobre sus vehículos.
+create table if not exists app_private.sync_user_sequence (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  last_seq bigint not null default 0
+);
+revoke all on app_private.sync_user_sequence from public, anon, authenticated;
+create index if not exists sync_entities_user_seq_idx
+  on public.sync_entities(user_id, server_seq, entity_type, entity_id);
+
+-- Fila bloqueada por usuario: confirma los cambios en el orden del cursor
+-- aun si se editan registros distintos desde dos dispositivos simultáneos.
+create or replace function app_private.sync_entities_set_sequence()
+returns trigger language plpgsql security definer set search_path = ''
+as $sync_sequence$
+begin
+  insert into app_private.sync_user_sequence(user_id,last_seq)
+    values (new.user_id,1)
+  on conflict(user_id) do update
+    set last_seq = app_private.sync_user_sequence.last_seq + 1
+  returning last_seq into new.server_seq;
+  return new;
+end;
+$sync_sequence$;
+revoke all on function app_private.sync_entities_set_sequence()
+  from public, anon, authenticated;
+drop trigger if exists zz_sync_entities_set_sequence on public.sync_entities;
+create trigger zz_sync_entities_set_sequence
+before insert or update on public.sync_entities
+for each row execute function app_private.sync_entities_set_sequence();
 
 create or replace function app_private.sync_entities_bump_version()
 returns trigger
