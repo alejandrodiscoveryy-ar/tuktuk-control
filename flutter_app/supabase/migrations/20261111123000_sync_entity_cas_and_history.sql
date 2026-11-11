@@ -10,7 +10,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $sync_body$
 begin
   -- También protege escrituras directas de APK existentes.
   -- La fecha de EDICIÓN, no el momento de sincronizar, decide.
@@ -44,7 +44,7 @@ begin
   end if;
   return new;
 end;
-$;
+$sync_body$;
 revoke all on function app_private.sync_entities_bump_version() from public, anon, authenticated;
 
 drop trigger if exists zz_sync_entities_bump_version on public.sync_entities;
