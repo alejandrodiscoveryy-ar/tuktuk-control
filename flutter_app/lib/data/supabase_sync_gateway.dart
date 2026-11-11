@@ -200,11 +200,21 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         .from(tableName)
         .select(
           'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
-          'updated_at,deleted_at,server_version',
+          'updated_at,deleted_at,server_version,server_seq',
         )
         .eq('user_id', userId);
     if (parsedCursor != null) {
-      if (parsedCursor.isLegacy) {
+      if (parsedCursor.serverSeq != null) {
+        final seq = parsedCursor.serverSeq!;
+        final type = _postgrestLiteral(parsedCursor.entityType);
+        final id = _postgrestLiteral(parsedCursor.entityId);
+        query = query.or(
+          'server_seq.gt.$seq,'
+          'and(server_seq.eq.$seq,entity_type.gt.$type),'
+          'and(server_seq.eq.$seq,entity_type.eq.$type,'
+          'entity_id.gt.$id)',
+        );
+      } else if (parsedCursor.isLegacy) {
         query = query.gte(
           'updated_at',
           parsedCursor.updatedAt.toIso8601String(),
@@ -224,7 +234,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
       }
     }
     final response = await query
-        .order('updated_at')
+        .order('server_seq')
         .order('entity_type')
         .order('entity_id')
         .limit(safeLimit);
@@ -250,6 +260,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         deviceId: '${row['device_id'] ?? ''}',
         payload: payload,
         serverVersion: (row['server_version'] as num?)?.toInt(),
+        serverSeq: (row['server_seq'] as num?)?.toInt(),
       );
     }).toList();
     return RemotePullResult(
