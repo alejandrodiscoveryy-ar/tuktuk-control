@@ -77,3 +77,27 @@ Las APK distribuidas hoy escriben mediante `upsert` **sin enviar versión espera
 **Solo diseño y auditoría estática / inspección SQL de lectura.** Ninguna migración se aplicó, ningún test SQL de escritura o concurrencia se ejecutó y no se verificó el comportamiento con dos dispositivos reales. El PR sigue como borrador. El registro de resultados tiene que distinguir implementación, tests, integración y producción.
 
 **Referencias:** `flutter_app/lib/data/supabase_sync_gateway.dart`, `flutter_app/lib/domain/sync.dart`, `flutter_app/lib/data/sync_queue.dart`, `flutter_app/docs/sync-multidevice-conflict-safety-20261110.md`, `AGENTS.md`, `docs/architecture.md`. Documentación Supabase RLS y PostgreSQL RLS (TRUNCATE fuera de las políticas).
+
+## 6. Corrección de permisos efectuada con autorización (2026-11-11)
+
+**Estado: APLICADA EN SUPABASE Y VERIFICADA MEDIANTE CONSULTAS DE SOLO LECTURA.** Esto actualiza exclusivamente la situación de los permisos descritos en la sección 1; el versionado de servidor, CAS, UI y resolución de conflictos siguen pendientes.
+
+Migración registrada en Supabase: `20261111111039_harden_sync_entities_truncate_trigger_privileges_20261111`.
+
+Operaciones ejecutadas:
+
+```sql
+revoke truncate, trigger on table public.sync_entities from authenticated;
+revoke trigger on table public.sync_entities from anon;
+```
+
+Resultados comprobados después de la migración:
+- `authenticated`: **sin** `TRUNCATE` ni `TRIGGER` sobre `public.sync_entities`.
+- `anon`: **sin** `TRIGGER` sobre la misma tabla.
+- `authenticated`: `SELECT`, `INSERT`, `UPDATE` y `DELETE` **siguen concedidos** y sujetos a las políticas vigentes.
+- RLS sigue habilitado; existen cuatro políticas (una por operación anterior).
+- Los tres triggers de usuario siguen habilitados, sin modificaciones.
+- `service_role` conserva sus privilegios originales.
+- **No** se ejecutaron escrituras de datos de negocio ni pruebas de concurrencia. Esta comprobación de privilegios no sustituye una prueba funcional de sincronización.
+
+**Control de cambios:** la autorización abarcaba exclusivamente la revocación de los permisos anteriores, sin migraciones de versionado, merge, publicación de WebApp ni APK. No se han aplicado esos cambios adicionales. La migración aplicada en el proyecto remoto debe conciliarse con la historia de migraciones del repositorio antes de futuros despliegues SQL (evitar aplicarla dos veces con otro identificador).
