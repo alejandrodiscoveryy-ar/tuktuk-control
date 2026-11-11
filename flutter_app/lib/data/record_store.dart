@@ -2293,7 +2293,9 @@ class RecordStore extends ChangeNotifier {
     if (currentUser == null) return;
     await _ensureRemoteProfile();
     await _recoverMissingLocalSyncQueue(currentUser.id);
-    final cursorKey = 'supabaseCursor:${currentUser.id}';
+    // Cursor de orden de confirmación del servidor. Separado del cursor
+    // histórico por fecha usado en las APK anteriores.
+    final cursorKey = 'supabaseSeqCursor:${currentUser.id}';
     var cursor = fullRefresh ? null : _meta.get(cursorKey)?.toString();
     var pageCount = 0;
     var hasMore = true;
