@@ -923,6 +923,12 @@ class RecordStore extends ChangeNotifier {
     'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
     // Copias locales y remotas de conflictos, para recuperación manual.
     // La importación JSON ordinaria NO los resuelve ni los reimporta.
+    'syncAutomaticResolutionSnapshots': [
+      for (final key in _meta.keys.whereType<String>())
+        if (key.startsWith('syncAutoResolve:$activeUserId:') &&
+            _meta.get(key) is Map)
+          Map<String, dynamic>.from(_meta.get(key) as Map),
+    ],
     'syncConflictSnapshots': [
       for (final operationId in _blockedSyncOperationIds)
         if (_meta.get('syncConflict:$activeUserId:$operationId') is Map)
@@ -2325,6 +2331,17 @@ class RecordStore extends ChangeNotifier {
         }
       },
     );
+    // Si la nube ganó por fecha de edición, aplicar su copia ahora.
+    // No sobreescribir una nueva edición pendiente realizada durante el envío.
+    if (report.remoteWins.isNotEmpty) {
+      await _applyRemoteChanges(
+        report.remoteWins,
+        forceRemoteOperationIds: {
+          for (final remote in report.remoteWins)
+            '${remote.entityType.name}:${remote.entityId}',
+        },
+      );
+    }
     _load();
     if (report.failed > 0 && !report.blockedByLicense) {
       throw const TemporarySyncException('remote push failed');
@@ -2399,12 +2416,17 @@ class RecordStore extends ChangeNotifier {
     _ensuredProfileFingerprint = fingerprint;
   }
 
-  Future<void> _applyRemoteChanges(List<RemoteChange> changes) async {
+  Future<void> _applyRemoteChanges(
+    List<RemoteChange> changes, {
+    Set<String> forceRemoteOperationIds = const {},
+  }) async {
     final currentUser = user;
     if (currentUser == null) return;
     for (final change in changes) {
       if (change.userId != currentUser.id) continue;
       final operationId = '${change.entityType.name}:${change.entityId}';
+      final forced = forceRemoteOperationIds.contains(operationId);
+      var applied = false;
 
       // Nunca se completa ni se sustituye una edición pendiente por un pull.
       // Sólo el acuse de un push exitoso puede retirarla de la cola.
@@ -2473,7 +2495,8 @@ class RecordStore extends ChangeNotifier {
             local?.deviceId,
             local?.deletedAt,
             change,
-          )) {
+          ) || forced) {
+            applied = true;
             await _box.put(
               remote.id,
               remote
@@ -2499,7 +2522,8 @@ class RecordStore extends ChangeNotifier {
             local?.deviceId,
             local?.deletedAt,
             change,
-          )) {
+          ) || forced) {
+            applied = true;
             await _maintenanceBox.put(
               remote.id,
               remote
@@ -2525,7 +2549,8 @@ class RecordStore extends ChangeNotifier {
             local?.deviceId,
             local?.deletedAt,
             change,
-          )) {
+          ) || forced) {
+            applied = true;
             await _meta.put(
               'vehicle:${remote.id}',
               remote
@@ -2550,7 +2575,9 @@ class RecordStore extends ChangeNotifier {
           final localUpdatedAt = DateTime.tryParse(
             '${_meta.get('settingsUpdatedAt')}',
           );
-          if (!_remoteWins(localUpdatedAt, deviceId, null, change)) break;
+          if (!forced &&
+              !_remoteWins(localUpdatedAt, deviceId, null, change)) break;
+          applied = true;
           await _meta.putAll({
             'maintenanceIntervalKm':
                 (payload['maintenanceIntervalKm'] as num?)?.toDouble() ??
@@ -2566,6 +2593,12 @@ class RecordStore extends ChangeNotifier {
           });
           await _syncQueue.complete([operationId]);
           break;
+      }
+      if (applied && change.serverVersion != null) {
+        await _meta.put(
+          'syncVersion:${change.userId}:$operationId',
+          change.serverVersion,
+        );
       }
     }
     _load();
