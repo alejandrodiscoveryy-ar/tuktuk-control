@@ -101,3 +101,45 @@ Resultados comprobados después de la migración:
 - **No** se ejecutaron escrituras de datos de negocio ni pruebas de concurrencia. Esta comprobación de privilegios no sustituye una prueba funcional de sincronización.
 
 **Control de cambios:** la autorización abarcaba exclusivamente la revocación de los permisos anteriores, sin migraciones de versionado, merge, publicación de WebApp ni APK. No se han aplicado esos cambios adicionales. La migración aplicada en el proyecto remoto debe conciliarse con la historia de migraciones del repositorio antes de futuros despliegues SQL (evitar aplicarla dos veces con otro identificador).
+
+
+## 7. Corrección del contrato de concurrencia antes de crear la migración
+
+**Estatus:** diseño técnico revisado (no implementado), 2026-11-11. Este apartado **precisa y prevalece** sobre la simplificación de `server_version` de 2.1: una versión por fila sin registro de cambios no basta para recuperar eliminaciones físicas o evitar saltos en el cursor.
+
+### 7.1 Dos identificadores diferentes
+
+- `server_version`: contador impuesto por servidor para cada fila viva. Se incrementa en cada cambio real, incluyendo escrituras desde APK antiguas. Ningún cliente puede fijarlo por su cuenta: trigger BEFORE debe ignorar su valor de entrada.
+- `change_seq`: número creciente **por usuario** para cada evento de cambio (crear, actualizar, borrar lógicamente, borrar físicamente). Se asigna al registrar el evento en un historial privado dentro de la misma transacción, nunca con el reloj del teléfono. `change_seq` es el cursor de *pull* y el testigo estricto para escritura condicional v2.
+- Un evento `baseline` por cada fila preexistente debe poblar el historial antes de habilitar triggers, **sin hacer UPDATE masivo sobre `sync_entities`**: hay disparadores existentes de vehículos que no deben reactivarse accidentalmente.
+- El contador por usuario se actualiza en una fila bloqueada transaccionalmente (no con `nextval()` global aislado), de modo que una transacción concurrente no puede confirmar un evento posterior antes de uno anterior para el mismo usuario. Validar esto con dos transacciones reales; la asignación por timestamps o secuencias globales sin control de orden de commit puede saltar cambios.
+- El historial privado debe registrar copias necesarias para recuperación antes y después de cada escritura legada o v2. No exponer copias históricas de un usuario a otro.
+
+### 7.2 Protocolo de escritura v2
+
+1. Cliente guarda de forma persistente `mutation_id` y `expected_change_seq` de la base contra la que editó, junto al contenido original. La operación no se considera confirmada hasta recibir acuse persistido.
+2. RPC toma `auth.uid()` de la sesión, valida autorización de escritura (incluido derecho de TukTuk Control), estructura, identidad, vehículo y tamaño; compara el último `change_seq` de **esa entidad** con `expected_change_seq` bajo exclusión transaccional de la misma fila. 
+3. Si la versión coincide, escribe mediante la tabla original: se activan los triggers de negocio existentes y los de versionado/journal; retorna versión y `change_seq` confirmados.
+4. Si no coincide, devuelve un conflicto con la última copia autorizada **sin escribir ni quitar la operación local de Hive**. Una sincronización posterior no puede resolverlo mediante `last write wins`.
+5. Se persiste acuse idempotente por cuenta y mutación, comparando identidad y contenido completo o una huella criptográfica fuerte. Reintentos idénticos devuelven el mismo resultado. Reutilización de identificador con otro contenido se rechaza.
+6. El caso `expected_change_seq=0` solo permite crear un identificador que **nunca** tuvo historial; si el registro fue borrado físicamente, la nueva WebApp debe tratar la reaparición como conflicto o resurrección explícita, no como registro nuevo.
+7. Una modificación legacy después de una escritura v2 sigue siendo posible durante convivencia: queda registrada como evento que permite detectar y recuperar el cambio. Es imposible ofrecer prevención universal de sobrescrituras legadas mientras sus escrituras directas sigan habilitadas.
+
+### 7.3 Paginación correcta de descarga
+
+- Nuevo `pull_v2(after_change_seq,limit)` devuelve eventos ordenados por `change_seq` de una sola cuenta. El siguiente cursor es el último evento **realmente recibido y persistido**. No avanzar cursor antes de aplicar páginas y guardar respaldo/cola.
+- Incluye eventos de borrado físico, a diferencia de leer únicamente las filas actuales de `sync_entities`.
+- Nunca modificar el `updated_at` de negocio como sustituto de un reloj de servidor; conservarlo por compatibilidad. La paginación v2 utiliza el contador de eventos.
+- El historial sin límite crece: antes de habilitar producción hay que definir retención por cliente/cursor, resiembra segura para cursores caducados y política de privacidad. No eliminar historial con un cron improvisado.
+
+### 7.4 Bloqueo que debe resolver la prueba aislada
+
+Hay una carrera delicada al borrar físicamente y recrear el mismo identificador, y otra si una RPC bloquea primero la fila mientras un disparador legacy toma un bloqueo auxiliar en orden inverso. **No aprobar una migración que pueda provocar deadlocks**.
+
+La prueba SQL aislada debe abarcar: dos v2 sobre la misma base; v2 frente a upsert legacy; delete físico seguido de create; reintentos del mismo `mutation_id`; dos entidades distintas del mismo usuario; inserción simultánea de la misma clave; conflictos sin eliminación de cola; cursor con transacciones que comienzan/terminan fuera de orden. La implementación deberá elegir y demostrar un **orden único de bloqueos**; hasta tener esas pruebas no se autoriza DDL real.
+
+### 7.5 Herramientas y alcance de esta etapa
+
+La sesión actual permite lectura de Supabase y edición de archivos GitHub, pero no dispone de un PostgreSQL local ni de Flutter/Dart instalados. No se ha creado rama de Supabase de pago ni se han ejecutado escrituras de prueba en producción. Se ha verificado documentalmente la estructura/privilegios y se ha reflejado en GitHub la migración de permisos remota ya aplicada.
+
+La creación de un SQL de migración real queda condicionada a disponer de entorno PostgreSQL aislado con las tres funciones/triggers de negocio representados y pruebas de rollback. No añadir por ahora un SQL incompleto al directorio de migraciones ejecutables.
