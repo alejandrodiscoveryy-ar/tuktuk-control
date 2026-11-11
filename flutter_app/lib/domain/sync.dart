@@ -287,10 +287,12 @@ class RemotePushResult {
   const RemotePushResult({
     required this.acceptedOperationIds,
     this.rejectedOperations = const {},
+    this.remoteWins = const [],
   });
 
   final Set<String> acceptedOperationIds;
   final Map<String, String> rejectedOperations;
+  final List<RemoteChange> remoteWins;
 }
 
 class RemotePullResult {
@@ -445,6 +447,7 @@ class SyncRunReport {
     this.completedOperationIds = const {},
     this.blockedByLicense = false,
     this.blockedOperationIds = const {},
+    this.remoteWins = const [],
   });
 
   final int attempted;
@@ -456,6 +459,7 @@ class SyncRunReport {
   final Set<String> completedOperationIds;
   final bool blockedByLicense;
   final Set<String> blockedOperationIds;
+  final List<RemoteChange> remoteWins;
 }
 
 class TemporarySyncException implements Exception {
