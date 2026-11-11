@@ -373,6 +373,7 @@ class RemoteChange {
     required this.deviceId,
     required this.payload,
     this.deletedAt,
+    this.serverVersion,
   });
 
   final SyncEntityType entityType;
@@ -383,6 +384,7 @@ class RemoteChange {
   final DateTime? deletedAt;
   final String deviceId;
   final Map<String, dynamic> payload;
+  final int? serverVersion;
 }
 
 abstract interface class RemoteSyncGateway {
