@@ -2413,6 +2413,49 @@ class RecordStore extends ChangeNotifier {
       if (queued != null && queued.userId == currentUser.id) {
         Map? localRaw;
         switch (change.entityType) {
+          case SyncEntityType.dailyRecord:
+            localRaw = _box.get(change.entityId);
+            break;
+          case SyncEntityType.maintenance:
+            localRaw = _maintenanceBox.get(change.entityId);
+            break;
+          case SyncEntityType.vehicle:
+            localRaw = _meta.get('vehicle:${change.entityId}');
+            break;
+          case SyncEntityType.settings:
+            // El formato del respaldo anterior de preferencias es distinto
+            // al payload remoto. No mezclar durante una edición pendiente.
+            continue;
+        }
+
+        if (localRaw is Map &&
+            localRaw['userId']?.toString() == currentUser.id &&
+            (change.entityType == SyncEntityType.vehicle ||
+                localRaw['vehicleId']?.toString() == change.vehicleId)) {
+          final conflictKey = 'syncConflict:${currentUser.id}:$operationId';
+          final localPayload = Map<String, dynamic>.from(localRaw);
+          if (!_meta.containsKey(conflictKey) &&
+              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+                entityType: change.entityType,
+                previousPayload: queued.previousPayload,
+                remotePayload: change.payload,
+              )) {
+            await _meta.put(conflictKey, <String, dynamic>{
+              'operationId': operationId,
+              'entityId': change.entityId,
+              'entityType': change.entityType.name,
+              'userId': currentUser.id,
+              'vehicleId': change.vehicleId,
+              'savedAt': DateTime.now().toUtc().toIso8601String(),
+              'localPayload': localPayload,
+              'remotePayload': Map<String, dynamic>.from(change.payload),
+              'localOperation': queued.toMap(),
+            });
+          }
+          continue;
+        }
+      }
+      switch (change.entityType) {
         case SyncEntityType.dailyRecord:
           final remote = DailyRecord.fromMap(change.payload);
           final raw = _box.get(change.entityId);
