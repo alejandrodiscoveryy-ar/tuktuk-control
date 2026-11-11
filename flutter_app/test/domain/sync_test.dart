@@ -286,6 +286,7 @@ void main() {
       SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
         entityType: SyncEntityType.dailyRecord,
         previousPayload: base,
+        localPayload: {...base, 'earnings': 150},
         remotePayload: unchangedRemote,
       ),
       isFalse,
@@ -294,6 +295,7 @@ void main() {
       SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
         entityType: SyncEntityType.dailyRecord,
         previousPayload: base,
+        localPayload: {...base, 'earnings': 150},
         remotePayload: {...unchangedRemote, 'earnings': 200},
       ),
       isTrue,
@@ -302,6 +304,7 @@ void main() {
       SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
         entityType: SyncEntityType.dailyRecord,
         previousPayload: null,
+        localPayload: {...base, 'earnings': 150},
         remotePayload: unchangedRemote,
       ),
       isTrue,
@@ -315,9 +318,65 @@ void main() {
       SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
         entityType: SyncEntityType.vehicle,
         previousPayload: base,
+        localPayload: {...base, 'name': 'Triciclo'},
         remotePayload: remote,
       ),
       isFalse,
+    );
+  });
+
+  test('reenvío de contenido idéntico no bloquea sin base previa', () {
+    final same = <String, dynamic>{
+      'id': 'record-1',
+      'userId': 'u',
+      'vehicleId': 'v',
+      'earnings': 75,
+    };
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: null,
+        localPayload: same,
+        remotePayload: {...same, 'syncStatus': 'synced'},
+      ),
+      isFalse,
+    );
+  });
+
+  test('preferencias normalizan el nombre antiguo con clave por usuario', () {
+    final base = <String, dynamic>{
+      'maintenanceIntervalKm': 500,
+      'preferredCurrency': 'CUP',
+      'preferredLanguage': 'es',
+      'preferredTheme': 'dark',
+      'profileDisplayName:u-1': 'Anterior',
+      'settingsUpdatedAt': '2026-11-01',
+    };
+    final remote = <String, dynamic>{
+      'maintenanceIntervalKm': 500.0,
+      'preferredCurrency': 'CUP',
+      'preferredLanguage': 'es',
+      'preferredTheme': 'dark',
+      'profileDisplayName': 'Anterior',
+    };
+    final local = {...remote, 'profileDisplayName': 'Actual'};
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.settings,
+        previousPayload: base,
+        localPayload: local,
+        remotePayload: remote,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.settings,
+        previousPayload: base,
+        localPayload: local,
+        remotePayload: {...remote, 'profileDisplayName': 'Otra persona'},
+      ),
+      isTrue,
     );
   });
 

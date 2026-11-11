@@ -11,8 +11,12 @@ aceptable: interrumpía las demás operaciones del conductor.
 - Si no hay una edición local pendiente, se conserva el flujo actual.
 - Si un registro local tiene una edición sin enviar, el pull nunca sobrescribe
   ese registro ni retira su operación de la cola.
-- Se compara la versión remota con la versión previa a la edición (cuando
-  existe). Si no había versión previa o difiere, se considera divergencia.
+- Se compara la versión remota con el contenido actual y con la versión previa
+  a la edición. Un reenvío idéntico no genera conflicto. Si no hay base previa
+  y el contenido remoto es diferente, se preserva como divergencia.
+- Las preferencias se comparan por contenido, normalizando sus campos antiguos.
+- Las discrepancias de propietario o vehículo se conservan sin exportar datos
+  privados de una cuenta diferente.
 - La copia local, la copia remota y los metadatos de la operación se conservan
   bajo una clave local por cuenta y registro, sin resolverlos automáticamente.
 - Sólo la operación afectada se excluye del push; el resto de la cola continúa.
@@ -20,9 +24,8 @@ aceptable: interrumpía las demás operaciones del conductor.
   ambas copias como `syncConflictSnapshots` para conservación manual.
 - La importación normal de un respaldo **no** restaura ni resuelve automáticamente
   esos conflictos. No realizar restauraciones destructivas como solución.
-- Una edición pendiente de preferencias no se reemplaza durante el pull.
-  La detección de conflictos para preferencias requiere normalizar su contrato
-  por separado, antes de publicar.
+- Una edición pendiente de preferencias no se reemplaza durante el pull y
+  se compara contra la base anterior si la operación tiene esa referencia.
 
 ## Lo que **no** está resuelto
 
