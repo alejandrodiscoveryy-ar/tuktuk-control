@@ -5,6 +5,9 @@ void main() {
   final source = File(
     'lib/presentation/marketplace_jobs.dart',
   ).readAsStringSync();
+  final visuals = File(
+    'lib/presentation/marketplace_work_map_primitives.dart',
+  ).readAsStringSync();
 
   test(
     'solicitudes fijan precio y aceptar fuera del desplazamiento interno',
@@ -25,9 +28,10 @@ void main() {
   );
 
   test('fichas reutilizan marcadores del mapa en origen y destino', () {
-    final start = source.indexOf('class _WorkMapLocationRow');
+    final start = visuals.indexOf('class _WorkMapLocationRow');
     expect(start, greaterThan(0));
-    final marker = source.substring(start);
+    final marker = visuals.substring(start);
+    expect(source, contains('_WorkMapLocationRow('));
     expect(marker, contains('assets/map_markers/pickup_green.png'));
     expect(marker, contains('assets/map_markers/destination_red.png'));
     expect(marker, contains("'Recogida'"));
