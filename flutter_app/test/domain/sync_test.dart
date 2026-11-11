@@ -265,6 +265,137 @@ void main() {
     );
   });
 
+  test('conflicto sólo si el remoto cambió respecto de la base anterior', () {
+    final base = <String, dynamic>{
+      'id': 'r-1',
+      'userId': 'u-1',
+      'vehicleId': 'v-1',
+      'note': 'Antes',
+      'earnings': 100,
+      'updatedAt': '2026-11-09',
+      'deviceId': 'phone-a',
+      'syncStatus': 'synced',
+    };
+    final unchangedRemote = <String, dynamic>{
+      ...base,
+      'updatedAt': '2026-11-09T00:00:00Z',
+      'deviceId': 'phone-b',
+      'syncStatus': 'synced',
+    };
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: base,
+        localPayload: {...base, 'earnings': 150},
+        remotePayload: unchangedRemote,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: base,
+        localPayload: {...base, 'earnings': 150},
+        remotePayload: {...unchangedRemote, 'earnings': 200},
+      ),
+      isTrue,
+    );
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: null,
+        localPayload: {...base, 'earnings': 150},
+        remotePayload: unchangedRemote,
+      ),
+      isTrue,
+    );
+  });
+
+  test('compara vehículos sin metadato derivado vehicleId', () {
+    final base = {'id': 'v-1', 'userId': 'u-1', 'name': 'Moto'};
+    final remote = {...base, 'vehicleId': 'v-1'};
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.vehicle,
+        previousPayload: base,
+        localPayload: {...base, 'name': 'Triciclo'},
+        remotePayload: remote,
+      ),
+      isFalse,
+    );
+  });
+
+  test('reenvío de contenido idéntico no bloquea sin base previa', () {
+    final same = <String, dynamic>{
+      'id': 'record-1',
+      'userId': 'u',
+      'vehicleId': 'v',
+      'earnings': 75,
+    };
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: null,
+        localPayload: same,
+        remotePayload: {...same, 'syncStatus': 'synced'},
+      ),
+      isFalse,
+    );
+  });
+
+  test('preferencias normalizan el nombre antiguo con clave por usuario', () {
+    final base = <String, dynamic>{
+      'maintenanceIntervalKm': 500,
+      'preferredCurrency': 'CUP',
+      'preferredLanguage': 'es',
+      'preferredTheme': 'dark',
+      'profileDisplayName:u-1': 'Anterior',
+      'settingsUpdatedAt': '2026-11-01',
+    };
+    final remote = <String, dynamic>{
+      'maintenanceIntervalKm': 500.0,
+      'preferredCurrency': 'CUP',
+      'preferredLanguage': 'es',
+      'preferredTheme': 'dark',
+      'profileDisplayName': 'Anterior',
+    };
+    final local = {...remote, 'profileDisplayName': 'Actual'};
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.settings,
+        previousPayload: base,
+        localPayload: local,
+        remotePayload: remote,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.settings,
+        previousPayload: base,
+        localPayload: local,
+        remotePayload: {...remote, 'profileDisplayName': 'Otra persona'},
+      ),
+      isTrue,
+    );
+  });
+
+  test('un conflicto no bloquea la cola completa de otro registro', () async {
+    final queue = _MemoryQueue([operationFor('blocked'), operationFor('safe')]);
+    final gateway = _AcceptingGateway();
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+    final report = await coordinator.pushPendingBatches(
+      userId: 'user-1',
+      excludedOperationIds: {'dailyRecord:blocked'},
+      onCompletedBatch: (_) async {},
+    );
+    expect(report.completed, 1);
+    expect(report.pendingRemaining, isTrue);
+    expect(report.sendablePendingRemaining, isFalse);
+    expect(queue.pendingForUser('user-1').single.id, 'dailyRecord:blocked');
+    expect(gateway.batchSizes, [1]);
+  });
+
   test('la propiedad pendiente puede migrarse a la cuenta Google', () {
     final local = operation();
 
@@ -498,9 +629,15 @@ class _MemoryQueue implements SyncQueueRepository {
   final Map<String, String> failed = {};
 
   @override
-  List<SyncOperation> pendingForUser(String userId, {int limit = 50}) {
+  List<SyncOperation> pendingForUser(
+    String userId, {
+    int limit = 50,
+    Set<String> excludedOperationIds = const <String>{},
+  }) {
     return operations
-        .where((operation) => operation.userId == userId)
+        .where((operation) =>
+            operation.userId == userId &&
+            !excludedOperationIds.contains(operation.id))
         .take(limit)
         .toList();
   }

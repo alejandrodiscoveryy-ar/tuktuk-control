@@ -171,6 +171,66 @@ abstract final class SyncQueuePolicy {
   }
 }
 
+
+
+abstract final class SyncMultiDeviceConflictPolicy {
+  /// Compara datos de negocio contra la última versión conocida antes
+  /// de editar. Una versión remota igual a esa base no es un conflicto.
+  /// Sin base previa, un identificador ya existente en remoto exige revisión.
+  static bool remoteDivergedFromBase({
+    required SyncEntityType entityType,
+    required Map<String, dynamic>? previousPayload,
+    required Map<String, dynamic> localPayload,
+    required Map<String, dynamic> remotePayload,
+  }) {
+    final remoteFingerprint = jsonEncode(_canonical(remotePayload, entityType));
+    // Una fila idéntica que ya esté en nube es un reenvío, no un conflicto.
+    if (jsonEncode(_canonical(localPayload, entityType)) == remoteFingerprint) {
+      return false;
+    }
+    if (previousPayload == null) return true;
+    return jsonEncode(_canonical(previousPayload, entityType)) !=
+        remoteFingerprint;
+  }
+
+  static Object? _canonical(Object? value, SyncEntityType entityType) {
+    if (value is Map && entityType == SyncEntityType.settings) {
+      dynamic displayName = value['profileDisplayName'];
+      if (displayName == null) {
+        for (final entry in value.entries) {
+          if (entry.key.toString().startsWith('profileDisplayName:')) {
+            displayName = entry.value;
+            break;
+          }
+        }
+      }
+      return <String, Object?>{
+        'maintenanceIntervalKm':
+            (value['maintenanceIntervalKm'] as num?)?.toDouble(),
+        'preferredCurrency': value['preferredCurrency']?.toString(),
+        'preferredLanguage': value['preferredLanguage']?.toString(),
+        'preferredTheme': value['preferredTheme']?.toString(),
+        'profileDisplayName': displayName?.toString(),
+      };
+    }
+    if (value is Map) {
+      final keys = value.keys.map((key) => key.toString()).where((key) =>
+          key != 'syncStatus' &&
+          key != 'updatedAt' &&
+          key != 'deviceId' &&
+          (entityType != SyncEntityType.vehicle || key != 'vehicleId')).toList()
+        ..sort();
+      return <String, Object?>{
+        for (final key in keys) key: _canonical(value[key], entityType),
+      };
+    }
+    if (value is List) {
+      return value.map((item) => _canonical(item, entityType)).toList();
+    }
+    return value;
+  }
+}
+
 abstract final class SyncPayloadOwnership {
   /// No subir a la cuenta activa datos locales que pertenecen a otra cuenta
   /// o que ya fueron reasignados a otro vehículo o identificador.
@@ -205,7 +265,11 @@ abstract final class SyncReceiptPolicy {
 }
 
 abstract interface class SyncQueueRepository {
-  List<SyncOperation> pendingForUser(String userId, {int limit = 50});
+  List<SyncOperation> pendingForUser(
+    String userId, {
+    int limit = 50,
+    Set<String> excludedOperationIds = const <String>{},
+  });
 
   Future<void> complete(Iterable<String> operationIds);
 
@@ -375,6 +439,7 @@ class SyncRunReport {
     required this.failed,
     this.skippedBecauseUnconfigured = false,
     this.pendingRemaining = false,
+    this.sendablePendingRemaining = false,
     this.completedOperationIds = const {},
     this.blockedByLicense = false,
     this.blockedOperationIds = const {},
@@ -385,6 +450,7 @@ class SyncRunReport {
   final int failed;
   final bool skippedBecauseUnconfigured;
   final bool pendingRemaining;
+  final bool sendablePendingRemaining;
   final Set<String> completedOperationIds;
   final bool blockedByLicense;
   final Set<String> blockedOperationIds;

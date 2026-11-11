@@ -6,10 +6,16 @@ class SyncQueueStore implements SyncQueueRepository {
   final Box _box;
 
   @override
-  List<SyncOperation> pendingForUser(String userId, {int limit = 50}) {
+  List<SyncOperation> pendingForUser(
+    String userId, {
+    int limit = 50,
+    Set<String> excludedOperationIds = const <String>{},
+  }) {
     final operations = _box.values
         .map((raw) => SyncOperation.fromMap(raw as Map))
-        .where((operation) => operation.userId == userId)
+        .where((operation) =>
+            operation.userId == userId &&
+            !excludedOperationIds.contains(operation.id))
         .toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return operations.take(limit).toList();
