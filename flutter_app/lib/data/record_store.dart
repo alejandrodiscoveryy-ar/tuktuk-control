@@ -804,6 +804,23 @@ class RecordStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Bloqueos locales persistentes, aislados por cuenta. Nunca se
+  /// descartan automáticamente sin una decisión de resolución.
+  Set<String> get _blockedSyncOperationIds {
+    final owner = user?.id;
+    if (owner == null) return <String>{};
+    final prefix = 'syncConflict:$owner:';
+    final queueBox = Hive.box(_syncQueueBox);
+    return _meta.keys.whereType<String>().where((key) {
+      if (!key.startsWith(prefix)) return false;
+      final opId = key.substring(prefix.length);
+      final raw = queueBox.get(opId);
+      return raw is Map && raw['userId']?.toString() == owner;
+    }).map((key) => key.substring(prefix.length)).toSet();
+  }
+
+  int get pendingConflictCount => _blockedSyncOperationIds.length;
+
   DateTime? get lastSyncAt {
     final currentUser = user;
     if (currentUser == null) return null;
@@ -904,6 +921,15 @@ class RecordStore extends ChangeNotifier {
     'createdAt': DateTime.now().toIso8601String(),
     'updatedAt': DateTime.now().toIso8601String(),
     'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
+    // Copias locales y remotas de conflictos, para recuperación manual.
+    // La importación JSON ordinaria NO los resuelve ni los reimporta.
+    'syncConflictSnapshots': [
+      for (final operationId in _blockedSyncOperationIds)
+        if (_meta.get('syncConflict:$activeUserId:$operationId') is Map)
+          Map<String, dynamic>.from(
+            _meta.get('syncConflict:$activeUserId:$operationId') as Map,
+          ),
+    ],
     'records': _allDailyRecords
         .where((record) => record.userId == activeUserId)
         .map((record) => record.toMap())
@@ -1932,9 +1958,13 @@ class RecordStore extends ChangeNotifier {
         return;
       }
       await _synchronizeWithSupabase();
-      syncMessage = pendingSyncCount == 0
-          ? 'Datos sincronizados de forma segura'
-          : 'Cambios guardados localmente, pendientes de conexion';
+      final blocked = pendingConflictCount;
+      syncMessage = blocked > 0
+          ? '$blocked conflicto(s) entre dispositivos. '
+              'Las versiones están guardadas; el resto se sincroniza.'
+          : pendingSyncCount == 0
+              ? 'Datos sincronizados de forma segura'
+              : 'Cambios guardados localmente, pendientes de conexion';
     });
   }
 
@@ -1973,12 +2003,6 @@ class RecordStore extends ChangeNotifier {
           DateTime.now().toIso8601String(),
         );
       }
-    } on SyncMultiDeviceConflictException {
-      // Se conserva la copia local y la versión remota. No forzar reintentos
-      // automáticos rápidos ni informar erróneamente que no hay internet.
-      syncMessage =
-          'Conflicto entre dispositivos. Los registros locales siguen guardados. '
-          'Exporta un respaldo JSON antes de resolverlo.';
     } catch (_) {
       syncMessage = 'Sin conexion. Los cambios permanecen guardados';
       _scheduleSyncRetry();
@@ -2074,12 +2098,6 @@ class RecordStore extends ChangeNotifier {
       }
 
       await syncNow();
-    } on SyncMultiDeviceConflictException {
-      if (_disposed) return;
-      syncMessage =
-          'Conflicto entre dispositivos. Tus registros locales no se han borrado. '
-          'Exporta un respaldo JSON para conservarlos.';
-      notifyListeners();
     } catch (_) {
       if (_disposed) return;
       syncMessage = 'Sin conexion. Trabajando con los datos locales';
@@ -2291,6 +2309,7 @@ class RecordStore extends ChangeNotifier {
     // El límite evita una tarea incontrolada; si quedan datos, continúa después.
     final report = await _syncCoordinator.pushPendingBatches(
       userId: currentUser.id,
+      excludedOperationIds: _blockedSyncOperationIds,
       batchSize: 500,
       maxBatches: 4,
       onCompletedBatch: (operations) async {
@@ -2311,10 +2330,10 @@ class RecordStore extends ChangeNotifier {
       throw const TemporarySyncException('remote push failed');
     }
     if (report.skippedBecauseUnconfigured ||
-        (report.pendingRemaining && report.completed == 0)) {
+        (report.sendablePendingRemaining && report.completed == 0)) {
       throw const TemporarySyncException('sync pending without progress');
     }
-    if (report.pendingRemaining) {
+    if (report.sendablePendingRemaining) {
       _syncRequestedWhileRunning = true;
     }
   }
@@ -2387,15 +2406,56 @@ class RecordStore extends ChangeNotifier {
       if (change.userId != currentUser.id) continue;
       final operationId = '${change.entityType.name}:${change.entityId}';
 
-      // Los cambios locales todavía no enviados no se sustituyen con versiones
-      // de otro teléfono. La cola y ambas versiones quedan intactas.
+      // Nunca se completa ni se sustituye una edición pendiente por un pull.
+      // Sólo el acuse de un push exitoso puede retirarla de la cola.
       final queuedRaw = Hive.box(_syncQueueBox).get(operationId);
-      final queued = queuedRaw is Map
-          ? SyncOperation.fromMap(queuedRaw)
-          : null;
-      if (queued?.userId == currentUser.id) {
+      final queued = queuedRaw is Map ? SyncOperation.fromMap(queuedRaw) : null;
+      if (queued != null && queued.userId == currentUser.id) {
         Map? localRaw;
         switch (change.entityType) {
+          case SyncEntityType.dailyRecord:
+            localRaw = _box.get(change.entityId);
+            break;
+          case SyncEntityType.maintenance:
+            localRaw = _maintenanceBox.get(change.entityId);
+            break;
+          case SyncEntityType.vehicle:
+            localRaw = _meta.get('vehicle:${change.entityId}');
+            break;
+          case SyncEntityType.settings:
+            // El formato del respaldo anterior de preferencias es distinto
+            // al payload remoto. No mezclar durante una edición pendiente.
+            continue;
+        }
+
+        if (localRaw is Map &&
+            localRaw['userId']?.toString() == currentUser.id &&
+            (change.entityType == SyncEntityType.vehicle ||
+                localRaw['vehicleId']?.toString() == change.vehicleId)) {
+          final conflictKey = 'syncConflict:${currentUser.id}:$operationId';
+          final localPayload = Map<String, dynamic>.from(localRaw);
+          if (!_meta.containsKey(conflictKey) &&
+              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+                entityType: change.entityType,
+                previousPayload: queued.previousPayload,
+                remotePayload: change.payload,
+              )) {
+            await _meta.put(conflictKey, <String, dynamic>{
+              'operationId': operationId,
+              'entityId': change.entityId,
+              'entityType': change.entityType.name,
+              'userId': currentUser.id,
+              'vehicleId': change.vehicleId,
+              'savedAt': DateTime.now().toUtc().toIso8601String(),
+              'localPayload': localPayload,
+              'remotePayload': Map<String, dynamic>.from(change.payload),
+              'localOperation': queued.toMap(),
+            });
+          }
+          continue;
+        }
+      }
+      switch (change.entityType) {
           case SyncEntityType.dailyRecord:
             localRaw = _box.get(change.entityId);
             break;

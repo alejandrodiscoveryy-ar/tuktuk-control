@@ -2652,6 +2652,21 @@ class LoginScreen extends StatelessWidget {
         '${store.pendingSyncCount} ${tr('cambios locales pendientes de sincronizacion')}',
         style: TextStyle(color: appMutedColor(context), fontSize: 12),
       ),
+      if (store.pendingConflictCount > 0) ...[
+        const SizedBox(height: 8),
+        Text(
+          '${store.pendingConflictCount} registro(s) con versiones distintas. '
+          'No se enviarán hasta resolver el conflicto. '
+          'Los demás registros pueden sincronizarse.',
+          style: const TextStyle(color: kDanger, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Usa Exportar JSON para conservar una copia de ambas versiones. '
+          'La importación normal no resuelve estos conflictos.',
+          style: TextStyle(color: appMutedColor(context), fontSize: 12),
+        ),
+      ],
       if (store.lastSyncAt != null) ...[
         const SizedBox(height: 8),
         Text(

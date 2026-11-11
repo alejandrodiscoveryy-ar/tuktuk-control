@@ -1,29 +1,38 @@
-# Revisión de conflictos de sincronización entre dispositivos
+# PR #121: contención de conflictos sin bloquear toda la sincronización
 
-## Por qué es necesario
+## Problema comprobado en el código anterior
 
-La importación de `sync_entities` comparaba marcas de tiempo y podía
-sustituir un registro local pendiente al recibir una versión más reciente
-de otro dispositivo, retirando además su operación de la cola. Esto podía
-perder una edición sin que el conductor lo supiera.
+Un pull remoto que ganaba por fecha podía sustituir un registro local con
+operación pendiente y eliminar su cola. Un bloqueo global simple tampoco era
+aceptable: interrumpía las demás operaciones del conductor.
 
-## Comportamiento propuesto (PR de revisión)
+## Diseño aplicado en el borrador
 
-- Si el mismo registro tiene cambios locales pendientes y también se modificó
-  desde otro dispositivo de la misma cuenta, se interrumpe esa importación
-  sin sobrescribir el registro local ni borrar la operación pendiente.
-- La versión remota sigue almacenada en Supabase, sin ninguna mutación.
-- El conductor ve un mensaje de conflicto distinto de un fallo de internet.
-- Se recomienda exportar respaldo JSON antes de cualquier resolución.
-- No se crean registros duplicados ni se modifican ingresos de carreras.
-- No se cambia la estructura de la base de datos ni los datos existentes.
+- Si no hay una edición local pendiente, se conserva el flujo actual.
+- Si un registro local tiene una edición sin enviar, el pull nunca sobrescribe
+  ese registro ni retira su operación de la cola.
+- Se compara la versión remota con la versión previa a la edición (cuando
+  existe). Si no había versión previa o difiere, se considera divergencia.
+- La copia local, la copia remota y los metadatos de la operación se conservan
+  bajo una clave local por cuenta y registro, sin resolverlos automáticamente.
+- Sólo la operación afectada se excluye del push; el resto de la cola continúa.
+- El aviso aparece en la WebApp, con un contador. La exportación JSON incluye
+  ambas copias como `syncConflictSnapshots` para conservación manual.
+- La importación normal de un respaldo **no** restaura ni resuelve automáticamente
+  esos conflictos. No realizar restauraciones destructivas como solución.
+- Una edición pendiente de preferencias no se reemplaza durante el pull.
+  La detección de conflictos para preferencias requiere normalizar su contrato
+  por separado, antes de publicar.
 
-## Limitaciones y condición de cierre
+## Lo que **no** está resuelto
 
-Este PR es un cortafuegos conservador, **no un sistema completo de resolución
-de conflictos**. Si ocurre un conflicto real, la sincronización de la cuenta
-quedará detenida hasta una resolución controlada. Antes de publicar, se
-debe definir y probar una interfaz que permita comparar dos versiones y elegir
-cuál conservar o fusionar, sin perder la otra.
+El servidor actual acepta `upsert` incondicional en `sync_entities`.
+Un cambio remoto posterior al pull y anterior al push todavía puede ser
+sobrescrito sin control de versiones. Para una solución completa hacen falta
+versiones monotónicas de servidor, actualización condicional atómica,
+compatibilidad con clientes antiguos, pruebas SQL aisladas y un procedimiento
+para resolver cada conflicto de forma explícita. No desplegar un cambio de
+base de datos sin autorización expresa.
 
-No integra PR #118 de respaldo Android. No modifica APK, servidores o datos.
+Esta es una protección parcial conservadora; el PR continúa **draft**.
+No se han modificado Supabase, APK o WebApp de producción.
