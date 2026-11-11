@@ -172,32 +172,38 @@ abstract final class SyncQueuePolicy {
 }
 
 
+
 abstract final class SyncMultiDeviceConflictPolicy {
-  /// Nunca reemplace en silencio un cambio no enviado por una versión
-  /// almacenada desde otro dispositivo. El servidor conserva su versión y el
-  /// registro local permanece intacto para una resolución explícita.
-  static bool shouldKeepBoth({
-    required bool hasQueuedLocalChange,
-    required SyncStatus localStatus,
-    required String localUserId,
-    required String localDeviceId,
-    required String remoteUserId,
-    required String remoteDeviceId,
-  }) =>
-      hasQueuedLocalChange &&
-      localStatus != SyncStatus.synced &&
-      localUserId.isNotEmpty &&
-      localUserId == remoteUserId &&
-      localDeviceId.isNotEmpty &&
-      remoteDeviceId.isNotEmpty &&
-      localDeviceId != remoteDeviceId;
-}
+  /// Compara datos de negocio contra la última versión conocida antes
+  /// de editar. Una versión remota igual a esa base no es un conflicto.
+  /// Sin base previa, un identificador ya existente en remoto exige revisión.
+  static bool remoteDivergedFromBase({
+    required SyncEntityType entityType,
+    required Map<String, dynamic>? previousPayload,
+    required Map<String, dynamic> remotePayload,
+  }) {
+    if (previousPayload == null) return true;
+    return jsonEncode(_canonical(previousPayload, entityType)) !=
+        jsonEncode(_canonical(remotePayload, entityType));
+  }
 
-class SyncMultiDeviceConflictException implements Exception {
-  const SyncMultiDeviceConflictException();
-
-  @override
-  String toString() => 'SYNC_MULTI_DEVICE_CONFLICT';
+  static Object? _canonical(Object? value, SyncEntityType entityType) {
+    if (value is Map) {
+      final keys = value.keys.map((key) => key.toString()).where((key) =>
+          key != 'syncStatus' &&
+          key != 'updatedAt' &&
+          key != 'deviceId' &&
+          (entityType != SyncEntityType.vehicle || key != 'vehicleId')).toList()
+        ..sort();
+      return <String, Object?>{
+        for (final key in keys) key: _canonical(value[key], entityType),
+      };
+    }
+    if (value is List) {
+      return value.map((item) => _canonical(item, entityType)).toList();
+    }
+    return value;
+  }
 }
 
 abstract final class SyncPayloadOwnership {
@@ -234,7 +240,11 @@ abstract final class SyncReceiptPolicy {
 }
 
 abstract interface class SyncQueueRepository {
-  List<SyncOperation> pendingForUser(String userId, {int limit = 50});
+  List<SyncOperation> pendingForUser(
+    String userId, {
+    int limit = 50,
+    Set<String> excludedOperationIds = const <String>{},
+  });
 
   Future<void> complete(Iterable<String> operationIds);
 
@@ -404,6 +414,7 @@ class SyncRunReport {
     required this.failed,
     this.skippedBecauseUnconfigured = false,
     this.pendingRemaining = false,
+    this.sendablePendingRemaining = false,
     this.completedOperationIds = const {},
     this.blockedByLicense = false,
     this.blockedOperationIds = const {},
@@ -414,6 +425,7 @@ class SyncRunReport {
   final int failed;
   final bool skippedBecauseUnconfigured;
   final bool pendingRemaining;
+  final bool sendablePendingRemaining;
   final Set<String> completedOperationIds;
   final bool blockedByLicense;
   final Set<String> blockedOperationIds;

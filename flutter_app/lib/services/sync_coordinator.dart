@@ -17,6 +17,7 @@ class SyncCoordinator {
     required String userId,
     int batchSize = 500,
     int maxBatches = 4,
+    Set<String> excludedOperationIds = const <String>{},
     required Future<void> Function(List<SyncOperation>) onCompletedBatch,
   }) async {
     if (batchSize < 1 || maxBatches < 1) {
@@ -29,10 +30,18 @@ class SyncCoordinator {
     final completedOperationIds = <String>{};
 
     for (var batch = 0; batch < maxBatches; batch++) {
-      final pending = _queue.pendingForUser(userId, limit: batchSize);
+      final pending = _queue.pendingForUser(
+        userId,
+        limit: batchSize,
+        excludedOperationIds: excludedOperationIds,
+      );
       if (pending.isEmpty) break;
 
-      final report = await pushPending(userId: userId, batchSize: batchSize);
+      final report = await pushPending(
+        userId: userId,
+        batchSize: batchSize,
+        excludedOperationIds: excludedOperationIds,
+      );
       attempted += report.attempted;
       completed += report.completed;
       failed += report.failed;
@@ -59,12 +68,18 @@ class SyncCoordinator {
       completedOperationIds: completedOperationIds,
       skippedBecauseUnconfigured: skipped,
       pendingRemaining: _queue.pendingForUser(userId, limit: 1).isNotEmpty,
+      sendablePendingRemaining: _queue.pendingForUser(
+        userId,
+        limit: 1,
+        excludedOperationIds: excludedOperationIds,
+      ).isNotEmpty,
     );
   }
 
   Future<SyncRunReport> pushPending({
     required String userId,
     int batchSize = 50,
+    Set<String> excludedOperationIds = const <String>{},
   }) async {
     if (!_gateway.isConfigured) {
       return const SyncRunReport(
@@ -74,7 +89,11 @@ class SyncCoordinator {
         skippedBecauseUnconfigured: true,
       );
     }
-    final pending = _queue.pendingForUser(userId, limit: batchSize);
+    final pending = _queue.pendingForUser(
+      userId,
+      limit: batchSize,
+      excludedOperationIds: excludedOperationIds,
+    );
     if (pending.isEmpty) {
       return const SyncRunReport(attempted: 0, completed: 0, failed: 0);
     }

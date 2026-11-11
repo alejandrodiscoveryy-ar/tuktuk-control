@@ -265,95 +265,76 @@ void main() {
     );
   });
 
-  test('conserva versiones local y remota ante ediciones desde otro móvil', () {
+  test('conflicto sólo si el remoto cambió respecto de la base anterior', () {
+    final base = <String, dynamic>{
+      'id': 'r-1',
+      'userId': 'u-1',
+      'vehicleId': 'v-1',
+      'note': 'Antes',
+      'earnings': 100,
+      'updatedAt': '2026-11-09',
+      'deviceId': 'phone-a',
+      'syncStatus': 'synced',
+    };
+    final unchangedRemote = <String, dynamic>{
+      ...base,
+      'updatedAt': '2026-11-09T00:00:00Z',
+      'deviceId': 'phone-b',
+      'syncStatus': 'synced',
+    };
     expect(
-      SyncMultiDeviceConflictPolicy.shouldKeepBoth(
-        hasQueuedLocalChange: true,
-        localStatus: SyncStatus.pending,
-        localUserId: 'account-1',
-        localDeviceId: 'phone-a',
-        remoteUserId: 'account-1',
-        remoteDeviceId: 'phone-b',
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: base,
+        remotePayload: unchangedRemote,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: base,
+        remotePayload: {...unchangedRemote, 'earnings': 200},
+      ),
+      isTrue,
+    );
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.dailyRecord,
+        previousPayload: null,
+        remotePayload: unchangedRemote,
       ),
       isTrue,
     );
   });
 
-  test('no bloquea restauración normal ni reintento desde el mismo dispositivo', () {
-    bool conflicts({
-      required bool pending,
-      required SyncStatus status,
-      required String localDevice,
-      required String remoteDevice,
-      String localUser = 'account-1',
-      String remoteUser = 'account-1',
-    }) =>
-        SyncMultiDeviceConflictPolicy.shouldKeepBoth(
-          hasQueuedLocalChange: pending,
-          localStatus: status,
-          localUserId: localUser,
-          localDeviceId: localDevice,
-          remoteUserId: remoteUser,
-          remoteDeviceId: remoteDevice,
-        );
+  test('compara vehículos sin metadato derivado vehicleId', () {
+    final base = {'id': 'v-1', 'userId': 'u-1', 'name': 'Moto'};
+    final remote = {...base, 'vehicleId': 'v-1'};
+    expect(
+      SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+        entityType: SyncEntityType.vehicle,
+        previousPayload: base,
+        remotePayload: remote,
+      ),
+      isFalse,
+    );
+  });
 
-    expect(
-      conflicts(
-        pending: false,
-        status: SyncStatus.pending,
-        localDevice: 'phone-a',
-        remoteDevice: 'phone-b',
-      ),
-      isFalse,
+  test('un conflicto no bloquea la cola completa de otro registro', () async {
+    final queue = _MemoryQueue([operationFor('blocked'), operationFor('safe')]);
+    final gateway = _AcceptingGateway();
+    final coordinator = SyncCoordinator(queue: queue, gateway: gateway);
+    final report = await coordinator.pushPendingBatches(
+      userId: 'user-1',
+      excludedOperationIds: {'dailyRecord:blocked'},
+      onCompletedBatch: (_) async {},
     );
-    expect(
-      conflicts(
-        pending: true,
-        status: SyncStatus.synced,
-        localDevice: 'phone-a',
-        remoteDevice: 'phone-b',
-      ),
-      isFalse,
-    );
-    // Registros anteriores pueden seguir como localOnly mientras su
-    // primera operación de sincronización todavía está encolada.
-    expect(
-      conflicts(
-        pending: true,
-        status: SyncStatus.localOnly,
-        localDevice: 'phone-a',
-        remoteDevice: 'phone-b',
-      ),
-      isTrue,
-    );
-    expect(
-      conflicts(
-        pending: true,
-        status: SyncStatus.pending,
-        localDevice: 'phone-a',
-        remoteDevice: 'phone-a',
-      ),
-      isFalse,
-    );
-    expect(
-      conflicts(
-        pending: true,
-        status: SyncStatus.pending,
-        localDevice: 'phone-a',
-        remoteDevice: 'phone-b',
-        remoteUser: 'other-account',
-      ),
-      isFalse,
-    );
-    expect(
-      conflicts(
-        pending: true,
-        status: SyncStatus.pending,
-        localDevice: '',
-        remoteDevice: 'phone-b',
-      ),
-      isFalse,
-    );
+    expect(report.completed, 1);
+    expect(report.pendingRemaining, isTrue);
+    expect(report.sendablePendingRemaining, isFalse);
+    expect(queue.pendingForUser('user-1').single.id, 'dailyRecord:blocked');
+    expect(gateway.batchSizes, [1]);
   });
 
   test('la propiedad pendiente puede migrarse a la cuenta Google', () {
@@ -589,9 +570,15 @@ class _MemoryQueue implements SyncQueueRepository {
   final Map<String, String> failed = {};
 
   @override
-  List<SyncOperation> pendingForUser(String userId, {int limit = 50}) {
+  List<SyncOperation> pendingForUser(
+    String userId, {
+    int limit = 50,
+    Set<String> excludedOperationIds = const <String>{},
+  }) {
     return operations
-        .where((operation) => operation.userId == userId)
+        .where((operation) =>
+            operation.userId == userId &&
+            !excludedOperationIds.contains(operation.id))
         .take(limit)
         .toList();
   }
