@@ -15,6 +15,10 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
 
   final SupabaseClient _client;
   final SyncPayloadResolver _payloadFor;
+  final Box _syncMeta = Hive.box(_metaBox);
+
+  String _versionKey(SyncOperation op) =>
+      'syncVersion:${op.userId}:${op.id}';
 
   @override
   bool get isConfigured => _client.auth.currentUser != null;
@@ -50,15 +54,75 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         'payload': payload,
         'updated_at': updatedAt.toUtc().toIso8601String(),
         'deleted_at': payload['deletedAt'],
+        'previous_payload': operation.previousPayload ??
+            _syncMeta.get('syncOverride:${operation.userId}:${operation.id}'),
+        'expected_version': _syncMeta.get(_versionKey(operation)),
       });
       accepted.add(operation.id);
     }
 
     if (rows.isNotEmpty) {
       try {
-        await _client
-            .from(tableName)
-            .upsert(rows, onConflict: 'user_id,entity_type,entity_id');
+        // La RPC aplica cada cambio con verificación atómica. Un upsert
+        // directo podría sobrescribir el trabajo de otro dispositivo.
+        final response = await _client.rpc(
+          'sync_entities_push_cas',
+          params: {'p_rows': rows},
+        );
+        if (response is! Map) {
+          throw const FormatException('Respuesta de sincronización inesperada.');
+        }
+        final result = Map<String, dynamic>.from(response);
+        final acknowledgments = result['accepted'];
+        final conflicts = result['conflicts'];
+        if (acknowledgments is! List || conflicts is! List) {
+          throw const FormatException('Acuse de sincronización incompleto.');
+        }
+
+        final acceptedByServer = <String>{};
+        for (final item in acknowledgments) {
+          if (item is! Map) continue;
+          final ack = Map<String, dynamic>.from(item);
+          final id = ack['id']?.toString();
+          if (id == null || !accepted.contains(id)) continue;
+          final op = operations.where((o) => o.id == id).first;
+          // Persistir el acuse/version antes de retirar el cambio de la cola.
+          final version = (ack['server_version'] as num?)?.toInt();
+          if (version != null) await _syncMeta.put(_versionKey(op), version);
+          await _syncMeta.delete('syncOverride:${op.userId}:${op.id}');
+          acceptedByServer.add(id);
+        }
+
+        for (final item in conflicts) {
+          if (item is! Map) continue;
+          final conflict = Map<String, dynamic>.from(item);
+          final id = conflict['id']?.toString();
+          if (id == null || !accepted.contains(id)) continue;
+          final operation = operations.where((o) => o.id == id).first;
+          final payload = _payloadFor(operation);
+          final key = 'syncConflict:${operation.userId}:$id';
+          if (_syncMeta.containsKey(key)) continue;
+          await _syncMeta.put(key, <String, dynamic>{
+            'operationId': id,
+            'entityId': operation.entityId,
+            'entityType': operation.entityType.name,
+            'userId': operation.userId,
+            'vehicleId': operation.vehicleId,
+            'savedAt': DateTime.now().toUtc().toIso8601String(),
+            'localPayload': payload,
+            'remotePayload': conflict['remote_payload'],
+            'remoteVehicleId': conflict['remote_vehicle_id'],
+            'remoteDeviceId': conflict['remote_device_id'],
+            'remoteUpdatedAt': conflict['remote_updated_at'],
+            'remoteDeletedAt': conflict['remote_deleted_at'],
+            'remoteVersion': conflict['server_version'],
+            'localOperation': operation.toMap(),
+            'ownershipMismatch': false,
+          });
+        }
+        accepted
+          ..clear()
+          ..addAll(acceptedByServer);
       } catch (error) {
         if (isSupabaseAuthorizationFailure(error)) {
           throw LicenseWriteRejectedException(error);
@@ -84,7 +148,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         .from(tableName)
         .select(
           'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
-          'updated_at,deleted_at',
+          'updated_at,deleted_at,server_version',
         )
         .eq('user_id', userId);
     if (parsedCursor != null) {
@@ -133,6 +197,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
             : DateTime.tryParse('${row['deleted_at']}'),
         deviceId: '${row['device_id'] ?? ''}',
         payload: payload,
+        serverVersion: (row['server_version'] as num?)?.toInt(),
       );
     }).toList();
     return RemotePullResult(
