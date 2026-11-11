@@ -813,6 +813,12 @@ class RecordStore extends ChangeNotifier {
     final queueBox = Hive.box(_syncQueueBox);
     return _meta.keys.whereType<String>().where((key) {
       if (!key.startsWith(prefix)) return false;
+      // Los conflictos de contenido se resuelven en el servidor por hora de
+      // edición. Solo bloquear identidades incompatibles o datos ajenos.
+      final snapshot = _meta.get(key);
+      if (snapshot is! Map || snapshot['ownershipMismatch'] != true) {
+        return false;
+      }
       final opId = key.substring(prefix.length);
       final raw = queueBox.get(opId);
       return raw is Map && raw['userId']?.toString() == owner;
@@ -923,12 +929,17 @@ class RecordStore extends ChangeNotifier {
     'settings': {'maintenanceIntervalKm': maintenanceIntervalKm},
     // Copias locales y remotas de conflictos, para recuperación manual.
     // La importación JSON ordinaria NO los resuelve ni los reimporta.
+    'syncAutomaticResolutionSnapshots': [
+      for (final key in _meta.keys.whereType<String>())
+        if (key.startsWith('syncAutoResolve:$activeUserId:') &&
+            _meta.get(key) is Map)
+          Map<String, dynamic>.from(_meta.get(key) as Map),
+    ],
     'syncConflictSnapshots': [
-      for (final operationId in _blockedSyncOperationIds)
-        if (_meta.get('syncConflict:$activeUserId:$operationId') is Map)
-          Map<String, dynamic>.from(
-            _meta.get('syncConflict:$activeUserId:$operationId') as Map,
-          ),
+      for (final key in _meta.keys.whereType<String>())
+        if (key.startsWith('syncConflict:$activeUserId:') &&
+            _meta.get(key) is Map)
+          Map<String, dynamic>.from(_meta.get(key) as Map),
     ],
     'records': _allDailyRecords
         .where((record) => record.userId == activeUserId)
@@ -2282,7 +2293,9 @@ class RecordStore extends ChangeNotifier {
     if (currentUser == null) return;
     await _ensureRemoteProfile();
     await _recoverMissingLocalSyncQueue(currentUser.id);
-    final cursorKey = 'supabaseCursor:${currentUser.id}';
+    // Cursor de orden de confirmación del servidor. Separado del cursor
+    // histórico por fecha usado en las APK anteriores.
+    final cursorKey = 'supabaseSeqCursor:${currentUser.id}';
     var cursor = fullRefresh ? null : _meta.get(cursorKey)?.toString();
     var pageCount = 0;
     var hasMore = true;
@@ -2325,6 +2338,17 @@ class RecordStore extends ChangeNotifier {
         }
       },
     );
+    // Si la nube ganó por fecha de edición, aplicar su copia ahora.
+    // No sobreescribir una nueva edición pendiente realizada durante el envío.
+    if (report.remoteWins.isNotEmpty) {
+      await _applyRemoteChanges(
+        report.remoteWins,
+        forceRemoteOperationIds: {
+          for (final remote in report.remoteWins)
+            '${remote.entityType.name}:${remote.entityId}',
+        },
+      );
+    }
     _load();
     if (report.failed > 0 && !report.blockedByLicense) {
       throw const TemporarySyncException('remote push failed');
@@ -2399,12 +2423,17 @@ class RecordStore extends ChangeNotifier {
     _ensuredProfileFingerprint = fingerprint;
   }
 
-  Future<void> _applyRemoteChanges(List<RemoteChange> changes) async {
+  Future<void> _applyRemoteChanges(
+    List<RemoteChange> changes, {
+    Set<String> forceRemoteOperationIds = const {},
+  }) async {
     final currentUser = user;
     if (currentUser == null) return;
     for (final change in changes) {
       if (change.userId != currentUser.id) continue;
       final operationId = '${change.entityType.name}:${change.entityId}';
+      final forced = forceRemoteOperationIds.contains(operationId);
+      var applied = false;
 
       // Nunca se completa ni se sustituye una edición pendiente por un pull.
       // Sólo el acuse de un push exitoso puede retirarla de la cola.
@@ -2444,7 +2473,8 @@ class RecordStore extends ChangeNotifier {
               remotePayload: change.payload,
             );
         final conflictKey = 'syncConflict:${currentUser.id}:$operationId';
-        if (diverged && !_meta.containsKey(conflictKey)) {
+        if (diverged && (!sameOwner || !sameVehicle) &&
+            !_meta.containsKey(conflictKey)) {
           await _meta.put(conflictKey, <String, dynamic>{
             'operationId': operationId,
             'entityId': change.entityId,
@@ -2473,7 +2503,8 @@ class RecordStore extends ChangeNotifier {
             local?.deviceId,
             local?.deletedAt,
             change,
-          )) {
+          ) || forced) {
+            applied = true;
             await _box.put(
               remote.id,
               remote
@@ -2499,7 +2530,8 @@ class RecordStore extends ChangeNotifier {
             local?.deviceId,
             local?.deletedAt,
             change,
-          )) {
+          ) || forced) {
+            applied = true;
             await _maintenanceBox.put(
               remote.id,
               remote
@@ -2525,7 +2557,8 @@ class RecordStore extends ChangeNotifier {
             local?.deviceId,
             local?.deletedAt,
             change,
-          )) {
+          ) || forced) {
+            applied = true;
             await _meta.put(
               'vehicle:${remote.id}',
               remote
@@ -2550,7 +2583,11 @@ class RecordStore extends ChangeNotifier {
           final localUpdatedAt = DateTime.tryParse(
             '${_meta.get('settingsUpdatedAt')}',
           );
-          if (!_remoteWins(localUpdatedAt, deviceId, null, change)) break;
+          if (!forced &&
+              !_remoteWins(localUpdatedAt, deviceId, null, change)) {
+            break;
+          }
+          applied = true;
           await _meta.putAll({
             'maintenanceIntervalKm':
                 (payload['maintenanceIntervalKm'] as num?)?.toDouble() ??
@@ -2566,6 +2603,12 @@ class RecordStore extends ChangeNotifier {
           });
           await _syncQueue.complete([operationId]);
           break;
+      }
+      if (applied && change.serverVersion != null) {
+        await _meta.put(
+          'syncVersion:${change.userId}:$operationId',
+          change.serverVersion,
+        );
       }
     }
     _load();

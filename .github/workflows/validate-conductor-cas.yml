@@ -1,0 +1,49 @@
+name: Validate TUKTUK sync latest edit
+
+on:
+  pull_request:
+    paths:
+      - 'flutter_app/supabase/migrations/20261111123000_sync_entity_cas_and_history.sql'
+      - 'flutter_app/test/sql/**'
+      - '.github/workflows/validate-conductor-cas.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-cas:
+    name: Test versioning and legacy writes in isolated PostgreSQL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PostgreSQL 17 test fixture, migration, behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e PGPASSWORD=postgres \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            postgres:17 sh -c '
+              set -eu
+              psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+                -f /repo/flutter_app/test/sql/sync_cas_fixture.sql
+              psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+                -f /repo/flutter_app/supabase/migrations/20261111123000_sync_entity_cas_and_history.sql
+              psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+                -f /repo/flutter_app/test/sql/sync_cas_behavior.sql
+            '

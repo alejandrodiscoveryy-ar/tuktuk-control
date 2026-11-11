@@ -287,10 +287,12 @@ class RemotePushResult {
   const RemotePushResult({
     required this.acceptedOperationIds,
     this.rejectedOperations = const {},
+    this.remoteWins = const [],
   });
 
   final Set<String> acceptedOperationIds;
   final Map<String, String> rejectedOperations;
+  final List<RemoteChange> remoteWins;
 }
 
 class RemotePullResult {
@@ -311,17 +313,20 @@ class RemoteSyncCursor {
     required this.entityType,
     required this.entityId,
     this.isLegacy = false,
+    this.serverSeq,
   });
 
   final DateTime updatedAt;
   final String entityType;
   final String entityId;
   final bool isLegacy;
+  final int? serverSeq;
 
   factory RemoteSyncCursor.fromChange(RemoteChange change) => RemoteSyncCursor(
         updatedAt: change.updatedAt.toUtc(),
         entityType: change.entityType.name,
         entityId: change.entityId,
+        serverSeq: change.serverSeq,
       );
 
   static RemoteSyncCursor? tryParse(String? value) {
@@ -331,6 +336,15 @@ class RemoteSyncCursor {
         utf8.decode(base64Url.decode(base64Url.normalize(value))),
       );
       if (decoded is! Map) return null;
+      final seq = (decoded['serverSeq'] as num?)?.toInt();
+      if (decoded['version'] == 2 && seq != null && seq >= 0) {
+        return RemoteSyncCursor(
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+          entityType: '${decoded['entityType'] ?? ''}',
+          entityId: '${decoded['entityId'] ?? ''}',
+          serverSeq: seq,
+        );
+      }
       final updatedAt = DateTime.tryParse('${decoded['updatedAt']}');
       if (updatedAt == null) return null;
       return RemoteSyncCursor(
@@ -353,12 +367,19 @@ class RemoteSyncCursor {
 
   String encode() => base64Url.encode(
         utf8.encode(
-          jsonEncode({
-            'version': 1,
-            'updatedAt': updatedAt.toUtc().toIso8601String(),
-            'entityType': entityType,
-            'entityId': entityId,
-          }),
+          jsonEncode(serverSeq == null
+              ? {
+                  'version': 1,
+                  'updatedAt': updatedAt.toUtc().toIso8601String(),
+                  'entityType': entityType,
+                  'entityId': entityId,
+                }
+              : {
+                  'version': 2,
+                  'serverSeq': serverSeq,
+                  'entityType': entityType,
+                  'entityId': entityId,
+                }),
         ),
       );
 }
@@ -373,6 +394,8 @@ class RemoteChange {
     required this.deviceId,
     required this.payload,
     this.deletedAt,
+    this.serverVersion,
+    this.serverSeq,
   });
 
   final SyncEntityType entityType;
@@ -383,6 +406,8 @@ class RemoteChange {
   final DateTime? deletedAt;
   final String deviceId;
   final Map<String, dynamic> payload;
+  final int? serverVersion;
+  final int? serverSeq;
 }
 
 abstract interface class RemoteSyncGateway {
@@ -443,6 +468,7 @@ class SyncRunReport {
     this.completedOperationIds = const {},
     this.blockedByLicense = false,
     this.blockedOperationIds = const {},
+    this.remoteWins = const [],
   });
 
   final int attempted;
@@ -454,6 +480,7 @@ class SyncRunReport {
   final Set<String> completedOperationIds;
   final bool blockedByLicense;
   final Set<String> blockedOperationIds;
+  final List<RemoteChange> remoteWins;
 }
 
 class TemporarySyncException implements Exception {

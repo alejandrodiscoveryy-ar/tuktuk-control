@@ -15,6 +15,10 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
 
   final SupabaseClient _client;
   final SyncPayloadResolver _payloadFor;
+  final Box _syncMeta = Hive.box(_metaBox);
+
+  String _versionKey(SyncOperation op) =>
+      'syncVersion:${op.userId}:${op.id}';
 
   @override
   bool get isConfigured => _client.auth.currentUser != null;
@@ -28,6 +32,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
     final rows = <Map<String, dynamic>>[];
     final accepted = <String>{};
     final rejected = <String, String>{};
+    final remotelyResolved = <RemoteChange>[];
     for (final operation in operations) {
       final payload = _payloadFor(operation);
       if (payload == null) {
@@ -50,15 +55,125 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         'payload': payload,
         'updated_at': updatedAt.toUtc().toIso8601String(),
         'deleted_at': payload['deletedAt'],
+        'previous_payload': operation.previousPayload ??
+            _syncMeta.get('syncOverride:${operation.userId}:${operation.id}'),
+        'expected_version': _syncMeta.get(_versionKey(operation)),
       });
       accepted.add(operation.id);
     }
 
     if (rows.isNotEmpty) {
       try {
-        await _client
-            .from(tableName)
-            .upsert(rows, onConflict: 'user_id,entity_type,entity_id');
+        // La RPC aplica cada cambio con verificación atómica. Un upsert
+        // directo podría sobrescribir el trabajo de otro dispositivo.
+        final response = await _client.rpc(
+          'sync_entities_push_cas',
+          params: {'p_rows': rows},
+        );
+        if (response is! Map) {
+          throw const FormatException('Respuesta de sincronización inesperada.');
+        }
+        final result = Map<String, dynamic>.from(response);
+        final acknowledgments = result['accepted'];
+        final conflicts = result['conflicts'];
+        final remoteWins = result['remote_wins'];
+        if (acknowledgments is! List || conflicts is! List || remoteWins is! List) {
+          throw const FormatException('Acuse de sincronización incompleto.');
+        }
+
+        final acceptedByServer = <String>{};
+        for (final item in acknowledgments) {
+          if (item is! Map) continue;
+          final ack = Map<String, dynamic>.from(item);
+          final id = ack['id']?.toString();
+          if (id == null || !accepted.contains(id)) continue;
+          final op = operations.where((o) => o.id == id).first;
+          // Persistir el acuse/version antes de retirar el cambio de la cola.
+          final version = (ack['server_version'] as num?)?.toInt();
+          if (version != null) await _syncMeta.put(_versionKey(op), version);
+          await _syncMeta.delete('syncOverride:${op.userId}:${op.id}');
+          acceptedByServer.add(id);
+        }
+
+        for (final item in remoteWins) {
+          if (item is! Map) continue;
+          final win = Map<String, dynamic>.from(item);
+          final id = win['id']?.toString();
+          if (id == null || !accepted.contains(id)) continue;
+          final op = operations.firstWhere((o) => o.id == id);
+          final previousLocal = _payloadFor(op);
+          final rawRemote = win['remote_payload'];
+          final remoteVehicle = win['remote_vehicle_id']?.toString();
+          final remoteUpdated = DateTime.tryParse(
+            '${win['remote_updated_at']}',
+          );
+          if (previousLocal == null || rawRemote is! Map ||
+              remoteVehicle == null || remoteUpdated == null ||
+              remoteVehicle.isEmpty) {
+            rejected[id] = 'La respuesta remota no permite recuperar el registro';
+            continue;
+          }
+          final remotePayload = Map<String, dynamic>.from(rawRemote);
+          final version = (win['server_version'] as num?)?.toInt();
+          final deletedText = win['remote_deleted_at']?.toString();
+          final remoteDeleted = deletedText == null
+              ? null
+              : DateTime.tryParse(deletedText);
+          // Respaldo duradero ANTES de aceptar la versión remota.
+          await _syncMeta.put('syncAutoResolve:${op.userId}:$id', {
+            'operationId': id,
+            'userId': op.userId,
+            'entityType': op.entityType.name,
+            'localPayload': previousLocal,
+            'remotePayload': remotePayload,
+            'remoteVersion': version,
+            'savedAt': DateTime.now().toUtc().toIso8601String(),
+          });
+          if (version != null) await _syncMeta.put(_versionKey(op), version);
+          remotelyResolved.add(RemoteChange(
+            entityType: op.entityType,
+            entityId: op.entityId,
+            userId: op.userId,
+            vehicleId: remoteVehicle,
+            updatedAt: remoteUpdated,
+            deletedAt: remoteDeleted,
+            deviceId: win['remote_device_id']?.toString() ?? '',
+            payload: remotePayload,
+            serverVersion: version,
+          ));
+          acceptedByServer.add(id);
+        }
+
+        for (final item in conflicts) {
+          if (item is! Map) continue;
+          final conflict = Map<String, dynamic>.from(item);
+          final id = conflict['id']?.toString();
+          if (id == null || !accepted.contains(id)) continue;
+          final operation = operations.where((o) => o.id == id).first;
+          final payload = _payloadFor(operation);
+          final key = 'syncConflict:${operation.userId}:$id';
+          if (_syncMeta.containsKey(key)) continue;
+          await _syncMeta.put(key, <String, dynamic>{
+            'operationId': id,
+            'entityId': operation.entityId,
+            'entityType': operation.entityType.name,
+            'userId': operation.userId,
+            'vehicleId': operation.vehicleId,
+            'savedAt': DateTime.now().toUtc().toIso8601String(),
+            'localPayload': payload,
+            'remotePayload': conflict['remote_payload'],
+            'remoteVehicleId': conflict['remote_vehicle_id'],
+            'remoteDeviceId': conflict['remote_device_id'],
+            'remoteUpdatedAt': conflict['remote_updated_at'],
+            'remoteDeletedAt': conflict['remote_deleted_at'],
+            'remoteVersion': conflict['server_version'],
+            'localOperation': operation.toMap(),
+            'ownershipMismatch': false,
+          });
+        }
+        accepted
+          ..clear()
+          ..addAll(acceptedByServer);
       } catch (error) {
         if (isSupabaseAuthorizationFailure(error)) {
           throw LicenseWriteRejectedException(error);
@@ -69,6 +184,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
     return RemotePushResult(
       acceptedOperationIds: accepted,
       rejectedOperations: rejected,
+      remoteWins: remotelyResolved,
     );
   }
 
@@ -84,11 +200,21 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         .from(tableName)
         .select(
           'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
-          'updated_at,deleted_at',
+          'updated_at,deleted_at,server_version,server_seq',
         )
         .eq('user_id', userId);
     if (parsedCursor != null) {
-      if (parsedCursor.isLegacy) {
+      if (parsedCursor.serverSeq != null) {
+        final seq = parsedCursor.serverSeq!;
+        final type = _postgrestLiteral(parsedCursor.entityType);
+        final id = _postgrestLiteral(parsedCursor.entityId);
+        query = query.or(
+          'server_seq.gt.$seq,'
+          'and(server_seq.eq.$seq,entity_type.gt.$type),'
+          'and(server_seq.eq.$seq,entity_type.eq.$type,'
+          'entity_id.gt.$id)',
+        );
+      } else if (parsedCursor.isLegacy) {
         query = query.gte(
           'updated_at',
           parsedCursor.updatedAt.toIso8601String(),
@@ -108,7 +234,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
       }
     }
     final response = await query
-        .order('updated_at')
+        .order('server_seq')
         .order('entity_type')
         .order('entity_id')
         .limit(safeLimit);
@@ -133,6 +259,8 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
             : DateTime.tryParse('${row['deleted_at']}'),
         deviceId: '${row['device_id'] ?? ''}',
         payload: payload,
+        serverVersion: (row['server_version'] as num?)?.toInt(),
+        serverSeq: (row['server_seq'] as num?)?.toInt(),
       );
     }).toList();
     return RemotePullResult(

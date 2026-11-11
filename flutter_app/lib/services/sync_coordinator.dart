@@ -28,6 +28,7 @@ class SyncCoordinator {
     var failed = 0;
     var skipped = false;
     final completedOperationIds = <String>{};
+    final remoteWins = <RemoteChange>[];
 
     for (var batch = 0; batch < maxBatches; batch++) {
       final pending = _queue.pendingForUser(
@@ -47,6 +48,7 @@ class SyncCoordinator {
       failed += report.failed;
       skipped = skipped || report.skippedBecauseUnconfigured;
       completedOperationIds.addAll(report.completedOperationIds);
+      remoteWins.addAll(report.remoteWins);
 
       final accepted = pending.where(
         (operation) => report.completedOperationIds.contains(operation.id),
@@ -66,6 +68,7 @@ class SyncCoordinator {
       completed: completed,
       failed: failed,
       completedOperationIds: completedOperationIds,
+      remoteWins: remoteWins,
       skippedBecauseUnconfigured: skipped,
       pendingRemaining: _queue.pendingForUser(userId, limit: 1).isNotEmpty,
       sendablePendingRemaining: _queue.pendingForUser(
@@ -112,6 +115,8 @@ class SyncCoordinator {
         completed: completedIds.length,
         failed: result.rejectedOperations.length,
         completedOperationIds: completedIds,
+        remoteWins: result.remoteWins.where((remote) =>
+            completedIds.contains('${remote.entityType.name}:${remote.entityId}')).toList(),
       );
     } catch (error) {
       await _queue.markFailed(

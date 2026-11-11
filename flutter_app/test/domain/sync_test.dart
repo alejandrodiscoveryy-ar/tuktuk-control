@@ -410,6 +410,27 @@ void main() {
     expect(claimed.vehicleId, 'google-vehicle');
   });
 
+  test('cursor de servidor no depende de la fecha de edición', () {
+    final lateOffline = RemoteChange(
+      entityType: SyncEntityType.dailyRecord,
+      entityId: 'late-offline',
+      userId: 'user-1',
+      vehicleId: 'vehicle-1',
+      updatedAt: DateTime.utc(2026, 11, 1),
+      deviceId: 'phone-a',
+      payload: const {'id': 'late-offline'},
+      serverVersion: 7,
+      serverSeq: 91,
+    );
+    final encoded = RemoteSyncCursor.fromChange(lateOffline).encode();
+    final decoded = RemoteSyncCursor.tryParse(encoded);
+    expect(decoded, isNotNull);
+    expect(decoded!.serverSeq, 91);
+    expect(decoded.entityType, 'dailyRecord');
+    expect(decoded.entityId, 'late-offline');
+    expect(decoded.isLegacy, isFalse);
+  });
+
   test('ConflictResolver prioriza el cambio más reciente', () {
     final local = ConflictCandidate(
       updatedAt: DateTime.utc(2026, 7, 15, 10),
