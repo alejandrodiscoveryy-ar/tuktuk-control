@@ -813,6 +813,12 @@ class RecordStore extends ChangeNotifier {
     final queueBox = Hive.box(_syncQueueBox);
     return _meta.keys.whereType<String>().where((key) {
       if (!key.startsWith(prefix)) return false;
+      // Los conflictos de contenido se resuelven en el servidor por hora de
+      // edición. Solo bloquear identidades incompatibles o datos ajenos.
+      final snapshot = _meta.get(key);
+      if (snapshot is! Map || snapshot['ownershipMismatch'] != true) {
+        return false;
+      }
       final opId = key.substring(prefix.length);
       final raw = queueBox.get(opId);
       return raw is Map && raw['userId']?.toString() == owner;
@@ -930,11 +936,10 @@ class RecordStore extends ChangeNotifier {
           Map<String, dynamic>.from(_meta.get(key) as Map),
     ],
     'syncConflictSnapshots': [
-      for (final operationId in _blockedSyncOperationIds)
-        if (_meta.get('syncConflict:$activeUserId:$operationId') is Map)
-          Map<String, dynamic>.from(
-            _meta.get('syncConflict:$activeUserId:$operationId') as Map,
-          ),
+      for (final key in _meta.keys.whereType<String>())
+        if (key.startsWith('syncConflict:$activeUserId:') &&
+            _meta.get(key) is Map)
+          Map<String, dynamic>.from(_meta.get(key) as Map),
     ],
     'records': _allDailyRecords
         .where((record) => record.userId == activeUserId)
@@ -2466,7 +2471,8 @@ class RecordStore extends ChangeNotifier {
               remotePayload: change.payload,
             );
         final conflictKey = 'syncConflict:${currentUser.id}:$operationId';
-        if (diverged && !_meta.containsKey(conflictKey)) {
+        if (diverged && (!sameOwner || !sameVehicle) &&
+            !_meta.containsKey(conflictKey)) {
           await _meta.put(conflictKey, <String, dynamic>{
             'operationId': operationId,
             'entityId': change.entityId,
