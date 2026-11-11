@@ -5,6 +5,9 @@ on:
       - 'flutter_app/lib/data/record_store.dart'
       - 'flutter_app/test/domain/marketplace_mixed_odometer_test.dart'
       - '.github/workflows/validate-conductor-sync-web.yml'
+      - '.github/workflows/deploy-web-production.yml'
+      - '.github/workflows/verify-web-auto-deploy-pr.yml'
+      - '.github/ci/check-web-auto-deploy.mjs'
 permissions:
   contents: read
 jobs:
