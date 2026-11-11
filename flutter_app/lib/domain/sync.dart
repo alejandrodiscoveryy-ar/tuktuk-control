@@ -180,14 +180,39 @@ abstract final class SyncMultiDeviceConflictPolicy {
   static bool remoteDivergedFromBase({
     required SyncEntityType entityType,
     required Map<String, dynamic>? previousPayload,
+    required Map<String, dynamic> localPayload,
     required Map<String, dynamic> remotePayload,
   }) {
+    final remoteFingerprint = jsonEncode(_canonical(remotePayload, entityType));
+    // Una fila idéntica que ya esté en nube es un reenvío, no un conflicto.
+    if (jsonEncode(_canonical(localPayload, entityType)) == remoteFingerprint) {
+      return false;
+    }
     if (previousPayload == null) return true;
     return jsonEncode(_canonical(previousPayload, entityType)) !=
-        jsonEncode(_canonical(remotePayload, entityType));
+        remoteFingerprint;
   }
 
   static Object? _canonical(Object? value, SyncEntityType entityType) {
+    if (value is Map && entityType == SyncEntityType.settings) {
+      dynamic displayName = value['profileDisplayName'];
+      if (displayName == null) {
+        for (final entry in value.entries) {
+          if (entry.key.toString().startsWith('profileDisplayName:')) {
+            displayName = entry.value;
+            break;
+          }
+        }
+      }
+      return <String, Object?>{
+        'maintenanceIntervalKm':
+            (value['maintenanceIntervalKm'] as num?)?.toDouble(),
+        'preferredCurrency': value['preferredCurrency']?.toString(),
+        'preferredLanguage': value['preferredLanguage']?.toString(),
+        'preferredTheme': value['preferredTheme']?.toString(),
+        'profileDisplayName': displayName?.toString(),
+      };
+    }
     if (value is Map) {
       final keys = value.keys.map((key) => key.toString()).where((key) =>
           key != 'syncStatus' &&
