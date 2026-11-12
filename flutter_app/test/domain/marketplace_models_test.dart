@@ -4,6 +4,22 @@ import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('la forma de pago de carrera se lee sin confundirla con la billetera', () {
+    for (final code in ['cash', 'transfer', null, 'card']) {
+      final payload = {'job_id': 'job', 'service_code': 'passenger', 'final_price': 1500, 'currency': 'CUP', 'ride_payment_method': code, 'billing_mode': 'wallet_commission'};
+      final offer = MarketplaceAvailableJob.fromMap(payload);
+      final assigned = MarketplaceJob.fromMap(payload);
+      final expected = code == 'cash' || code == 'transfer' ? code : null;
+      expect(offer.ridePaymentMethod, expected);
+      expect(assigned.ridePaymentMethod, expected);
+      expect(assigned.billingMode, MarketplaceBillingMode.walletCommission);
+    }
+    expect(marketplaceRidePaymentLabel('cash'), 'Efectivo');
+    expect(marketplaceRidePaymentLabel('transfer'), 'Transferencia');
+    expect(marketplaceRidePaymentLabel(null), 'No especificado');
+    expect(MarketplaceAvailableJob.fromMap({'final_price': 100}).ridePaymentMethod, isNull);
+  });
+
   group('MarketplaceWallet', () {
     test('lee total, reservado y disponible directamente del servidor', () {
       final wallet = MarketplaceWallet.fromMap({
