@@ -3964,6 +3964,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 5),
+                              _RidePaymentLabel(
+                                key: const ValueKey('work-active-payment'),
+                                method: active.ridePaymentMethod,
+                              ),
                               const Divider(height: 16),
                               Flexible(
                                 fit: FlexFit.loose,
@@ -4627,6 +4632,38 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 }
 
+class _RidePaymentLabel extends StatelessWidget {
+  const _RidePaymentLabel({required this.method, super.key});
+
+  final String? method;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Icon(
+            method == 'transfer'
+                ? Icons.account_balance_outlined
+                : method == 'cash'
+                    ? Icons.payments_outlined
+                    : Icons.help_outline_rounded,
+            size: 17,
+            color: appPrimaryColor(context),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Pago: ${marketplaceRidePaymentLabel(method)}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: appPrimaryColor(context),
+              ),
+            ),
+          ),
+        ],
+      );
+}
+
 class _AvailableJobCard extends StatefulWidget {
   const _AvailableJobCard({
     required this.job,
@@ -4720,6 +4757,11 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 5),
+          _RidePaymentLabel(
+            key: ValueKey('work-map-offer-payment-${job.id}'),
+            method: job.ridePaymentMethod,
           ),
           const Divider(height: 16),
           Flexible(
