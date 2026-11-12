@@ -279,6 +279,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   final Map<String, String> _scopeErrors = <String, String>{};
 
   bool _loading = true;
+  bool _signingInFromJobs = false;
+  String? _jobsSignInError;
   String? _error;
   String? _incomeError;
   String? _acceptingJobId;
@@ -4274,6 +4276,25 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     return _buildWorkMapHome(context);
   }
 
+  Future<void> _signInFromJobs() async {
+    if (_signingInFromJobs) return;
+    setState(() {
+      _signingInFromJobs = true;
+      _jobsSignInError = null;
+    });
+    try {
+      await widget.store.signIn(returnToJobs: true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _jobsSignInError =
+            'No pudimos abrir Google. Comprueba tu conexión e inténtalo de nuevo.';
+      });
+    } finally {
+      if (mounted) setState(() => _signingInFromJobs = false);
+    }
+  }
+
   Widget _buildAvailableTab(BuildContext context) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -4282,23 +4303,48 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final onboarding = _onboarding;
 
     if (onboarding == null) {
+      final needsLogin = widget.store.user == null;
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
           GlassCard(
             child: Column(
               children: [
-                const Icon(Icons.cloud_off_outlined, size: 42),
+                Icon(
+                  needsLogin ? Icons.account_circle_outlined : Icons.cloud_off_outlined,
+                  size: 42,
+                ),
                 const SizedBox(height: 12),
                 Text(
-                  _error ?? 'No se pudieron cargar Trabajos.',
+                  needsLogin
+                      ? 'Inicia sesión con Google para ver Trabajos.'
+                      : _error ?? 'No se pudieron cargar Trabajos.',
                   textAlign: TextAlign.center,
                 ),
+                if (needsLogin && _jobsSignInError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _jobsSignInError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 FilledButton.icon(
-                  onPressed: _load,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar'),
+                  key: const ValueKey('work-auth-or-retry'),
+                  onPressed: needsLogin
+                      ? (_signingInFromJobs ? null : _signInFromJobs)
+                      : _load,
+                  icon: _signingInFromJobs && needsLogin
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(needsLogin ? Icons.login : Icons.refresh),
+                  label: Text(needsLogin
+                      ? 'Entrar con Google'
+                      : 'Reintentar'),
                 ),
               ],
             ),
