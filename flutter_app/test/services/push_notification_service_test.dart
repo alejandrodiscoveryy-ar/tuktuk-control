@@ -228,6 +228,12 @@ void main() {
     expect(decodePushMessageData('{invalid'), isEmpty);
   });
 
+  test('el acceso Google iniciado en Trabajos vuelve a esa vista incluso tras recarga web', () {
+    expect(appShellIndexAfterAuthentication(currentIndex: 0, marketplaceJobId: null, returnToJobs: true), 2);
+    expect(appShellIndexAfterAuthentication(currentIndex: 2, marketplaceJobId: null, returnToJobs: true), 2);
+    expect(appShellIndexAfterAuthentication(currentIndex: 5, marketplaceJobId: null), 0);
+  });
+
   test('la restauración de sesión conserva Trabajos desde una oferta válida',
       () {
     expect(
