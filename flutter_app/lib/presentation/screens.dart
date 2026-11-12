@@ -633,7 +633,11 @@ class _AppShellState extends State<AppShell> {
           index = appShellIndexAfterAuthentication(
             currentIndex: index,
             marketplaceJobId: _marketplacePushJobId.value,
+            returnToJobs: store.consumeJobsLoginIntent(),
           );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _setMarketplaceJobsVisible(index == 2);
+          });
         }
         _lastAuthenticatedUserId = authenticatedUserId;
 
