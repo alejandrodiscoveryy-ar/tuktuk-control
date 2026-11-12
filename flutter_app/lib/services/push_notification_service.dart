@@ -79,8 +79,9 @@ String? marketplaceJobIdFromUrl(Uri uri) => marketplaceJobIdFromPush({
 int appShellIndexAfterAuthentication({
   required int currentIndex,
   required String? marketplaceJobId,
+  bool returnToJobs = false,
 }) =>
-    marketplaceJobId == null ? 0 : currentIndex;
+    returnToJobs ? 2 : (marketplaceJobId == null ? 0 : currentIndex);
 
 @visibleForTesting
 Uri? appUpdateUri(Map<String, dynamic> data) {

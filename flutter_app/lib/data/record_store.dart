@@ -1926,16 +1926,59 @@ class RecordStore extends ChangeNotifier {
     unawaitedSync();
   }
 
-  Future<void> signIn() async {
+  static const _jobsLoginIntentKey = 'marketplaceJobsLoginIntentAt';
+  int? _jobsLoginIntentAt;
+
+  Future<void> _saveJobsLoginIntent(int? requestedAt) async {
+    _jobsLoginIntentAt = requestedAt;
+    try {
+      if (requestedAt == null) {
+        await _meta.delete(_jobsLoginIntentKey);
+      } else {
+        await _meta.put(_jobsLoginIntentKey, requestedAt);
+      }
+    } catch (_) {
+      // La preferencia de navegación no debe impedir el acceso a la cuenta.
+    }
+  }
+
+  // OAuth web recarga la aplicación. Guardar solo el destino local, sin
+  // credenciales, y consumirlo una vez al recibir una sesión autenticada.
+  bool consumeJobsLoginIntent() {
+    int? requestedAt = _jobsLoginIntentAt;
+    try {
+      final saved = _meta.get(_jobsLoginIntentKey);
+      if (requestedAt == null && saved is int) requestedAt = saved;
+    } catch (_) {
+      // Usar la intención en memoria si el almacenamiento no está disponible.
+    }
+    unawaited(_saveJobsLoginIntent(null));
+    if (requestedAt == null) return false;
+    final age = DateTime.now().millisecondsSinceEpoch - requestedAt;
+    return age >= 0 && age <= const Duration(minutes: 15).inMilliseconds;
+  }
+
+  Future<void> signIn({bool returnToJobs = false}) async {
+    await _saveJobsLoginIntent(
+      returnToJobs ? DateTime.now().millisecondsSinceEpoch : null,
+    );
     syncMessage = 'Abriendo acceso seguro con Google...';
     notifyListeners();
-    await _supabase.auth.signInWithOAuth(
-      OAuthProvider.google,
-      redirectTo: kIsWeb ? webOAuthRedirect(Uri.base) : _supabaseMobileRedirect,
-      authScreenLaunchMode: kIsWeb
-          ? LaunchMode.platformDefault
-          : LaunchMode.externalApplication,
-    );
+    try {
+      final launched = await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? webOAuthRedirect(Uri.base) : _supabaseMobileRedirect,
+        authScreenLaunchMode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+      );
+      if (!launched && returnToJobs) {
+        throw StateError('No se pudo abrir el acceso con Google.');
+      }
+    } catch (_) {
+      await _saveJobsLoginIntent(null);
+      rethrow;
+    }
   }
 
   Future<void> restoreGoogleSession() async {
@@ -1943,6 +1986,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await _saveJobsLoginIntent(null);
     _stopAutomaticSync();
     final currentUser = user;
     if (currentUser != null) {
