@@ -12,6 +12,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class _Store extends Fake implements RecordStore {
   final incomes = <String, String?>{};
   int incomeCalls = 0;
+  bool signedIn = true;
+  int signInCalls = 0;
+  bool? lastReturnToJobs;
+  Completer<void>? pendingSignIn;
+
+  @override
+  Future<void> signIn({bool returnToJobs = false}) async {
+    signInCalls++;
+    lastReturnToJobs = returnToJobs;
+    await pendingSignIn?.future;
+  }
   @override
   String? marketplaceIncomeReconciliationError;
 
@@ -47,7 +58,7 @@ class _Store extends Fake implements RecordStore {
   }
 
   @override
-  User? get user => const User(
+  User? get user => !signedIn ? null : const User(
     id: 'driver-test',
     appMetadata: {},
     userMetadata: {},
@@ -86,6 +97,8 @@ class _JobsService extends MarketplaceService {
   final ratedJobs = <String>{};
   String? lastAdvanceAction;
   List<MarketplaceAvailableJob> availableJobs = [offer];
+  bool failOnboarding = false;
+  int onboardingCalls = 0;
   bool failAvailable = false;
   bool failActive = false;
   bool failIncome = false;
@@ -98,8 +111,10 @@ class _JobsService extends MarketplaceService {
   Completer<List<MarketplaceAvailableJob>>? pending;
 
   @override
-  Future<MarketplaceOnboarding> onboarding() async =>
-      MarketplaceOnboarding.fromMap({
+  Future<MarketplaceOnboarding> onboarding() async {
+    onboardingCalls++;
+    if (failOnboarding) throw const SocketException('offline');
+    return MarketplaceOnboarding.fromMap({
         'driver_profile_exists': true,
         'driver_status': 'active',
         'display_name': 'Conductor de prueba',
@@ -117,6 +132,7 @@ class _JobsService extends MarketplaceService {
           },
         ],
       });
+  }
 
   @override
   Future<MarketplaceWorkAccess> access(String vehicleId) async =>
@@ -379,6 +395,51 @@ void main() {
     await tester.tap(item);
     await pumpJobs(tester);
   }
+
+  testWidgets('Trabajos sin sesión ofrece acceso Google y permite reintentar OAuth', (tester) async {
+    store.signedIn = false;
+    store.pendingSignIn = Completer<void>();
+    await open(tester);
+
+    final action = find.byKey(const ValueKey('work-auth-or-retry'));
+    expect(find.text('Inicia sesión con Google para ver Trabajos.'), findsOneWidget);
+    expect(find.text('Entrar con Google'), findsOneWidget);
+    expect(find.text('Reintentar'), findsNothing);
+    expect(service.onboardingCalls, 0);
+
+    await tester.tap(action);
+    await tester.pump();
+    expect(store.signInCalls, 1);
+    expect(store.lastReturnToJobs, true);
+    expect(tester.widget<FilledButton>(action).onPressed, isNull);
+
+    store.pendingSignIn!.completeError(StateError('OAuth failed'));
+    await pumpJobs(tester);
+    expect(find.text('No pudimos abrir Google. Comprueba tu conexión e inténtalo de nuevo.'), findsOneWidget);
+    expect(tester.widget<FilledButton>(action).onPressed, isNotNull);
+
+    store.pendingSignIn = Completer<void>();
+    await tester.tap(action);
+    await tester.pump();
+    expect(store.signInCalls, 2);
+    store.pendingSignIn!.complete();
+    await pumpJobs(tester);
+    expect(find.text('Entrar con Google'), findsOneWidget);
+    expect(service.onboardingCalls, 0);
+  });
+
+  testWidgets('Trabajos con sesión conserva Reintentar ante un fallo de conexión', (tester) async {
+    service.failOnboarding = true;
+    await open(tester);
+    final action = find.byKey(const ValueKey('work-auth-or-retry'));
+    expect(find.text('Reintentar'), findsOneWidget);
+    expect(find.text('Entrar con Google'), findsNothing);
+    final before = service.onboardingCalls;
+    await tester.tap(action);
+    await pumpJobs(tester);
+    expect(service.onboardingCalls, greaterThan(before));
+    expect(store.signInCalls, 0);
+  });
 
   test('visual history fetches only one page', () async {
     final paged = _PagedService();
