@@ -441,6 +441,39 @@ void main() {
     expect(store.signInCalls, 0);
   });
 
+  testWidgets('la oferta muestra transferencia antes de aceptar y la carrera conserva el método', (tester) async {
+    service.availableJobs = [
+      const MarketplaceAvailableJob(
+        id: '12345678-1234-4123-8123-123456789012',
+        serviceCode: 'passenger',
+        finalPrice: 1500,
+        currency: 'CUP',
+        ridePaymentMethod: 'transfer',
+      ),
+    ];
+    await open(tester);
+    expect(find.byKey(const ValueKey('work-map-offer-payment-12345678-1234-4123-8123-123456789012')), findsOneWidget);
+    expect(find.text('Pago: Transferencia'), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012')), findsOneWidget);
+
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': '12345678-1234-4123-8123-123456789012',
+        'status': 'en_route',
+        'service_code': 'passenger',
+        'final_price': 1500,
+        'currency': 'CUP',
+        'ride_payment_method': 'transfer',
+      }),
+    ];
+    service.successfulAccept = true;
+    await tester.tap(find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012')));
+    await pumpJobs(tester);
+    expect(service.atomicAcceptCalls, 1);
+    expect(find.byKey(const ValueKey('work-active-payment')), findsOneWidget);
+    expect(find.text('Pago: Transferencia'), findsOneWidget);
+  });
+
   test('visual history fetches only one page', () async {
     final paged = _PagedService();
     final jobs = await paged.jobs('history');
