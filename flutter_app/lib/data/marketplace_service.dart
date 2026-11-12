@@ -485,12 +485,26 @@ class MarketplaceWallet {
       );
 }
 
+// Ride settlement is informational, separate from wallet billing and top-ups.
+String? marketplaceRidePaymentMethod(Object? value) => switch (value) {
+      'cash' => 'cash',
+      'transfer' => 'transfer',
+      _ => null,
+    };
+
+String marketplaceRidePaymentLabel(String? value) => switch (value) {
+      'cash' => 'Efectivo',
+      'transfer' => 'Transferencia',
+      _ => 'No especificado',
+    };
+
 class MarketplaceAvailableJob {
   const MarketplaceAvailableJob({
     required this.id,
     required this.serviceCode,
     required this.finalPrice,
     required this.currency,
+    this.ridePaymentMethod,
     this.status,
     this.originText,
     this.destinationText,
@@ -530,6 +544,7 @@ class MarketplaceAvailableJob {
   final String? requiredBodyType;
   final double finalPrice;
   final String currency;
+  final String? ridePaymentMethod;
   final DateTime? publishedAt;
   final DateTime? expiresAt;
   final DateTime? createdAt;
@@ -572,6 +587,7 @@ class MarketplaceAvailableJob {
         requiredBodyType: _marketText(map['required_body_type']),
         finalPrice: _marketNumber(map['final_price']),
         currency: _marketText(map['currency']) ?? 'CUP',
+        ridePaymentMethod: marketplaceRidePaymentMethod(map['ride_payment_method']),
         publishedAt: _marketDate(map['published_at']),
         expiresAt: _marketDate(map['expires_at']),
         createdAt: _marketDate(map['created_at']),
@@ -585,6 +601,7 @@ class MarketplaceJob {
     required this.billingMode,
     required this.finalPrice,
     required this.currency,
+    this.ridePaymentMethod,
     this.isTest,
     this.vehicleName,
     this.vehicleRegistration,
@@ -647,6 +664,7 @@ class MarketplaceJob {
   final String? requiredBodyType;
   final double finalPrice;
   final String currency;
+  final String? ridePaymentMethod;
   final String? vehicleId;
   final MarketplaceBillingMode billingMode;
   final double? commissionAmountSnapshot;
@@ -727,6 +745,7 @@ class MarketplaceJob {
         requiredBodyType: _marketText(map['required_body_type']),
         finalPrice: _marketNumber(map['final_price']),
         currency: _marketText(map['currency']) ?? 'CUP',
+        ridePaymentMethod: marketplaceRidePaymentMethod(map['ride_payment_method']),
         vehicleId: _marketText(map['vehicle_id'] ?? map['assigned_vehicle_id']),
         billingMode: marketplaceBillingMode(map['billing_mode']),
         commissionAmountSnapshot: map['commission_amount_snapshot'] == null
@@ -1312,7 +1331,7 @@ class MarketplaceService {
       }).then(MarketplaceTopup.fromMap);
 
   Future<List<MarketplaceAvailableJob>> available(String vehicleId) => _list(
-        'list_my_marketplace_available_jobs',
+        'list_my_marketplace_available_jobs_with_payment',
         {'target_vehicle_id': vehicleId},
       ).then((items) => items.map(MarketplaceAvailableJob.fromMap).toList());
 
@@ -1339,7 +1358,7 @@ class MarketplaceService {
   Future<List<MarketplaceJob>> jobsPage(String scope,
           {MarketplaceJob? before}) =>
       _list(
-        'list_my_marketplace_jobs',
+        'list_my_marketplace_jobs_with_payment',
         {
           'target_scope': scope,
           'target_limit': 50,

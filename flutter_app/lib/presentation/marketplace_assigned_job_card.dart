@@ -96,6 +96,11 @@ class _AssignedJobCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          _RidePaymentLabel(
+            key: ValueKey('work-assigned-payment-${job.id}'),
+            method: job.ridePaymentMethod,
+          ),
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
