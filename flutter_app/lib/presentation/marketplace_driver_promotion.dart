@@ -400,17 +400,18 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 4;
+const _marketplacePromoArtworkVersion = 5;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
   required Uri? photoUrl, required ProjectIdentity identity,
   Object? profileUpdatedAt,
+  String? photoAssetId,
   bool identityVerified = false,
 }) => sha256.convert(utf8.encode(jsonEncode([
   _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized, identityVerified,
   photoUrl == null ? null : '${photoUrl.scheme}://${photoUrl.host}${photoUrl.path}',
-  profileUpdatedAt?.toString(), identity.projectId, identity.iconUrl,
+  profileUpdatedAt?.toString(), photoAssetId, identity.projectId, identity.iconUrl,
   identity.primaryColorHex, identity.secondaryColorHex,
   identity.updatedAt?.toIso8601String(),
 ]))).toString();
@@ -464,9 +465,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   final _cache = MarketplacePromoArtworkCache(Hive.box(_metaBox));
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
-  bool _busy = true, _consent = false, _sharePhoto = false, _enabled = false;
+  bool _busy = true, _enabled = false, _published = false, _canPublish = false, _publishing = false;
   bool _story = false, _sharing = false, _identityVerified = false;
-  String? _error, _code;
+  String? _error, _code, _photoAssetId;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
@@ -485,6 +486,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         if (_actor != null) unawaited(_cache.clear(_actor));
         setState(() {
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
+          _published = false; _canPublish = false; _photoAssetId = null;
           _squareBytes = null; _storyBytes = null;
           _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
         });
@@ -511,7 +513,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     setState(() { _busy = true; _error = null; _squareBytes = null; _storyBytes = null; _code = null; });
     var stage = 'perfil';
     try {
-      final result = await _client.rpc('get_my_marketplace_promo_profile');
+      final result = await _client.rpc('prepare_my_marketplace_promo_card_v1');
       if (!mounted || !_sameUser || revision != _revision) return;
       if (result is! Map) throw StateError('PROMO_PROFILE_INVALID');
       final enabled = result['enabled'] == true;
@@ -519,8 +521,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       setState(() {
         _enabled = enabled;
         _identityVerified = identityVerified;
-        _consent = enabled;
-        _sharePhoto = enabled && result['photo_authorized'] == true;
+        _published = enabled && result['published'] == true;
+        _canPublish = enabled && result['can_publish'] == true;
+        _photoAssetId = result['photo_asset_id'] is String ? result['photo_asset_id'] as String : null;
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
       });
       if (!enabled) {
@@ -531,13 +534,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (code is! String) throw StateError('PROMO_CODE_INVALID');
       marketplaceDriverPromoUri(code);
       stage = 'enlace';
-      final response = await _client.functions.invoke('marketplace-customer-gateway',
-        body: {'operation':'promo_profile','params':{'target_code':code}});
-      if (!mounted || !_sameUser || revision != _revision) return;
-      final envelope = response.data;
-      final raw = envelope is Map ? envelope['data'] : null;
-      if (raw is! Map || raw['public_name'] is! String ||
-          raw['category_code'] is! String || raw['service_codes'] is! List) {
+      // This is the authenticated driver's own prepared card. Drafts remain
+      // private; the public gateway is not used to disclose their data.
+      final raw = result;
+      if (raw['public_name'] is! String || raw['category_code'] is! String ||
+          raw['service_codes'] is! List) {
         throw StateError('PROMO_PROFILE_UNAVAILABLE');
       }
       final services = (raw['service_codes'] as List).whereType<String>()
@@ -545,13 +546,14 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (services.isEmpty) throw StateError('PROMO_SERVICE_UNAVAILABLE');
       final name = raw['public_name'] as String;
       final modality = '${_promoCategoryLabel(raw['category_code'] as String)} · $services';
-      final photoUrl = Uri.tryParse(raw['photo_url']?.toString() ?? '');
-      final photoAuthorized = result['photo_authorized'] == true;
-      final validPhotoUrl = photoAuthorized && photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty
-          ? photoUrl : null;
-      if (photoAuthorized && validPhotoUrl == null) {
-        // Do not reuse an old authorized portrait when the server no longer
-        // confirms that the photo is available for public promotion.
+      final photoPath = raw['photo_path'] is String ? raw['photo_path'] as String : null;
+      final photoAuthorized = raw['photo_authorized'] == true;
+      // The own-photo storage path is stable; never store the signed token.
+      final photoKey = photoAuthorized && photoPath != null
+        ? Uri(scheme: 'https', host: Uri.parse(_supabaseUrl).host,
+            pathSegments: ['marketplace-media', ...photoPath.split('/')])
+        : null;
+      if (photoAuthorized && photoKey == null) {
         stage = 'fotografía';
         throw StateError('PROMO_PHOTO_UNAVAILABLE');
       }
@@ -562,8 +564,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final identity = widget.store.projectIdentity;
       final fingerprint = marketplacePromoCacheFingerprint(
         actor: actor, code: code, name: name, modality: modality,
-        photoAuthorized: photoAuthorized, photoUrl: validPhotoUrl,
-        identity: identity, profileUpdatedAt: result['updated_at'],
+        photoAuthorized: photoAuthorized, photoUrl: photoKey,
+        identity: identity, photoAssetId: _photoAssetId,
         identityVerified: identityVerified,
       );
       final cached = force ? null : _cache.read(actor, fingerprint);
@@ -575,8 +577,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         return;
       }
       stage = 'fotografía';
-      final photo = validPhotoUrl == null ? null :
-          await downloadMarketplacePromoPortrait(validPhotoUrl);
+      Uint8List? photo;
+      if (photoAuthorized && photoPath != null) {
+        final signed = await _client.storage.from('marketplace-media').createSignedUrl(photoPath, 120);
+        photo = await downloadMarketplacePromoPortrait(Uri.parse(signed));
+      }
       if (!mounted || !_sameUser || revision != _revision) return;
       stage = 'tarjeta';
       final logo = await loadMarketplacePromoBrandLogo(identity);
@@ -611,27 +616,58 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
-  Future<void> _save({required bool consent}) async {
-    if (_busy || !_sameUser) return;
-    final name = _name.text.trim();
-    if (consent && (!_consent || name.isEmpty || name.length > 80)) {
-      setState(() => _error = 'Confirma tu autorización e indica un nombre de hasta 80 caracteres.');
-      return;
+  /// The deliberate share/download/copy action is the publication consent.
+  /// The preview itself does not expose any data publicly.
+  Future<bool> _ensurePublished() async {
+    final code = _code;
+    final actor = _actor;
+    if (!_sameUser || !_enabled || !_canPublish || _busy || _publishing ||
+        code == null || actor == null) return false;
+    final revision = _revision;
+    setState(() => _publishing = true);
+    try {
+      final result = await _client.rpc('publish_my_marketplace_promo_card_v1', params: {
+        'target_code': code,
+        'target_public_name': _name.text.trim(),
+        'target_photo_asset_id': _photoAssetId,
+      });
+      if (!mounted || !_sameUser || revision != _revision) return false;
+      if (result is! Map || result['published'] != true || result['code'] != code) {
+        throw StateError('PROMO_PUBLICATION_FAILED');
+      }
+      setState(() => _published = true);
+      if ((result['identity_verified'] == true) != _identityVerified) {
+        await _load();
+        if (mounted) toast(context, 'Actualizamos tu verificación. Vuelve a compartir tu tarjeta.');
+        return false;
+      }
+      return true;
+    } catch (_) {
+      if (mounted && _sameUser && revision == _revision) {
+        toast(context, 'No se pudo habilitar el enlace. Actualiza tu tarjeta y reintenta.');
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _publishing = false);
     }
+  }
+
+  Future<void> _revoke() async {
+    final actor = _actor;
+    if (_busy || _publishing || !_sameUser || actor == null) return;
     final revision = ++_revision;
     setState(() { _busy = true; _error = null; _code = null; _squareBytes = null; _storyBytes = null; });
     try {
       await _client.rpc('set_my_marketplace_promo_profile', params: {
-        'target_public_name': consent ? name : null,
-        'target_consent': consent, 'target_share_photo': consent && _sharePhoto,
+        'target_public_name': null, 'target_consent': false, 'target_share_photo': false,
       });
       if (!mounted || !_sameUser || revision != _revision) return;
-      if (!consent) await _cache.clear(_actor!);
+      await _cache.clear(actor);
       await _load();
     } catch (_) {
       if (mounted && revision == _revision) {
         setState(() {
-        _busy = false; _error = 'No se pudo guardar el perfil. Comprueba tu conexión o disponibilidad.';
+          _busy = false; _error = 'No se pudo desactivar el enlace. Comprueba tu conexión.';
         });
       }
     }
@@ -640,6 +676,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   Future<void> _shareCard() async {
     final bytes = _artwork, copy = _copy;
     if (!_sameUser || !_enabled || bytes == null || copy == null || _sharing) return;
+    if (!await _ensurePublished() || !mounted || !_sameUser) return;
     setState(() => _sharing = true);
     try {
       final box = context.findRenderObject() as RenderBox?;
@@ -664,6 +701,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   Future<void> _downloadCard() async {
     final bytes = _artwork;
     if (!_sameUser || !_enabled || bytes == null) return;
+    if (!await _ensurePublished() || !mounted || !_sameUser) return;
     if (kIsWeb && driver_promo_download.downloadPromoPng(bytes, _fileName)) return;
     try {
       await SharePlus.instance.share(ShareParams(files: [XFile.fromData(bytes,
@@ -675,6 +713,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
 
   Future<void> _copyText(String text) async {
     if (!_sameUser || !_enabled || _artwork == null) return;
+    if (!await _ensurePublished() || !mounted || !_sameUser) return;
     try {
       await Clipboard.setData(ClipboardData(text: text));
       if (mounted) toast(context, 'Copiado');
@@ -686,7 +725,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   @override
   Widget build(BuildContext context) {
     final art = _artwork, copy = _copy;
-    final ready = _sameUser && _enabled && !_busy && art != null && copy != null;
+    final previewReady = _sameUser && _enabled && !_busy && art != null && copy != null;
+    final ready = previewReady && _canPublish && !_publishing;
     return ListView(padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -699,19 +739,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             Text(_error!, style: const TextStyle(color: kDanger)),
             TextButton(onPressed: _busy ? null : _load, child: const Text('Reintentar')),
           ],
-          if (!_enabled) ...[
-            TextField(controller: _name, maxLength: 80, enabled: !_busy && _sameUser,
-              decoration: const InputDecoration(labelText: 'Nombre público')),
-            CheckboxListTile(contentPadding: EdgeInsets.zero, value: _sharePhoto,
-              onChanged: _busy || !_sameUser ? null : (value) => setState(() => _sharePhoto = value == true),
-              title: const Text('Autorizar mi fotografía registrada')),
-            CheckboxListTile(contentPadding: EdgeInsets.zero, value: _consent,
-              onChanged: _busy || !_sameUser ? null : (value) => setState(() => _consent = value == true),
-              title: const Text('Autorizo publicar mi nombre y los datos seleccionados de mi perfil'),
-              subtitle: const Text('Cualquier persona con mi enlace podrá verlos. Puedo revocar el perfil; las imágenes ya compartidas pueden permanecer en redes.')),
-            FilledButton(onPressed: _busy || !_sameUser || !_consent ? null : () => _save(consent: true),
-              child: const Text('Activar mi perfil')),
-          ],
+          if (!_enabled && !_busy && _error == null)
+            const Text('Tu ficha se prepara automáticamente al completar la inscripción y registrar un servicio operativo.'),
           if (_enabled) ...[
             const SizedBox(height: 12),
             SegmentedButton<bool>(segments: const [
@@ -722,28 +751,34 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             if (art != null) Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 380),
               child: ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.memory(art, fit: BoxFit.contain, gaplessPlayback: true)))),
             const SizedBox(height: 12),
+            if (previewReady && !_published)
+              Text(_canPublish
+                ? 'Tu ficha ya está lista. Al compartir, descargar o copiar el enlace, autorizas que tu nombre y la foto de esta tarjeta (si aparece) sean visibles para quienes tengan tu enlace. Puedes desactivarlo cuando quieras.'
+                : 'Tu ficha está lista. Podrás habilitar el enlace cuando tu servicio esté activo.',
+                style: const TextStyle(color: kMuted, fontSize: 12)),
+            if (_publishing) const LinearProgressIndicator(),
             FilledButton.icon(onPressed: ready && !_sharing ? _shareCard : null,
               icon: const Icon(Icons.share_outlined), label: const Text('Compartir tarjeta y mensaje')),
             OutlinedButton.icon(onPressed: ready ? _downloadCard : null,
               icon: const Icon(Icons.download_outlined), label: const Text('Descargar imagen')),
-            if (ready) ...[
-              TextButton.icon(onPressed: () => _load(force: true),
+            if (previewReady) ...[
+              TextButton.icon(onPressed: _publishing ? null : () => _load(force: true),
                 icon: const Icon(Icons.refresh), label: const Text('Actualizar tarjeta')),
               const SizedBox(height: 12),
               const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
-              SelectableText(marketplaceDriverPromoUri(_code!).toString()),
-              TextButton.icon(onPressed: () => _copyText(marketplaceDriverPromoUri(_code!).toString()),
+              if (_published) SelectableText(marketplaceDriverPromoUri(_code!).toString()),
+              TextButton.icon(onPressed: ready ? () => _copyText(marketplaceDriverPromoUri(_code!).toString()) : null,
                 icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
               const SizedBox(height: 8),
               const Text('Mensaje para compartir', style: TextStyle(fontWeight: FontWeight.w800)),
-              SelectableText(copy),
-              TextButton.icon(onPressed: () => _copyText(copy), icon: const Icon(Icons.copy),
+              if (_published) SelectableText(copy!),
+              TextButton.icon(onPressed: ready ? () => _copyText(copy!) : null, icon: const Icon(Icons.copy),
                 label: const Text('Copiar mensaje')),
               const Text('Si tu red social no admite compartir imagen y texto juntos, descarga la tarjeta y pega el mensaje completo en tu publicación.', style: TextStyle(color: kMuted, fontSize: 12)),
             ],
             const SizedBox(height: 16),
-            OutlinedButton(onPressed: _busy || !_sameUser ? null : () => _save(consent: false),
-              child: const Text('Desactivar mi perfil')),
+            if (_published) OutlinedButton(onPressed: _busy || _publishing || !_sameUser ? null : _revoke,
+              child: const Text('Desactivar mi perfil público')),
           ],
         ]),
       )),
