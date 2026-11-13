@@ -144,11 +144,11 @@ void main() {
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, 136, 136)'));
     expect(source, contains('panelShape'));
-    expect(source, contains('_cache.read(_actor!, fingerprint)'));
-    expect(source, contains('_cache.save(_actor!, fingerprint, square, story)'));
+    expect(source, contains('_cache.read(actor, fingerprint)'));
+    expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
     expect(source, contains('_load(force: true)'));
-    expect(source, contains('_cache.clear(_actor!)'));
-    expect(source.indexOf('_cache.read(_actor!, fingerprint)'), lessThan(source.indexOf('await downloadMarketplacePromoPortrait(validPhotoUrl)')));
+    expect(source, contains('_cache.clear(actor)'));
+    expect(source.indexOf('_cache.read(actor, fingerprint)'), lessThan(source.indexOf('await downloadMarketplacePromoPortrait(validPhotoUrl)')));
     expect(source, contains('driver_promo_download.downloadPromoPng'));
     expect(source, contains('auth.currentUser?.id == _actor'));
     expect(source, isNot(contains('claim_referral_code')));
