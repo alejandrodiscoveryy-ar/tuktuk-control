@@ -185,7 +185,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   final _name = TextEditingController();
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
-  bool _busy = true, _consent = false, _sharePhoto = true, _enabled = false;
+  bool _busy = true, _consent = false, _sharePhoto = false, _enabled = false;
   bool _story = false, _sharing = false;
   String? _error, _code;
   Uint8List? _squareBytes, _storyBytes;
@@ -236,7 +236,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       setState(() {
         _enabled = enabled;
         _consent = enabled;
-        _sharePhoto = enabled ? result['photo_authorized'] == true : true;
+        _sharePhoto = enabled && result['photo_authorized'] == true;
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
       });
       if (!enabled) return;
@@ -393,7 +393,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
               icon: const Icon(Icons.share_outlined), label: const Text('Compartir tarjeta y mensaje')),
             OutlinedButton.icon(onPressed: ready ? _downloadCard : null,
               icon: const Icon(Icons.download_outlined), label: const Text('Descargar imagen')),
-            if (ready) ...[
+            if (ready && copy != null) ...[
               const SizedBox(height: 12),
               const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
               SelectableText(marketplaceDriverPromoUri(_code!).toString()),
