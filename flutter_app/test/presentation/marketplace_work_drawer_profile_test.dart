@@ -63,6 +63,20 @@ void main() {
     },
   );
 
+  test('Mi TukTuk es la primera opción del perfil de Trabajo y también está en Más', () {
+    final work = File('lib/presentation/marketplace_jobs.dart').readAsStringSync();
+    final more = File('lib/presentation/marketplace_shell.dart').readAsStringSync();
+    final header = work.indexOf('_workDrawerDriverHeader(),');
+    final promo = work.indexOf("ValueKey('work-drawer-mi-tuktuk')", header);
+    final scheduled = work.indexOf("_workMenuItem(Icons.event_outlined, 'Programados', 1)", header);
+    expect(header, greaterThanOrEqualTo(0));
+    expect(promo, greaterThan(header));
+    expect(scheduled, greaterThan(promo));
+    expect(work.substring(promo, scheduled),
+      contains('MarketplaceDriverPromotionScreen(store: widget.store)'));
+    expect(more, contains('MarketplaceDriverPromotionScreen(store: store)'));
+  });
+
   test('Trabajo reutiliza referidos y conserva rutas operativas', () {
     final source = File(
       'lib/presentation/marketplace_jobs.dart',

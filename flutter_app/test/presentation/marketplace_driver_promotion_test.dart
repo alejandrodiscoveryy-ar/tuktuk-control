@@ -19,6 +19,11 @@ void main() {
     expect(marketplaceDriverPromoCopy('Gerson', code), contains(uri.toString()));
     final copy = marketplaceDriverPromoCopy('Gerson', code);
     expect(copy, contains('Soy Gerson, conductor de la Agencia TukTuk.'));
+    expect(copy, isNot(contains('verificado')));
+    expect(marketplaceDriverPromoCopy('Gerson', code, identityVerified: true),
+      contains('Soy Gerson, conductor verificado de la Agencia TukTuk.'));
+    expect(copy, contains('Solicita mi servicio desde este enlace:'));
+    expect(copy, contains('¡Tu próximo viaje comienza conmigo!'));
     expect(copy, contains('Tu conductor de confianza, a un toque.'));
     expect(copy, isNot(contains('otro conductor')));
     expect(copy, isNot(contains('flota')));
@@ -91,11 +96,14 @@ void main() {
     String key({String actor = 'driver-a', String name = 'Gerson',
       String modality = 'Auto · Pasajeros', bool authorized = true,
       String url = 'https://example.com/photo/one.png?token=first',
-      ProjectIdentity identity = ProjectIdentity.fallback}) =>
+      ProjectIdentity identity = ProjectIdentity.fallback, bool verified = false,
+      String? photoAssetId}) =>
         marketplacePromoCacheFingerprint(actor: actor, code: code, name: name,
           modality: modality, photoAuthorized: authorized, photoUrl: Uri.parse(url),
-          identity: identity);
+          identity: identity, identityVerified: verified, photoAssetId: photoAssetId);
     final original = key();
+    expect(key(verified: true), isNot(original));
+    expect(key(photoAssetId: 'new-photo'), isNot(original));
     expect(key(url: 'https://example.com/photo/one.png?token=second'), original);
     expect(key(url: 'https://example.com/photo/two.png?token=first'), isNot(original));
     expect(key(name: 'Otro'), isNot(original));
@@ -116,12 +124,26 @@ void main() {
       expect(png.width, 1080);
       expect(png.height, story ? 1920 : 1080);
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 368 : 78;
-      final y = story ? 1160 : 578;
-      expect(png.getPixel(x + 5, y + 5).r, 255);
+      final x = story ? 368 : 708;
+      final y = story ? 1361 : 706;
+      final module = story ? 7 : 6;
+      final qrSize = (qr.moduleCount + 8) * module;
+      // All four sides preserve a full four-module white quiet zone.
+      for (var p = 0; p < qrSize; p++) {
+        for (var margin = 0; margin < 4 * module; margin++) {
+          for (final pixel in [
+            png.getPixel(x + p, y + margin),
+            png.getPixel(x + p, y + qrSize - 1 - margin),
+            png.getPixel(x + margin, y + p),
+            png.getPixel(x + qrSize - 1 - margin, y + p),
+          ]) {
+            expect([pixel.r, pixel.g, pixel.b], [255, 255, 255]);
+          }
+        }
+      }
       for (var row = 0; row < qr.moduleCount; row++) {
         for (var col = 0; col < qr.moduleCount; col++) {
-          final pixel = png.getPixel(x + (col + 4) * 7 + 3, y + (row + 4) * 7 + 3);
+          final pixel = png.getPixel(x + (col + 4) * module + 3, y + (row + 4) * module + 3);
           final expected = qr.isDark(row, col) ? 0 : 255;
           expect([pixel.r, pixel.g, pixel.b], [expected, expected, expected], reason: 'module $row,$col');
         }
@@ -129,11 +151,59 @@ void main() {
     });
   }
 
+  for (final story in [false, true]) {
+    testWidgets('verification badge is exported only for confirmed identity: story=$story', (tester) async {
+      final normal = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+        name: 'Alex', code: code, modality: 'Auto · Pasajeros', story: story));
+      final verified = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+        name: 'Alex', code: code, modality: 'Auto · Pasajeros', story: story,
+        identityVerified: true));
+      int bluePixels(Uint8List bytes) {
+        final png = img.decodePng(bytes)!;
+        var count = 0;
+        for (var y = story ? 921 : 335; y < (story ? 1090 : 500); y++) {
+          for (var x = story ? 62 : 449; x < 1015; x++) {
+            final p = png.getPixel(x, y);
+            if (p.r == 29 && p.g == 155 && p.b == 240) count++;
+          }
+        }
+        return count;
+      }
+      expect(bluePixels(normal!), 0);
+      expect(bluePixels(verified!), greaterThan(300));
+    });
+  }
+
+  test('both formats are visible without selector and have independent actions', () {
+    final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
+    expect(source, isNot(contains('SegmentedButton<bool>')));
+    expect(source, contains('_formatCard(context, story: false, ready: ready)'));
+    expect(source, contains('_formatCard(context, story: true, ready: ready)'));
+    expect(source, contains('mi-tuktuk-share-story'));
+    expect(source, contains('mi-tuktuk-share-square'));
+    expect(source, contains('mi-tuktuk-download-story'));
+    expect(source, contains('mi-tuktuk-download-square'));
+    expect(source, contains('_shareCard(story: story)'));
+    expect(source, contains('_downloadCard(story: story)'));
+    expect(source, contains('_artworkFor(story)'));
+    expect(source, contains('_fileNameFor(story)'));
+    expect(source, contains("story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png'"));
+    expect(source, contains('text: copy'));
+  });
+
   test('sharing and download remain gated by own enabled profile and generated image', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
-    expect(source, contains('get_my_marketplace_promo_profile'));
-    expect(source, contains('set_my_marketplace_promo_profile'));
-    expect(source, contains('target_share_photo'));
+    expect(source, contains('prepare_my_marketplace_promo_card_v1'));
+    expect(source, isNot(contains('publish_my_marketplace_promo_card_v1')));
+    expect(source, contains('revoke_my_marketplace_promo_card_v1'));
+    expect(source, isNot(contains('Activar mi perfil')));
+    expect(source, isNot(contains('CheckboxListTile')));
+    expect(source, isNot(contains('_ensurePublished')));
+    expect(source, isNot(contains('Al compartir, descargar o copiar el enlace')));
+    expect(source, contains('active Mi TukTuk desde Administración'));
+    expect(source, contains('SelectableText(marketplaceDriverPromoUri(_code!).toString())'));
+    expect(source, contains('final ready = previewReady;'));
+    expect(source, contains("storage.from('marketplace-media').createSignedUrl"));
     expect(source, contains('files: [XFile.fromData'));
     expect(source, contains('text: copy'));
     expect(source, isNot(contains('assets/branding/tuktuk_logo_transparent.png')));
@@ -142,19 +212,26 @@ void main() {
     expect(source, contains('loadMarketplacePromoBrandLogo(identity)'));
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
-    expect(source, contains('Rect.fromLTWH(72, headerY, 136, 136)'));
+    expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 5;'));
+    expect(source, contains("result['identity_verified'] == true"));
+    expect(source, contains('identityVerified: identityVerified'));
+    expect(source, contains('Color(0xFF1D9BF0)'));
+    expect(source, contains('weight: FontWeight.w900'));
+    expect(source, contains('const paper = Color(0xFFF1F8FA)'));
     expect(source, contains('panelShape'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
     expect(source, contains('_load(force: true)'));
     expect(source, contains('_cache.clear(actor)'));
-    expect(source.indexOf('_cache.read(actor, fingerprint)'), lessThan(source.indexOf('await downloadMarketplacePromoPortrait(validPhotoUrl)')));
+    expect(source.indexOf('_cache.read(actor, fingerprint)'), lessThan(source.indexOf('await downloadMarketplacePromoPortrait(Uri.parse(signed))')));
     expect(source, contains('driver_promo_download.downloadPromoPng'));
     expect(source, contains('auth.currentUser?.id == _actor'));
     expect(source, isNot(contains('claim_referral_code')));
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
-    expect(source, contains('Solicita tu transporte desde mi enlace personal.'));
+    expect(source, contains('Solicita mi servicio desde este enlace:'));
+    expect(source, contains(r'Solicita mi servicio\ndesde este enlace'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
     expect(source, contains("'Agencia TukTuk'"));
     expect(source, contains('identity.primaryColorHex'));
