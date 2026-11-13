@@ -179,6 +179,38 @@ void main() {
     });
   }
 
+  testWidgets('vehicle category changes the watermark in both formats without changing QR', (tester) async {
+    for (final story in [false, true]) {
+      final car = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+        name: 'Alex', code: code, modality: 'Transporte · Pasajeros',
+        story: story, vehicleCategory: 'light_car'));
+      for (final category in ['motorcycle', 'tricycle', 'bicitaxi', 'bicycle', 'van', 'truck']) {
+        final other = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+          name: 'Alex', code: code, modality: 'Transporte · Pasajeros',
+          story: story, vehicleCategory: category));
+        final a = img.decodePng(car!)!, b = img.decodePng(other!)!;
+        var changes = 0;
+        for (var y = story ? 1020 : 423; y < (story ? 1240 : 588); y += 3) {
+          for (var x = story ? 480 : 610; x < 1060; x += 3) {
+            final p = a.getPixel(x,y), q = b.getPixel(x,y);
+            if (p.r != q.r || p.g != q.g || p.b != q.b) {
+              changes++;
+            }
+          }
+        }
+        expect(changes, greaterThan(25), reason: category);
+        final x = story ? 368 : 666, y = story ? 1361 : 673;
+        final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 7;
+        for (var dy = 0; dy < size; dy += 7) {
+          for (var dx = 0; dx < size; dx += 7) {
+            final p = a.getPixel(x + dx, y + dy), q = b.getPixel(x + dx, y + dy);
+            expect([p.r, p.g, p.b], [q.r, q.g, q.b]);
+          }
+        }
+      }
+    }
+  });
+
   test('both formats are visible without selector and have independent actions', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
     expect(source, isNot(contains('SegmentedButton<bool>')));
@@ -218,9 +250,12 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 6;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 7;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
+    expect(source, contains('vehicleCategory: vehicleCategory'));
+    expect(source, contains('_promoVehicleWatermark(canvas, vehicleCategory'));
+    expect(source, contains('identityVerified, vehicleCategory'));
     expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
     expect(source, contains('const panelDark = Color(0xFF0B1C2A)'));
