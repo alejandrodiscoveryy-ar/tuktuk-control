@@ -9,11 +9,10 @@ Uri marketplaceDriverPromoUri(String code) {
 }
 
 String marketplaceDriverPromoCopy(String name, String code) =>
-    '¡Viaja conmigo! Soy $name, conductor de TukTuk.\n'
-    'Solicita tu transporte desde mi enlace personal. Si no estoy disponible, '
-    'otro conductor de nuestra flota podrá atenderte.\n\n'
+    '¡Viaja conmigo!\n\n'
+    'Soy $name, conductor de la Agencia TukTuk. Solicita tu transporte de forma fácil desde mi enlace personal.\n\n'
     '${marketplaceDriverPromoUri(code)}\n\n'
-    'Tu conductor de confianza. Toda una flota a tu disposición.';
+    'Agencia TukTuk. Tu conductor de confianza, a un toque.';
 
 String _promoCategoryLabel(String code) => switch (code) {
   'motorcycle' => 'Moto', 'bicitaxi' => 'Bicitaxi', 'tricycle' => 'Triciclo',
@@ -101,27 +100,38 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       begin: Alignment.topLeft, end: Alignment.bottomRight,
       colors: [Color(0xFF111C28), Color(0xFF0A101A), Color(0xFF192B3C)],
     ).createShader(bounds));
-    const orange = Color(0xFFFB923C);
+    const turquoise = Color(0xFF00C9AF);
+    const gold = Color(0xFFFFC51B);
     const white = Color(0xFFFFFFFF);
     const muted = Color(0xFFCBD5E1);
     canvas.drawCircle(Offset(970, story ? 290 : 120), 310,
-      Paint()..color = const Color(0x18FB923C));
+      Paint()..color = const Color(0x18FFC51B));
     canvas.drawCircle(Offset(75, height - 60.0), 320,
-      Paint()..color = const Color(0x1722D3EE));
+      Paint()..color = const Color(0x1700C9AF));
     final headerY = story ? 125.0 : 44.0;
+    // The official asset has generous transparent margins. Frame its visible
+    // emblem so the agency identity is legible even in a mobile preview.
     if (logo != null) {
-      _promoFitImage(canvas, logo, Rect.fromLTWH(68, headerY, 265, 116));
-    } else {
-      _promoText(canvas, 'TukTuk', 68, headerY + 14, 340, 65, orange, lines: 1);
+      final lw = logo.width.toDouble(), lh = logo.height.toDouble();
+      final source = Rect.fromLTRB(lw * .11, lh * .24, lw * .88, lh * .76);
+      final frame = Rect.fromLTWH(68, headerY, 190, 126);
+      final fit = applyBoxFit(BoxFit.contain, source.size, frame.size);
+      final dest = Alignment.center.inscribe(fit.destination, frame);
+      canvas.drawImageRect(logo, source, dest, Paint()..filterQuality = FilterQuality.high);
     }
-    _promoText(canvas, 'MI TUKTUK', 690, headerY + 42, 310, 30, muted,
+    final brandX = logo == null ? 68.0 : 275.0;
+    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 24, 410, 44, turquoise, lines: 1);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+      Rect.fromLTWH(brandX, headerY + 84, 92, 7), const Radius.circular(4)),
+      Paint()..color = gold);
+    _promoText(canvas, 'MI TUKTUK', 720, headerY + 42, 290, 30, muted,
       center: true, lines: 1);
 
     final photoRect = story
         ? const Rect.fromLTWH(350, 345, 380, 380)
         : const Rect.fromLTWH(78, 216, 278, 278);
     canvas.drawCircle(photoRect.center, photoRect.width / 2 + 9,
-      Paint()..color = orange);
+      Paint()..color = turquoise);
     canvas.save();
     canvas.clipPath(ui.Path()..addOval(photoRect));
     canvas.drawRect(photoRect, Paint()..color = const Color(0xFF27384A));
@@ -137,12 +147,14 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
     if (story) {
       _promoText(canvas, name, 64, 775, 952, 68, white, center: true);
-      _promoText(canvas, modality, 70, 945, 940, 37, orange, center: true);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 934, 940, 34, turquoise, center: true, lines: 1);
+      _promoText(canvas, modality, 70, 987, 940, 35, muted, center: true, lines: 1);
       _promoText(canvas, '¡Viaja conmigo!', 70, 1050, 940, 54, white, center: true, lines: 1);
     } else {
-      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, orange, lines: 1);
-      _promoText(canvas, name, 405, 265, 615, 58, white);
-      _promoText(canvas, modality, 405, 418, 615, 35, muted);
+      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, turquoise, lines: 1);
+      _promoText(canvas, name, 405, 265, 615, 52, white);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, turquoise, lines: 1);
+      _promoText(canvas, modality, 405, 447, 615, 35, muted);
     }
     // QR is drawn into the PNG with exact pixel-aligned black/white squares.
     final qr = marketplaceDriverPromoQr(code);
@@ -161,16 +173,16 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       }
     }
     if (story) {
-      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, orange, center: true, lines: 1);
-      _promoText(canvas, 'Si no estoy disponible, TukTuk busca otro conductor para ti.',
+      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, turquoise, center: true, lines: 1);
+      _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         95, 1625, 890, 35, muted, center: true, lines: 3);
-      _promoText(canvas, 'Tu conductor de confianza. Toda una flota a tu disposición.',
+      _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         85, 1770, 910, 31, white, center: true, lines: 2);
     } else {
-      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, orange);
-      _promoText(canvas, 'Si no estoy disponible, TukTuk busca otro conductor para ti.',
+      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, turquoise);
+      _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         460, 728, 545, 34, muted, lines: 4);
-      _promoText(canvas, 'Tu conductor de confianza. Toda una flota a tu disposición.',
+      _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         64, 981, 952, 29, white, center: true, lines: 2);
     }
     final picture = recorder.endRecording();
@@ -390,7 +402,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Mi TukTuk', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const Text('Tu conductor de confianza. Toda una flota a tu disposición.', style: TextStyle(color: kMuted)),
+          const Text('Tu conductor de confianza, a un toque.', style: TextStyle(color: kMuted)),
           const SizedBox(height: 16),
           if (_busy) const LinearProgressIndicator(),
           if (_error != null) ...[
