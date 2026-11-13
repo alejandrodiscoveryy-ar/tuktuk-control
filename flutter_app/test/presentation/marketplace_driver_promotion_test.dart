@@ -19,6 +19,9 @@ void main() {
     expect(marketplaceDriverPromoCopy('Gerson', code), contains(uri.toString()));
     final copy = marketplaceDriverPromoCopy('Gerson', code);
     expect(copy, contains('Soy Gerson, conductor de la Agencia TukTuk.'));
+    expect(copy, isNot(contains('verificado')));
+    expect(marketplaceDriverPromoCopy('Gerson', code, identityVerified: true),
+      contains('Soy Gerson, conductor verificado de la Agencia TukTuk.'));
     expect(copy, contains('Solicita mi servicio desde este enlace:'));
     expect(copy, contains('¡Tu próximo viaje comienza conmigo!'));
     expect(copy, contains('Tu conductor de confianza, a un toque.'));
@@ -93,11 +96,12 @@ void main() {
     String key({String actor = 'driver-a', String name = 'Gerson',
       String modality = 'Auto · Pasajeros', bool authorized = true,
       String url = 'https://example.com/photo/one.png?token=first',
-      ProjectIdentity identity = ProjectIdentity.fallback}) =>
+      ProjectIdentity identity = ProjectIdentity.fallback, bool verified = false}) =>
         marketplacePromoCacheFingerprint(actor: actor, code: code, name: name,
           modality: modality, photoAuthorized: authorized, photoUrl: Uri.parse(url),
-          identity: identity);
+          identity: identity, identityVerified: verified);
     final original = key();
+    expect(key(verified: true), isNot(original));
     expect(key(url: 'https://example.com/photo/one.png?token=second'), original);
     expect(key(url: 'https://example.com/photo/two.png?token=first'), isNot(original));
     expect(key(name: 'Otro'), isNot(original));
@@ -145,6 +149,29 @@ void main() {
     });
   }
 
+  for (final story in [false, true]) {
+    testWidgets('verification badge is exported only for confirmed identity: story=$story', (tester) async {
+      final normal = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+        name: 'Alex', code: code, modality: 'Auto · Pasajeros', story: story));
+      final verified = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+        name: 'Alex', code: code, modality: 'Auto · Pasajeros', story: story,
+        identityVerified: true));
+      int bluePixels(Uint8List bytes) {
+        final png = img.decodePng(bytes)!;
+        var count = 0;
+        for (var y = story ? 921 : 335; y < (story ? 1090 : 500); y++) {
+          for (var x = story ? 62 : 449; x < 1015; x++) {
+            final p = png.getPixel(x, y);
+            if (p.r == 29 && p.g == 155 && p.b == 240) count++;
+          }
+        }
+        return count;
+      }
+      expect(bluePixels(normal!), 0);
+      expect(bluePixels(verified!), greaterThan(300));
+    });
+  }
+
   test('sharing and download remain gated by own enabled profile and generated image', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
     expect(source, contains('get_my_marketplace_promo_profile'));
@@ -159,7 +186,10 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 3;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 4;'));
+    expect(source, contains("result['identity_verified'] == true"));
+    expect(source, contains('identityVerified: identityVerified'));
+    expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
     expect(source, contains('const paper = Color(0xFFF1F8FA)'));
     expect(source, contains('panelShape'));
