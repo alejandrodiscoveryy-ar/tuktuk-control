@@ -1993,6 +1993,9 @@ class RecordStore extends ChangeNotifier {
       await _pushTokenCoordinator?.unregisterBeforeSignOut(currentUser.id);
     }
     await _supabase.auth.signOut();
+    if (currentUser != null) {
+      await MarketplacePromoArtworkCache(_meta).clear(currentUser.id);
+    }
     user = null;
     _load();
     await refreshLicense();

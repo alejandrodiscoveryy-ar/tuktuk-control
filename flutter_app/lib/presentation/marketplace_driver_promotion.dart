@@ -59,6 +59,28 @@ Future<ui.Image> _promoDecode(Uint8List bytes) async {
   }
 }
 
+/// Use only the approved master icon from the central identity. The full
+/// TukTuk Control wordmark belongs to the management application, not this
+/// customer-facing Agency TukTuk promotion.
+Future<Uint8List?> loadMarketplacePromoBrandLogo(ProjectIdentity identity, {http.Client? client}) async {
+  final uri = Uri.tryParse(identity.iconUrl ?? '');
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return null;
+  try {
+    final bytes = await downloadMarketplacePromoPortrait(uri, client: client);
+    final decoded = await _promoDecode(bytes);
+    decoded.dispose();
+    return bytes;
+  } catch (_) {
+    // Text-only brand fallback, never the full Control wordmark or old icon.
+    return null;
+  }
+}
+
+Color _promoBrandColor(String hex, Color fallback) {
+  if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(hex)) return fallback;
+  return Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
+}
+
 void _promoText(Canvas canvas, String value, double x, double y, double width,
     double fontSize, Color color, {bool center = false,
     FontWeight weight = FontWeight.w700, int lines = 2}) {
@@ -86,6 +108,7 @@ void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = fals
 Future<Uint8List> renderMarketplaceDriverPromoCard({
   required String name, required String code, required String modality,
   required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
+  ProjectIdentity identity = ProjectIdentity.fallback,
 }) async {
   const width = 1080;
   final height = story ? 1920 : 1080;
@@ -96,42 +119,63 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final bounds = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
-    canvas.drawRect(bounds, Paint()..shader = const LinearGradient(
-      begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [Color(0xFF111C28), Color(0xFF0A101A), Color(0xFF192B3C)],
-    ).createShader(bounds));
-    const turquoise = Color(0xFF00C9AF);
-    const gold = Color(0xFFFFC51B);
+    final primary = _promoBrandColor(identity.primaryColorHex, const Color(0xFF06B6D4));
+    final secondary = _promoBrandColor(identity.secondaryColorHex, const Color(0xFF0F172A));
     const white = Color(0xFFFFFFFF);
     const muted = Color(0xFFCBD5E1);
-    canvas.drawCircle(Offset(970, story ? 290 : 120), 310,
-      Paint()..color = const Color(0x18FFC51B));
-    canvas.drawCircle(Offset(75, height - 60.0), 320,
-      Paint()..color = const Color(0x1700C9AF));
-    final headerY = story ? 125.0 : 44.0;
-    // The official asset has generous transparent margins. Frame its visible
-    // emblem so the agency identity is legible even in a mobile preview.
+    // Preserve a dark readable card even if Admin selects a light brand color.
+    final background = secondary.computeLuminance() > .18
+        ? Color.lerp(secondary, const Color(0xFF0B0F14), .85)!
+        : secondary;
+    final accent = primary.computeLuminance() < .22
+        ? Color.lerp(primary, white, .48)!
+        : primary;
+    canvas.drawRect(bounds, Paint()..shader = LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [background, const Color(0xFF0B0F14),
+        Color.lerp(background, primary, .12)!],
+    ).createShader(bounds));
+    // Premium agency card: restrained border, tonal watermark and one clear
+    // hierarchy. All typography and ornament stay outside the QR quiet zone.
+    final outer = RRect.fromRectAndRadius(
+      Rect.fromLTWH(24, 24, 1032, height - 48.0), const Radius.circular(48));
+    canvas.drawRRect(outer, Paint()
+      ..style = PaintingStyle.stroke ..strokeWidth = 2
+      ..color = primary.withValues(alpha: .28));
+    canvas.save();
+    canvas.clipRRect(outer);
+    final glow = Rect.fromCircle(center: Offset(1030, story ? 230 : 110), radius: 560);
+    canvas.drawRect(glow, Paint()..shader = RadialGradient(
+      colors: [primary.withValues(alpha: .22), primary.withValues(alpha: 0)],
+    ).createShader(glow));
+    final watermark = ui.Path()
+      ..moveTo(850, height - 430.0)
+      ..lineTo(1080, height - 650.0)
+      ..lineTo(1080, height - 570.0)
+      ..lineTo(850, height - 350.0)
+      ..close();
+    canvas.drawPath(watermark, Paint()..color = primary.withValues(alpha: .09));
+    canvas.restore();
+    final headerY = story ? 105.0 : 48.0;
     if (logo != null) {
-      final lw = logo.width.toDouble(), lh = logo.height.toDouble();
-      final source = Rect.fromLTRB(lw * .11, lh * .24, lw * .88, lh * .76);
-      final frame = Rect.fromLTWH(68, headerY, 190, 126);
-      final fit = applyBoxFit(BoxFit.contain, source.size, frame.size);
-      final dest = Alignment.center.inscribe(fit.destination, frame);
-      canvas.drawImageRect(logo, source, dest, Paint()..filterQuality = FilterQuality.high);
+      _promoFitImage(canvas, logo, Rect.fromLTWH(72, headerY, 136, 136));
     }
-    final brandX = logo == null ? 68.0 : 275.0;
-    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 24, 410, 44, turquoise, lines: 1);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-      Rect.fromLTWH(brandX, headerY + 84, 92, 7), const Radius.circular(4)),
-      Paint()..color = gold);
-    _promoText(canvas, 'MI TUKTUK', 720, headerY + 42, 290, 30, muted,
-      center: true, lines: 1);
+    final brandX = logo == null ? 72.0 : 225.0;
+    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 20, 800 - brandX, 51, white, lines: 1);
+    _promoText(canvas, 'MI TUKTUK', brandX, headerY + 85, 800 - brandX, 28, accent, lines: 1);
+    canvas.drawLine(Offset(72, headerY + 161), Offset(1008, headerY + 161),
+      Paint()..color = primary.withValues(alpha: .24)..strokeWidth = 2);
 
     final photoRect = story
-        ? const Rect.fromLTWH(350, 345, 380, 380)
-        : const Rect.fromLTWH(78, 216, 278, 278);
-    canvas.drawCircle(photoRect.center, photoRect.width / 2 + 9,
-      Paint()..color = turquoise);
+        ? const Rect.fromLTWH(350, 312, 380, 380)
+        : const Rect.fromLTWH(82, 251, 252, 252);
+    canvas.drawCircle(photoRect.center, photoRect.width / 2 + 16,
+      Paint()..color = primary.withValues(alpha: .13));
+    canvas.drawCircle(photoRect.center, photoRect.width / 2 + 6,
+      Paint()..shader = LinearGradient(
+        colors: [accent, primary.withValues(alpha: .35)],
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+      ).createShader(photoRect));
     canvas.save();
     canvas.clipPath(ui.Path()..addOval(photoRect));
     canvas.drawRect(photoRect, Paint()..color = const Color(0xFF27384A));
@@ -146,16 +190,23 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.restore();
 
     if (story) {
-      _promoText(canvas, name, 64, 775, 952, 68, white, center: true);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 934, 940, 34, turquoise, center: true, lines: 1);
-      _promoText(canvas, modality, 70, 987, 940, 35, muted, center: true, lines: 1);
-      _promoText(canvas, '¡Viaja conmigo!', 70, 1050, 940, 54, white, center: true, lines: 1);
+      _promoText(canvas, '¡Viaja conmigo!', 64, 733, 952, 42, accent, center: true, lines: 1);
+      _promoText(canvas, name, 64, 797, 952, 72, white, center: true);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 974, 940, 37, white, center: true, lines: 1);
+      _promoText(canvas, modality, 70, 1033, 940, 35, accent, center: true, lines: 2);
     } else {
-      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, turquoise, lines: 1);
-      _promoText(canvas, name, 405, 265, 615, 52, white);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, turquoise, lines: 1);
-      _promoText(canvas, modality, 405, 447, 615, 35, muted);
+      _promoText(canvas, '¡Viaja conmigo!', 380, 244, 628, 37, accent, lines: 1);
+      _promoText(canvas, name, 380, 302, 628, 53, white);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 380, 437, 628, 29, white, lines: 1);
+      _promoText(canvas, modality, 380, 482, 628, 33, accent, lines: 2);
     }
+    final panel = story
+      ? const Rect.fromLTWH(68, 1110, 944, 590)
+      : const Rect.fromLTWH(58, 558, 964, 380);
+    final panelShape = RRect.fromRectAndRadius(panel, const Radius.circular(34));
+    canvas.drawRRect(panelShape, Paint()..color = Colors.white.withValues(alpha: .045));
+    canvas.drawRRect(panelShape, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 2 ..color = primary.withValues(alpha: .26));
     // QR is drawn into the PNG with exact pixel-aligned black/white squares.
     final qr = marketplaceDriverPromoQr(code);
     const module = 7.0;
@@ -173,15 +224,15 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       }
     }
     if (story) {
-      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, turquoise, center: true, lines: 1);
+      _promoText(canvas, 'Escanea y viaja conmigo', 85, 1532, 910, 48, accent, center: true, lines: 1);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
-        95, 1625, 890, 35, muted, center: true, lines: 3);
+        110, 1600, 860, 34, muted, center: true, lines: 2);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
-        85, 1770, 910, 31, white, center: true, lines: 2);
+        85, 1770, 910, 34, white, center: true, lines: 2);
     } else {
-      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, turquoise);
+      _promoText(canvas, 'Escanea y viaja conmigo', 459, 628, 520, 47, accent);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
-        460, 728, 545, 34, muted, lines: 4);
+        459, 760, 520, 34, muted, lines: 3);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         64, 981, 952, 29, white, center: true, lines: 2);
     }
@@ -204,6 +255,58 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
   }
 }
 
+/// A single local entry per account, versioned by artwork and public metadata.
+/// Signed photo query parameters expire and must never invalidate or be stored.
+const _marketplacePromoArtworkVersion = 2;
+String marketplacePromoCacheFingerprint({
+  required String actor, required String code, required String name,
+  required String modality, required bool photoAuthorized,
+  required Uri? photoUrl, required ProjectIdentity identity,
+  Object? profileUpdatedAt,
+}) => sha256.convert(utf8.encode(jsonEncode([
+  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized,
+  photoUrl == null ? null : '${photoUrl.scheme}://${photoUrl.host}${photoUrl.path}',
+  profileUpdatedAt?.toString(), identity.projectId, identity.iconUrl,
+  identity.primaryColorHex, identity.secondaryColorHex,
+  identity.updatedAt?.toIso8601String(),
+]))).toString();
+
+class MarketplacePromoArtworkCache {
+  const MarketplacePromoArtworkCache(this.box);
+  final Box box;
+  static String _key(String actor) => 'marketplacePromoArtwork:$actor';
+
+  ({Uint8List square, Uint8List story})? read(String actor, String fingerprint) {
+    try {
+      final entry = box.get(_key(actor));
+      if (entry is! Map || entry['fingerprint'] != fingerprint) return null;
+      final square = entry['square'], story = entry['story'];
+      if (square is! Uint8List || story is! Uint8List ||
+          square.isEmpty || story.isEmpty) {
+        return null;
+      }
+      return (square: square, story: story);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> save(String actor, String fingerprint, Uint8List square, Uint8List story) async {
+    try {
+      // One atomic entry, not an ever-growing collection of rendered cards.
+      await box.put(_key(actor), {
+        'fingerprint': fingerprint, 'square': square, 'story': story,
+      });
+    } catch (_) {
+      // Storage quota or private browsing must not prevent using this session's card.
+    }
+  }
+
+  Future<void> clear(String actor) async {
+    try { await box.delete(_key(actor)); } catch (_) {}
+  }
+}
+
 class MarketplaceDriverPromotionScreen extends StatefulWidget {
   const MarketplaceDriverPromotionScreen({required this.store, super.key});
   final RecordStore store;
@@ -214,6 +317,7 @@ class MarketplaceDriverPromotionScreen extends StatefulWidget {
 class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverPromotionScreen> {
   final _client = Supabase.instance.client;
   final _name = TextEditingController();
+  final _cache = MarketplacePromoArtworkCache(Hive.box(_metaBox));
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _consent = false, _sharePhoto = false, _enabled = false;
@@ -234,6 +338,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     _auth = _client.auth.onAuthStateChange.listen((_) {
       if (!_sameUser && mounted) {
         _revision++;
+        if (_actor != null) unawaited(_cache.clear(_actor));
         setState(() {
           _enabled = false; _busy = false; _code = null;
           _squareBytes = null; _storyBytes = null;
@@ -252,9 +357,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     final revision = ++_revision;
-    if (!_sameUser) {
+    final actor = _actor;
+    if (actor == null || !_sameUser) {
       setState(() { _busy = false; _error = 'Inicia sesión para crear tu tarjeta.'; });
       return;
     }
@@ -271,7 +377,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         _sharePhoto = enabled && result['photo_authorized'] == true;
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
       });
-      if (!enabled) return;
+      if (!enabled) {
+        await _cache.clear(actor);
+        return;
+      }
       final code = result['code'];
       if (code is! String) throw StateError('PROMO_CODE_INVALID');
       marketplaceDriverPromoUri(code);
@@ -290,20 +399,53 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (services.isEmpty) throw StateError('PROMO_SERVICE_UNAVAILABLE');
       final name = raw['public_name'] as String;
       final modality = '${_promoCategoryLabel(raw['category_code'] as String)} · $services';
-      stage = 'fotografía';
-      Uint8List? photo;
       final photoUrl = Uri.tryParse(raw['photo_url']?.toString() ?? '');
-      if (photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty) {
-        photo = await downloadMarketplacePromoPortrait(photoUrl);
-      } else if (result['photo_authorized'] == true) {
+      final photoAuthorized = result['photo_authorized'] == true;
+      final validPhotoUrl = photoAuthorized && photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty
+          ? photoUrl : null;
+      if (photoAuthorized && validPhotoUrl == null) {
+        // Do not reuse an old authorized portrait when the server no longer
+        // confirms that the photo is available for public promotion.
+        stage = 'fotografía';
         throw StateError('PROMO_PHOTO_UNAVAILABLE');
       }
+      stage = 'tarjeta';
+      await widget.store.refreshProjectIdentity().timeout(
+        const Duration(seconds: 8), onTimeout: () {});
+      if (!mounted || !_sameUser || revision != _revision) return;
+      final identity = widget.store.projectIdentity;
+      final fingerprint = marketplacePromoCacheFingerprint(
+        actor: actor, code: code, name: name, modality: modality,
+        photoAuthorized: photoAuthorized, photoUrl: validPhotoUrl,
+        identity: identity, profileUpdatedAt: result['updated_at'],
+      );
+      final cached = force ? null : _cache.read(actor, fingerprint);
+      if (cached != null) {
+        setState(() {
+          _name.text = name; _code = code;
+          _squareBytes = cached.square; _storyBytes = cached.story;
+        });
+        return;
+      }
+      stage = 'fotografía';
+      final photo = validPhotoUrl == null ? null :
+          await downloadMarketplacePromoPortrait(validPhotoUrl);
       if (!mounted || !_sameUser || revision != _revision) return;
       stage = 'tarjeta';
-      final logoData = await rootBundle.load('assets/branding/tuktuk_logo_transparent.png');
-      final logo = logoData.buffer.asUint8List(logoData.offsetInBytes, logoData.lengthInBytes);
-      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo);
-      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo);
+      final logo = await loadMarketplacePromoBrandLogo(identity);
+      if (!mounted || !_sameUser || revision != _revision) return;
+      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity);
+      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity);
+      if (!mounted || !_sameUser || revision != _revision) return;
+      // If the configured official icon failed to load, do not persist a
+      // degraded rendering; a later visit can retry the correct identity.
+      if (logo != null || identity.iconUrl == null) {
+        await _cache.save(actor, fingerprint, square, story);
+        if (!_sameUser) {
+          await _cache.clear(actor);
+          return;
+        }
+      }
       if (!mounted || !_sameUser || revision != _revision) return;
       setState(() { _name.text = name; _code = code; _squareBytes = square; _storyBytes = story; });
     } catch (_) {
@@ -337,6 +479,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         'target_consent': consent, 'target_share_photo': consent && _sharePhoto,
       });
       if (!mounted || !_sameUser || revision != _revision) return;
+      if (!consent) await _cache.clear(_actor!);
       await _load();
     } catch (_) {
       if (mounted && revision == _revision) {
@@ -437,6 +580,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             OutlinedButton.icon(onPressed: ready ? _downloadCard : null,
               icon: const Icon(Icons.download_outlined), label: const Text('Descargar imagen')),
             if (ready) ...[
+              TextButton.icon(onPressed: () => _load(force: true),
+                icon: const Icon(Icons.refresh), label: const Text('Actualizar tarjeta')),
               const SizedBox(height: 12),
               const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
               SelectableText(marketplaceDriverPromoUri(_code!).toString()),
