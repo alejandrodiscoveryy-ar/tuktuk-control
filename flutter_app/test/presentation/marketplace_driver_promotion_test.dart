@@ -123,10 +123,15 @@ void main() {
       final png = img.decodePng(bytes!)!;
       expect(png.width, 1080);
       expect(png.height, story ? 1920 : 1080);
+      // Outside the QR the booking panel stays dark, never a white slab.
+      final panelPixel = png.getPixel(110, story ? 1510 : 900);
+      expect(panelPixel.r, lessThan(65));
+      expect(panelPixel.g, lessThan(85));
+      expect(panelPixel.b, lessThan(100));
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 368 : 708;
-      final y = story ? 1361 : 706;
-      final module = story ? 7 : 6;
+      final x = story ? 368 : 666;
+      final y = story ? 1361 : 673;
+      const module = 7;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
       for (var p = 0; p < qrSize; p++) {
@@ -174,6 +179,38 @@ void main() {
     });
   }
 
+  testWidgets('vehicle category changes the watermark in both formats without changing QR', (tester) async {
+    for (final story in [false, true]) {
+      final car = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+        name: 'Alex', code: code, modality: 'Transporte · Pasajeros',
+        story: story, vehicleCategory: 'light_car'));
+      for (final category in ['motorcycle', 'tricycle', 'bicitaxi', 'bicycle', 'van', 'truck']) {
+        final other = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
+          name: 'Alex', code: code, modality: 'Transporte · Pasajeros',
+          story: story, vehicleCategory: category));
+        final a = img.decodePng(car!)!, b = img.decodePng(other!)!;
+        var changes = 0;
+        for (var y = story ? 1020 : 423; y < (story ? 1240 : 588); y += 3) {
+          for (var x = story ? 480 : 610; x < 1060; x += 3) {
+            final p = a.getPixel(x,y), q = b.getPixel(x,y);
+            if (p.r != q.r || p.g != q.g || p.b != q.b) {
+              changes++;
+            }
+          }
+        }
+        expect(changes, greaterThan(25), reason: category);
+        final x = story ? 368 : 666, y = story ? 1361 : 673;
+        final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 7;
+        for (var dy = 0; dy < size; dy += 7) {
+          for (var dx = 0; dx < size; dx += 7) {
+            final p = a.getPixel(x + dx, y + dy), q = b.getPixel(x + dx, y + dy);
+            expect([p.r, p.g, p.b], [q.r, q.g, q.b]);
+          }
+        }
+      }
+    }
+  });
+
   test('both formats are visible without selector and have independent actions', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
     expect(source, isNot(contains('SegmentedButton<bool>')));
@@ -213,12 +250,15 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 5;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 7;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
+    expect(source, contains('vehicleCategory: vehicleCategory'));
+    expect(source, contains('_promoVehicleWatermark(canvas, vehicleCategory'));
+    expect(source, contains('identityVerified, vehicleCategory'));
     expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
-    expect(source, contains('const paper = Color(0xFFF1F8FA)'));
+    expect(source, contains('const panelDark = Color(0xFF0B1C2A)'));
     expect(source, contains('panelShape'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
