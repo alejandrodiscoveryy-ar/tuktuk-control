@@ -186,6 +186,23 @@ class MarketplaceMoreScreen extends StatelessWidget {
         GlassCard(
           child: ListTile(
             leading: const _MoreSectionIcon(
+              icon: Icons.campaign_outlined,
+              color: Color(0xFFFB923C),
+            ),
+            title: const Text('Mi TukTuk'),
+            subtitle: const Text('Tu tarjeta, QR y enlace personal'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _openPage(
+              context,
+              title: 'Mi TukTuk',
+              child: MarketplaceDriverPromotionScreen(store: store),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        GlassCard(
+          child: ListTile(
+            leading: const _MoreSectionIcon(
               icon: Icons.redeem_outlined,
               color: Color(0xFF9A7BFF),
             ),
