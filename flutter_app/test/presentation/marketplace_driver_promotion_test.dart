@@ -24,12 +24,12 @@ void main() {
     expect(marketplaceDriverPromoQr(code).moduleCount, 41);
   });
 
-  testWidgets('current official logo is preferred and official icon is fallback', (tester) async {
+  testWidgets('agency promotion uses only the approved master icon', (tester) async {
     const identity = ProjectIdentity(
       projectId: 'test', name: 'TukTuk Conductor',
       primaryColorHex: '#06B6D4', secondaryColorHex: '#0F172A',
-      logoUrl: 'https://example.com/current-logo.png',
-      iconUrl: 'https://example.com/current-icon.png',
+      logoUrl: 'https://example.com/control-wordmark.png',
+      iconUrl: 'https://example.com/approved-icon.png',
     );
     final pixels = img.Image(width: 4, height: 4);
     img.fill(pixels, color: img.ColorRgb8(10, 200, 100));
@@ -37,27 +37,24 @@ void main() {
     final requests = <String>[];
     final client = MockClient((request) async {
       requests.add(request.url.path);
-      if (request.url.path == '/current-logo.png') {
-        return http.Response('unavailable', 404);
-      }
       return http.Response.bytes(png, 200);
     });
     addTearDown(client.close);
     final bytes = await tester.runAsync(() =>
       loadMarketplacePromoBrandLogo(identity, client: client));
     expect(bytes, orderedEquals(png));
-    expect(requests, ['/current-logo.png', '/current-icon.png']);
-    final direct = MockClient((request) async {
-      expect(request.url.path, '/current-logo.png');
-      return http.Response.bytes(png, 200);
+    expect(requests, ['/approved-icon.png']);
+    final failed = MockClient((request) async {
+      expect(request.url.path, '/approved-icon.png');
+      return http.Response('unavailable', 404);
     });
-    addTearDown(direct.close);
-    final directBytes = await tester.runAsync(() =>
-      loadMarketplacePromoBrandLogo(identity, client: direct));
-    expect(directBytes, orderedEquals(png));
+    addTearDown(failed.close);
     final missing = await tester.runAsync(() =>
-      loadMarketplacePromoBrandLogo(ProjectIdentity.fallback));
+      loadMarketplacePromoBrandLogo(identity, client: failed));
     expect(missing, isNull);
+    final noIcon = await tester.runAsync(() =>
+      loadMarketplacePromoBrandLogo(ProjectIdentity.fallback));
+    expect(noIcon, isNull);
   });
 
   for (final story in [false, true]) {
@@ -93,6 +90,10 @@ void main() {
     expect(source, contains('widget.store.refreshProjectIdentity()'));
     expect(source, contains('widget.store.projectIdentity'));
     expect(source, contains('loadMarketplacePromoBrandLogo(identity)'));
+    expect(source, contains('identity.iconUrl'));
+    expect(source, isNot(contains('identity.logoUrl')));
+    expect(source, contains('Rect.fromLTWH(72, headerY, 136, 136)'));
+    expect(source, contains('panelShape'));
     expect(source, contains('driver_promo_download.downloadPromoPng'));
     expect(source, contains('auth.currentUser?.id == _actor'));
     expect(source, isNot(contains('claim_referral_code')));
