@@ -85,7 +85,7 @@ Color _promoBrandColor(String hex, Color fallback) {
 void _promoText(Canvas canvas, String value, double x, double y, double width,
     double fontSize, Color color, {bool center = false,
     FontWeight weight = FontWeight.w700, int lines = 2,
-    double? minFontSize, double letterSpacing = 0}) {
+    double? minFontSize, double letterSpacing = 0, double? boxHeight}) {
   final painter = TextPainter(
     textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
@@ -102,7 +102,8 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
     }
     size = max(minFontSize, size - 2);
   }
-  painter.paint(canvas, Offset(x, y));
+  final top = boxHeight == null ? y : y + max(0.0, (boxHeight - painter.height) / 2);
+  painter.paint(canvas, Offset(x, top));
   painter.dispose();
 }
 
@@ -329,8 +330,9 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     if (!story) canvas.drawCircle(Offset(servicePill.left + 27, servicePill.center.dy),
       6, Paint()..color = lime);
     _promoText(canvas, modality, servicePill.left + (story ? 20 : 47),
-      servicePill.top + 17, servicePill.width - (story ? 40 : 68),
+      servicePill.top, servicePill.width - (story ? 40 : 68),
       story ? 29 : 31, white, center: story, lines: 2, minFontSize: 23,
+      boxHeight: servicePill.height,
       weight: FontWeight.w700);
 
     // Integrated midnight booking pass. Only the QR's quiet zone is white;
