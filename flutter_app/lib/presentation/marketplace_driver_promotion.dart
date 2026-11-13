@@ -9,11 +9,10 @@ Uri marketplaceDriverPromoUri(String code) {
 }
 
 String marketplaceDriverPromoCopy(String name, String code) =>
-    '¡Viaja conmigo! Soy $name, conductor de TukTuk.\n'
-    'Solicita tu transporte desde mi enlace personal. Si no estoy disponible, '
-    'otro conductor de nuestra flota podrá atenderte.\n\n'
+    '¡Viaja conmigo!\n\n'
+    'Soy $name, conductor de TukTuk. Solicita tu transporte de forma fácil desde mi enlace personal.\n\n'
     '${marketplaceDriverPromoUri(code)}\n\n'
-    'Tu conductor de confianza. Toda una flota a tu disposición.';
+    'TukTuk. Tu conductor de confianza, a un toque.';
 
 String _promoCategoryLabel(String code) => switch (code) {
   'motorcycle' => 'Moto', 'bicitaxi' => 'Bicitaxi', 'tricycle' => 'Triciclo',
@@ -162,15 +161,15 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     if (story) {
       _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, orange, center: true, lines: 1);
-      _promoText(canvas, 'Si no estoy disponible, TukTuk busca otro conductor para ti.',
+      _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         95, 1625, 890, 35, muted, center: true, lines: 3);
-      _promoText(canvas, 'Tu conductor de confianza. Toda una flota a tu disposición.',
+      _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         85, 1770, 910, 31, white, center: true, lines: 2);
     } else {
       _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, orange);
-      _promoText(canvas, 'Si no estoy disponible, TukTuk busca otro conductor para ti.',
+      _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         460, 728, 545, 34, muted, lines: 4);
-      _promoText(canvas, 'Tu conductor de confianza. Toda una flota a tu disposición.',
+      _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         64, 981, 952, 29, white, center: true, lines: 2);
     }
     final picture = recorder.endRecording();
@@ -390,7 +389,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Mi TukTuk', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const Text('Tu conductor de confianza. Toda una flota a tu disposición.', style: TextStyle(color: kMuted)),
+          const Text('Tu conductor de confianza, a un toque.', style: TextStyle(color: kMuted)),
           const SizedBox(height: 16),
           if (_busy) const LinearProgressIndicator(),
           if (_error != null) ...[
