@@ -47,7 +47,7 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   final painter = TextPainter(
     text: TextSpan(text: value, style: TextStyle(color: color,
       fontSize: fontSize, fontWeight: weight, height: 1.14)),
-    textDirection: TextDirection.ltr,
+    textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
     maxLines: lines, ellipsis: '…',
   )..layout(minWidth: width, maxWidth: width);
@@ -69,7 +69,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
   required String name, required String code, required String modality,
   required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
 }) async {
-  final width = 1080;
+  const width = 1080;
   final height = story ? 1920 : 1080;
   ui.Image? portrait, logo;
   try {
@@ -104,7 +104,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawCircle(photoRect.center, photoRect.width / 2 + 9,
       Paint()..color = orange);
     canvas.save();
-    canvas.clipPath(Path()..addOval(photoRect));
+    canvas.clipPath(ui.Path()..addOval(photoRect));
     canvas.drawRect(photoRect, Paint()..color = const Color(0xFF27384A));
     if (portrait != null) {
       _promoFitImage(canvas, portrait, photoRect, cover: true);
@@ -393,7 +393,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
               icon: const Icon(Icons.share_outlined), label: const Text('Compartir tarjeta y mensaje')),
             OutlinedButton.icon(onPressed: ready ? _downloadCard : null,
               icon: const Icon(Icons.download_outlined), label: const Text('Descargar imagen')),
-            if (ready && copy != null) ...[
+            if (ready) ...[
               const SizedBox(height: 12),
               const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
               SelectableText(marketplaceDriverPromoUri(_code!).toString()),
