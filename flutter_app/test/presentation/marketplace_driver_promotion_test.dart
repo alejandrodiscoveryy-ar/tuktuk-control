@@ -14,7 +14,7 @@ void main() {
     expect(uri.queryParameters, {'conductor': code});
     expect(marketplaceDriverPromoCopy('Gerson', code), contains(uri.toString()));
     final copy = marketplaceDriverPromoCopy('Gerson', code);
-    expect(copy, contains('Soy Gerson, conductor de TukTuk.'));
+    expect(copy, contains('Soy Gerson, conductor de la Agencia TukTuk.'));
     expect(copy, contains('Tu conductor de confianza, a un toque.'));
     expect(copy, isNot(contains('otro conductor')));
     expect(copy, isNot(contains('flota')));
@@ -58,5 +58,9 @@ void main() {
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
     expect(source, contains('Solicita tu transporte desde mi enlace personal.'));
+    expect(source, contains("'Conductor de la Agencia TukTuk'"));
+    expect(source, contains("'Agencia TukTuk'"));
+    expect(source, contains('Color(0xFF00C9AF)'));
+    expect(source, contains('Color(0xFFFFC51B)'));
   });
 }
