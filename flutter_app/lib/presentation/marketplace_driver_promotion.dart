@@ -174,7 +174,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
       color: Colors.white, fontSize: size, fontWeight: FontWeight.w900,
       height: 1.10, letterSpacing: -1.8));
     painter.layout(maxWidth: available);
-    if (!painter.didExceedMaxLines || size <= minFontSize) {
+    if ((!painter.didExceedMaxLines && painter.height <= area.height) || size <= minFontSize) {
       break;
     }
     size = max(minFontSize, size - 2);
@@ -359,7 +359,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final accent = primary.computeLuminance() < .22
         ? Color.lerp(primary, white, .48)!
         : primary;
-    final lime = Color.lerp(primary, const Color(0xFF84FF62), .76)!;
+    final lime = Color.lerp(primary, const Color(0xFF84FF62), .90)!;
     const panelDark = Color(0xFF0B1C2A);
     const panelDeep = Color(0xFF102E3B);
     // A campaign artwork, not an app screen: the dark stage, energetic
@@ -488,8 +488,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     canvas.restore();
 
-    final nameArea = story ? const Rect.fromLTWH(494, 615, 530, 155)
-      : const Rect.fromLTWH(448, 350, 570, 150);
+    final nameArea = story ? const Rect.fromLTWH(494, 615, 530, 145)
+      : const Rect.fromLTWH(448, 350, 570, 125);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
       fontSize: story ? 92 : 78, minFontSize: 32, center: false,
       identityVerified: identityVerified);
