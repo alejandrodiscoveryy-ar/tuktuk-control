@@ -13,6 +13,11 @@ void main() {
     expect(uri.path, '/cliente/tuk/');
     expect(uri.queryParameters, {'conductor': code});
     expect(marketplaceDriverPromoCopy('Gerson', code), contains(uri.toString()));
+    final copy = marketplaceDriverPromoCopy('Gerson', code);
+    expect(copy, contains('Soy Gerson, conductor de TukTuk.'));
+    expect(copy, contains('Tu conductor de confianza, a un toque.'));
+    expect(copy, isNot(contains('otro conductor')));
+    expect(copy, isNot(contains('flota')));
     expect(() => marketplaceDriverPromoUri('invalid'), throwsArgumentError);
     expect(marketplaceDriverPromoQr(code).moduleCount, 41);
   });
@@ -50,5 +55,8 @@ void main() {
     expect(source, contains('driver_promo_download.downloadPromoPng'));
     expect(source, contains('auth.currentUser?.id == _actor'));
     expect(source, isNot(contains('claim_referral_code')));
+    expect(source, isNot(contains('Si no estoy disponible')));
+    expect(source, isNot(contains('Toda una flota a tu disposición')));
+    expect(source, contains('Solicita tu transporte desde mi enlace personal.'));
   });
 }
