@@ -273,9 +273,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (!mounted || !_sameUser || revision != _revision) return;
       setState(() { _name.text = name; _code = code; _squareBytes = square; _storyBytes = story; });
     } catch (_) {
-      if (mounted && revision == _revision) setState(() {
+      if (mounted && revision == _revision) {
+        setState(() {
         _error = 'Mi TukTuk todavía no está disponible o no se pudo cargar tu tarjeta. Reintenta.';
-      });
+        });
+      }
     } finally {
       if (mounted && revision == _revision) setState(() => _busy = false);
     }
@@ -298,9 +300,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (!mounted || !_sameUser || revision != _revision) return;
       await _load();
     } catch (_) {
-      if (mounted && revision == _revision) setState(() {
+      if (mounted && revision == _revision) {
+        setState(() {
         _busy = false; _error = 'No se pudo guardar el perfil. Comprueba tu conexión o disponibilidad.';
-      });
+        });
+      }
     }
   }
 
