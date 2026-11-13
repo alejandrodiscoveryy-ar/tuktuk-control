@@ -15,7 +15,7 @@ void main() {
     expect(marketplaceDriverPromoCopy('Gerson', code), contains(uri.toString()));
     final copy = marketplaceDriverPromoCopy('Gerson', code);
     expect(copy, contains('Soy Gerson, conductor de la Agencia TukTuk.'));
-    expect(copy, contains('Tu conductor de confianza, a un toque.'));
+    expect(copy, contains('Agencia TukTuk. Tu ciudad te mueve.'));
     expect(copy, isNot(contains('otro conductor')));
     expect(copy, isNot(contains('flota')));
     expect(() => marketplaceDriverPromoUri('invalid'), throwsArgumentError);
@@ -51,7 +51,9 @@ void main() {
     expect(source, contains('target_share_photo'));
     expect(source, contains('files: [XFile.fromData'));
     expect(source, contains('text: copy'));
-    expect(source, contains('assets/branding/tuktuk_logo_transparent.png'));
+    expect(source, contains('_promoBrandLockup(canvas, 68, headerY)'));
+    expect(source, isNot(contains('assets/branding/tuktuk_logo_transparent.png')));
+    expect(source, contains('T U   C I U D A D   T E   M U E V E'));
     expect(source, contains('driver_promo_download.downloadPromoPng'));
     expect(source, contains('auth.currentUser?.id == _actor'));
     expect(source, isNot(contains('claim_referral_code')));
@@ -59,8 +61,8 @@ void main() {
     expect(source, isNot(contains('Toda una flota a tu disposición')));
     expect(source, contains('Solicita tu transporte desde mi enlace personal.'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
-    expect(source, contains("'Agencia TukTuk'"));
-    expect(source, contains('Color(0xFF00C9AF)'));
-    expect(source, contains('Color(0xFFFFC51B)'));
+    expect(source, contains("TextSpan(text: 'TUK', style: TextStyle(color: Colors.white))"));
+    expect(source, contains('Color(0xFF35D6A2)'));
+    expect(source, contains('Color(0xFFE5A84E)'));
   });
 }
