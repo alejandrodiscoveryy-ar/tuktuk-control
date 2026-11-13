@@ -112,7 +112,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   required double fontSize, required double minFontSize, required bool center,
   required bool identityVerified,
 }) {
-  final badgeSize = identityVerified ? 49.0 : 0.0;
+  final badgeSize = identityVerified ? 58.0 : 0.0;
   final gap = identityVerified ? 16.0 : 0.0;
   final painter = TextPainter(textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
@@ -355,21 +355,22 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       ..color = lime.withValues(alpha: .22));
 
     _promoVehicleWatermark(canvas, vehicleCategory,
-      story ? const Rect.fromLTWH(480, 1020, 600, 220)
-        : const Rect.fromLTWH(610, 423, 450, 165), accent);
+      story ? const Rect.fromLTWH(230, 274, 620, 227)
+        : const Rect.fromLTWH(530, 475, 510, 187), accent);
 
     // The approved master icon is used at its full aspect ratio.
-    final headerY = story ? 137.0 : 42.0;
+    final headerY = story ? 95.0 : 42.0;
     final iconSize = story ? 126.0 : 112.0;
     if (logo != null) {
-      _promoFitImage(canvas, logo, Rect.fromLTWH(65, headerY, iconSize, iconSize));
+      _promoFitImage(canvas, logo, Rect.fromLTWH(1015 - iconSize, headerY, iconSize, iconSize));
     }
-    final brandX = logo == null ? 65.0 : (story ? 218.0 : 199.0);
+    const brandX = 65.0;
+    final brandWidth = logo == null ? 950.0 : 950.0 - iconSize - 26;
     _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 12,
-      1000 - brandX, story ? 55 : 51, white, lines: 1,
+      brandWidth, story ? 55 : 51, white, lines: 1,
       weight: FontWeight.w800, minFontSize: 35, letterSpacing: -1.1);
     _promoText(canvas, 'MI TUKTUK', brandX, headerY + 75,
-      1000 - brandX, 25, accent, lines: 1,
+      brandWidth, 25, accent, lines: 1,
       weight: FontWeight.w600, letterSpacing: 4);
     final brandRule = Rect.fromLTWH(65, headerY + iconSize + 23, 950, 5);
     canvas.drawRRect(RRect.fromRectAndRadius(brandRule, const Radius.circular(3)),
@@ -378,7 +379,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       ], stops: const [0, .23, 1]).createShader(brandRule));
 
     final photoRect = story
-        ? const Rect.fromLTWH(316, 443, 448, 448)
+        ? const Rect.fromLTWH(316, 495, 448, 448)
         : const Rect.fromLTWH(67, 238, 348, 348);
     final photoRadius = photoRect.width / 2;
     final portraitGlow = Rect.fromCircle(center: photoRect.center, radius: photoRadius + 47);
@@ -413,30 +414,24 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
     double roleY;
     if (story) {
-      _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 62, 316,
-        956, 52, white, center: true, weight: FontWeight.w800, lines: 2,
-        minFontSize: 42, letterSpacing: -1.2);
-      final nameBottom = _promoVerifiedName(canvas, name, const Rect.fromLTWH(62, 921, 956, 169),
-        fontSize: 76, minFontSize: 39, center: true, identityVerified: identityVerified);
-      roleY = max(1030.0, nameBottom + 16);
+      final nameBottom = _promoVerifiedName(canvas, name, const Rect.fromLTWH(62, 968, 956, 169),
+        fontSize: 70, minFontSize: 36, center: true, identityVerified: identityVerified);
+      roleY = max(1067.0, nameBottom + 12);
       _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
         : 'Conductor de la Agencia TukTuk', 64, roleY, 952,
         34, identityVerified ? const Color(0xFF81CEFF) : muted,
         center: true, lines: 1, weight: FontWeight.w600, minFontSize: 27);
     } else {
-      _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 449, 224,
-        566, 42, white, weight: FontWeight.w800, minFontSize: 34,
-        letterSpacing: -.8);
-      final nameBottom = _promoVerifiedName(canvas, name, const Rect.fromLTWH(449, 335, 566, 165),
-        fontSize: 76, minFontSize: 31, center: false, identityVerified: identityVerified);
-      roleY = max(445.0, nameBottom + 16);
+      final nameBottom = _promoVerifiedName(canvas, name, const Rect.fromLTWH(449, 245, 566, 165),
+        fontSize: 70, minFontSize: 31, center: false, identityVerified: identityVerified);
+      roleY = max(355.0, nameBottom + 12);
       _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
         : 'Conductor de la Agencia TukTuk', 449, roleY,
         566, 28, identityVerified ? const Color(0xFF81CEFF) : muted,
         lines: 1, weight: FontWeight.w600, minFontSize: 20);
     }
     final servicePill = story
-      ? Rect.fromLTWH(235, roleY + 51, 610, 72)
+      ? Rect.fromLTWH(235, roleY + 45, 610, 66)
       : Rect.fromLTWH(449, roleY + 42, 566, 76);
     final pill = RRect.fromRectAndRadius(servicePill, const Radius.circular(27));
     canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .13));
@@ -455,7 +450,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     // Integrated midnight booking pass. Only the QR's quiet zone is white;
     // the call to action remains part of the agency's dark visual identity.
     final panel = story
-      ? const Rect.fromLTWH(65, 1240, 950, 491)
+      ? const Rect.fromLTWH(65, 1260, 950, 420)
       : const Rect.fromLTWH(51, 662, 978, 362);
     final panelShape = RRect.fromRectAndRadius(panel, const Radius.circular(40));
     canvas.drawRRect(panelShape.shift(const Offset(0, 9)),
@@ -473,8 +468,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final qr = marketplaceDriverPromoQr(code);
     const module = 7.0;
     final qrSize = (qr.moduleCount + 8) * module;
-    final qrX = story ? ((1080 - qrSize) / 2).floorToDouble() : 666.0;
-    final qrY = story ? 1361.0 : 673.0;
+    final qrX = story ? 638.0 : 666.0;
+    final qrY = story ? 1298.0 : 673.0;
     final qrFrame = Rect.fromLTWH(qrX - 7, qrY - 7, qrSize + 14, qrSize + 14);
     canvas.drawRRect(RRect.fromRectAndRadius(qrFrame, const Radius.circular(12)),
       Paint()..color = accent.withValues(alpha: .34));
@@ -492,10 +487,12 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
 
     if (story) {
-      _promoText(canvas, 'Solicita mi servicio\ndesde este enlace', 101, 1272,
-        878, 37, white, center: true, weight: FontWeight.w900,
-        minFontSize: 33, lines: 2, letterSpacing: -.6);
-      _promoText(canvas, 'Tu conductor de confianza, a un toque.', 64, 1760,
+      _promoText(canvas, 'ESCANEA EL QR', 105, 1320, 490, 25, lime,
+        lines: 1, weight: FontWeight.w700, letterSpacing: 3);
+      _promoText(canvas, 'Solicita mi servicio\ndesde este enlace', 105, 1385,
+        492, 43, white, weight: FontWeight.w900,
+        minFontSize: 34, lines: 2, letterSpacing: -.6);
+      _promoText(canvas, 'Tu conductor de confianza, a un toque.', 64, 1725,
         952, 31, white, center: true, weight: FontWeight.w600, lines: 2);
     } else {
       _promoText(canvas, 'ESCANEA EL QR', 91, 725, 540, 24, lime,
@@ -532,7 +529,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 7;
+const _marketplacePromoArtworkVersion = 8;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
