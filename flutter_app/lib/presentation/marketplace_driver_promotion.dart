@@ -255,6 +255,56 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
   }
 }
 
+/// A single local entry per account, versioned by artwork and public metadata.
+/// Signed photo query parameters expire and must never invalidate or be stored.
+const _marketplacePromoArtworkVersion = 2;
+String marketplacePromoCacheFingerprint({
+  required String actor, required String code, required String name,
+  required String modality, required bool photoAuthorized,
+  required Uri? photoUrl, required ProjectIdentity identity,
+  Object? profileUpdatedAt,
+}) => sha256.convert(utf8.encode(jsonEncode([
+  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized,
+  photoUrl == null ? null : '${photoUrl.scheme}://${photoUrl.host}${photoUrl.path}',
+  profileUpdatedAt?.toString(), identity.projectId, identity.iconUrl,
+  identity.primaryColorHex, identity.secondaryColorHex,
+  identity.updatedAt?.toIso8601String(),
+]))).toString();
+
+class MarketplacePromoArtworkCache {
+  const MarketplacePromoArtworkCache(this.box);
+  final Box box;
+  static String _key(String actor) => 'marketplacePromoArtwork:$actor';
+
+  ({Uint8List square, Uint8List story})? read(String actor, String fingerprint) {
+    try {
+      final entry = box.get(_key(actor));
+      if (entry is! Map || entry['fingerprint'] != fingerprint) return null;
+      final square = entry['square'], story = entry['story'];
+      if (square is! Uint8List || story is! Uint8List ||
+          square.isEmpty || story.isEmpty) return null;
+      return (square: square, story: story);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> save(String actor, String fingerprint, Uint8List square, Uint8List story) async {
+    try {
+      // One atomic entry, not an ever-growing collection of rendered cards.
+      await box.put(_key(actor), {
+        'fingerprint': fingerprint, 'square': square, 'story': story,
+      });
+    } catch (_) {
+      // Storage quota or private browsing must not prevent using this session's card.
+    }
+  }
+
+  Future<void> clear(String actor) async {
+    try { await box.delete(_key(actor)); } catch (_) {}
+  }
+}
+
 class MarketplaceDriverPromotionScreen extends StatefulWidget {
   const MarketplaceDriverPromotionScreen({required this.store, super.key});
   final RecordStore store;
@@ -265,6 +315,7 @@ class MarketplaceDriverPromotionScreen extends StatefulWidget {
 class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverPromotionScreen> {
   final _client = Supabase.instance.client;
   final _name = TextEditingController();
+  final _cache = MarketplacePromoArtworkCache(Hive.box(_metaBox));
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _consent = false, _sharePhoto = false, _enabled = false;
@@ -285,6 +336,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     _auth = _client.auth.onAuthStateChange.listen((_) {
       if (!_sameUser && mounted) {
         _revision++;
+        if (_actor != null) unawaited(_cache.clear(_actor!));
         setState(() {
           _enabled = false; _busy = false; _code = null;
           _squareBytes = null; _storyBytes = null;
@@ -303,7 +355,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     final revision = ++_revision;
     if (!_sameUser) {
       setState(() { _busy = false; _error = 'Inicia sesión para crear tu tarjeta.'; });
@@ -322,7 +374,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         _sharePhoto = enabled && result['photo_authorized'] == true;
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
       });
-      if (!enabled) return;
+      if (!enabled) {
+        await _cache.clear(_actor!);
+        return;
+      }
       final code = result['code'];
       if (code is! String) throw StateError('PROMO_CODE_INVALID');
       marketplaceDriverPromoUri(code);
@@ -341,24 +396,53 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (services.isEmpty) throw StateError('PROMO_SERVICE_UNAVAILABLE');
       final name = raw['public_name'] as String;
       final modality = '${_promoCategoryLabel(raw['category_code'] as String)} · $services';
-      stage = 'fotografía';
-      Uint8List? photo;
       final photoUrl = Uri.tryParse(raw['photo_url']?.toString() ?? '');
-      if (photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty) {
-        photo = await downloadMarketplacePromoPortrait(photoUrl);
-      } else if (result['photo_authorized'] == true) {
+      final photoAuthorized = result['photo_authorized'] == true;
+      final validPhotoUrl = photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty
+          ? photoUrl : null;
+      if (photoAuthorized && validPhotoUrl == null) {
+        // Do not reuse an old authorized portrait when the server no longer
+        // confirms that the photo is available for public promotion.
+        stage = 'fotografía';
         throw StateError('PROMO_PHOTO_UNAVAILABLE');
       }
-      if (!mounted || !_sameUser || revision != _revision) return;
       stage = 'tarjeta';
       await widget.store.refreshProjectIdentity().timeout(
         const Duration(seconds: 8), onTimeout: () {});
       if (!mounted || !_sameUser || revision != _revision) return;
       final identity = widget.store.projectIdentity;
+      final fingerprint = marketplacePromoCacheFingerprint(
+        actor: _actor!, code: code, name: name, modality: modality,
+        photoAuthorized: photoAuthorized, photoUrl: validPhotoUrl,
+        identity: identity, profileUpdatedAt: result['updated_at'],
+      );
+      final cached = force ? null : _cache.read(_actor!, fingerprint);
+      if (cached != null) {
+        setState(() {
+          _name.text = name; _code = code;
+          _squareBytes = cached.square; _storyBytes = cached.story;
+        });
+        return;
+      }
+      stage = 'fotografía';
+      final photo = validPhotoUrl == null ? null :
+          await downloadMarketplacePromoPortrait(validPhotoUrl);
+      if (!mounted || !_sameUser || revision != _revision) return;
+      stage = 'tarjeta';
       final logo = await loadMarketplacePromoBrandLogo(identity);
       if (!mounted || !_sameUser || revision != _revision) return;
       final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity);
       final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity);
+      if (!mounted || !_sameUser || revision != _revision) return;
+      // If the configured official icon failed to load, do not persist a
+      // degraded rendering; a later visit can retry the correct identity.
+      if (logo != null || identity.iconUrl == null) {
+        await _cache.save(_actor!, fingerprint, square, story);
+        if (!_sameUser) {
+          await _cache.clear(_actor!);
+          return;
+        }
+      }
       if (!mounted || !_sameUser || revision != _revision) return;
       setState(() { _name.text = name; _code = code; _squareBytes = square; _storyBytes = story; });
     } catch (_) {
@@ -392,6 +476,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         'target_consent': consent, 'target_share_photo': consent && _sharePhoto,
       });
       if (!mounted || !_sameUser || revision != _revision) return;
+      if (!consent) await _cache.clear(_actor!);
       await _load();
     } catch (_) {
       if (mounted && revision == _revision) {
@@ -492,6 +577,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             OutlinedButton.icon(onPressed: ready ? _downloadCard : null,
               icon: const Icon(Icons.download_outlined), label: const Text('Descargar imagen')),
             if (ready) ...[
+              TextButton.icon(onPressed: () => _load(force: true),
+                icon: const Icon(Icons.refresh), label: const Text('Actualizar tarjeta')),
               const SizedBox(height: 12),
               const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
               SelectableText(marketplaceDriverPromoUri(_code!).toString()),
