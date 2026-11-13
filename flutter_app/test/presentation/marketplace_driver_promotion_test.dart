@@ -129,8 +129,8 @@ void main() {
       expect(panelPixel.g, lessThan(85));
       expect(panelPixel.b, lessThan(100));
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 638 : 666;
-      final y = story ? 1298 : 673;
+      final x = story ? 655 : 666;
+      final y = story ? 1218 : 673;
       const module = 7;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
@@ -166,8 +166,8 @@ void main() {
       int bluePixels(Uint8List bytes) {
         final png = img.decodePng(bytes)!;
         var count = 0;
-        for (var y = story ? 968 : 245; y < (story ? 1140 : 410); y++) {
-          for (var x = story ? 62 : 449; x < 1015; x++) {
+        for (var y = story ? 615 : 350; y < (story ? 760 : 475); y++) {
+          for (var x = story ? 494 : 448; x < 1024; x++) {
             final p = png.getPixel(x, y);
             if (p.r == 29 && p.g == 155 && p.b == 240) count++;
           }
@@ -190,8 +190,8 @@ void main() {
           story: story, vehicleCategory: category));
         final a = img.decodePng(car!)!, b = img.decodePng(other!)!;
         var changes = 0;
-        for (var y = story ? 274 : 475; y < (story ? 501 : 662); y += 3) {
-          for (var x = story ? 230 : 530; x < (story ? 850 : 1040); x += 3) {
+        for (var y = story ? 345 : 202; y < (story ? 645 : 417); y += 3) {
+          for (var x = story ? 500 : 520; x < 1060; x += 3) {
             final p = a.getPixel(x,y), q = b.getPixel(x,y);
             if (p.r != q.r || p.g != q.g || p.b != q.b) {
               changes++;
@@ -199,7 +199,7 @@ void main() {
           }
         }
         expect(changes, greaterThan(25), reason: category);
-        final x = story ? 638 : 666, y = story ? 1298 : 673;
+        final x = story ? 655 : 666, y = story ? 1218 : 673;
         final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 7;
         for (var dy = 0; dy < size; dy += 7) {
           for (var dx = 0; dx < size; dx += 7) {
@@ -249,19 +249,19 @@ void main() {
     expect(source, contains('loadMarketplacePromoBrandLogo(identity)'));
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
-    expect(source, contains('Rect.fromLTWH(1015 - iconSize, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 8;'));
+    expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 9;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
-    expect(source, contains('_promoVehicleWatermark(canvas, vehicleCategory'));
+    expect(source, contains('_promoVehicleWatermark(canvas, vehicleCategory, vehicleArea, accent)'));
     expect(source, contains('identityVerified, vehicleCategory'));
     expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
     expect(source, contains('const panelDark = Color(0xFF0B1C2A)'));
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
-    expect(source, contains('Rect.fromLTWH(230, 274, 620, 227)'));
-    expect(source, contains('final qrX = story ? 638.0 : 666.0;'));
+    expect(source, contains('Rect.fromLTWH(500, 345, 650, 300)'));
+    expect(source, contains('final qrX = story ? 655.0 : 666.0;'));
     expect(source, contains('identityVerified ? 58.0 : 0.0'));
     expect(source, contains('panelShape'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
@@ -275,7 +275,13 @@ void main() {
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
     expect(source, contains('Solicita mi servicio desde este enlace:'));
-    expect(source, contains(r'Solicita mi servicio\ndesde este enlace'));
+    expect(source, contains("_promoText(canvas, 'Solicita mi'"));
+    expect(source, contains("_promoText(canvas, 'servicio'"));
+    expect(source, contains("_promoText(canvas, 'desde este enlace'"));
+    expect(source, contains('base64Decode(_promoApprovedCarArtwork)'));
+    expect(source, contains('BlendMode.dstIn'));
+    expect(source, contains('final pin = ui.Path()'));
+    expect(source, contains('final arrowHead = ui.Path()'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
     expect(source, contains("'Agencia TukTuk'"));
     expect(source, isNot(contains("_promoText(canvas, 'MI TUKTUK'")));
