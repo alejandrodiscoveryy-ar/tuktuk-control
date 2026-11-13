@@ -190,7 +190,6 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFFFB923C),
             ),
             title: const Text('Mi TukTuk'),
-            subtitle: const Text('Tu tarjeta, QR y enlace personal'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
