@@ -466,13 +466,13 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _enabled = false, _published = false, _canPublish = false, _publishing = false;
-  bool _story = false, _sharing = false, _identityVerified = false;
+  bool _sharing = false, _identityVerified = false;
   String? _error, _code, _photoAssetId;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
-  Uint8List? get _artwork => _story ? _storyBytes : _squareBytes;
-  String get _fileName => _story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
+  Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
+  String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
   String? get _copy => _code == null ? null : marketplaceDriverPromoCopy(_name.text.trim(), _code!, identityVerified: _identityVerified);
 
   @override
@@ -671,8 +671,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
-  Future<void> _shareCard() async {
-    final bytes = _artwork, copy = _copy;
+  Future<void> _shareCard({required bool story}) async {
+    final bytes = _artworkFor(story), copy = _copy;
+    final fileName = _fileNameFor(story);
     if (!_sameUser || !_enabled || bytes == null || copy == null || _sharing) return;
     if (!await _ensurePublished() || !mounted || !_sameUser) return;
     setState(() => _sharing = true);
@@ -680,8 +681,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final box = context.findRenderObject() as RenderBox?;
       final result = await SharePlus.instance.share(ShareParams(
         title: 'Mi TukTuk', text: copy,
-        files: [XFile.fromData(bytes, mimeType: 'image/png', name: _fileName)],
-        fileNameOverrides: [_fileName],
+        files: [XFile.fromData(bytes, mimeType: 'image/png', name: fileName)],
+        fileNameOverrides: [fileName],
         sharePositionOrigin: box == null ? null : box.localToGlobal(Offset.zero) & box.size,
         downloadFallbackEnabled: false,
       ));
@@ -696,21 +697,22 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
-  Future<void> _downloadCard() async {
-    final bytes = _artwork;
+  Future<void> _downloadCard({required bool story}) async {
+    final bytes = _artworkFor(story);
+    final fileName = _fileNameFor(story);
     if (!_sameUser || !_enabled || bytes == null) return;
     if (!await _ensurePublished() || !mounted || !_sameUser) return;
-    if (kIsWeb && driver_promo_download.downloadPromoPng(bytes, _fileName)) return;
+    if (kIsWeb && driver_promo_download.downloadPromoPng(bytes, fileName)) return;
     try {
       await SharePlus.instance.share(ShareParams(files: [XFile.fromData(bytes,
-        mimeType: 'image/png', name: _fileName)], fileNameOverrides: [_fileName]));
+        mimeType: 'image/png', name: fileName)], fileNameOverrides: [fileName]));
     } catch (_) {
       if (mounted) toast(context, 'No se pudo descargar la tarjeta.');
     }
   }
 
   Future<void> _copyText(String text) async {
-    if (!_sameUser || !_enabled || _artwork == null) return;
+    if (!_sameUser || !_enabled || _squareBytes == null || _storyBytes == null) return;
     if (!await _ensurePublished() || !mounted || !_sameUser) return;
     try {
       await Clipboard.setData(ClipboardData(text: text));
@@ -720,10 +722,75 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
+  Widget _formatCard(BuildContext context, {required bool story, required bool ready}) {
+    final art = _artworkFor(story);
+    final label = story ? 'Historia' : 'Cuadrada';
+    final muted = appMutedColor(context);
+    return Container(
+      key: ValueKey(story ? 'mi-tuktuk-story-card' : 'mi-tuktuk-square-card'),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).dividerColor),
+        color: Theme.of(context).colorScheme.surface,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          Text(story ? '9:16 · Estados e historias' : '1:1 · Publicaciones',
+            style: TextStyle(color: muted, fontSize: 12)),
+          const SizedBox(height: 10),
+          AspectRatio(
+            aspectRatio: 1,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B1523),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: art == null
+                  ? const Icon(Icons.image_outlined, color: Colors.white54, size: 36)
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(art, fit: BoxFit.contain, gaplessPlayback: true,
+                        semanticLabel: 'Tarjeta Mi TukTuk $label'),
+                    ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            key: ValueKey(story ? 'mi-tuktuk-share-story' : 'mi-tuktuk-share-square'),
+            onPressed: ready && !_sharing ? () => _shareCard(story: story) : null,
+            icon: const Icon(Icons.share_outlined, size: 18),
+            label: const Text('Compartir', textAlign: TextAlign.center),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              minimumSize: const Size(0, 44),
+            ),
+          ),
+          const SizedBox(height: 6),
+          OutlinedButton.icon(
+            key: ValueKey(story ? 'mi-tuktuk-download-story' : 'mi-tuktuk-download-square'),
+            onPressed: ready && !_sharing ? () => _downloadCard(story: story) : null,
+            icon: const Icon(Icons.download_outlined, size: 18),
+            label: const Text('Descargar', textAlign: TextAlign.center),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              minimumSize: const Size(0, 44),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final art = _artwork, copy = _copy;
-    final previewReady = _sameUser && _enabled && !_busy && art != null && copy != null;
+    final copy = _copy;
+    final previewReady = _sameUser && _enabled && !_busy &&
+        _squareBytes != null && _storyBytes != null && copy != null;
     final ready = previewReady && _canPublish && !_publishing;
     return ListView(padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600),
@@ -741,13 +808,29 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             const Text('Tu ficha se prepara automáticamente al completar la inscripción y registrar un servicio operativo.'),
           if (_enabled) ...[
             const SizedBox(height: 12),
-            SegmentedButton<bool>(segments: const [
-              ButtonSegment(value: false, label: Text('Cuadrada')),
-              ButtonSegment(value: true, label: Text('Historia')),
-            ], selected: {_story}, onSelectionChanged: (value) => setState(() => _story = value.first)),
-            const SizedBox(height: 12),
-            if (art != null) Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 380),
-              child: ClipRRect(borderRadius: BorderRadius.circular(18), child: Image.memory(art, fit: BoxFit.contain, gaplessPlayback: true)))),
+            if (_squareBytes != null && _storyBytes != null)
+              LayoutBuilder(builder: (context, constraints) {
+                final square = _formatCard(context, story: false, ready: ready);
+                final story = _formatCard(context, story: true, ready: ready);
+                if (constraints.maxWidth < 300) {
+                  return Column(children: [
+                    square, const SizedBox(height: 12), story,
+                  ]);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: square),
+                    const SizedBox(width: 12),
+                    Expanded(child: story),
+                  ],
+                );
+              }),
+            if (previewReady) ...[
+              const SizedBox(height: 8),
+              Text('Compartir incluye la tarjeta elegida, tu mensaje y el enlace personal.',
+                style: TextStyle(color: appMutedColor(context), fontSize: 12)),
+            ],
             const SizedBox(height: 12),
             if (previewReady && !_published)
               Text(_canPublish
@@ -755,10 +838,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                 : 'Tu ficha está lista. Podrás habilitar el enlace cuando tu servicio esté activo.',
                 style: const TextStyle(color: kMuted, fontSize: 12)),
             if (_publishing) const LinearProgressIndicator(),
-            FilledButton.icon(onPressed: ready && !_sharing ? _shareCard : null,
-              icon: const Icon(Icons.share_outlined), label: const Text('Compartir tarjeta y mensaje')),
-            OutlinedButton.icon(onPressed: ready ? _downloadCard : null,
-              icon: const Icon(Icons.download_outlined), label: const Text('Descargar imagen')),
             if (previewReady) ...[
               TextButton.icon(onPressed: _publishing ? null : () => _load(force: true),
                 icon: const Icon(Icons.refresh), label: const Text('Actualizar tarjeta')),
