@@ -1177,6 +1177,17 @@ class MarketplaceService {
     );
   }
 
+  /// Records a real authenticated connection without requesting GPS.
+  /// False means the server no longer considers this vehicle's shift active.
+  Future<bool> sendDriverPresenceHeartbeat({required String vehicleId}) async {
+    final result = await _client.rpc(
+      'marketplace_driver_presence_heartbeat_v2',
+      params: {'target_vehicle_id': vehicleId},
+    );
+    if (result is! bool) throw StateError('PRESENCE_HEARTBEAT_INVALID');
+    return result;
+  }
+
   Future<void> clearDriverOperationalLocation() async {
     await _client.rpc('clear_my_marketplace_driver_location');
   }

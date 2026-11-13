@@ -291,6 +291,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   MarketplaceWorkAccess? _workAccess;
 
   Timer? _operationalLocationTimer;
+  Timer? _presenceHeartbeatTimer;
+  bool _presenceHeartbeatInFlight = false;
   StreamSubscription<Position>? _activeOperationalLocationSubscription;
   bool? _operationalLocationStreamActiveService;
   bool _operationalLocationStreamStarting = false;
@@ -334,6 +336,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
     marketplaceJobRefreshRequests.addListener(_refreshAvailability);
+    _presenceHeartbeatTimer = Timer.periodic(const Duration(minutes: 2), (_) {
+      unawaited(_sendPresenceHeartbeat());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_load());
     });
@@ -355,6 +360,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   void dispose() {
     _stopOperationalLocationSampling();
     _operationalGpsReadinessTimer?.cancel();
+    _presenceHeartbeatTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
@@ -400,6 +406,35 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (mounted) {
         setState(() => _loadingRatings = false);
       }
+    }
+  }
+
+  // Real server contact is independent of GPS and never reopens a closed shift.
+  Future<void> _sendPresenceHeartbeat() async {
+    final vehicleId = _selectedVehicleId;
+    final userId = widget.store.user?.id;
+    final vehicle = _vehicleById(vehicleId);
+    if (!mounted ||
+        _operationalLifecycleState != AppLifecycleState.resumed ||
+        _presenceHeartbeatInFlight || _updatingAvailability ||
+        vehicleId == null || userId == null ||
+        _workOnboardingUserId != userId ||
+        !_vehicleReadyForWork(vehicle) || vehicle?.acceptingJobs != true) {
+      return;
+    }
+    _presenceHeartbeatInFlight = true;
+    try {
+      final working = await _service.sendDriverPresenceHeartbeat(vehicleId: vehicleId)
+          .timeout(const Duration(seconds: 12));
+      if (!working && mounted && widget.store.user?.id == userId &&
+          _selectedVehicleId == vehicleId && !_updatingAvailability) {
+        // Reload authoritative state rather than writing accepting_jobs=true.
+        await _load();
+      }
+    } catch (_) {
+      // Offline or older backend: preserve local state; retry on next contact.
+    } finally {
+      _presenceHeartbeatInFlight = false;
     }
   }
 
@@ -1026,6 +1061,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       final workingVehicle = _vehicleById(vehicleId);
       _marketplaceDriverWorking.value = _vehicleReadyForWork(workingVehicle) &&
           workingVehicle?.acceptingJobs == true;
+      unawaited(_sendPresenceHeartbeat());
 
       await Future.wait([
         _loadScope('active'),
