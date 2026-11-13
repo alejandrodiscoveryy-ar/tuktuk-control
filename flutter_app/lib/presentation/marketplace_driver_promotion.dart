@@ -243,7 +243,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 62, 316,
         956, 52, white, center: true, weight: FontWeight.w800, lines: 2,
         minFontSize: 42, letterSpacing: -1.2);
-      _promoText(canvas, name, 62, 921, 956, 89, white,
+      _promoText(canvas, name, 62, 921, 956, 76, white,
         center: true, weight: FontWeight.w900, minFontSize: 39,
         letterSpacing: -2);
       _promoText(canvas, 'Conductor de la Agencia TukTuk', 64, 1100, 952,
@@ -258,7 +258,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         566, 28, muted, lines: 1, weight: FontWeight.w500, minFontSize: 23);
     }
     final servicePill = story
-      ? const Rect.fromLTWH(174, 1149, 732, 65)
+      ? const Rect.fromLTWH(174, 1143, 732, 75)
       : const Rect.fromLTWH(449, 552, 566, 83);
     final pill = RRect.fromRectAndRadius(servicePill, const Radius.circular(27));
     canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .13));
@@ -267,8 +267,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawCircle(Offset(servicePill.left + 27, servicePill.center.dy),
       6, Paint()..color = lime);
     _promoText(canvas, modality, servicePill.left + 47,
-      servicePill.top + (story ? 14 : 10), servicePill.width - 68,
-      story ? 32 : 31, white, lines: 2, minFontSize: 24,
+      servicePill.top + (story ? 8 : 10), servicePill.width - 68,
+      story ? 28 : 31, white, lines: 2, minFontSize: 23,
       weight: FontWeight.w700);
 
     // High-contrast booking pass. This surface deliberately differs from the
@@ -303,8 +303,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
 
     if (story) {
-      _promoText(canvas, 'Solicita mi servicio desde este enlace', 101, 1280,
-        878, 44, ink, center: true, weight: FontWeight.w900,
+      _promoText(canvas, 'Solicita mi servicio\ndesde este enlace', 101, 1272,
+        878, 37, ink, center: true, weight: FontWeight.w900,
         minFontSize: 33, lines: 2, letterSpacing: -.6);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.', 64, 1760,
         952, 31, white, center: true, weight: FontWeight.w600, lines: 2);
