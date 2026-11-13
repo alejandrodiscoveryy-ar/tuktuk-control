@@ -282,7 +282,9 @@ class MarketplacePromoArtworkCache {
       if (entry is! Map || entry['fingerprint'] != fingerprint) return null;
       final square = entry['square'], story = entry['story'];
       if (square is! Uint8List || story is! Uint8List ||
-          square.isEmpty || story.isEmpty) return null;
+          square.isEmpty || story.isEmpty) {
+        return null;
+      }
       return (square: square, story: story);
     } catch (_) {
       return null;
@@ -336,7 +338,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     _auth = _client.auth.onAuthStateChange.listen((_) {
       if (!_sameUser && mounted) {
         _revision++;
-        if (_actor != null) unawaited(_cache.clear(_actor!));
+        if (_actor != null) unawaited(_cache.clear(_actor));
         setState(() {
           _enabled = false; _busy = false; _code = null;
           _squareBytes = null; _storyBytes = null;
@@ -357,7 +359,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
 
   Future<void> _load({bool force = false}) async {
     final revision = ++_revision;
-    if (!_sameUser) {
+    final actor = _actor;
+    if (actor == null || !_sameUser) {
       setState(() { _busy = false; _error = 'Inicia sesión para crear tu tarjeta.'; });
       return;
     }
@@ -375,7 +378,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
       });
       if (!enabled) {
-        await _cache.clear(_actor!);
+        await _cache.clear(actor);
         return;
       }
       final code = result['code'];
@@ -412,11 +415,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (!mounted || !_sameUser || revision != _revision) return;
       final identity = widget.store.projectIdentity;
       final fingerprint = marketplacePromoCacheFingerprint(
-        actor: _actor!, code: code, name: name, modality: modality,
+        actor: actor, code: code, name: name, modality: modality,
         photoAuthorized: photoAuthorized, photoUrl: validPhotoUrl,
         identity: identity, profileUpdatedAt: result['updated_at'],
       );
-      final cached = force ? null : _cache.read(_actor!, fingerprint);
+      final cached = force ? null : _cache.read(actor, fingerprint);
       if (cached != null) {
         setState(() {
           _name.text = name; _code = code;
@@ -437,9 +440,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       // If the configured official icon failed to load, do not persist a
       // degraded rendering; a later visit can retry the correct identity.
       if (logo != null || identity.iconUrl == null) {
-        await _cache.save(_actor!, fingerprint, square, story);
+        await _cache.save(actor, fingerprint, square, story);
         if (!_sameUser) {
-          await _cache.clear(_actor!);
+          await _cache.clear(actor);
           return;
         }
       }
