@@ -465,7 +465,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   final _cache = MarketplacePromoArtworkCache(Hive.box(_metaBox));
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
-  bool _busy = true, _enabled = false, _published = false, _canPublish = false, _publishing = false;
+  bool _busy = true, _enabled = false;
   bool _sharing = false, _identityVerified = false;
   String? _error, _code, _photoAssetId;
   Uint8List? _squareBytes, _storyBytes;
@@ -486,7 +486,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         if (_actor != null) unawaited(_cache.clear(_actor));
         setState(() {
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
-          _published = false; _canPublish = false; _photoAssetId = null;
+          _photoAssetId = null;
           _squareBytes = null; _storyBytes = null;
           _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
         });
@@ -521,8 +521,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       setState(() {
         _enabled = enabled;
         _identityVerified = identityVerified;
-        _published = enabled && result['published'] == true;
-        _canPublish = enabled && result['can_publish'] == true;
         _photoAssetId = result['photo_asset_id'] is String ? result['photo_asset_id'] as String : null;
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
       });
@@ -534,8 +532,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (code is! String) throw StateError('PROMO_CODE_INVALID');
       marketplaceDriverPromoUri(code);
       stage = 'enlace';
-      // This is the authenticated driver's own prepared card. Drafts remain
-      // private; the public gateway is not used to disclose their data.
+      // The administrator has already activated this profile and personal QR.
+      // The authenticated driver only retrieves the approved metadata.
       final raw = result;
       if (raw['public_name'] is! String || raw['category_code'] is! String ||
           raw['service_codes'] is! List) {
@@ -616,45 +614,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
-  /// The deliberate share/download/copy action is the publication consent.
-  /// The preview itself does not expose any data publicly.
-  Future<bool> _ensurePublished() async {
-    final code = _code;
-    final actor = _actor;
-    if (!_sameUser || !_enabled || !_canPublish || _busy || _publishing ||
-        code == null || actor == null) return false;
-    final revision = _revision;
-    setState(() => _publishing = true);
-    try {
-      final result = await _client.rpc('publish_my_marketplace_promo_card_v1', params: {
-        'target_code': code,
-        'target_public_name': _name.text.trim(),
-        'target_photo_asset_id': _photoAssetId,
-      });
-      if (!mounted || !_sameUser || revision != _revision) return false;
-      if (result is! Map || result['published'] != true || result['code'] != code) {
-        throw StateError('PROMO_PUBLICATION_FAILED');
-      }
-      setState(() => _published = true);
-      if ((result['identity_verified'] == true) != _identityVerified) {
-        await _load();
-        if (mounted) toast(context, 'Actualizamos tu verificación. Vuelve a compartir tu tarjeta.');
-        return false;
-      }
-      return true;
-    } catch (_) {
-      if (mounted && _sameUser && revision == _revision) {
-        toast(context, 'No se pudo habilitar el enlace. Actualiza tu tarjeta y reintenta.');
-      }
-      return false;
-    } finally {
-      if (mounted) setState(() => _publishing = false);
-    }
-  }
-
   Future<void> _revoke() async {
     final actor = _actor;
-    if (_busy || _publishing || !_sameUser || actor == null) return;
+    if (_busy || !_sameUser || actor == null) return;
     final revision = ++_revision;
     setState(() { _busy = true; _error = null; _code = null; _squareBytes = null; _storyBytes = null; });
     try {
@@ -675,7 +637,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final bytes = _artworkFor(story), copy = _copy;
     final fileName = _fileNameFor(story);
     if (!_sameUser || !_enabled || bytes == null || copy == null || _sharing) return;
-    if (!await _ensurePublished() || !mounted || !_sameUser) return;
     setState(() => _sharing = true);
     try {
       final box = context.findRenderObject() as RenderBox?;
@@ -701,7 +662,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final bytes = _artworkFor(story);
     final fileName = _fileNameFor(story);
     if (!_sameUser || !_enabled || bytes == null) return;
-    if (!await _ensurePublished() || !mounted || !_sameUser) return;
     if (kIsWeb && driver_promo_download.downloadPromoPng(bytes, fileName)) return;
     try {
       await SharePlus.instance.share(ShareParams(files: [XFile.fromData(bytes,
@@ -713,7 +673,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
 
   Future<void> _copyText(String text) async {
     if (!_sameUser || !_enabled || _squareBytes == null || _storyBytes == null) return;
-    if (!await _ensurePublished() || !mounted || !_sameUser) return;
     try {
       await Clipboard.setData(ClipboardData(text: text));
       if (mounted) toast(context, 'Copiado');
@@ -791,7 +750,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final copy = _copy;
     final previewReady = _sameUser && _enabled && !_busy &&
         _squareBytes != null && _storyBytes != null && copy != null;
-    final ready = previewReady && _canPublish && !_publishing;
+    final ready = previewReady;
     return ListView(padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -805,7 +764,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             TextButton(onPressed: _busy ? null : _load, child: const Text('Reintentar')),
           ],
           if (!_enabled && !_busy && _error == null)
-            const Text('Tu ficha se prepara automáticamente al completar la inscripción y registrar un servicio operativo.'),
+            const Text('Tu ficha estará disponible cuando la Agencia TukTuk verifique tu identidad y active Mi TukTuk desde Administración.'),
           if (_enabled) ...[
             const SizedBox(height: 12),
             if (_squareBytes != null && _storyBytes != null)
@@ -832,29 +791,23 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                 style: TextStyle(color: appMutedColor(context), fontSize: 12)),
             ],
             const SizedBox(height: 12),
-            if (previewReady && !_published)
-              Text(_canPublish
-                ? 'Tu ficha ya está lista. Al compartir, descargar o copiar el enlace, autorizas que tu nombre y la foto de esta tarjeta (si aparece) sean visibles para quienes tengan tu enlace. Puedes desactivarlo cuando quieras.'
-                : 'Tu ficha está lista. Podrás habilitar el enlace cuando tu servicio esté activo.',
-                style: const TextStyle(color: kMuted, fontSize: 12)),
-            if (_publishing) const LinearProgressIndicator(),
             if (previewReady) ...[
-              TextButton.icon(onPressed: _publishing ? null : () => _load(force: true),
+              TextButton.icon(onPressed: () => _load(force: true),
                 icon: const Icon(Icons.refresh), label: const Text('Actualizar tarjeta')),
               const SizedBox(height: 12),
               const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
-              if (_published) SelectableText(marketplaceDriverPromoUri(_code!).toString()),
+              SelectableText(marketplaceDriverPromoUri(_code!).toString()),
               TextButton.icon(onPressed: ready ? () => _copyText(marketplaceDriverPromoUri(_code!).toString()) : null,
                 icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
               const SizedBox(height: 8),
               const Text('Mensaje para compartir', style: TextStyle(fontWeight: FontWeight.w800)),
-              if (_published) SelectableText(copy),
+              SelectableText(copy),
               TextButton.icon(onPressed: ready ? () => _copyText(copy) : null, icon: const Icon(Icons.copy),
                 label: const Text('Copiar mensaje')),
               const Text('Si tu red social no admite compartir imagen y texto juntos, descarga la tarjeta y pega el mensaje completo en tu publicación.', style: TextStyle(color: kMuted, fontSize: 12)),
             ],
             const SizedBox(height: 16),
-            if (_published) OutlinedButton(onPressed: _busy || _publishing || !_sameUser ? null : _revoke,
+            OutlinedButton(onPressed: _busy || !_sameUser ? null : _revoke,
               child: const Text('Desactivar mi perfil público')),
           ],
         ]),
