@@ -32,6 +32,25 @@ QrImage marketplaceDriverPromoQr(String code) {
   return QrImage(qr);
 }
 
+/// HTTP uses the browser transport on web and the native transport elsewhere.
+Future<Uint8List> downloadMarketplacePromoPortrait(Uri url, {http.Client? client}) async {
+  if (url.scheme != 'https' || url.host.isEmpty || url.userInfo.isNotEmpty) {
+    throw StateError('PROMO_PHOTO_URL_INVALID');
+  }
+  final owned = client == null;
+  final transport = client ?? http.Client();
+  try {
+    final response = await transport.get(url).timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200 || response.bodyBytes.isEmpty ||
+        response.bodyBytes.length > 10 * 1024 * 1024) {
+      throw StateError('PROMO_PHOTO_DOWNLOAD_FAILED');
+    }
+    return response.bodyBytes;
+  } finally {
+    if (owned) transport.close();
+  }
+}
+
 Future<ui.Image> _promoDecode(Uint8List bytes) async {
   final codec = await ui.instantiateImageCodec(bytes);
   try {
@@ -228,6 +247,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       return;
     }
     setState(() { _busy = true; _error = null; _squareBytes = null; _storyBytes = null; _code = null; });
+    var stage = 'perfil';
     try {
       final result = await _client.rpc('get_my_marketplace_promo_profile');
       if (!mounted || !_sameUser || revision != _revision) return;
@@ -243,6 +263,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final code = result['code'];
       if (code is! String) throw StateError('PROMO_CODE_INVALID');
       marketplaceDriverPromoUri(code);
+      stage = 'enlace';
       final response = await _client.functions.invoke('marketplace-customer-gateway',
         body: {'operation':'promo_profile','params':{'target_code':code}});
       if (!mounted || !_sameUser || revision != _revision) return;
@@ -257,15 +278,16 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (services.isEmpty) throw StateError('PROMO_SERVICE_UNAVAILABLE');
       final name = raw['public_name'] as String;
       final modality = '${_promoCategoryLabel(raw['category_code'] as String)} · $services';
+      stage = 'fotografía';
       Uint8List? photo;
       final photoUrl = Uri.tryParse(raw['photo_url']?.toString() ?? '');
       if (photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty) {
-        final data = await NetworkAssetBundle(photoUrl).load(photoUrl.toString()).timeout(const Duration(seconds: 15));
-        photo = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        photo = await downloadMarketplacePromoPortrait(photoUrl);
       } else if (result['photo_authorized'] == true) {
         throw StateError('PROMO_PHOTO_UNAVAILABLE');
       }
       if (!mounted || !_sameUser || revision != _revision) return;
+      stage = 'tarjeta';
       final logoData = await rootBundle.load('assets/branding/tuktuk_logo_transparent.png');
       final logo = logoData.buffer.asUint8List(logoData.offsetInBytes, logoData.lengthInBytes);
       final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo);
@@ -275,7 +297,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     } catch (_) {
       if (mounted && revision == _revision) {
         setState(() {
-        _error = 'Mi TukTuk todavía no está disponible o no se pudo cargar tu tarjeta. Reintenta.';
+        _error = switch (stage) {
+          'fotografía' => 'No se pudo cargar tu fotografía autorizada. Reintenta sin desactivar tu perfil.',
+          'tarjeta' => 'No se pudo generar la imagen de tu tarjeta. Reintenta.',
+          'enlace' => 'No se pudo consultar tu enlace personal. Reintenta.',
+          _ => 'No se pudo consultar tu perfil de Mi TukTuk. Reintenta.',
+        };
         });
       }
     } finally {
