@@ -658,9 +658,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final revision = ++_revision;
     setState(() { _busy = true; _error = null; _code = null; _squareBytes = null; _storyBytes = null; });
     try {
-      await _client.rpc('set_my_marketplace_promo_profile', params: {
-        'target_public_name': null, 'target_consent': false, 'target_share_photo': false,
-      });
+      await _client.rpc('revoke_my_marketplace_promo_card_v1');
       if (!mounted || !_sameUser || revision != _revision) return;
       await _cache.clear(actor);
       await _load();
