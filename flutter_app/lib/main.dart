@@ -22,6 +22,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:qr/qr.dart';
+import 'package:share_plus/share_plus.dart';
+import 'services/driver_promo_download_stub.dart'
+    if (dart.library.html) 'services/driver_promo_download_web.dart'
+    as driver_promo_download;
 
 import 'services/push_notification_service.dart';
 import 'services/android_driver_alerts.dart';
@@ -57,6 +62,7 @@ part 'data/marketplace_customer_request.dart';
 part 'data/marketplace_map_service.dart';
 part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
+part 'presentation/marketplace_driver_promotion.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
 part 'presentation/marketplace_assigned_job_card.dart';
