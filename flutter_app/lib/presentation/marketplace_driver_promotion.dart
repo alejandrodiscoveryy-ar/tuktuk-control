@@ -148,7 +148,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawRect(glow, Paint()..shader = RadialGradient(
       colors: [primary.withValues(alpha: .22), primary.withValues(alpha: 0)],
     ).createShader(glow));
-    final watermark = Path()
+    final watermark = ui.Path()
       ..moveTo(850, height - 430.0)
       ..lineTo(1080, height - 650.0)
       ..lineTo(1080, height - 570.0)
@@ -398,7 +398,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final modality = '${_promoCategoryLabel(raw['category_code'] as String)} · $services';
       final photoUrl = Uri.tryParse(raw['photo_url']?.toString() ?? '');
       final photoAuthorized = result['photo_authorized'] == true;
-      final validPhotoUrl = photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty
+      final validPhotoUrl = photoAuthorized && photoUrl != null && photoUrl.scheme == 'https' && photoUrl.host.isNotEmpty
           ? photoUrl : null;
       if (photoAuthorized && validPhotoUrl == null) {
         // Do not reuse an old authorized portrait when the server no longer
