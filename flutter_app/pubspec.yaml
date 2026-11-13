@@ -22,6 +22,7 @@ dependencies:
   flutter_local_notifications: ^22.3.0
   app_links: ^7.2.1
   share_plus: ^13.3.0
+  qr: 3.0.2
   flutter_map: ^8.3.2
   mapbox_maps_flutter: 3.0.0
   latlong2: ^0.10.1
