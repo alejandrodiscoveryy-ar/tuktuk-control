@@ -8,9 +8,9 @@ Uri marketplaceDriverPromoUri(String code) {
   return Uri.https('www.vrixora.com', '/cliente/tuk/', {'conductor': code});
 }
 
-String marketplaceDriverPromoCopy(String name, String code) =>
+String marketplaceDriverPromoCopy(String name, String code, {bool identityVerified = false}) =>
     '¡Tu próximo viaje comienza conmigo!\n\n'
-    'Soy $name, conductor de la Agencia TukTuk.\n\n'
+    'Soy $name, ${identityVerified ? 'conductor verificado' : 'conductor'} de la Agencia TukTuk.\n\n'
     'Solicita mi servicio desde este enlace:\n\n'
     '${marketplaceDriverPromoUri(code)}\n\n'
     'Agencia TukTuk. Tu conductor de confianza, a un toque.';
@@ -106,6 +106,59 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   painter.dispose();
 }
 
+/// The badge is part of the exported PNG, not merely the app preview.
+void _promoVerifiedName(Canvas canvas, String name, Rect area, {
+  required double fontSize, required double minFontSize, required bool center,
+  required bool identityVerified,
+}) {
+  final badgeSize = identityVerified ? 49.0 : 0.0;
+  final gap = identityVerified ? 16.0 : 0.0;
+  final painter = TextPainter(textDirection: ui.TextDirection.ltr,
+    textAlign: center ? TextAlign.center : TextAlign.left,
+    maxLines: 2, ellipsis: '…');
+  var size = fontSize;
+  final available = area.width - badgeSize - gap;
+  while (true) {
+    painter.text = TextSpan(text: name, style: TextStyle(
+      color: Colors.white, fontSize: size, fontWeight: FontWeight.w900,
+      height: 1.10, letterSpacing: -1.8));
+    painter.layout(maxWidth: available);
+    if (!painter.didExceedMaxLines || size <= minFontSize) {
+      break;
+    }
+    size = max(minFontSize, size - 2);
+  }
+  final total = painter.width + gap + badgeSize;
+  final x = center ? area.left + (area.width - total) / 2 : area.left;
+  painter.paint(canvas, Offset(x, area.top));
+  if (identityVerified) {
+    final origin = Offset(x + painter.width + gap, area.top + (size * 1.1 - badgeSize) / 2);
+    canvas.save();
+    canvas.translate(origin.dx, origin.dy);
+    canvas.scale(badgeSize / 32);
+    final badge = ui.Path();
+    for (var i = 0; i < 32; i++) {
+      final angle = i * pi / 16 - pi / 2;
+      final radius = i.isEven ? 15.0 : 12.8;
+      final px = 16 + cos(angle) * radius;
+      final py = 16 + sin(angle) * radius;
+      if (i == 0) {
+        badge.moveTo(px, py);
+      } else {
+        badge.lineTo(px, py);
+      }
+    }
+    badge.close();
+    canvas.drawPath(badge, Paint()..color = const Color(0xFF1D9BF0));
+    final check = ui.Path()..moveTo(9, 16)..lineTo(14, 21)..lineTo(23, 11);
+    canvas.drawPath(check, Paint()..color = Colors.white
+      ..style = PaintingStyle.stroke..strokeWidth = 3.2
+      ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
+    canvas.restore();
+  }
+  painter.dispose();
+}
+
 void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = false}) {
   final size = Size(image.width.toDouble(), image.height.toDouble());
   final fitted = applyBoxFit(cover ? BoxFit.cover : BoxFit.contain, size, rect.size);
@@ -120,6 +173,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
   required String name, required String code, required String modality,
   required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
   ProjectIdentity identity = ProjectIdentity.fallback,
+  bool identityVerified = false,
 }) async {
   const width = 1080;
   final height = story ? 1920 : 1080;
@@ -243,19 +297,22 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 62, 316,
         956, 52, white, center: true, weight: FontWeight.w800, lines: 2,
         minFontSize: 42, letterSpacing: -1.2);
-      _promoText(canvas, name, 62, 921, 956, 76, white,
-        center: true, weight: FontWeight.w900, minFontSize: 39,
-        letterSpacing: -2);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 64, 1100, 952,
-        34, muted, center: true, lines: 1, weight: FontWeight.w500);
+      _promoVerifiedName(canvas, name, const Rect.fromLTWH(62, 921, 956, 169),
+        fontSize: 76, minFontSize: 39, center: true, identityVerified: identityVerified);
+      _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
+        : 'Conductor de la Agencia TukTuk', 64, 1100, 952,
+        34, identityVerified ? const Color(0xFF81CEFF) : muted,
+        center: true, lines: 1, weight: FontWeight.w600, minFontSize: 27);
     } else {
       _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 449, 224,
         566, 42, white, weight: FontWeight.w800, minFontSize: 34,
         letterSpacing: -.8);
-      _promoText(canvas, name, 449, 335, 566, 76, white,
-        weight: FontWeight.w900, minFontSize: 31, letterSpacing: -1.8);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 449, 509,
-        566, 28, muted, lines: 1, weight: FontWeight.w500, minFontSize: 23);
+      _promoVerifiedName(canvas, name, const Rect.fromLTWH(449, 335, 566, 165),
+        fontSize: 76, minFontSize: 31, center: false, identityVerified: identityVerified);
+      _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
+        : 'Conductor de la Agencia TukTuk', 449, 509,
+        566, 28, identityVerified ? const Color(0xFF81CEFF) : muted,
+        lines: 1, weight: FontWeight.w600, minFontSize: 20);
     }
     final servicePill = story
       ? const Rect.fromLTWH(174, 1143, 732, 75)
@@ -343,14 +400,15 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 3;
+const _marketplacePromoArtworkVersion = 4;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
   required Uri? photoUrl, required ProjectIdentity identity,
   Object? profileUpdatedAt,
+  bool identityVerified = false,
 }) => sha256.convert(utf8.encode(jsonEncode([
-  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized,
+  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized, identityVerified,
   photoUrl == null ? null : '${photoUrl.scheme}://${photoUrl.host}${photoUrl.path}',
   profileUpdatedAt?.toString(), identity.projectId, identity.iconUrl,
   identity.primaryColorHex, identity.secondaryColorHex,
@@ -407,14 +465,14 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _consent = false, _sharePhoto = false, _enabled = false;
-  bool _story = false, _sharing = false;
+  bool _story = false, _sharing = false, _identityVerified = false;
   String? _error, _code;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? get _artwork => _story ? _storyBytes : _squareBytes;
   String get _fileName => _story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
-  String? get _copy => _code == null ? null : marketplaceDriverPromoCopy(_name.text.trim(), _code!);
+  String? get _copy => _code == null ? null : marketplaceDriverPromoCopy(_name.text.trim(), _code!, identityVerified: _identityVerified);
 
   @override
   void initState() {
@@ -426,7 +484,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         _revision++;
         if (_actor != null) unawaited(_cache.clear(_actor));
         setState(() {
-          _enabled = false; _busy = false; _code = null;
+          _enabled = false; _busy = false; _code = null; _identityVerified = false;
           _squareBytes = null; _storyBytes = null;
           _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
         });
@@ -457,8 +515,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (!mounted || !_sameUser || revision != _revision) return;
       if (result is! Map) throw StateError('PROMO_PROFILE_INVALID');
       final enabled = result['enabled'] == true;
+      final identityVerified = enabled && result['identity_verified'] == true;
       setState(() {
         _enabled = enabled;
+        _identityVerified = identityVerified;
         _consent = enabled;
         _sharePhoto = enabled && result['photo_authorized'] == true;
         if (result['public_name'] is String) _name.text = result['public_name'] as String;
@@ -504,6 +564,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         actor: actor, code: code, name: name, modality: modality,
         photoAuthorized: photoAuthorized, photoUrl: validPhotoUrl,
         identity: identity, profileUpdatedAt: result['updated_at'],
+        identityVerified: identityVerified,
       );
       final cached = force ? null : _cache.read(actor, fingerprint);
       if (cached != null) {
@@ -520,8 +581,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       stage = 'tarjeta';
       final logo = await loadMarketplacePromoBrandLogo(identity);
       if (!mounted || !_sameUser || revision != _revision) return;
-      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity);
-      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity);
+      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified);
+      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified);
       if (!mounted || !_sameUser || revision != _revision) return;
       // If the configured official icon failed to load, do not persist a
       // degraded rendering; a later visit can retry the correct identity.
