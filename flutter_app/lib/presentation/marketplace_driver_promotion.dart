@@ -59,6 +59,29 @@ Future<ui.Image> _promoDecode(Uint8List bytes) async {
   }
 }
 
+/// Use the centralized public project identity, never a legacy bundled logo.
+Future<Uint8List?> loadMarketplacePromoBrandLogo(ProjectIdentity identity, {http.Client? client}) async {
+  final urls = {identity.logoUrl, identity.iconUrl}.whereType<String>();
+  for (final value in urls) {
+    final uri = Uri.tryParse(value);
+    if (uri == null) continue;
+    try {
+      final bytes = await downloadMarketplacePromoPortrait(uri, client: client);
+      final decoded = await _promoDecode(bytes);
+      decoded.dispose();
+      return bytes;
+    } catch (_) {
+      // The current official icon is the next fallback; otherwise use text.
+    }
+  }
+  return null;
+}
+
+Color _promoBrandColor(String hex, Color fallback) {
+  if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(hex)) return fallback;
+  return Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
+}
+
 void _promoText(Canvas canvas, String value, double x, double y, double width,
     double fontSize, Color color, {bool center = false,
     FontWeight weight = FontWeight.w700, int lines = 2}) {
@@ -86,6 +109,7 @@ void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = fals
 Future<Uint8List> renderMarketplaceDriverPromoCard({
   required String name, required String code, required String modality,
   required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
+  ProjectIdentity identity = ProjectIdentity.fallback,
 }) async {
   const width = 1080;
   final height = story ? 1920 : 1080;
@@ -96,42 +120,42 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final bounds = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
-    canvas.drawRect(bounds, Paint()..shader = const LinearGradient(
-      begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [Color(0xFF111C28), Color(0xFF0A101A), Color(0xFF192B3C)],
-    ).createShader(bounds));
-    const turquoise = Color(0xFF00C9AF);
-    const gold = Color(0xFFFFC51B);
+    final primary = _promoBrandColor(identity.primaryColorHex, const Color(0xFF06B6D4));
+    final secondary = _promoBrandColor(identity.secondaryColorHex, const Color(0xFF0F172A));
     const white = Color(0xFFFFFFFF);
     const muted = Color(0xFFCBD5E1);
+    // Preserve a dark readable card even if Admin selects a light brand color.
+    final background = secondary.computeLuminance() > .18
+        ? Color.lerp(secondary, const Color(0xFF0B0F14), .85)!
+        : secondary;
+    final accent = primary.computeLuminance() < .22
+        ? Color.lerp(primary, white, .48)!
+        : primary;
+    canvas.drawRect(bounds, Paint()..shader = LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [background, const Color(0xFF0B0F14),
+        Color.lerp(background, primary, .12)!],
+    ).createShader(bounds));
     canvas.drawCircle(Offset(970, story ? 290 : 120), 310,
-      Paint()..color = const Color(0x18FFC51B));
+      Paint()..color = primary.withValues(alpha: .10));
     canvas.drawCircle(Offset(75, height - 60.0), 320,
-      Paint()..color = const Color(0x1700C9AF));
-    final headerY = story ? 125.0 : 44.0;
-    // The official asset has generous transparent margins. Frame its visible
-    // emblem so the agency identity is legible even in a mobile preview.
+      Paint()..color = primary.withValues(alpha: .08));
+    final headerY = story ? 92.0 : 20.0;
+    // The current brand asset can be a wordmark or an icon. Preserve its full
+    // aspect ratio and do not crop it using the old tuk-tuk illustration bounds.
     if (logo != null) {
-      final lw = logo.width.toDouble(), lh = logo.height.toDouble();
-      final source = Rect.fromLTRB(lw * .11, lh * .24, lw * .88, lh * .76);
-      final frame = Rect.fromLTWH(68, headerY, 190, 126);
-      final fit = applyBoxFit(BoxFit.contain, source.size, frame.size);
-      final dest = Alignment.center.inscribe(fit.destination, frame);
-      canvas.drawImageRect(logo, source, dest, Paint()..filterQuality = FilterQuality.high);
+      _promoFitImage(canvas, logo, Rect.fromLTWH(48, headerY, 320, 164));
     }
-    final brandX = logo == null ? 68.0 : 275.0;
-    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 24, 410, 44, turquoise, lines: 1);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-      Rect.fromLTWH(brandX, headerY + 84, 92, 7), const Radius.circular(4)),
-      Paint()..color = gold);
-    _promoText(canvas, 'MI TUKTUK', 720, headerY + 42, 290, 30, muted,
-      center: true, lines: 1);
+    final brandX = logo == null ? 68.0 : 390.0;
+    final brandWidth = logo == null ? 944.0 : 610.0;
+    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 24, brandWidth, 54, white, lines: 1);
+    _promoText(canvas, 'MI TUKTUK', brandX, headerY + 94, brandWidth, 30, accent, lines: 1);
 
     final photoRect = story
         ? const Rect.fromLTWH(350, 345, 380, 380)
         : const Rect.fromLTWH(78, 216, 278, 278);
     canvas.drawCircle(photoRect.center, photoRect.width / 2 + 9,
-      Paint()..color = turquoise);
+      Paint()..color = accent);
     canvas.save();
     canvas.clipPath(ui.Path()..addOval(photoRect));
     canvas.drawRect(photoRect, Paint()..color = const Color(0xFF27384A));
@@ -147,13 +171,13 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
     if (story) {
       _promoText(canvas, name, 64, 775, 952, 68, white, center: true);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 934, 940, 34, turquoise, center: true, lines: 1);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 934, 940, 34, accent, center: true, lines: 1);
       _promoText(canvas, modality, 70, 987, 940, 35, muted, center: true, lines: 1);
       _promoText(canvas, '¡Viaja conmigo!', 70, 1050, 940, 54, white, center: true, lines: 1);
     } else {
-      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, turquoise, lines: 1);
+      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, accent, lines: 1);
       _promoText(canvas, name, 405, 265, 615, 52, white);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, turquoise, lines: 1);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, accent, lines: 1);
       _promoText(canvas, modality, 405, 447, 615, 35, muted);
     }
     // QR is drawn into the PNG with exact pixel-aligned black/white squares.
@@ -173,13 +197,13 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       }
     }
     if (story) {
-      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, turquoise, center: true, lines: 1);
+      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, accent, center: true, lines: 1);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         95, 1625, 890, 35, muted, center: true, lines: 3);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         85, 1770, 910, 31, white, center: true, lines: 2);
     } else {
-      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, turquoise);
+      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, accent);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         460, 728, 545, 34, muted, lines: 4);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
@@ -300,10 +324,14 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       }
       if (!mounted || !_sameUser || revision != _revision) return;
       stage = 'tarjeta';
-      final logoData = await rootBundle.load('assets/branding/tuktuk_logo_transparent.png');
-      final logo = logoData.buffer.asUint8List(logoData.offsetInBytes, logoData.lengthInBytes);
-      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo);
-      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo);
+      await widget.store.refreshProjectIdentity().timeout(
+        const Duration(seconds: 8), onTimeout: () {});
+      if (!mounted || !_sameUser || revision != _revision) return;
+      final identity = widget.store.projectIdentity;
+      final logo = await loadMarketplacePromoBrandLogo(identity);
+      if (!mounted || !_sameUser || revision != _revision) return;
+      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity);
+      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity);
       if (!mounted || !_sameUser || revision != _revision) return;
       setState(() { _name.text = name; _code = code; _squareBytes = square; _storyBytes = story; });
     } catch (_) {
