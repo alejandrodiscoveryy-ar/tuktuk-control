@@ -96,12 +96,14 @@ void main() {
     String key({String actor = 'driver-a', String name = 'Gerson',
       String modality = 'Auto · Pasajeros', bool authorized = true,
       String url = 'https://example.com/photo/one.png?token=first',
-      ProjectIdentity identity = ProjectIdentity.fallback, bool verified = false}) =>
+      ProjectIdentity identity = ProjectIdentity.fallback, bool verified = false,
+      String? photoAssetId}) =>
         marketplacePromoCacheFingerprint(actor: actor, code: code, name: name,
           modality: modality, photoAuthorized: authorized, photoUrl: Uri.parse(url),
-          identity: identity, identityVerified: verified);
+          identity: identity, identityVerified: verified, photoAssetId: photoAssetId);
     final original = key();
     expect(key(verified: true), isNot(original));
+    expect(key(photoAssetId: 'new-photo'), isNot(original));
     expect(key(url: 'https://example.com/photo/one.png?token=second'), original);
     expect(key(url: 'https://example.com/photo/two.png?token=first'), isNot(original));
     expect(key(name: 'Otro'), isNot(original));
@@ -174,9 +176,16 @@ void main() {
 
   test('sharing and download remain gated by own enabled profile and generated image', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
-    expect(source, contains('get_my_marketplace_promo_profile'));
-    expect(source, contains('set_my_marketplace_promo_profile'));
-    expect(source, contains('target_share_photo'));
+    expect(source, contains('prepare_my_marketplace_promo_card_v1'));
+    expect(source, contains('publish_my_marketplace_promo_card_v1'));
+    expect(source, contains('revoke_my_marketplace_promo_card_v1'));
+    expect(source, contains('target_photo_asset_id'));
+    expect(source, isNot(contains('Activar mi perfil')));
+    expect(source, isNot(contains('CheckboxListTile')));
+    expect(source, contains('if (!await _ensurePublished()'));
+    expect(source, contains('if (_published) SelectableText'));
+    expect(source, contains('Al compartir, descargar o copiar el enlace'));
+    expect(source, contains("storage.from('marketplace-media').createSignedUrl"));
     expect(source, contains('files: [XFile.fromData'));
     expect(source, contains('text: copy'));
     expect(source, isNot(contains('assets/branding/tuktuk_logo_transparent.png')));
@@ -186,7 +195,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 4;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 5;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('Color(0xFF1D9BF0)'));
@@ -197,7 +206,7 @@ void main() {
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
     expect(source, contains('_load(force: true)'));
     expect(source, contains('_cache.clear(actor)'));
-    expect(source.indexOf('_cache.read(actor, fingerprint)'), lessThan(source.indexOf('await downloadMarketplacePromoPortrait(validPhotoUrl)')));
+    expect(source.indexOf('_cache.read(actor, fingerprint)'), lessThan(source.indexOf('await downloadMarketplacePromoPortrait(Uri.parse(signed))')));
     expect(source, contains('driver_promo_download.downloadPromoPng'));
     expect(source, contains('auth.currentUser?.id == _actor'));
     expect(source, isNot(contains('claim_referral_code')));
