@@ -19,6 +19,8 @@ void main() {
     expect(marketplaceDriverPromoCopy('Gerson', code), contains(uri.toString()));
     final copy = marketplaceDriverPromoCopy('Gerson', code);
     expect(copy, contains('Soy Gerson, conductor de la Agencia TukTuk.'));
+    expect(copy, contains('Solicita mi servicio desde este enlace:'));
+    expect(copy, contains('¡Tu próximo viaje comienza conmigo!'));
     expect(copy, contains('Tu conductor de confianza, a un toque.'));
     expect(copy, isNot(contains('otro conductor')));
     expect(copy, isNot(contains('flota')));
@@ -116,12 +118,26 @@ void main() {
       expect(png.width, 1080);
       expect(png.height, story ? 1920 : 1080);
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 368 : 78;
-      final y = story ? 1160 : 578;
-      expect(png.getPixel(x + 5, y + 5).r, 255);
+      final x = story ? 368 : 708;
+      final y = story ? 1361 : 706;
+      final module = story ? 7 : 6;
+      final qrSize = (qr.moduleCount + 8) * module;
+      // All four sides preserve a full four-module white quiet zone.
+      for (var p = 0; p < qrSize; p++) {
+        for (var margin = 0; margin < 4 * module; margin++) {
+          for (final pixel in [
+            png.getPixel(x + p, y + margin),
+            png.getPixel(x + p, y + qrSize - 1 - margin),
+            png.getPixel(x + margin, y + p),
+            png.getPixel(x + qrSize - 1 - margin, y + p),
+          ]) {
+            expect([pixel.r, pixel.g, pixel.b], [255, 255, 255]);
+          }
+        }
+      }
       for (var row = 0; row < qr.moduleCount; row++) {
         for (var col = 0; col < qr.moduleCount; col++) {
-          final pixel = png.getPixel(x + (col + 4) * 7 + 3, y + (row + 4) * 7 + 3);
+          final pixel = png.getPixel(x + (col + 4) * module + 3, y + (row + 4) * module + 3);
           final expected = qr.isDark(row, col) ? 0 : 255;
           expect([pixel.r, pixel.g, pixel.b], [expected, expected, expected], reason: 'module $row,$col');
         }
@@ -142,7 +158,10 @@ void main() {
     expect(source, contains('loadMarketplacePromoBrandLogo(identity)'));
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
-    expect(source, contains('Rect.fromLTWH(72, headerY, 136, 136)'));
+    expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 3;'));
+    expect(source, contains('weight: FontWeight.w900'));
+    expect(source, contains('const paper = Color(0xFFF1F8FA)'));
     expect(source, contains('panelShape'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
@@ -154,7 +173,8 @@ void main() {
     expect(source, isNot(contains('claim_referral_code')));
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
-    expect(source, contains('Solicita tu transporte desde mi enlace personal.'));
+    expect(source, contains('Solicita mi servicio desde este enlace:'));
+    expect(source, contains(r'Solicita mi servicio\ndesde este enlace'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
     expect(source, contains("'Agencia TukTuk'"));
     expect(source, contains('identity.primaryColorHex'));
