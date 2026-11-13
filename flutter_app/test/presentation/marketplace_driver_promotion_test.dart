@@ -194,14 +194,15 @@ void main() {
   test('sharing and download remain gated by own enabled profile and generated image', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
     expect(source, contains('prepare_my_marketplace_promo_card_v1'));
-    expect(source, contains('publish_my_marketplace_promo_card_v1'));
+    expect(source, isNot(contains('publish_my_marketplace_promo_card_v1')));
     expect(source, contains('revoke_my_marketplace_promo_card_v1'));
-    expect(source, contains('target_photo_asset_id'));
     expect(source, isNot(contains('Activar mi perfil')));
     expect(source, isNot(contains('CheckboxListTile')));
-    expect(source, contains('if (!await _ensurePublished()'));
-    expect(source, contains('if (_published) SelectableText'));
-    expect(source, contains('Al compartir, descargar o copiar el enlace'));
+    expect(source, isNot(contains('_ensurePublished')));
+    expect(source, isNot(contains('Al compartir, descargar o copiar el enlace')));
+    expect(source, contains('active Mi TukTuk desde Administración'));
+    expect(source, contains('SelectableText(marketplaceDriverPromoUri(_code!).toString())'));
+    expect(source, contains('final ready = previewReady;'));
     expect(source, contains("storage.from('marketplace-media').createSignedUrl"));
     expect(source, contains('files: [XFile.fromData'));
     expect(source, contains('text: copy'));
