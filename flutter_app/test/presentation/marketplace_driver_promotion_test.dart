@@ -278,6 +278,7 @@ void main() {
     expect(source, contains(r'Solicita mi servicio\ndesde este enlace'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
     expect(source, contains("'Agencia TukTuk'"));
+    expect(source, isNot(contains("_promoText(canvas, 'MI TUKTUK'")));
     expect(source, contains('identity.primaryColorHex'));
     expect(source, contains('identity.secondaryColorHex'));
   });
