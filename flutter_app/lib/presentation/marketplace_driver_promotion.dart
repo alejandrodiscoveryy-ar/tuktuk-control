@@ -107,7 +107,7 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
 }
 
 /// The badge is part of the exported PNG, not merely the app preview.
-void _promoVerifiedName(Canvas canvas, String name, Rect area, {
+double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   required double fontSize, required double minFontSize, required bool center,
   required bool identityVerified,
 }) {
@@ -156,7 +156,9 @@ void _promoVerifiedName(Canvas canvas, String name, Rect area, {
       ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
     canvas.restore();
   }
+  final bottom = area.top + painter.height;
   painter.dispose();
+  return bottom;
 }
 
 void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = false}) {
@@ -196,8 +198,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         ? Color.lerp(primary, white, .48)!
         : primary;
     final lime = Color.lerp(primary, const Color(0xFF84FF62), .76)!;
-    const ink = Color(0xFF101C29);
-    const paper = Color(0xFFF1F8FA);
+    const panelDark = Color(0xFF0B1C2A);
+    const panelDeep = Color(0xFF102E3B);
     // A campaign artwork, not an app screen: the dark stage, energetic
     // diagonal ribbons and a luminous portrait anchor the composition.
     canvas.drawRect(bounds, Paint()..shader = LinearGradient(
@@ -293,59 +295,70 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     canvas.restore();
 
+    double roleY;
     if (story) {
       _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 62, 316,
         956, 52, white, center: true, weight: FontWeight.w800, lines: 2,
         minFontSize: 42, letterSpacing: -1.2);
-      _promoVerifiedName(canvas, name, const Rect.fromLTWH(62, 921, 956, 169),
+      final nameBottom = _promoVerifiedName(canvas, name, const Rect.fromLTWH(62, 921, 956, 169),
         fontSize: 76, minFontSize: 39, center: true, identityVerified: identityVerified);
+      roleY = max(1030.0, nameBottom + 16);
       _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
-        : 'Conductor de la Agencia TukTuk', 64, 1100, 952,
+        : 'Conductor de la Agencia TukTuk', 64, roleY, 952,
         34, identityVerified ? const Color(0xFF81CEFF) : muted,
         center: true, lines: 1, weight: FontWeight.w600, minFontSize: 27);
     } else {
       _promoText(canvas, 'Tu próximo viaje\ncomienza conmigo', 449, 224,
         566, 42, white, weight: FontWeight.w800, minFontSize: 34,
         letterSpacing: -.8);
-      _promoVerifiedName(canvas, name, const Rect.fromLTWH(449, 335, 566, 165),
+      final nameBottom = _promoVerifiedName(canvas, name, const Rect.fromLTWH(449, 335, 566, 165),
         fontSize: 76, minFontSize: 31, center: false, identityVerified: identityVerified);
+      roleY = max(445.0, nameBottom + 16);
       _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
-        : 'Conductor de la Agencia TukTuk', 449, 509,
+        : 'Conductor de la Agencia TukTuk', 449, roleY,
         566, 28, identityVerified ? const Color(0xFF81CEFF) : muted,
         lines: 1, weight: FontWeight.w600, minFontSize: 20);
     }
     final servicePill = story
-      ? const Rect.fromLTWH(174, 1143, 732, 75)
-      : const Rect.fromLTWH(449, 552, 566, 83);
+      ? Rect.fromLTWH(235, roleY + 51, 610, 72)
+      : Rect.fromLTWH(449, roleY + 42, 566, 76);
     final pill = RRect.fromRectAndRadius(servicePill, const Radius.circular(27));
     canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .13));
     canvas.drawRRect(pill, Paint()..style = PaintingStyle.stroke
       ..strokeWidth = 2 ..color = accent.withValues(alpha: .46));
-    canvas.drawCircle(Offset(servicePill.left + 27, servicePill.center.dy),
+    if (!story) canvas.drawCircle(Offset(servicePill.left + 27, servicePill.center.dy),
       6, Paint()..color = lime);
-    _promoText(canvas, modality, servicePill.left + 47,
-      servicePill.top + (story ? 8 : 10), servicePill.width - 68,
-      story ? 28 : 31, white, lines: 2, minFontSize: 23,
+    _promoText(canvas, modality, servicePill.left + (story ? 20 : 47),
+      servicePill.top + 17, servicePill.width - (story ? 40 : 68),
+      story ? 29 : 31, white, center: story, lines: 2, minFontSize: 23,
       weight: FontWeight.w700);
 
-    // High-contrast booking pass. This surface deliberately differs from the
-    // dark stage so the personal link is immediately recognizable in a feed.
+    // Integrated midnight booking pass. Only the QR's quiet zone is white;
+    // the call to action remains part of the agency's dark visual identity.
     final panel = story
       ? const Rect.fromLTWH(65, 1240, 950, 491)
-      : const Rect.fromLTWH(51, 681, 978, 343);
+      : const Rect.fromLTWH(51, 662, 978, 362);
     final panelShape = RRect.fromRectAndRadius(panel, const Radius.circular(40));
     canvas.drawRRect(panelShape.shift(const Offset(0, 9)),
       Paint()..color = Colors.black.withValues(alpha: .24));
-    canvas.drawRRect(panelShape, Paint()..color = paper);
+    canvas.drawRRect(panelShape, Paint()..shader = const LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [panelDark, panelDeep],
+    ).createShader(panel));
+    canvas.drawRRect(panelShape, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 2 ..color = accent.withValues(alpha: .48));
     final topRule = Rect.fromLTWH(panel.left + 38, panel.top + 20, 110, 6);
     canvas.drawRRect(RRect.fromRectAndRadius(topRule, const Radius.circular(3)),
       Paint()..shader = LinearGradient(colors: [primary, lime]).createShader(topRule));
 
     final qr = marketplaceDriverPromoQr(code);
-    final module = story ? 7.0 : 6.0;
+    const module = 7.0;
     final qrSize = (qr.moduleCount + 8) * module;
-    final qrX = story ? ((1080 - qrSize) / 2).floorToDouble() : 708.0;
-    final qrY = story ? 1361.0 : 706.0;
+    final qrX = story ? ((1080 - qrSize) / 2).floorToDouble() : 666.0;
+    final qrY = story ? 1361.0 : 673.0;
+    final qrFrame = Rect.fromLTWH(qrX - 7, qrY - 7, qrSize + 14, qrSize + 14);
+    canvas.drawRRect(RRect.fromRectAndRadius(qrFrame, const Radius.circular(12)),
+      Paint()..color = accent.withValues(alpha: .34));
     // An exact integer grid with four white modules of quiet zone on all
     // sides. Decorative elements never enter this rectangle.
     canvas.drawRect(Rect.fromLTWH(qrX, qrY, qrSize, qrSize), Paint()..color = white);
@@ -361,20 +374,20 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
     if (story) {
       _promoText(canvas, 'Solicita mi servicio\ndesde este enlace', 101, 1272,
-        878, 37, ink, center: true, weight: FontWeight.w900,
+        878, 37, white, center: true, weight: FontWeight.w900,
         minFontSize: 33, lines: 2, letterSpacing: -.6);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.', 64, 1760,
         952, 31, white, center: true, weight: FontWeight.w600, lines: 2);
     } else {
-      _promoText(canvas, 'ESCANEA EL QR', 91, 725, 570, 24, ink,
+      _promoText(canvas, 'ESCANEA EL QR', 91, 725, 540, 24, lime,
         lines: 1, weight: FontWeight.w700, letterSpacing: 3);
       _promoText(canvas, 'Solicita mi servicio\ndesde este enlace', 91, 780,
-        575, 49, ink, weight: FontWeight.w900, minFontSize: 37,
+        540, 49, white, weight: FontWeight.w900, minFontSize: 37,
         lines: 2, letterSpacing: -1);
       final arrow = ui.Path()
         ..moveTo(95, 937)..lineTo(225, 937)
         ..moveTo(208, 921)..lineTo(225, 937)..lineTo(208, 953);
-      canvas.drawPath(arrow, Paint()..color = ink..style = PaintingStyle.stroke
+      canvas.drawPath(arrow, Paint()..color = accent..style = PaintingStyle.stroke
         ..strokeWidth = 4..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.', 64, 1043,
         952, 23, white, center: true, weight: FontWeight.w600, lines: 1);
@@ -400,7 +413,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 5;
+const _marketplacePromoArtworkVersion = 6;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
