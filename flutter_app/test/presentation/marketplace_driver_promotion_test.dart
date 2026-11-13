@@ -174,6 +174,23 @@ void main() {
     });
   }
 
+  test('both formats are visible without selector and have independent actions', () {
+    final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
+    expect(source, isNot(contains('SegmentedButton<bool>')));
+    expect(source, contains('_formatCard(context, story: false, ready: ready)'));
+    expect(source, contains('_formatCard(context, story: true, ready: ready)'));
+    expect(source, contains('mi-tuktuk-share-story'));
+    expect(source, contains('mi-tuktuk-share-square'));
+    expect(source, contains('mi-tuktuk-download-story'));
+    expect(source, contains('mi-tuktuk-download-square'));
+    expect(source, contains('_shareCard(story: story)'));
+    expect(source, contains('_downloadCard(story: story)'));
+    expect(source, contains('_artworkFor(story)'));
+    expect(source, contains('_fileNameFor(story)'));
+    expect(source, contains("story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png'"));
+    expect(source, contains('text: copy'));
+  });
+
   test('sharing and download remain gated by own enabled profile and generated image', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
     expect(source, contains('prepare_my_marketplace_promo_card_v1'));
