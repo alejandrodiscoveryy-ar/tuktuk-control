@@ -366,12 +366,10 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     const brandX = 65.0;
     final brandWidth = logo == null ? 950.0 : 950.0 - iconSize - 26;
-    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 12,
-      brandWidth, story ? 55 : 51, white, lines: 1,
-      weight: FontWeight.w800, minFontSize: 35, letterSpacing: -1.1);
-    _promoText(canvas, 'MI TUKTUK', brandX, headerY + 75,
-      brandWidth, 25, accent, lines: 1,
-      weight: FontWeight.w600, letterSpacing: 4);
+    _promoText(canvas, 'Agencia TukTuk', brandX, headerY,
+      brandWidth, story ? 59 : 55, white, lines: 1,
+      weight: FontWeight.w800, minFontSize: 35, letterSpacing: -1.1,
+      boxHeight: iconSize);
     final brandRule = Rect.fromLTWH(65, headerY + iconSize + 23, 950, 5);
     canvas.drawRRect(RRect.fromRectAndRadius(brandRule, const Radius.circular(3)),
       Paint()..shader = LinearGradient(colors: [
