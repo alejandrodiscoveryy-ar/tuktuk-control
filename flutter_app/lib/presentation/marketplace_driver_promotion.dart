@@ -170,6 +170,116 @@ void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = fals
   canvas.drawImageRect(image, source, dest, Paint()..filterQuality = FilterQuality.high);
 }
 
+/// Vehicle-class illustration, drawn locally as a subdued luminous watermark.
+/// No stock-photo download, no claim about the exact vehicle model.
+void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color accent) {
+  canvas.save();
+  canvas.translate(area.left, area.top);
+  canvas.scale(area.width / 600, area.height / 220);
+  final stroke = Paint()..color = accent.withValues(alpha: .40)
+    ..style = PaintingStyle.stroke..strokeWidth = 2.4
+    ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
+  final detail = Paint()..color = accent.withValues(alpha: .24)
+    ..style = PaintingStyle.stroke..strokeWidth = 1.8
+    ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
+  final fill = Paint()..shader = LinearGradient(
+    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+    colors: [accent.withValues(alpha: .20), const Color(0xFF081D2B).withValues(alpha: .40)],
+  ).createShader(const Rect.fromLTWH(0, 0, 600, 220));
+  final glow = Paint()..shader = RadialGradient(colors: [
+    accent.withValues(alpha: .13), accent.withValues(alpha: 0),
+  ]).createShader(const Rect.fromLTWH(0, 0, 600, 220));
+  canvas.drawRect(const Rect.fromLTWH(0, 0, 600, 220), glow);
+  void wheel(double x, double y, double radius) {
+    final center = Offset(x, y);
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF091827));
+    canvas.drawCircle(center, radius, stroke);
+    canvas.drawCircle(center, radius * .53, detail);
+    canvas.drawCircle(center, radius * .13, Paint()..color = accent.withValues(alpha: .32));
+  }
+  void body(ui.Path path) {
+    canvas.drawPath(path, fill);
+    canvas.drawPath(path, stroke);
+  }
+  void line(double x1, double y1, double x2, double y2) {
+    canvas.drawLine(Offset(x1, y1), Offset(x2, y2), detail);
+  }
+  final isCycle = category == 'motorcycle' || category == 'bicycle' ||
+      category == 'bicitaxi' || category == 'tricycle';
+  if (isCycle) {
+    final pedal = category == 'bicycle' || category == 'bicitaxi';
+    final three = category == 'bicitaxi' || category == 'tricycle';
+    wheel(135, 157, 47);
+    wheel(460, 157, 47);
+    if (three) {
+      wheel(368, 172, 32);
+      body(ui.Path()..moveTo(223, 58)..lineTo(387, 58)
+        ..quadraticBezierTo(421, 58, 437, 92)..lineTo(450, 126)
+        ..lineTo(245, 126)..lineTo(223, 58)..close());
+      line(250, 60, 250, 123);
+      line(382, 60, 382, 123);
+      line(223, 58, 205, 37);
+      line(205, 37, 408, 37);
+    }
+    final frame = ui.Path()..moveTo(135, 157)..lineTo(260, 75)
+      ..lineTo(303, 157)..lineTo(135, 157)..moveTo(303, 157)
+      ..lineTo(405, 72)..lineTo(260, 75)..moveTo(405, 72)
+      ..lineTo(460, 157)..moveTo(405, 72)..lineTo(389, 44)
+      ..lineTo(428, 40);
+    canvas.drawPath(frame, stroke);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+      const Rect.fromLTWH(225, 64, 76, 12), const Radius.circular(6)), fill);
+    if (pedal) {
+      canvas.drawCircle(const Offset(303, 157), 15, detail);
+      line(303, 157, 323, 179);
+    } else {
+      body(ui.Path()..moveTo(276, 87)..quadraticBezierTo(350, 64, 388, 91)
+        ..lineTo(362, 132)..lineTo(290, 131)..close());
+      canvas.drawRRect(RRect.fromRectAndRadius(
+        const Rect.fromLTWH(289, 130, 63, 31), const Radius.circular(9)), fill);
+      line(196, 153, 326, 170);
+    }
+  } else {
+    final van = category == 'van';
+    final truck = category == 'truck';
+    if (truck) {
+      body(ui.Path()..moveTo(37, 153)..lineTo(37, 49)..lineTo(365, 49)
+        ..lineTo(365, 83)..lineTo(473, 83)..lineTo(539, 137)
+        ..lineTo(563, 153)..lineTo(563, 178)..lineTo(37, 178)..close());
+      line(366, 87, 366, 172);
+      line(393, 94, 466, 94);
+      line(466, 94, 511, 131);
+      line(511, 131, 393, 131);
+      line(393, 131, 393, 94);
+    } else {
+      body(ui.Path()..moveTo(33, 150)
+        ..quadraticBezierTo(54, 125, 125, 116)
+        ..lineTo(van ? 181 : 239, van ? 54 : 69)
+        ..quadraticBezierTo(280, van ? 42 : 36, 405, van ? 46 : 65)
+        ..lineTo(van ? 474 : 482, van ? 109 : 112)
+        ..quadraticBezierTo(545, 118, 561, 148)
+        ..lineTo(565, 171)..lineTo(36, 171)..close());
+      final glass = ui.Path()..moveTo(van ? 192 : 248, 77)
+        ..quadraticBezierTo(309, van ? 55 : 49, 399, 76)
+        ..lineTo(455, 111)..lineTo(180, 111)..close();
+      canvas.drawPath(glass, fill);
+      canvas.drawPath(glass, detail);
+      line(319, 64, 330, 111);
+      line(330, 115, 330, 163);
+      line(180, 116, 201, 163);
+      line(440, 117, 464, 160);
+      line(48, 147, 114, 136);
+      line(484, 137, 543, 147);
+      canvas.drawLine(const Offset(48, 147), const Offset(114, 136),
+        Paint()..color = accent.withValues(alpha: .70)..strokeWidth = 4..strokeCap = StrokeCap.round);
+    }
+    wheel(146, 172, 40);
+    wheel(463, 172, 40);
+  }
+  canvas.drawLine(const Offset(25, 213), const Offset(575, 213), detail);
+  canvas.restore();
+}
+
 /// Renders the actual exported artwork, not a separate HTML QR or screenshot.
 /// No photos or generated files are uploaded by this renderer.
 Future<Uint8List> renderMarketplaceDriverPromoCard({
@@ -177,6 +287,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
   required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
   ProjectIdentity identity = ProjectIdentity.fallback,
   bool identityVerified = false,
+  String vehicleCategory = 'light_car',
 }) async {
   const width = 1080;
   final height = story ? 1920 : 1080;
@@ -242,6 +353,10 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawPath(routeLight, Paint()
       ..style = PaintingStyle.stroke ..strokeWidth = 2
       ..color = lime.withValues(alpha: .22));
+
+    _promoVehicleWatermark(canvas, vehicleCategory,
+      story ? const Rect.fromLTWH(480, 1020, 600, 220)
+        : const Rect.fromLTWH(610, 423, 450, 165), accent);
 
     // The approved master icon is used at its full aspect ratio.
     final headerY = story ? 137.0 : 42.0;
@@ -327,8 +442,10 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .13));
     canvas.drawRRect(pill, Paint()..style = PaintingStyle.stroke
       ..strokeWidth = 2 ..color = accent.withValues(alpha: .46));
-    if (!story) canvas.drawCircle(Offset(servicePill.left + 27, servicePill.center.dy),
-      6, Paint()..color = lime);
+    if (!story) {
+      canvas.drawCircle(Offset(servicePill.left + 27, servicePill.center.dy),
+        6, Paint()..color = lime);
+    }
     _promoText(canvas, modality, servicePill.left + (story ? 20 : 47),
       servicePill.top, servicePill.width - (story ? 40 : 68),
       story ? 29 : 31, white, center: story, lines: 2, minFontSize: 23,
@@ -415,7 +532,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 6;
+const _marketplacePromoArtworkVersion = 7;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
@@ -423,8 +540,9 @@ String marketplacePromoCacheFingerprint({
   Object? profileUpdatedAt,
   String? photoAssetId,
   bool identityVerified = false,
+  String vehicleCategory = 'light_car',
 }) => sha256.convert(utf8.encode(jsonEncode([
-  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized, identityVerified,
+  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized, identityVerified, vehicleCategory,
   photoUrl == null ? null : '${photoUrl.scheme}://${photoUrl.host}${photoUrl.path}',
   profileUpdatedAt?.toString(), photoAssetId, identity.projectId, identity.iconUrl,
   identity.primaryColorHex, identity.secondaryColorHex,
@@ -558,7 +676,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         .map(_promoServiceLabel).where((label) => label.isNotEmpty).toSet().join(' · ');
       if (services.isEmpty) throw StateError('PROMO_SERVICE_UNAVAILABLE');
       final name = raw['public_name'] as String;
-      final modality = '${_promoCategoryLabel(raw['category_code'] as String)} · $services';
+      final vehicleCategory = raw['category_code'] as String;
+      final modality = '${_promoCategoryLabel(vehicleCategory)} · $services';
       final photoPath = raw['photo_path'] is String ? raw['photo_path'] as String : null;
       final photoAuthorized = raw['photo_authorized'] == true;
       // The own-photo storage path is stable; never store the signed token.
@@ -579,7 +698,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         actor: actor, code: code, name: name, modality: modality,
         photoAuthorized: photoAuthorized, photoUrl: photoKey,
         identity: identity, photoAssetId: _photoAssetId,
-        identityVerified: identityVerified,
+        identityVerified: identityVerified, vehicleCategory: vehicleCategory,
       );
       final cached = force ? null : _cache.read(actor, fingerprint);
       if (cached != null) {
@@ -599,8 +718,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       stage = 'tarjeta';
       final logo = await loadMarketplacePromoBrandLogo(identity);
       if (!mounted || !_sameUser || revision != _revision) return;
-      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified);
-      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified);
+      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
+      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
       if (!mounted || !_sameUser || revision != _revision) return;
       // If the configured official icon failed to load, do not persist a
       // degraded rendering; a later visit can retry the correct identity.
