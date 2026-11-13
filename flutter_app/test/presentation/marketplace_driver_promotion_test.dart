@@ -123,10 +123,15 @@ void main() {
       final png = img.decodePng(bytes!)!;
       expect(png.width, 1080);
       expect(png.height, story ? 1920 : 1080);
+      // Outside the QR the booking panel stays dark, never a white slab.
+      final panelPixel = png.getPixel(110, story ? 1510 : 900);
+      expect(panelPixel.r, lessThan(65));
+      expect(panelPixel.g, lessThan(85));
+      expect(panelPixel.b, lessThan(100));
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 368 : 708;
-      final y = story ? 1361 : 706;
-      final module = story ? 7 : 6;
+      final x = story ? 368 : 666;
+      final y = story ? 1361 : 673;
+      const module = 7;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
       for (var p = 0; p < qrSize; p++) {
@@ -213,12 +218,12 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(65, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 5;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 6;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
-    expect(source, contains('const paper = Color(0xFFF1F8FA)'));
+    expect(source, contains('const panelDark = Color(0xFF0B1C2A)'));
     expect(source, contains('panelShape'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
