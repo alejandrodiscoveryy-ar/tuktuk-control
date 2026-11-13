@@ -59,22 +59,21 @@ Future<ui.Image> _promoDecode(Uint8List bytes) async {
   }
 }
 
-/// Use the centralized public project identity, never a legacy bundled logo.
+/// Use only the approved master icon from the central identity. The full
+/// TukTuk Control wordmark belongs to the management application, not this
+/// customer-facing Agency TukTuk promotion.
 Future<Uint8List?> loadMarketplacePromoBrandLogo(ProjectIdentity identity, {http.Client? client}) async {
-  final urls = {identity.logoUrl, identity.iconUrl}.whereType<String>();
-  for (final value in urls) {
-    final uri = Uri.tryParse(value);
-    if (uri == null) continue;
-    try {
-      final bytes = await downloadMarketplacePromoPortrait(uri, client: client);
-      final decoded = await _promoDecode(bytes);
-      decoded.dispose();
-      return bytes;
-    } catch (_) {
-      // The current official icon is the next fallback; otherwise use text.
-    }
+  final uri = Uri.tryParse(identity.iconUrl ?? '');
+  if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return null;
+  try {
+    final bytes = await downloadMarketplacePromoPortrait(uri, client: client);
+    final decoded = await _promoDecode(bytes);
+    decoded.dispose();
+    return bytes;
+  } catch (_) {
+    // Text-only brand fallback, never the full Control wordmark or old icon.
+    return null;
   }
-  return null;
 }
 
 Color _promoBrandColor(String hex, Color fallback) {
@@ -136,26 +135,47 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       colors: [background, const Color(0xFF0B0F14),
         Color.lerp(background, primary, .12)!],
     ).createShader(bounds));
-    canvas.drawCircle(Offset(970, story ? 290 : 120), 310,
-      Paint()..color = primary.withValues(alpha: .10));
-    canvas.drawCircle(Offset(75, height - 60.0), 320,
-      Paint()..color = primary.withValues(alpha: .08));
-    final headerY = story ? 92.0 : 20.0;
-    // The current brand asset can be a wordmark or an icon. Preserve its full
-    // aspect ratio and do not crop it using the old tuk-tuk illustration bounds.
+    // Premium agency card: restrained border, tonal watermark and one clear
+    // hierarchy. All typography and ornament stay outside the QR quiet zone.
+    final outer = RRect.fromRectAndRadius(
+      Rect.fromLTWH(24, 24, 1032, height - 48.0), const Radius.circular(48));
+    canvas.drawRRect(outer, Paint()
+      ..style = PaintingStyle.stroke ..strokeWidth = 2
+      ..color = primary.withValues(alpha: .28));
+    canvas.save();
+    canvas.clipRRect(outer);
+    final glow = Rect.fromCircle(center: Offset(1030, story ? 230 : 110), radius: 560);
+    canvas.drawRect(glow, Paint()..shader = RadialGradient(
+      colors: [primary.withValues(alpha: .22), primary.withValues(alpha: 0)],
+    ).createShader(glow));
+    final watermark = Path()
+      ..moveTo(850, height - 430.0)
+      ..lineTo(1080, height - 650.0)
+      ..lineTo(1080, height - 570.0)
+      ..lineTo(850, height - 350.0)
+      ..close();
+    canvas.drawPath(watermark, Paint()..color = primary.withValues(alpha: .09));
+    canvas.restore();
+    final headerY = story ? 105.0 : 48.0;
     if (logo != null) {
-      _promoFitImage(canvas, logo, Rect.fromLTWH(48, headerY, 320, 164));
+      _promoFitImage(canvas, logo, Rect.fromLTWH(72, headerY, 136, 136));
     }
-    final brandX = logo == null ? 68.0 : 390.0;
-    final brandWidth = logo == null ? 944.0 : 610.0;
-    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 24, brandWidth, 54, white, lines: 1);
-    _promoText(canvas, 'MI TUKTUK', brandX, headerY + 94, brandWidth, 30, accent, lines: 1);
+    final brandX = logo == null ? 72.0 : 225.0;
+    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 20, 800 - brandX, 51, white, lines: 1);
+    _promoText(canvas, 'MI TUKTUK', brandX, headerY + 85, 800 - brandX, 28, accent, lines: 1);
+    canvas.drawLine(Offset(72, headerY + 161), Offset(1008, headerY + 161),
+      Paint()..color = primary.withValues(alpha: .24)..strokeWidth = 2);
 
     final photoRect = story
-        ? const Rect.fromLTWH(350, 345, 380, 380)
-        : const Rect.fromLTWH(78, 216, 278, 278);
-    canvas.drawCircle(photoRect.center, photoRect.width / 2 + 9,
-      Paint()..color = accent);
+        ? const Rect.fromLTWH(350, 312, 380, 380)
+        : const Rect.fromLTWH(82, 251, 252, 252);
+    canvas.drawCircle(photoRect.center, photoRect.width / 2 + 16,
+      Paint()..color = primary.withValues(alpha: .13));
+    canvas.drawCircle(photoRect.center, photoRect.width / 2 + 6,
+      Paint()..shader = LinearGradient(
+        colors: [accent, primary.withValues(alpha: .35)],
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+      ).createShader(photoRect));
     canvas.save();
     canvas.clipPath(ui.Path()..addOval(photoRect));
     canvas.drawRect(photoRect, Paint()..color = const Color(0xFF27384A));
@@ -170,16 +190,23 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.restore();
 
     if (story) {
-      _promoText(canvas, name, 64, 775, 952, 68, white, center: true);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 934, 940, 34, accent, center: true, lines: 1);
-      _promoText(canvas, modality, 70, 987, 940, 35, muted, center: true, lines: 1);
-      _promoText(canvas, '¡Viaja conmigo!', 70, 1050, 940, 54, white, center: true, lines: 1);
+      _promoText(canvas, '¡Viaja conmigo!', 64, 733, 952, 42, accent, center: true, lines: 1);
+      _promoText(canvas, name, 64, 797, 952, 72, white, center: true);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 974, 940, 37, white, center: true, lines: 1);
+      _promoText(canvas, modality, 70, 1033, 940, 35, accent, center: true, lines: 2);
     } else {
-      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, accent, lines: 1);
-      _promoText(canvas, name, 405, 265, 615, 52, white);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, accent, lines: 1);
-      _promoText(canvas, modality, 405, 447, 615, 35, muted);
+      _promoText(canvas, '¡Viaja conmigo!', 380, 244, 628, 37, accent, lines: 1);
+      _promoText(canvas, name, 380, 302, 628, 53, white);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 380, 437, 628, 29, white, lines: 1);
+      _promoText(canvas, modality, 380, 482, 628, 33, accent, lines: 2);
     }
+    final panel = story
+      ? const Rect.fromLTWH(68, 1110, 944, 590)
+      : const Rect.fromLTWH(58, 558, 964, 380);
+    final panelShape = RRect.fromRectAndRadius(panel, const Radius.circular(34));
+    canvas.drawRRect(panelShape, Paint()..color = Colors.white.withValues(alpha: .045));
+    canvas.drawRRect(panelShape, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 2 ..color = primary.withValues(alpha: .26));
     // QR is drawn into the PNG with exact pixel-aligned black/white squares.
     final qr = marketplaceDriverPromoQr(code);
     const module = 7.0;
@@ -197,15 +224,15 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       }
     }
     if (story) {
-      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, accent, center: true, lines: 1);
+      _promoText(canvas, 'Escanea y viaja conmigo', 85, 1532, 910, 48, accent, center: true, lines: 1);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
-        95, 1625, 890, 35, muted, center: true, lines: 3);
+        110, 1600, 860, 34, muted, center: true, lines: 2);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
-        85, 1770, 910, 31, white, center: true, lines: 2);
+        85, 1770, 910, 34, white, center: true, lines: 2);
     } else {
-      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, accent);
+      _promoText(canvas, 'Escanea y viaja conmigo', 459, 628, 520, 47, accent);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
-        460, 728, 545, 34, muted, lines: 4);
+        459, 760, 520, 34, muted, lines: 3);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         64, 981, 952, 29, white, center: true, lines: 2);
     }
