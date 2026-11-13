@@ -23,6 +23,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:qr/qr.dart';
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'services/driver_promo_download_stub.dart'
     if (dart.library.html) 'services/driver_promo_download_web.dart'
