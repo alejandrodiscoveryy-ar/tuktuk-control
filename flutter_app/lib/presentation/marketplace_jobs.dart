@@ -3305,6 +3305,25 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           _workDrawerDriverHeader(),
 
                           const Divider(),
+                          ListTile(
+                            key: const ValueKey('work-drawer-mi-tuktuk'),
+                            leading: const Icon(
+                              Icons.campaign_outlined,
+                              color: kPrimary,
+                            ),
+                            title: const Text(
+                              'Mi TukTuk',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            subtitle: const Text('Tus tarjetas y enlace personal'),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                            onTap: () => _openWorkDrawerPage(
+                              context,
+                              'Mi TukTuk',
+                              MarketplaceDriverPromotionScreen(store: widget.store),
+                            ),
+                          ),
+                          const Divider(),
                           if (_incomeError != null)
                             Padding(
                               padding: const EdgeInsets.symmetric(
