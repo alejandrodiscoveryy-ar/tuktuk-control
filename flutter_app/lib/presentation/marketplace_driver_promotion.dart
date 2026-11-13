@@ -12,7 +12,7 @@ String marketplaceDriverPromoCopy(String name, String code) =>
     '¡Viaja conmigo!\n\n'
     'Soy $name, conductor de la Agencia TukTuk. Solicita tu transporte de forma fácil desde mi enlace personal.\n\n'
     '${marketplaceDriverPromoUri(code)}\n\n'
-    'Agencia TukTuk. Tu conductor de confianza, a un toque.';
+    'Agencia TukTuk. Tu ciudad te mueve.';
 
 String _promoCategoryLabel(String code) => switch (code) {
   'motorcycle' => 'Moto', 'bicitaxi' => 'Bicitaxi', 'tricycle' => 'Triciclo',
@@ -73,6 +73,39 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   painter.dispose();
 }
 
+/// Consumer wordmark mirrors _TuktukBrandLockup in TukTuk Cliente.
+void _promoBrandLockup(Canvas canvas, double x, double y) {
+  final wordmark = TextPainter(
+    text: const TextSpan(
+      style: TextStyle(fontSize: 76, height: .92, fontWeight: FontWeight.w900,
+        letterSpacing: -3.4),
+      children: [
+        TextSpan(text: 'TUK', style: TextStyle(color: Colors.white)),
+        TextSpan(text: 'TUK', style: TextStyle(color: Color(0xFFE5A84E))),
+      ],
+    ),
+    textDirection: ui.TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  wordmark.paint(canvas, Offset(x, y));
+  final wordmarkWidth = wordmark.width;
+  wordmark.dispose();
+  final tagline = TextPainter(
+    text: const TextSpan(text: 'T U   C I U D A D   T E   M U E V E',
+      style: TextStyle(color: Color(0xFFD0D6DC), fontSize: 22,
+        height: 1, fontWeight: FontWeight.w600, letterSpacing: 1.6)),
+    textDirection: ui.TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+  canvas.save();
+  canvas.translate(x, y + 78);
+  final scale = wordmarkWidth / tagline.width;
+  canvas.scale(scale);
+  tagline.paint(canvas, Offset.zero);
+  canvas.restore();
+  tagline.dispose();
+}
+
 void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = false}) {
   final size = Size(image.width.toDouble(), image.height.toDouble());
   final fitted = applyBoxFit(cover ? BoxFit.cover : BoxFit.contain, size, rect.size);
@@ -85,53 +118,36 @@ void _promoFitImage(Canvas canvas, ui.Image image, Rect rect, {bool cover = fals
 /// No photos or generated files are uploaded by this renderer.
 Future<Uint8List> renderMarketplaceDriverPromoCard({
   required String name, required String code, required String modality,
-  required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
+  required bool story, Uint8List? photoBytes,
 }) async {
   const width = 1080;
   final height = story ? 1920 : 1080;
-  ui.Image? portrait, logo;
+  ui.Image? portrait;
   try {
     if (photoBytes != null) portrait = await _promoDecode(photoBytes);
-    if (logoBytes != null) logo = await _promoDecode(logoBytes);
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     final bounds = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
     canvas.drawRect(bounds, Paint()..shader = const LinearGradient(
       begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [Color(0xFF111C28), Color(0xFF0A101A), Color(0xFF192B3C)],
+      colors: [Color(0xFF050B10), Color(0xFF09141C), Color(0xFF172028)],
     ).createShader(bounds));
-    const turquoise = Color(0xFF00C9AF);
-    const gold = Color(0xFFFFC51B);
+    const mint = Color(0xFF35D6A2);
+    const gold = Color(0xFFE5A84E);
     const white = Color(0xFFFFFFFF);
-    const muted = Color(0xFFCBD5E1);
-    canvas.drawCircle(Offset(970, story ? 290 : 120), 310,
-      Paint()..color = const Color(0x18FFC51B));
-    canvas.drawCircle(Offset(75, height - 60.0), 320,
-      Paint()..color = const Color(0x1700C9AF));
+    const muted = Color(0xFFAAB6C5);
     final headerY = story ? 125.0 : 44.0;
-    // The official asset has generous transparent margins. Frame its visible
-    // emblem so the agency identity is legible even in a mobile preview.
-    if (logo != null) {
-      final lw = logo.width.toDouble(), lh = logo.height.toDouble();
-      final source = Rect.fromLTRB(lw * .11, lh * .24, lw * .88, lh * .76);
-      final frame = Rect.fromLTWH(68, headerY, 190, 126);
-      final fit = applyBoxFit(BoxFit.contain, source.size, frame.size);
-      final dest = Alignment.center.inscribe(fit.destination, frame);
-      canvas.drawImageRect(logo, source, dest, Paint()..filterQuality = FilterQuality.high);
-    }
-    final brandX = logo == null ? 68.0 : 275.0;
-    _promoText(canvas, 'Agencia TukTuk', brandX, headerY + 24, 410, 44, turquoise, lines: 1);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-      Rect.fromLTWH(brandX, headerY + 84, 92, 7), const Radius.circular(4)),
-      Paint()..color = gold);
-    _promoText(canvas, 'MI TUKTUK', 720, headerY + 42, 290, 30, muted,
+    _promoBrandLockup(canvas, 68, headerY);
+    _promoText(canvas, 'MI TUKTUK', 720, headerY + 24, 290, 30, muted,
       center: true, lines: 1);
+    canvas.drawLine(Offset(68, headerY + 122), Offset(1012, headerY + 122),
+      Paint()..color = const Color(0xFF3A4853)..strokeWidth = 2);
 
     final photoRect = story
         ? const Rect.fromLTWH(350, 345, 380, 380)
         : const Rect.fromLTWH(78, 216, 278, 278);
     canvas.drawCircle(photoRect.center, photoRect.width / 2 + 9,
-      Paint()..color = turquoise);
+      Paint()..color = gold);
     canvas.save();
     canvas.clipPath(ui.Path()..addOval(photoRect));
     canvas.drawRect(photoRect, Paint()..color = const Color(0xFF27384A));
@@ -146,14 +162,14 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.restore();
 
     if (story) {
-      _promoText(canvas, name, 64, 775, 952, 68, white, center: true);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 934, 940, 34, turquoise, center: true, lines: 1);
+      _promoText(canvas, name, 64, 764, 952, 68, white, center: true);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 70, 930, 940, 37, mint, center: true, lines: 1);
       _promoText(canvas, modality, 70, 987, 940, 35, muted, center: true, lines: 1);
       _promoText(canvas, '¡Viaja conmigo!', 70, 1050, 940, 54, white, center: true, lines: 1);
     } else {
-      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, turquoise, lines: 1);
+      _promoText(canvas, '¡Viaja conmigo!', 405, 200, 615, 46, mint, lines: 1);
       _promoText(canvas, name, 405, 265, 615, 52, white);
-      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, turquoise, lines: 1);
+      _promoText(canvas, 'Conductor de la Agencia TukTuk', 405, 397, 615, 31, mint, lines: 1);
       _promoText(canvas, modality, 405, 447, 615, 35, muted);
     }
     // QR is drawn into the PNG with exact pixel-aligned black/white squares.
@@ -173,13 +189,13 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       }
     }
     if (story) {
-      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, turquoise, center: true, lines: 1);
+      _promoText(canvas, 'Escanea y viaja conmigo', 60, 1550, 960, 49, mint, center: true, lines: 1);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         95, 1625, 890, 35, muted, center: true, lines: 3);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
         85, 1770, 910, 31, white, center: true, lines: 2);
     } else {
-      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, turquoise);
+      _promoText(canvas, 'Escanea y viaja conmigo', 460, 590, 545, 49, mint);
       _promoText(canvas, 'Solicita tu transporte desde mi enlace personal.',
         460, 728, 545, 34, muted, lines: 4);
       _promoText(canvas, 'Tu conductor de confianza, a un toque.',
@@ -200,7 +216,6 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
   } finally {
     portrait?.dispose();
-    logo?.dispose();
   }
 }
 
@@ -300,10 +315,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       }
       if (!mounted || !_sameUser || revision != _revision) return;
       stage = 'tarjeta';
-      final logoData = await rootBundle.load('assets/branding/tuktuk_logo_transparent.png');
-      final logo = logoData.buffer.asUint8List(logoData.offsetInBytes, logoData.lengthInBytes);
-      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo);
-      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo);
+      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo);
+      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo);
       if (!mounted || !_sameUser || revision != _revision) return;
       setState(() { _name.text = name; _code = code; _squareBytes = square; _storyBytes = story; });
     } catch (_) {
