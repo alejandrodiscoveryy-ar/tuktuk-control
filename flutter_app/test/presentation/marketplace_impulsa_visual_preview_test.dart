@@ -10,6 +10,13 @@ void main() {
     final path = Platform.environment['IMPULSA_PREVIEW_DIR'];
     if (path == null) return;
     final directory = Directory(path)..createSync(recursive: true);
+    await tester.runAsync(() async {
+      final campaign = FontLoader('ImpulsaMontserrat');
+      for (final filename in ['Montserrat-Bold.ttf', 'Montserrat-ExtraBold.ttf']) {
+        campaign.addFont(rootBundle.load('assets/branding/impulsa/$filename'));
+      }
+      await campaign.load();
+    });
     final fonts = Platform.environment['IMPULSA_FONT_DIR'];
     if (fonts != null) {
       await tester.runAsync(() async {
