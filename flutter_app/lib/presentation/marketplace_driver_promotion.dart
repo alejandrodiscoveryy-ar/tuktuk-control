@@ -1,5 +1,107 @@
 part of '../main.dart';
 
+const _promoModalityArtwork = <String, String>{
+  'tricycle':
+    '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',
+  'motorcycle':
+    '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',
+  'bicitaxi':
+    'UklGRloHAABXRUJQVlA4IE4HAACQIwCdASp4AFUAP0WMu1YwKSWjrLlMagAoiWwAun/fUFyrrh8SrAF8hxFZMm4w55hm1uPbOHtT'
+    'mTg1OSssBnmvBl8x1RX7oUaYnf5f1s2z5XB7+f411BGf9VjlPX/jkhZXv2KjWZ8aGTpV6qUDZgbTZpKR72jPIekMdCWf/fAGZQmk'
+    '+/devETipD+Oerd5lOmou36jQavEYT4ZdRmsKRU8jBAjtmyWfiRxumjvm/6zaxNsF1Ppd4A6BRHdb/hO4UTYCbznYLb8+JcNoiKX'
+    'mlHube16XxCEN4rO1IOzTd7PEqQzT5E/tqJT+P0nafbiyAlA5K/PLzEH1W4cRfYhzQXqq2K9MbGLP2SFd4myonMgdGazF+l9mVdr'
+    '589BrmZQUPXZHbqqAAD+83NiL0eb+WhtMSoOEmZ7w+ol6tzinhjuk3Bh9c0xgMb7r1cxcyc5Avfsw+I34geMWgh9/GffwxRnAbHw'
+    'qOpU24/wu8ilKfz/EKMa9CNXl6Rk9m1J2qjqYOU0ULwHLrFN0mGh3I8E8Tgp07nkPS1b4acRY1jU+wBqVb7xk/VE58aiQRCAKSgR'
+    'TE4gmCS0wvEdnThmo6wjSi56Jb31//2HdovjcGwM5iuGSBQUWqcaQ6vytj2mG3mak13+eS7P8YXWwYsSJxBNSJLRQdwQzwhErx6E'
+    'jNzi7g6Pqy8XM6MTAtwGpBr/AwWkNX+XoW7E7DNig3T+b9/0GMb6KZFqyUJ2ICrLVcA9/x+Peoqv+jfmPpmPgUMfwTrcfCbAeoCX'
+    'mA1P6nwwNI7tmrjoEhVGKiXlM5Fj27NiDCViGnoLk0XtRjslfhccJ7JIJqUof953xKZ+NZgJPprZlZmlFfGiXHF2PsBdagx1LKbT'
+    'yN/MfNp6+csFMcJKBRQ6Kc2E6Uo8jezmN9kXgo3HsbhVawuwHMBY6DPAl3PbgZDBh5rqlgc+WFFaW9OJcyRa8Af6XEbulTxMt3KE'
+    'LB3qH937hrtYzYSp91nbKfZpbsZFjBhVpKk07vkcSFCA9vuItDaRzWztIvVuJ73KOSeqAJbk6f29qdTAmwZLEZvlRz63HvhZ+J2h'
+    'T0MlCNfW+KM9IDCAP+KjvrkFAI8ZmwGobIu4bTXv8wCGesFfNIeaKBx9cuXt49n1k0uvSoMwaKM0XS8tWNXpyblBuWoXbNTWfvzJ'
+    'Wnn21vkAuHNLTistsgk3cPm2A2Je0hDxeMvZv1ELWpxPZ4atvO0V3mWhbHcUueMosQcy/cwiPSDMBZm1vwyXBOdAauDZb7f+3Izz'
+    'lZQFAIu+Ct8cCcZO/IEF1uwdjSs7Lk9itXIYwhQcArxafkuXNpF+ycJQ+fi+KGX/CzoiZ+QXWqt43v/lY7RBoOJBBWOS2vNJ9t0A'
+    'dsG2+IUN4qIetjJJT6EoKOVWsRg7OG2ZBYitJSnQ/um3fpOB7A0FBRn9jHYB8IvMiia5fU1Qgix2Kxvb1tEc6ti9+ptR6zn+Sgcc'
+    'iPvYhc3V7dY684ewdYB6kHSRDAqtBuhvmaIVz1exPyaNfu6yuYmJZ0HsRZfDUkfEkx8qWtFGxF0dPllFUaCZ4mjTEGblH8ZdDftY'
+    'yMI/zAnWtX8WHxNw7UWDa7NV02SezadUEm7HU9KlgyXl+38GX9jNUvTPdawOMX5MnZZi9WK5T7x2pdUnUWSbtzubQsC/cVyC42vw'
+    'yt5GX3n/A8hgRIvFsEfP+sglH8sEhVMlX+fKqOEM8i+iVZMF3ugI7TliPuUX4dkO4b4QM73izM6tVHOLl+3M6Zf604ilsm9fsxPT'
+    'Ryfwk7DgawmsXzl2c93Fdh/tF4simefsdo+y1iQHmJaUoAD0LrbvVKBmqWIs2c460amlOp5yxWRj/wdQcr8mYTRKyJFEAbTCiXXN'
+    '92UQeFsSI6JdxqTmZmiYmN+34OgLGZ3MTu8ETuWzQmzMHSjMUedgWuy+c4XQEaiXHCCxMMl+PxABHJwLPpV7IaDaAe6ez7r5NF6U'
+    'VQXh0DzQnFQSa4S1eDdP3Vz9Yf7/VB9Eea6sksA8msjUkKr7/fU/5VzP4obAosn/buIUlOHljH21Bu43PBmRfFH18JMBip5eKMM6'
+    'czSgLb6mbIzIQpcL603N0kIFe2ArGSMfvTxzmojssPBFEbbqlekcrDgyjSBW3hPSQBXM1LQXEm/7YbLnUZ8RLbn2MR214XHmuhKS'
+    'Mb2bV0HsLAbGQA0szaYt0CeLuqtq1D+0Rh+rZqETYztXvOiCvbQxe62C9viFWe56T3YIzmQzaOcvDG7OS3OM40Kxmrl1Q5xXZE5R'
+    'x3PmgGJbgTzDQO+F4hMG1N2t8H0vDptSWTQnHiZ0/8JA8EiZTgrDPZ12voLmb1CvbxK3qGGlxg+hnWYJpzeYk5feQ2MH1La0Kiz9'
+    'MZTvVETB98y+ir5zTLB6zDvfRcN2dqexvnSEx+obVgWfXYiDqjjiRzImGGCUL2X6/J2pFPfLkRiGny76ZH3LDF3gBSewPOq9f8gn'
+    'roHN0EKszRulTp87dAAA',
+  'comfort':
+    'UklGRhoFAABXRUJQVlA4IA4FAAAQGgCdASp4ADoAP0WSvVkwKaYjqRjsKgAoiWgAyYCFjbDLvhRxNwSza1sz/+2AZjILu55I/ysF'
+    'Vjgi9S0HhMpb1IuQAUtOV08VbPTHCtzS5Fcjgx5o8DeJHdSjKug4EgH1lCadUZEhm3N7ugXPm+qxlhb+jX5mZ0b6oyFimWqDfjhN'
+    'qJA/K6eqhzsiCyglzogx5Pc+VDoCXfKzOxggiacfmUUk69s23muoRCDf/vv1Mtx4vNZjr8pVQSGzin/d7enmj/jcsk+skbN39ahO'
+    'PdeNT0djewC6dkOcAP7jTFTfFom7l+Rru0glMypwNHuPjm5WBuTo7wJsxN5h/scE1LM76rBAazeqDkfUTyNG+EgJfc0Qp4BqCCGm'
+    'Th480SQDXcMHR1Toud5+ch42wzIRPRgKSXMKQhnxgZkCOyJo/GGHRXmVCz+8SMnd4SKd0Gbdc7LuB8b36qvu3QDVZyqTu+DSDudX'
+    '+Xii1VPSOPM1GZYraonxxd939X2mg4we4RcZymUgnatFoBf58mbAqwV19H9t3MJv3OMH+3YUvdoPnh1RZCuh4ZYKBGj/6vR0Qq/E'
+    '7jJN6WSP8jegeIijgJvZgTKjk7rWwZ4BczcQo7MdzJ3RTzpGNITluP2n2PNcT8LSVvRcPkB4C4idODuKdKKrvsYvHrKTyS7J8P2A'
+    'JdkNj3arRPAM2btm/FU6Rjhy4/MpGK0DXrNfW5ooOtheZb01uJy65FvcvHe8BO+t8AHLq1Wa8iXo03C7TkHV15B0xmhUkcWVrX/w'
+    '2bITj6CLLaqDjTF+FvT/NVINcH9+/g8aajPE3TkU5CY1+7mEF5NZiGn4vmRB0QZb2OVgUXLiz6FdkuNA8hB8Q0wbnnkV56LzGCsP'
+    'xHylARFqSbO2TUk9506ZnfmIGFlsT/g6/Mudn0I0ub5Z3CiPu7ff539PMwHW4pcw2rkhJ6HpZQjhIhXWtKOU0FoWZtcqaCITyeX7'
+    'a0FLCVkx6gO4hfVo9wiku0dNvW2Apk89XwP0gqRwCpHYTAsaelO2noguk0AfimaAhqQd3AdVEuwEOzcpoyLQCRNLz+ynrBUjA2C+'
+    'fSSWWTwpp1U/2sFvSiy5bvInnIq2a3Pga9jmYt1ToqGmgDNFXX31t9Jqmu9mYDa2nE/lhksZga5AS1IxeQaJ8qnbBdqqK5miqU6H'
+    'O7egHhcYdHHRKRQAxsybisJ3dZs3lW3H5D/ibNO5P8mShB6MHNWc+izYoPIbF8yMc4Jg7pfIz7wjJYP+aU9U3cHHmd0Eex6zepPh'
+    'uvGNTa65vUC8zzM73SqPBqLGgIBfQOJpbV6dISVIEU3YhXmb+bMPZmvlTYhQJSOWfAhckuA2TbhSKUZuFfAZVcFMlxzr2ZJXmXPQ'
+    'Yq1Zagw606VKZDDbtV+CLnz43/5tCW38VMuEZA5egW27rMo59brTph3+rzBhIGmOak6jRCPBZd61R8hshDfhjE5fqExAKkPhs3vM'
+    'HnRJ9fALUCFzpjGuPX7sKbHAQKFGmHgUF+PMU3b19m2KuAYOdCVI5kV7e7N+WZzFLN4lljJtJopdM3oocpCV3iZoZJnXKEKjfj4M'
+    '2saJKwXsuR/6u7L9LDJgLuls04AqIaUVBW3YCLS/vc5mTi3fR+oG9gy1kW46rrgt+SNnX3z9IZ0rz63rxH/BwJPAOSyEuD/AwypW'
+    '3BRA0vqfcRdRzg6uchLaWw4I4Qzz8H0AdHaJDaVxspB/xbajQgAA',
+};
+
+
+
 // Cropped car artwork from the approved campaign, local and reusable.
 const _promoApprovedCarArtwork =
     '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhl'
@@ -67,7 +169,7 @@ String marketplaceDriverPromoCopy(String name, String code, {bool identityVerifi
 
 String _promoCategoryLabel(String code) => switch (code) {
   'motorcycle' => 'Moto', 'bicitaxi' => 'Bicitaxi', 'tricycle' => 'Triciclo',
-  'light_car' => 'Auto', 'van' => 'Furgoneta', 'truck' => 'Camión',
+  'light_car' => 'Auto', 'comfort' || 'confort' => 'Confort', 'van' => 'Furgoneta', 'truck' => 'Camión',
   'bicycle' => 'Bicicleta', _ => 'Transporte',
 };
 String _promoServiceLabel(String code) => switch (code) {
@@ -380,6 +482,14 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         ? Color.lerp(primary, white, .48)!
         : primary;
     final lime = Color.lerp(primary, const Color(0xFF84FF62), .90)!;
+    final artworkCategory = vehicleCategory == 'confort' ? 'comfort' : vehicleCategory;
+    final modalityAccent = switch (artworkCategory) {
+      'tricycle' => const Color(0xFFFB923C),
+      'motorcycle' => const Color(0xFF4ADE80),
+      'bicitaxi' => const Color(0xFFC084FC),
+      'comfort' => const Color(0xFFFACC15),
+      _ => accent,
+    };
     // A campaign artwork, not an app screen: the dark stage, energetic
     // diagonal ribbons and a luminous portrait anchor the composition.
     canvas.drawRect(bounds, Paint()..shader = LinearGradient(
@@ -406,21 +516,21 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       ..strokeWidth = story ? 115 : 95
       ..strokeCap = StrokeCap.round
       ..shader = LinearGradient(colors: [
-        primary.withValues(alpha: .02), primary.withValues(alpha: .19),
-        lime.withValues(alpha: .10),
+        primary.withValues(alpha: .02), modalityAccent.withValues(alpha: .24),
+        modalityAccent.withValues(alpha: .14),
       ]).createShader(bounds));
     final route = ui.Path()
       ..moveTo(-60, sweepY + 360)
       ..cubicTo(290, sweepY + 402, 685, sweepY - 224, 1145, sweepY - 145);
     canvas.drawPath(route, Paint()
       ..style = PaintingStyle.stroke ..strokeWidth = 3
-      ..color = accent.withValues(alpha: .38));
+      ..color = modalityAccent.withValues(alpha: .48));
     final routeLight = ui.Path()
       ..moveTo(-60, sweepY + 385)
       ..cubicTo(310, sweepY + 430, 720, sweepY - 196, 1145, sweepY - 122);
     canvas.drawPath(routeLight, Paint()
       ..style = PaintingStyle.stroke ..strokeWidth = 2
-      ..color = lime.withValues(alpha: .22));
+      ..color = modalityAccent.withValues(alpha: .28));
 
     // Approved campaign composition: logo left, large agency wordmark,
     // circular portrait left, vehicle upper right, identity beneath it.
@@ -447,16 +557,17 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawRRect(RRect.fromRectAndRadius(brandRule, const Radius.circular(4)),
       Paint()..color = accent.withValues(alpha: .65)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9));
     final vehicleArea = story
-      ? const Rect.fromLTWH(500, 285, 650, 365)
-      : const Rect.fromLTWH(520, 202, 570, 215);
-    if (vehicleCategory == 'light_car') {
+      ? const Rect.fromLTWH(520, 240, 540, 340)
+      : const Rect.fromLTWH(590, 195, 470, 200);
+    final artwork = _promoModalityArtwork[artworkCategory];
+    if (vehicleCategory == 'light_car' || artwork != null) {
       // The original approved car illustration, with its edges faded into
       // the campaign background. The original personal portrait, badge,
       // wordmark and QR are NOT baked into this asset.
-      final car = await _promoDecode(base64Decode(_promoApprovedCarArtwork));
+      final car = await _promoDecode(base64Decode(artwork ?? _promoApprovedCarArtwork));
       try {
         canvas.saveLayer(vehicleArea, Paint());
-        _promoFitImage(canvas, car, vehicleArea, cover: true);
+        _promoFitImage(canvas, car, vehicleArea, cover: false);
         canvas.drawRect(vehicleArea, Paint()..blendMode = BlendMode.dstIn
           ..shader = const LinearGradient(begin: Alignment.topCenter,
             end: Alignment.bottomCenter, colors: [Colors.transparent,
@@ -527,13 +638,13 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       ? const Rect.fromLTWH(155, 935, 770, 108)
       : const Rect.fromLTWH(448, 540, 570, 65);
     final pill = RRect.fromRectAndRadius(servicePill, Radius.circular(servicePill.height / 2));
-    canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .50)
+    canvas.drawRRect(pill, Paint()..color = modalityAccent.withValues(alpha: .50)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
     canvas.drawRRect(pill, Paint()..shader = LinearGradient(
-      colors: [lime.withValues(alpha: .66), accent.withValues(alpha: .19),
+      colors: [modalityAccent.withValues(alpha: .68), modalityAccent.withValues(alpha: .19),
         const Color(0xFF0A2635)]).createShader(servicePill));
     canvas.drawRRect(pill, Paint()..style = PaintingStyle.stroke
-      ..strokeWidth = 3 ..color = accent);
+      ..strokeWidth = 3 ..color = modalityAccent);
     final miniVehicle = Rect.fromLTWH(servicePill.left + 16,
       servicePill.center.dy - servicePill.height * .31,
       servicePill.height * 1.45, servicePill.height * .62);
@@ -543,6 +654,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       'tricycle' => Icons.electric_rickshaw,
       'van' => Icons.airport_shuttle,
       'truck' => Icons.local_shipping,
+      'comfort' || 'confort' => Icons.diamond_outlined,
       _ => Icons.directions_car,
     };
     final vehicleGlyph = TextPainter(
@@ -559,7 +671,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final dividerX = miniVehicle.right + 14;
     canvas.drawLine(Offset(dividerX, servicePill.top + 17),
       Offset(dividerX, servicePill.bottom - 17),
-      Paint()..color = accent..strokeWidth = 2);
+      Paint()..color = modalityAccent..strokeWidth = 2);
     _promoText(canvas, modality, dividerX + 17,
       servicePill.top, servicePill.right - dividerX - 30,
       story ? 43 : 29, white, center: true, lines: 2, minFontSize: 23,
@@ -643,7 +755,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 12;
+const _marketplacePromoArtworkVersion = 13;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
