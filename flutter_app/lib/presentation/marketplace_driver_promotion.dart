@@ -1151,6 +1151,7 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    backgroundColor: const Color(0xFF101619),
     body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List)>(
       future: _cards,
       builder: (context, snapshot) {
@@ -1166,10 +1167,12 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
         final message = '¡Tu próximo viaje comienza conmigo!\n\nSoy $name, conductor verificado de la Agencia TukTuk.\n\nSolicita mi servicio desde este enlace:\n$link\n\nAgencia TukTuk. Tu conductor de confianza, a un toque.';
         Widget card(Uint8List bytes, bool vertical) {
           final file = vertical ? 'tuktuk-historia.png' : 'tuktuk-cuadrada.png';
-          return Expanded(child: Column(children: [
+          return Column(children: [
             Text(vertical ? 'Historia' : 'Cuadrada'),
             const SizedBox(height: 8),
-            SizedBox(height: 220, child: Image.memory(bytes, fit: BoxFit.contain)),
+            GestureDetector(onTap: () => showDialog<void>(context: context, builder: (dialogContext) => Dialog(child: InteractiveViewer(child: Image.memory(bytes, fit: BoxFit.contain)))),
+              child: ConstrainedBox(constraints: const BoxConstraints(maxHeight: 420), child: Image.memory(bytes, fit: BoxFit.contain))),
+            const SizedBox(height: 12),
             FilledButton.icon(onPressed: () {
               if (!driver_promo_download.downloadPromoPng(bytes, file)) {
                 toast(context, 'No se pudo descargar la tarjeta.');
@@ -1187,10 +1190,15 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
                 if (context.mounted) toast(context, 'Descarga la tarjeta y copia el mensaje.');
               }
             }, icon: const Icon(Icons.share), label: const Text('Compartir')),
-          ]));
+          ]);
         }
         return SingleChildScrollView(padding: const EdgeInsets.all(12), child: Column(children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [card(square, false), card(story, true)]),
+          LayoutBuilder(builder: (context, constraints) {
+            if (constraints.maxWidth < 600) {
+              return Column(children: [card(square, false), const SizedBox(height: 24), card(story, true)]);
+            }
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: card(square, false)), const SizedBox(width: 16), Expanded(child: card(story, true))]);
+          }),
           TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: link)),
             icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
           TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: message)),
