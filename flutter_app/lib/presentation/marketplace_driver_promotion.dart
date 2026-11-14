@@ -365,15 +365,15 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     // diagonal ribbons and a luminous portrait anchor the composition.
     canvas.drawRect(bounds, Paint()..shader = LinearGradient(
       begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [midnight, Color.lerp(background, const Color(0xFF004078), .60)!,
-        const Color(0xFF002447)],
+      colors: [midnight, Color.lerp(background, const Color(0xFF002B59), .72)!,
+        const Color(0xFF00152E)],
       stops: const [0, .56, 1],
     ).createShader(bounds));
     final glow = Rect.fromCircle(
       center: Offset(story ? 845 : 255, story ? 540 : 355),
       radius: story ? 670 : 560);
     canvas.drawRect(glow, Paint()..shader = RadialGradient(
-      colors: [neon.withValues(alpha: .66), primary.withValues(alpha: 0)],
+      colors: [neon.withValues(alpha: .28), primary.withValues(alpha: 0)],
     ).createShader(glow));
 
     // The route-inspired strokes are ornamental, not representations of a
@@ -513,6 +513,9 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       ]).createShader(portraitGlow));
     canvas.drawCircle(photoRect.center, photoRadius + 14,
       Paint()..color = const Color(0xFF07121D));
+    canvas.drawCircle(photoRect.center, photoRadius + 10,
+      Paint()..style = PaintingStyle.stroke..strokeWidth = 14
+        ..color = neon..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
     canvas.drawCircle(photoRect.center, photoRadius + 9,
       Paint()..shader = const LinearGradient(
         begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -562,7 +565,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       colors: [modalityAccent, Color.lerp(modalityAccent, midnight, .36)!,
         Color.lerp(modalityAccent, midnight, .66)!]).createShader(servicePill));
     canvas.drawRRect(pill, Paint()..style = PaintingStyle.stroke
-      ..strokeWidth = 5 ..shader = LinearGradient(colors: [white, modalityAccent, white]).createShader(servicePill));
+      ..strokeWidth = 5 ..shader = LinearGradient(colors: [modalityAccent,
+        Color.lerp(modalityAccent, white, .86)!, modalityAccent]).createShader(servicePill));
     final miniVehicle = Rect.fromLTWH(servicePill.left + 16,
       servicePill.center.dy - servicePill.height * .31,
       servicePill.height * 1.45, servicePill.height * .62);
@@ -620,10 +624,22 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       canvas.clipRRect(RRect.fromRectAndRadius(panel.deflate(7), const Radius.circular(49)));
       // Keep the original approved pin, arrow and CTA lettering; the QR well
       // is drawn independently so it cannot be stretched or include a mock code.
-      final copyArea = Rect.fromLTWH(panel.left, panel.top, 630, panel.height);
-      canvas.drawImageRect(bookingArt, Rect.fromLTWH(0, 0,
-        bookingArt.width * .63, bookingArt.height.toDouble()), copyArea,
+      final copyArea = Rect.fromLTWH(panel.left + 20, panel.top + 11, 610, panel.height - 22);
+      canvas.saveLayer(copyArea, Paint());
+      canvas.drawImageRect(bookingArt, Rect.fromLTWH(20, 22,
+        bookingArt.width * .575, bookingArt.height - 44.0), copyArea,
         Paint()..filterQuality = FilterQuality.high);
+      // Blend just the old asset's outer edges into the single luminous frame.
+      // The original letterforms, pin and arrow remain untouched; there is no
+      // remnant of the old QR well or its frame beside the real code.
+      canvas.drawRect(copyArea, Paint()..blendMode = BlendMode.dstIn
+        ..shader = const LinearGradient(colors: [Colors.transparent, Colors.white,
+          Colors.white, Colors.transparent], stops: [0, .045, .95, 1]).createShader(copyArea));
+      canvas.drawRect(copyArea, Paint()..blendMode = BlendMode.dstIn
+        ..shader = const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+          stops: [0, .045, .95, 1]).createShader(copyArea));
+      canvas.restore();
       canvas.restore();
     } finally {
       bookingArt.dispose();
@@ -666,7 +682,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         Color.lerp(modalityAccent, midnight, .50)!,
         Color.lerp(modalityAccent, midnight, .72)!]).createShader(linkArea));
     canvas.drawRRect(linkShape, Paint()..style = PaintingStyle.stroke..strokeWidth = 5
-      ..shader = LinearGradient(colors: [white, modalityAccent, white]).createShader(linkArea));
+      ..shader = LinearGradient(colors: [modalityAccent, Color.lerp(modalityAccent, white, .86)!,
+        modalityAccent]).createShader(linkArea));
     final linkIcon = TextPainter(textDirection: ui.TextDirection.ltr,
       text: TextSpan(text: String.fromCharCode(Icons.link.codePoint), style: TextStyle(
         fontFamily: Icons.link.fontFamily, package: Icons.link.fontPackage, color: white,
@@ -678,10 +695,16 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     // Long aliases must remain complete, not be truncated. The old internal URL
     // is only a non-commercial fallback for already-existing internal callers.
     _promoText(canvas, link, linkArea.left + 119, linkArea.top,
-      linkArea.width - 151, story ? 55 : 48, white, center: true, lines: 1,
+      linkArea.width - 215, story ? 55 : 48, white, center: true, lines: 1,
       minFontSize: 17, weight: FontWeight.w900, boxHeight: linkArea.height);
+    final touch = TextPainter(textDirection: ui.TextDirection.ltr,
+      text: TextSpan(text: String.fromCharCode(Icons.touch_app_outlined.codePoint), style: TextStyle(
+        fontFamily: Icons.touch_app_outlined.fontFamily, package: Icons.touch_app_outlined.fontPackage,
+        color: white, fontSize: story ? 66 : 54)))..layout();
+    touch.paint(canvas, Offset(linkArea.right - touch.width - 22, linkArea.center.dy - touch.height / 2));
+    touch.dispose();
     canvas.drawRRect(ctaShape, Paint()..style = PaintingStyle.stroke..strokeWidth = 5
-      ..shader = const LinearGradient(colors: [white, neon, Color(0xFF008BFF), neon]).createShader(ctaFrame));
+      ..shader = const LinearGradient(colors: [neon, white, neon, Color(0xFF008BFF)], stops: [0, .22, .55, 1]).createShader(ctaFrame));
     final footerY = story ? 1708.0 : 1015.0;
     _promoText(canvas, 'Tu conductor de confianza, a un toque.', 120,
       footerY, 840, story ? 35 : 24, white,
