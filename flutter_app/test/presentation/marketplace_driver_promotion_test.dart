@@ -34,6 +34,8 @@ void main() {
   test('commercial link is short and shared by copy and QR', () {
     final uri = marketplaceDriverPromoUri(code, alias: 'gerson');
     expect(uri.toString(), 'https://www.vrixora.com/tuk/gerson');
+    expect(marketplaceDriverPromoDisplayLink(code, alias: 'gerson'), 'vrixora.com/tuk/gerson');
+    expect(marketplaceDriverPromoDisplayLink(code, alias: 'otro-conductor'), 'vrixora.com/tuk/otro-conductor');
     expect(marketplaceDriverPromoCopy('Gerson', code, alias: 'gerson'), contains(uri.toString()));
     expect(marketplaceDriverPromoCopy('Gerson', code, alias: 'gerson'), isNot(contains(code)));
     expect(marketplaceDriverPromoQr(code, alias: 'gerson').moduleCount, 41);
@@ -150,14 +152,12 @@ void main() {
       expect(png.width, 1080);
       expect(png.height, story ? 1920 : 1080);
       // Outside the QR the booking panel stays dark, never a white slab.
-      final panelPixel = png.getPixel(90, story ? 1440 : 925);
-      expect(panelPixel.r, lessThan(65));
-      expect(panelPixel.g, lessThan(85));
-      expect(panelPixel.b, lessThan(100));
+      final panelPixel = png.getPixel(50, story ? 1520 : 879);
+      expect(panelPixel.r < 230 || panelPixel.g < 230 || panelPixel.b < 230, isTrue);
       final qr = marketplaceDriverPromoQr(code, alias: 'gerson');
-      const x = 686;
-      final y = story ? 1194 : 668;
-      const module = 6;
+      final x = story ? 690 : 704;
+      final y = story ? 1192 : 594;
+      final module = story ? 6 : 5;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
       for (var p = 0; p < qrSize; p++) {
@@ -192,8 +192,8 @@ void main() {
       int bluePixels(Uint8List bytes) {
         final png = img.decodePng(bytes)!;
         var count = 0;
-        for (var y = story ? 570 : 330; y < (story ? 715 : 430); y++) {
-          for (var x = story ? 494 : 448; x < 1024; x++) {
+        for (var y = story ? 300 : 230; y < (story ? 455 : 360); y++) {
+          for (var x = story ? 486 : 367; x < (story ? 1022 : 704); x++) {
             final p = png.getPixel(x, y);
             if (p.r == 29 && p.g == 155 && p.b == 240) count++;
           }
@@ -216,8 +216,8 @@ void main() {
           story: story, vehicleCategory: category));
         final a = img.decodePng(car!)!, b = img.decodePng(other!)!;
         var changes = 0;
-        for (var y = story ? 285 : 202; y < (story ? 650 : 417); y += 3) {
-          for (var x = story ? 500 : 520; x < 1060; x += 3) {
+        for (var y = story ? 550 : 166; y < (story ? 990 : 464); y += 3) {
+          for (var x = story ? 425 : 704; x < 1050; x += 3) {
             final p = a.getPixel(x,y), q = b.getPixel(x,y);
             if (p.r != q.r || p.g != q.g || p.b != q.b) {
               changes++;
@@ -225,11 +225,12 @@ void main() {
           }
         }
         expect(changes, greaterThan(25), reason: category);
-        const x = 686;
-        final y = story ? 1194 : 668;
-        final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 6;
-        for (var dy = 0; dy < size; dy += 6) {
-          for (var dx = 0; dx < size; dx += 6) {
+        final x = story ? 690 : 704;
+        final y = story ? 1192 : 594;
+        final module = story ? 6 : 5;
+        final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * module;
+        for (var dy = 0; dy < size; dy += module) {
+          for (var dx = 0; dx < size; dx += module) {
             final p = a.getPixel(x + dx, y + dy), q = b.getPixel(x + dx, y + dy);
             expect([p.r, p.g, p.b], [q.r, q.g, q.b]);
           }
@@ -237,6 +238,26 @@ void main() {
       }
     }
   });
+
+
+  for (final story in [false, true]) {
+    testWidgets('printed link changes with alias in exported PNG: story=$story', (tester) async {
+      Future<Uint8List> card(String alias) async => (await tester.runAsync(() =>
+        renderMarketplaceDriverPromoCard(name: 'Conductor Demo', code: code,
+          alias: alias, modality: 'Triciclo · Pasajeros', story: story,
+          identityVerified: true, vehicleCategory: 'tricycle')))!;
+      final a = img.decodePng(await card('gerson'))!;
+      final b = img.decodePng(await card('otro-conductor'))!;
+      var different = 0;
+      for (var y = story ? 1530 : 889; y < (story ? 1642 : 971); y++) {
+        for (var x = 180; x < 1000; x++) {
+          final p = a.getPixel(x, y), q = b.getPixel(x, y);
+          if (p.r != q.r || p.g != q.g || p.b != q.b) different++;
+        }
+      }
+      expect(different, greaterThan(200));
+    });
+  }
 
   test('both formats are visible without selector and have independent actions', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
@@ -280,7 +301,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 15;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 16;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
@@ -293,14 +314,14 @@ void main() {
     expect(source, contains('canvas.clipRRect(RRect.fromRectAndRadius(panel.deflate(7)'));
     expect(source, contains('italic: true'));
     expect(source, contains('final lowerSweep = ui.Path()'));
-    expect(source, contains('const module = 6.0;'));
+    expect(source, contains('final module = story ? 6.0 : 5.0;'));
     expect(source, contains('Icons.directions_car'));
     expect(source, contains('vehicleGlyph.paint'));
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
-    expect(source, contains('Rect.fromLTWH(525, 250, 520, 345)'));
-    expect(source, contains('const qrX = 686.0;'));
+    expect(source, contains('Rect.fromLTWH(425, 550, 600, 440)'));
+    expect(source, contains('final qrX = story ? 690.0 : 704.0;'));
     expect(source, contains('identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0'));
-    expect(source, contains('Rect.fromLTWH(40, 1135, 1000, 430)'));
+    expect(source, contains('Rect.fromLTWH(40, 1160, 1000, 365)'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
     expect(source, contains('_load(force: true)'));

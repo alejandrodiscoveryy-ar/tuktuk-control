@@ -45,7 +45,7 @@ void main() {
       for (final story in [false, true]) {
         final bytes = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
           name: 'Conductor Demo', code: '0123456789abcdef0123456789abcdef',
-          modality: entry.value, story: story, logoBytes: logo,
+          alias: 'conductor-demo', modality: entry.value, story: story, logoBytes: logo,
           identity: identity, identityVerified: true, vehicleCategory: entry.key));
         expect(bytes, isNotNull);
         final png = img.decodePng(bytes!)!;
