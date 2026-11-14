@@ -254,7 +254,10 @@ void main() {
     expect(source, isNot(contains('_ensurePublished')));
     expect(source, isNot(contains('Al compartir, descargar o copiar el enlace')));
     expect(source, contains('active Mi TukTuk desde Administración'));
-    expect(source, contains('SelectableText(marketplaceDriverPromoUri(_code!).toString())'));
+    expect(source, contains('_copyText(marketplaceDriverPromoUri(_code!).toString())'));
+    expect(source, contains('ExpansionTile('));
+    expect(source, contains('showDialog<bool>'));
+    expect(source, contains('confirmed == true && mounted'));
     expect(source, contains('final ready = previewReady;'));
     expect(source, contains("storage.from('marketplace-media').createSignedUrl"));
     expect(source, contains('files: [XFile.fromData'));
