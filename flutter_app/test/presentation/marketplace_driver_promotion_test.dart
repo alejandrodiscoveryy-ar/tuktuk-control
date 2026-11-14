@@ -115,6 +115,21 @@ void main() {
       iconUrl: 'https://example.com/icon.png')), isNot(original));
   });
 
+  test('approved booking asset contains no illustrative QR', () {
+    final artwork = img.decodeWebP(File('assets/branding/tuktuk_promo_booking.webp').readAsBytesSync())!;
+    expect(artwork.width, 850);
+    expect(artwork.height, 365);
+    // The reserved well must be blank; only the renderer may add a QR.
+    for (var y = 55; y < 300; y += 4) {
+      for (var x = 550; x < 795; x += 4) {
+        final p = artwork.getPixel(x, y);
+        expect(p.r, greaterThan(230));
+        expect(p.g, greaterThan(230));
+        expect(p.b, greaterThan(230));
+      }
+    }
+  });
+
   for (final story in [false, true]) {
     testWidgets('export embeds QR modules with quiet zone in ${story ? 'story' : 'square'} PNG', (tester) async {
       final bytes = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
@@ -124,14 +139,14 @@ void main() {
       expect(png.width, 1080);
       expect(png.height, story ? 1920 : 1080);
       // Outside the QR the booking panel stays dark, never a white slab.
-      final panelPixel = png.getPixel(110, story ? 1510 : 900);
+      final panelPixel = png.getPixel(90, story ? 1440 : 925);
       expect(panelPixel.r, lessThan(65));
       expect(panelPixel.g, lessThan(85));
       expect(panelPixel.b, lessThan(100));
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 655 : 666;
-      final y = story ? 1218 : 673;
-      const module = 7;
+      final x = story ? 686 : 679;
+      final y = story ? 1194 : 684;
+      const module = 6;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
       for (var p = 0; p < qrSize; p++) {
@@ -166,7 +181,7 @@ void main() {
       int bluePixels(Uint8List bytes) {
         final png = img.decodePng(bytes)!;
         var count = 0;
-        for (var y = story ? 615 : 350; y < (story ? 760 : 475); y++) {
+        for (var y = story ? 615 : 330; y < (story ? 760 : 430); y++) {
           for (var x = story ? 494 : 448; x < 1024; x++) {
             final p = png.getPixel(x, y);
             if (p.r == 29 && p.g == 155 && p.b == 240) count++;
@@ -199,10 +214,10 @@ void main() {
           }
         }
         expect(changes, greaterThan(25), reason: category);
-        final x = story ? 655 : 666, y = story ? 1218 : 673;
-        final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 7;
-        for (var dy = 0; dy < size; dy += 7) {
-          for (var dx = 0; dx < size; dx += 7) {
+        final x = story ? 686 : 679, y = story ? 1194 : 684;
+        final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 6;
+        for (var dy = 0; dy < size; dy += 6) {
+          for (var dx = 0; dx < size; dx += 6) {
             final p = a.getPixel(x + dx, y + dy), q = b.getPixel(x + dx, y + dy);
             expect([p.r, p.g, p.b], [q.r, q.g, q.b]);
           }
@@ -250,7 +265,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 9;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 10;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
@@ -258,12 +273,16 @@ void main() {
     expect(source, contains('identityVerified, vehicleCategory'));
     expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
-    expect(source, contains('const panelDark = Color(0xFF0B1C2A)'));
+    expect(source, contains("rootBundle.load('assets/branding/tuktuk_promo_booking.webp')"));
+    expect(source, contains('canvas.drawImageRect(bookingArt'));
+    expect(source, contains('const module = 6.0;'));
+    expect(source, contains('Icons.directions_car'));
+    expect(source, contains('vehicleGlyph.paint'));
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
     expect(source, contains('Rect.fromLTWH(500, 345, 650, 300)'));
-    expect(source, contains('final qrX = story ? 655.0 : 666.0;'));
+    expect(source, contains('final qrX = story ? 686.0 : 679.0;'));
     expect(source, contains('identityVerified ? 58.0 : 0.0'));
-    expect(source, contains('panelShape'));
+    expect(source, contains('Rect.fromLTWH(40, 1135, 1000, 430)'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
     expect(source, contains('_load(force: true)'));
@@ -275,13 +294,12 @@ void main() {
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
     expect(source, contains('Solicita mi servicio desde este enlace:'));
-    expect(source, contains("_promoText(canvas, 'Solicita mi'"));
-    expect(source, contains("_promoText(canvas, 'servicio'"));
-    expect(source, contains("_promoText(canvas, 'desde este enlace'"));
+    expect(source, isNot(contains("_promoText(canvas, 'Solicita mi'")));
+    expect(source, isNot(contains("_promoText(canvas, 'servicio'")));
     expect(source, contains('base64Decode(_promoApprovedCarArtwork)'));
     expect(source, contains('BlendMode.dstIn'));
-    expect(source, contains('final pin = ui.Path()'));
-    expect(source, contains('final arrowHead = ui.Path()'));
+    expect(source, isNot(contains('final pin = ui.Path()')));
+    expect(source, isNot(contains('final arrowHead = ui.Path()')));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
     expect(source, contains("'Agencia TukTuk'"));
     expect(source, isNot(contains("_promoText(canvas, 'MI TUKTUK'")));
