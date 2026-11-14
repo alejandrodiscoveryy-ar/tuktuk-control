@@ -604,6 +604,127 @@ class MarketplacePromoArtworkCache {
   }
 }
 
+/// Read-only commercial figures. Never infer an earned balance from the
+/// promotional card or calculate a credit on the client.
+class MarketplaceImpulsaEarnings {
+  const MarketplaceImpulsaEarnings({
+    required this.generated, required this.ownTrips, required this.ownSavings,
+    required this.creditedTrips, required this.credited, required this.pending,
+    required this.fundingRequired, required this.reversalPending, required this.recent,
+  });
+  final int generated, ownTrips, creditedTrips;
+  final num ownSavings, credited, pending, fundingRequired, reversalPending;
+  final List<Map<String, dynamic>> recent;
+  factory MarketplaceImpulsaEarnings.fromMap(Map<String, dynamic> data) {
+    num number(String key) {
+      final value = data[key];
+      final parsed = value is num ? value : num.tryParse(value?.toString() ?? '');
+      if (parsed == null || !parsed.isFinite || parsed < 0) {
+        throw const FormatException('INVALID_IMPULSA_SUMMARY');
+      }
+      return parsed;
+    }
+    final rows = data['recent'];
+    if (rows is! List) throw const FormatException('INVALID_IMPULSA_HISTORY');
+    return MarketplaceImpulsaEarnings(
+      generated: number('generated_jobs').toInt(), ownTrips: number('own_paid_jobs').toInt(),
+      ownSavings: number('own_savings_cup'), creditedTrips: number('fleet_credited_jobs').toInt(),
+      credited: number('credited_cup'), pending: number('pending_cup'),
+      fundingRequired: number('funding_required_cup'), reversalPending: number('reversal_pending_cup'),
+      recent: rows.whereType<Map>().take(20).map((row) => Map<String,dynamic>.from(row)).toList(growable: false),
+    );
+  }
+}
+
+class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
+  const _MarketplaceImpulsaEarningsCard({required this.earnings, required this.refresh, required this.loading});
+  final MarketplaceImpulsaEarnings earnings;
+  final VoidCallback refresh;
+  final bool loading;
+  String _cup(num value) => '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)} CUP';
+  String _label(Object? state) => switch(state) {
+    'pending' => 'Por acreditar', 'funding_required' => 'Pendiente de financiación',
+    'credited' => 'Acreditada', 'cancelled' => 'Cancelada',
+    'reversal_pending' => 'Ajuste pendiente', 'reversed' => 'Revertida',
+    _ => 'Estado no disponible',
+  };
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = appMutedColor(context);
+    final d = earnings;
+    Widget metric(String label, String value) => Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(border: Border.all(color: theme.dividerColor), borderRadius: BorderRadius.circular(12)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(color: muted, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+      ]),
+    );
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(padding: const EdgeInsets.all(12), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Icon(Icons.trending_up, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Mis ganancias Impulsa', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+            IconButton(tooltip: 'Actualizar ganancias', onPressed: loading ? null : refresh, icon: const Icon(Icons.refresh)),
+          ]),
+          if (loading) const LinearProgressIndicator(),
+          Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(14)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Ganancias comerciales acreditadas', style: TextStyle(color: muted, fontSize: 12)),
+              const SizedBox(height: 5),
+              Text(_cup(d.credited), style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: theme.colorScheme.primary)),
+              Text('Histórico de créditos netos, no saldo disponible.', style: TextStyle(color: muted, fontSize: 11)),
+            ])),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: metric('Solicitudes generadas', '${d.generated}')),
+            const SizedBox(width: 8),
+            Expanded(child: metric('Viajes propios liquidados', '${d.ownTrips}')),
+          ]),
+          const SizedBox(height: 8),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: metric('Ahorro en comisión', _cup(d.ownSavings))),
+            const SizedBox(width: 8),
+            Expanded(child: metric('Viajes de la flota acreditados', '${d.creditedTrips}')),
+          ]),
+          const SizedBox(height: 8),
+          Text('Por acreditar: ${_cup(d.pending)}', style: TextStyle(color: muted, fontSize: 12)),
+          if (d.fundingRequired > 0) Text('Pendientes de financiación: ${_cup(d.fundingRequired)}', style: TextStyle(color: muted, fontSize: 12)),
+          if (d.reversalPending > 0) Text('Ajustes pendientes: ${_cup(d.reversalPending)}', style: TextStyle(color: muted, fontSize: 12)),
+          if (d.recent.isNotEmpty) ExpansionTile(
+            tilePadding: EdgeInsets.zero, childrenPadding: EdgeInsets.zero,
+            title: const Text('Historial comercial'),
+            children: d.recent.map((row) {
+              final id = row['job_id']?.toString() ?? '';
+              final value = num.tryParse(row['amount']?.toString() ?? '') ?? 0;
+              final rate = num.tryParse(row['commercial_rate']?.toString() ?? '');
+              final date = DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal();
+              return ListTile(contentPadding: EdgeInsets.zero, dense: true,
+                leading: const Icon(Icons.receipt_long_outlined),
+                title: Text(_label(row['state'])),
+                subtitle: Text([
+                  if (id.isNotEmpty) 'Viaje ${id.substring(0, min(8,id.length))}',
+                  if (rate != null) '${(rate*100).toStringAsFixed(2)}%',
+                  if (date != null) '${date.day}/${date.month}/${date.year}',
+                ].join(' · ')),
+                trailing: Text(_cup(value), style: const TextStyle(fontWeight: FontWeight.w700)),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 4),
+          Text('La comisión comercial se acredita tras liquidar viajes reales realizados por otro conductor. En tus viajes propios el beneficio es la comisión reducida.', style: TextStyle(fontSize: 12, color: muted)),
+        ],
+      )),
+    );
+  }
+}
+
 class MarketplaceDriverPromotionScreen extends StatefulWidget {
   const MarketplaceDriverPromotionScreen({required this.store, super.key});
   final RecordStore store;
@@ -622,6 +743,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   String? _error, _code, _photoAssetId, _alias;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
+  int _earningsRevision = 0;
+  MarketplaceImpulsaEarnings? _earnings;
+  bool _earningsBusy = false, _earningsUnavailable = false;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
   String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
@@ -634,25 +758,45 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     _name.text = widget.store.profileDisplayName;
     _auth = _client.auth.onAuthStateChange.listen((_) {
       if (!_sameUser && mounted) {
-        _revision++;
+        _revision++; _earningsRevision++;
         if (_actor != null) unawaited(_cache.clear(_actor));
         setState(() {
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
-          _photoAssetId = null;
+          _photoAssetId = null; _earnings = null; _earningsBusy = false; _earningsUnavailable = false;
           _squareBytes = null; _storyBytes = null;
           _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
         });
       }
     });
     unawaited(_load());
+    unawaited(_loadEarnings());
   }
 
   @override
   void dispose() {
-    _revision++;
+    _revision++; _earningsRevision++;
     _auth?.cancel();
     _name.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadEarnings() async {
+    if (!_sameUser || !mounted) return;
+    final revision = ++_earningsRevision;
+    setState(() { _earningsBusy = true; _earningsUnavailable = false; });
+    try {
+      final raw = await _client.rpc('get_my_marketplace_impulsa_summary_v1').timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser || revision != _earningsRevision) return;
+      if (raw is! Map) throw const FormatException('INVALID_IMPULSA_SUMMARY');
+      final data = MarketplaceImpulsaEarnings.fromMap(Map<String,dynamic>.from(raw));
+      setState(() { _earnings = data; });
+    } catch (_) {
+      if (mounted && _sameUser && revision == _earningsRevision) {
+        setState(() { _earningsUnavailable = true; });
+      }
+    } finally {
+      if (mounted && _sameUser && revision == _earningsRevision) setState(() { _earningsBusy = false; });
+    }
   }
 
   Future<void> _load({bool force = false}) async {
@@ -938,6 +1082,15 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           ],
           if (!_enabled && !_busy && _error == null)
             const Text('Tu ficha estará disponible cuando la Agencia TukTuk verifique tu identidad y active Mi TukTuk desde Administración.'),
+          if (_sameUser && _earnings != null)
+            _MarketplaceImpulsaEarningsCard(earnings: _earnings!, refresh: () => unawaited(_loadEarnings()), loading: _earningsBusy)
+          else if (_sameUser && _enabled && _earningsBusy)
+            const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator())
+          else if (_sameUser && _enabled && _earningsUnavailable)
+            Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [
+              const Expanded(child: Text('Ganancias comerciales aún no disponibles.', style: TextStyle(fontSize: 12))),
+              TextButton(onPressed: () => unawaited(_loadEarnings()), child: const Text('Consultar')),
+            ])),
           if (_enabled) ...[
             Row(children: [
               const Expanded(child: Text('Mis tarjetas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
