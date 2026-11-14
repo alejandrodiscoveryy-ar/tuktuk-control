@@ -37,6 +37,13 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: ImpulsaMontserrat
+      fonts:
+        - asset: assets/branding/impulsa/Montserrat-Bold.ttf
+          weight: 700
+        - asset: assets/branding/impulsa/Montserrat-ExtraBold.ttf
+          weight: 800
   assets:
     - assets/branding/tuktuk_logo.png
     - assets/branding/tuktuk_logo_transparent.png
