@@ -44,9 +44,16 @@ jobs:
             https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/28c4cfefc2ae38cfe84575c7aacc113c401d073f/supabase/functions/marketplace-customer-gateway/index.ts \
             -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
       - run: flutter test --no-pub
+      - name: Download official TukTuk master icon for review
+        if: github.event_name == 'pull_request'
+        run: |
+          curl --fail --silent --show-error --location --retry 2 --max-time 45 \
+            'https://vvxvnywzgtqhlaqpxyqh.supabase.co/storage/v1/object/public/project-branding/dfb41cea-a812-46f2-b511-7a60bd3d78af/favicon-53e50af7-7082-40a2-b5b2-62c5bc57eb28.png' \
+            -o "$RUNNER_TEMP/impulsa-official-icon.png"
       - name: Render ten Impulsa cards for visual review
         if: github.event_name == 'pull_request'
         env:
+          IMPULSA_OFFICIAL_ICON: ${{ runner.temp }}/impulsa-official-icon.png
           IMPULSA_PREVIEW_DIR: ${{ runner.temp }}/impulsa-previews
           IMPULSA_FONT_DIR: ${{ env.FLUTTER_ROOT }}/bin/cache/artifacts/material_fonts
         run: flutter test --no-pub test/presentation/marketplace_impulsa_visual_preview_test.dart
