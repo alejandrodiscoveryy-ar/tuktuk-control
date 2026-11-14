@@ -44,8 +44,8 @@ void main() {
     for (final entry in profiles.entries) {
       for (final story in [false, true]) {
         final bytes = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
-          name: 'Conductor Demo', code: '0123456789abcdef0123456789abcdef',
-          alias: 'conductor-demo', modality: entry.value, story: story, logoBytes: logo,
+          name: entry.key == 'tricycle' ? 'Frank Camilo Núñez Nieves' : 'Conductor Demo', code: '0123456789abcdef0123456789abcdef',
+          alias: entry.key == 'tricycle' ? 'frank' : 'conductor-demo', modality: entry.value, story: story, logoBytes: logo,
           identity: identity, identityVerified: true, vehicleCategory: entry.key));
         expect(bytes, isNotNull);
         final png = img.decodePng(bytes!)!;
