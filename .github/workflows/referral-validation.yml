@@ -44,6 +44,20 @@ jobs:
             https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/28c4cfefc2ae38cfe84575c7aacc113c401d073f/supabase/functions/marketplace-customer-gateway/index.ts \
             -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
       - run: flutter test --no-pub
+      - name: Render ten Impulsa cards for visual review
+        if: github.event_name == 'pull_request'
+        env:
+          IMPULSA_PREVIEW_DIR: ${{ runner.temp }}/impulsa-previews
+          IMPULSA_FONT_DIR: ${{ env.FLUTTER_ROOT }}/bin/cache/artifacts/material_fonts
+        run: flutter test --no-pub test/presentation/marketplace_impulsa_visual_preview_test.dart
+      - name: Upload visual review PNGs
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: impulsa-visual-review
+          path: ${{ runner.temp }}/impulsa-previews/*.png
+          if-no-files-found: error
+          retention-days: 7
       # Prohibido compilar APK automaticamente por cambios en un PR.
       # Solo se habilita en workflow_dispatch con el permiso booleano explicito.
       - name: Prepare fake Firebase configuration for compilation only

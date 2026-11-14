@@ -1,54 +1,14 @@
 part of '../main.dart';
 
-// Cropped car artwork from the approved campaign, local and reusable.
-const _promoApprovedCarArtwork =
-    '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'
-    'iEIgKZ2gQhUKhuqEKCxVO1KEK1MX/9k=';
+// Local, reusable illustrations extracted from the approved campaign artwork.
+// Only vehicle pixels: no reference driver's portrait, name, badge or QR.
+const _promoModalityArtwork = <String, String>{
+  'tricycle': 'assets/branding/impulsa/tricycle.webp',
+  'light_car': 'assets/branding/impulsa/light_car.webp',
+  'motorcycle': 'assets/branding/impulsa/motorcycle.webp',
+  'comfort': 'assets/branding/impulsa/comfort.webp',
+  'bicitaxi': 'assets/branding/impulsa/bicitaxi.webp',
+};
 
 /// Same URL for the copy, PNG QR and customer entry. Never use a driver UUID.
 Uri marketplaceDriverPromoUri(String code) {
@@ -67,7 +27,7 @@ String marketplaceDriverPromoCopy(String name, String code, {bool identityVerifi
 
 String _promoCategoryLabel(String code) => switch (code) {
   'motorcycle' => 'Moto', 'bicitaxi' => 'Bicitaxi', 'tricycle' => 'Triciclo',
-  'light_car' => 'Auto', 'van' => 'Furgoneta', 'truck' => 'Camión',
+  'light_car' => 'Auto', 'comfort' || 'confort' => 'Confort', 'van' => 'Furgoneta', 'truck' => 'Camión',
   'bicycle' => 'Bicicleta', _ => 'Transporte',
 };
 String _promoServiceLabel(String code) => switch (code) {
@@ -144,7 +104,7 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   var size = fontSize;
   while (true) {
     painter.text = TextSpan(text: value, style: TextStyle(color: color,
-      fontSize: size, fontWeight: weight, height: 1.10,
+      fontFamily: 'Roboto', fontSize: size, fontWeight: weight, height: 1.10,
       letterSpacing: letterSpacing, fontStyle: italic ? FontStyle.italic : FontStyle.normal));
     painter.layout(minWidth: width, maxWidth: width);
     if (!painter.didExceedMaxLines || minFontSize == null || size <= minFontSize) {
@@ -162,7 +122,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   required double fontSize, required double minFontSize, required bool center,
   required bool identityVerified,
 }) {
-  final badgeSize = identityVerified ? 76.0 : 0.0;
+  final badgeSize = identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0;
   final gap = identityVerified ? 16.0 : 0.0;
   final painter = TextPainter(textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
@@ -171,7 +131,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   final available = area.width - badgeSize - gap;
   while (true) {
     painter.text = TextSpan(text: name, style: TextStyle(
-      color: Colors.white, fontSize: size, fontWeight: FontWeight.w900,
+      color: Colors.white, fontFamily: 'Roboto', fontSize: size, fontWeight: FontWeight.w900,
       height: 1.10, letterSpacing: -1.8));
     painter.layout(maxWidth: available);
     if ((!painter.didExceedMaxLines && painter.height <= area.height) || size <= minFontSize) {
@@ -380,6 +340,15 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         ? Color.lerp(primary, white, .48)!
         : primary;
     final lime = Color.lerp(primary, const Color(0xFF84FF62), .90)!;
+    final artworkCategory = vehicleCategory == 'confort' ? 'comfort' : vehicleCategory;
+    final modalityAccent = switch (artworkCategory) {
+      'tricycle' => const Color(0xFFF97316),
+      'light_car' => const Color(0xFF06B6D4),
+      'motorcycle' => const Color(0xFF4ADE80),
+      'bicitaxi' => const Color(0xFFC084FC),
+      'comfort' => const Color(0xFFFACC15),
+      _ => accent,
+    };
     // A campaign artwork, not an app screen: the dark stage, energetic
     // diagonal ribbons and a luminous portrait anchor the composition.
     canvas.drawRect(bounds, Paint()..shader = LinearGradient(
@@ -406,21 +375,21 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       ..strokeWidth = story ? 115 : 95
       ..strokeCap = StrokeCap.round
       ..shader = LinearGradient(colors: [
-        primary.withValues(alpha: .02), primary.withValues(alpha: .19),
-        lime.withValues(alpha: .10),
+        primary.withValues(alpha: .02), modalityAccent.withValues(alpha: .24),
+        modalityAccent.withValues(alpha: .14),
       ]).createShader(bounds));
     final route = ui.Path()
       ..moveTo(-60, sweepY + 360)
       ..cubicTo(290, sweepY + 402, 685, sweepY - 224, 1145, sweepY - 145);
     canvas.drawPath(route, Paint()
       ..style = PaintingStyle.stroke ..strokeWidth = 3
-      ..color = accent.withValues(alpha: .38));
+      ..color = modalityAccent.withValues(alpha: .48));
     final routeLight = ui.Path()
       ..moveTo(-60, sweepY + 385)
       ..cubicTo(310, sweepY + 430, 720, sweepY - 196, 1145, sweepY - 122);
     canvas.drawPath(routeLight, Paint()
       ..style = PaintingStyle.stroke ..strokeWidth = 2
-      ..color = lime.withValues(alpha: .22));
+      ..color = modalityAccent.withValues(alpha: .28));
 
     // Approved campaign composition: logo left, large agency wordmark,
     // circular portrait left, vehicle upper right, identity beneath it.
@@ -447,36 +416,51 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawRRect(RRect.fromRectAndRadius(brandRule, const Radius.circular(4)),
       Paint()..color = accent.withValues(alpha: .65)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9));
     final vehicleArea = story
-      ? const Rect.fromLTWH(500, 285, 650, 365)
-      : const Rect.fromLTWH(520, 202, 570, 215);
-    if (vehicleCategory == 'light_car') {
-      // The original approved car illustration, with its edges faded into
-      // the campaign background. The original personal portrait, badge,
-      // wordmark and QR are NOT baked into this asset.
-      final car = await _promoDecode(base64Decode(_promoApprovedCarArtwork));
+      ? const Rect.fromLTWH(525, 250, 520, 345)
+      : const Rect.fromLTWH(718, 184, 332, 330);
+    final vehicleGlow = vehicleArea.inflate(75);
+    canvas.drawOval(vehicleGlow, Paint()..shader = RadialGradient(colors: [
+      modalityAccent.withValues(alpha: .32), modalityAccent.withValues(alpha: 0),
+    ]).createShader(vehicleGlow));
+    // The modality-colored sweep follows the approved campaign composition.
+    final vehicleSweep = ui.Path()
+      ..moveTo(vehicleArea.left - 110, vehicleArea.bottom - 30)
+      ..cubicTo(vehicleArea.left + 80, vehicleArea.top + 25,
+        vehicleArea.right - 90, vehicleArea.top + 20,
+        vehicleArea.right + 100, vehicleArea.top - 55);
+    canvas.drawPath(vehicleSweep, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 27..strokeCap = StrokeCap.round
+      ..color = modalityAccent.withValues(alpha: .24)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 19));
+    canvas.drawPath(vehicleSweep, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 5..strokeCap = StrokeCap.round
+      ..shader = LinearGradient(colors: [modalityAccent.withValues(alpha: 0),
+        modalityAccent, white.withValues(alpha: .8), modalityAccent])
+        .createShader(vehicleGlow));
+    final ground = Rect.fromLTWH(vehicleArea.left + 8,
+      vehicleArea.bottom - 20, vehicleArea.width - 16, 34);
+    canvas.drawOval(ground, Paint()..color = const Color(0xFF000810)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+    canvas.drawOval(ground.inflate(7), Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 3..color = modalityAccent.withValues(alpha: .75)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+    final artwork = _promoModalityArtwork[artworkCategory];
+    if (artwork != null) {
+      final asset = await rootBundle.load(artwork);
+      final vehicle = await _promoDecode(asset.buffer.asUint8List(
+        asset.offsetInBytes, asset.lengthInBytes));
       try {
-        canvas.saveLayer(vehicleArea, Paint());
-        _promoFitImage(canvas, car, vehicleArea, cover: true);
-        canvas.drawRect(vehicleArea, Paint()..blendMode = BlendMode.dstIn
-          ..shader = const LinearGradient(begin: Alignment.topCenter,
-            end: Alignment.bottomCenter, colors: [Colors.transparent,
-              Colors.white, Colors.white, Colors.transparent],
-            stops: [0, .05, .82, 1]).createShader(vehicleArea));
-        canvas.drawRect(vehicleArea, Paint()..blendMode = BlendMode.dstIn
-          ..shader = const LinearGradient(colors: [Colors.transparent,
-            Colors.white, Colors.white, Colors.transparent],
-            stops: [0, .12, .92, 1]).createShader(vehicleArea));
-        canvas.restore();
+        _promoFitImage(canvas, vehicle, vehicleArea);
       } finally {
-        car.dispose();
+        vehicle.dispose();
       }
     } else {
       _promoVehicleWatermark(canvas, vehicleCategory, vehicleArea, accent);
     }
 
     final photoRect = story
-        ? const Rect.fromLTWH(65, 365, 400, 400)
-        : const Rect.fromLTWH(66, 236, 350, 350);
+        ? const Rect.fromLTWH(65, 365, 370, 370)
+        : const Rect.fromLTWH(66, 220, 310, 310);
     final photoRadius = photoRect.width / 2;
     final portraitGlow = Rect.fromCircle(center: photoRect.center, radius: photoRadius + 47);
     canvas.drawCircle(photoRect.center, photoRadius + 47,
@@ -508,32 +492,33 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     canvas.restore();
 
-    final nameArea = story ? const Rect.fromLTWH(494, 570, 530, 145)
-      : const Rect.fromLTWH(448, 330, 570, 100);
+    final nameArea = story ? const Rect.fromLTWH(465, 590, 555, 145)
+      : const Rect.fromLTWH(400, 318, 305, 110);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
-      fontSize: story ? 92 : 78, minFontSize: 32, center: false,
+      fontSize: story ? 88 : 64, minFontSize: 32, center: false,
       identityVerified: identityVerified);
     final roleY = nameBottom + 10;
     _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
       : 'Conductor de la Agencia TukTuk', nameArea.left, roleY,
-      nameArea.width, story ? 35 : 29, white, lines: 2,
+      nameArea.width, story ? 35 : 25, white, lines: 2,
       weight: FontWeight.w600, minFontSize: 23);
-    final identityRule = Rect.fromLTWH(nameArea.left, story ? 825 : 521, nameArea.width, 5);
+    final identityRule = Rect.fromLTWH(nameArea.left, story ? 825 : 515, story ? nameArea.width : 620, 5);
     canvas.drawRRect(RRect.fromRectAndRadius(identityRule, const Radius.circular(3)),
       Paint()..shader = LinearGradient(colors: [lime, accent,
         accent.withValues(alpha: 0)]).createShader(identityRule));
 
     final servicePill = story
       ? const Rect.fromLTWH(155, 935, 770, 108)
-      : const Rect.fromLTWH(448, 540, 570, 65);
+      : const Rect.fromLTWH(145, 538, 790, 70);
     final pill = RRect.fromRectAndRadius(servicePill, Radius.circular(servicePill.height / 2));
-    canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .50)
+    canvas.drawRRect(pill, Paint()..color = modalityAccent.withValues(alpha: .50)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
     canvas.drawRRect(pill, Paint()..shader = LinearGradient(
-      colors: [lime.withValues(alpha: .66), accent.withValues(alpha: .19),
-        const Color(0xFF0A2635)]).createShader(servicePill));
+      colors: [modalityAccent.withValues(alpha: .86),
+        Color.lerp(modalityAccent, const Color(0xFF071C29), .52)!,
+        Color.lerp(modalityAccent, const Color(0xFF071C29), .78)!]).createShader(servicePill));
     canvas.drawRRect(pill, Paint()..style = PaintingStyle.stroke
-      ..strokeWidth = 3 ..color = accent);
+      ..strokeWidth = 4 ..color = modalityAccent);
     final miniVehicle = Rect.fromLTWH(servicePill.left + 16,
       servicePill.center.dy - servicePill.height * .31,
       servicePill.height * 1.45, servicePill.height * .62);
@@ -543,6 +528,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       'tricycle' => Icons.electric_rickshaw,
       'van' => Icons.airport_shuttle,
       'truck' => Icons.local_shipping,
+      'comfort' || 'confort' => Icons.diamond_outlined,
       _ => Icons.directions_car,
     };
     final vehicleGlyph = TextPainter(
@@ -559,10 +545,10 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final dividerX = miniVehicle.right + 14;
     canvas.drawLine(Offset(dividerX, servicePill.top + 17),
       Offset(dividerX, servicePill.bottom - 17),
-      Paint()..color = accent..strokeWidth = 2);
+      Paint()..color = modalityAccent..strokeWidth = 2);
     _promoText(canvas, modality, dividerX + 17,
       servicePill.top, servicePill.right - dividerX - 30,
-      story ? 43 : 29, white, center: true, lines: 2, minFontSize: 23,
+      story ? 43 : 32, white, center: true, lines: 2, minFontSize: 23,
       boxHeight: servicePill.height, weight: FontWeight.w800);
 
     // Use the actual approved static campaign artwork, not a redrawing.
@@ -622,6 +608,11 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
           primary.withValues(alpha: .08), accent, primary.withValues(alpha: .35),
         ]).createShader(bounds));
     }
+    canvas.drawRRect(RRect.fromRectAndRadius(
+      Rect.fromLTWH(4, 4, width - 8.0, height - 8.0), const Radius.circular(32)),
+      Paint()..style = PaintingStyle.stroke..strokeWidth = 3
+      ..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [accent, accent.withValues(alpha: .18), accent]).createShader(bounds));
     final picture = recorder.endRecording();
     try {
       final image = await picture.toImage(width, height);
@@ -643,7 +634,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 12;
+const _marketplacePromoArtworkVersion = 14;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
