@@ -154,6 +154,12 @@ void main() async {
     publishableKey: _supabasePublishableKey,
   );
 
+  final adminPromoCode = kIsWeb ? Uri.base.queryParameters['promo_card'] : null;
+  if (adminPromoCode != null && RegExp(r'^[0-9a-f]{32}$').hasMatch(adminPromoCode)) {
+    runApp(MaterialApp(debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(), home: MarketplaceSharedPromoCards(code: adminPromoCode)));
+    return;
+  }
   if (_marketplaceCustomerEntry) {
     runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
     return;

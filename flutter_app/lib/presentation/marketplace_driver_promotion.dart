@@ -1097,3 +1097,107 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     ]);
   }
 }
+
+ 
+/// Public, consented artwork only. The same renderer is used by Mi TukTuk.
+class MarketplaceSharedPromoCards extends StatefulWidget {
+  const MarketplaceSharedPromoCards({required this.code, super.key});
+  final String code;
+  @override
+  State<MarketplaceSharedPromoCards> createState() => _MarketplaceSharedPromoCardsState();
+}
+
+class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCards> {
+  late Future<(String, Uint8List, Uint8List)> _cards;
+  @override
+  void initState() {
+    super.initState();
+    _cards = _load();
+  }
+
+  Future<(String, Uint8List, Uint8List)> _load() async {
+    final client = Supabase.instance.client;
+    final response = await client.functions.invoke('marketplace-customer-gateway',
+      body: {'operation': 'promo_profile', 'params': {'target_code': widget.code}});
+    final envelope = response.data;
+    final raw = envelope is Map ? envelope['data'] : null;
+    if (raw is! Map || raw['verified'] != true ||
+        raw['public_name'] is! String || raw['category_code'] is! String ||
+        raw['service_codes'] is! List) {
+      throw StateError('PROMO_UNAVAILABLE');
+    }
+    final name = raw['public_name'] as String;
+    final category = raw['category_code'] as String;
+    final services = (raw['service_codes'] as List).whereType<String>()
+      .map(_promoServiceLabel).where((label) => label.isNotEmpty).toSet().join(' · ');
+    if (services.isEmpty) {
+      throw StateError('PROMO_SERVICE_UNAVAILABLE');
+    }
+    final identity = ProjectIdentity.fromRpc(await client.rpc('get_public_project_identity',
+      params: {'target_project_id': _projectId}));
+    if (identity == null || identity.projectId != _projectId) throw StateError('BRAND_UNAVAILABLE');
+    final photoUrl = raw['photo_url'];
+    final photo = photoUrl is String ? await downloadMarketplacePromoPortrait(Uri.parse(photoUrl)) : null;
+    final logo = await loadMarketplacePromoBrandLogo(identity);
+    final modality = '${_promoCategoryLabel(category)} · $services';
+    final square = await renderMarketplaceDriverPromoCard(name: name, code: widget.code,
+      modality: modality, story: false, photoBytes: photo, logoBytes: logo,
+      identity: identity, identityVerified: true, vehicleCategory: category);
+    final story = await renderMarketplaceDriverPromoCard(name: name, code: widget.code,
+      modality: modality, story: true, photoBytes: photo, logoBytes: logo,
+      identity: identity, identityVerified: true, vehicleCategory: category);
+    return (name, square, story);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List)>(
+      future: _cards,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Perfil promocional no disponible.'),
+          TextButton(onPressed: () => setState(() => _cards = _load()), child: const Text('Reintentar')),
+        ]));
+        }
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final (name, square, story) = snapshot.data!;
+        final link = marketplaceDriverPromoUri(widget.code).toString();
+        final message = '¡Tu próximo viaje comienza conmigo!\n\nSoy $name, conductor verificado de la Agencia TukTuk.\n\nSolicita mi servicio desde este enlace:\n$link\n\nAgencia TukTuk. Tu conductor de confianza, a un toque.';
+        Widget card(Uint8List bytes, bool vertical) {
+          final file = vertical ? 'tuktuk-historia.png' : 'tuktuk-cuadrada.png';
+          return Expanded(child: Column(children: [
+            Text(vertical ? 'Historia' : 'Cuadrada'),
+            const SizedBox(height: 8),
+            SizedBox(height: 220, child: Image.memory(bytes, fit: BoxFit.contain)),
+            FilledButton.icon(onPressed: () {
+              if (!driver_promo_download.downloadPromoPng(bytes, file)) {
+                toast(context, 'No se pudo descargar la tarjeta.');
+              }
+            }, icon: const Icon(Icons.download), label: const Text('Descargar')),
+            TextButton.icon(onPressed: () async {
+              try {
+                final result = await SharePlus.instance.share(ShareParams(text: message,
+                  files: [XFile.fromData(bytes, mimeType: 'image/png', name: file)],
+                  fileNameOverrides: [file], downloadFallbackEnabled: false));
+                if (context.mounted && result.status == ShareResultStatus.unavailable) {
+                  toast(context, 'Descarga la tarjeta y copia el mensaje.');
+                }
+              } catch (_) {
+                if (context.mounted) toast(context, 'Descarga la tarjeta y copia el mensaje.');
+              }
+            }, icon: const Icon(Icons.share), label: const Text('Compartir')),
+          ]));
+        }
+        return SingleChildScrollView(padding: const EdgeInsets.all(12), child: Column(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [card(square, false), card(story, true)]),
+          TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: link)),
+            icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
+          TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: message)),
+            icon: const Icon(Icons.copy), label: const Text('Copiar mensaje')),
+          SelectableText(link),
+        ]));
+      },
+    )),
+  );
+}
