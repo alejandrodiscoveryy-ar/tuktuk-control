@@ -31,6 +31,27 @@ void main() {
     expect(marketplaceDriverPromoQr(code).moduleCount, 41);
   });
 
+  test('public card lookup retries a database timeout once and never retries missing profile', () async {
+    var calls = 0;
+    final profile = await loadMarketplaceSharedPromoProfile(() async {
+      calls++;
+      if (calls == 1) throw StateError('canceling statement due to statement timeout');
+      return {'data': {'public_name': 'Demo', 'verified': true, 'promo_alias': 'demo'}};
+    }, pause: (_) async {});
+    expect(calls, 2);
+    expect(profile?['promo_alias'], 'demo');
+    calls = 0;
+    expect(await loadMarketplaceSharedPromoProfile(() async {
+      calls++; return {'data': null};
+    }, pause: (_) async {}), isNull);
+    expect(calls, 1);
+    calls = 0;
+    await expectLater(loadMarketplaceSharedPromoProfile(() async {
+      calls++; throw StateError('CUSTOMER_RATE_LIMITED');
+    }, pause: (_) async {}), throwsStateError);
+    expect(calls, 1);
+  });
+
   test('commercial link is short and shared by copy and QR', () {
     final uri = marketplaceDriverPromoUri(code, alias: 'gerson');
     expect(uri.toString(), 'https://www.vrixora.com/tuk/gerson');
@@ -301,7 +322,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 16;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 17;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
@@ -309,9 +330,12 @@ void main() {
     expect(source, contains('identityVerified, vehicleCategory'));
     expect(source, contains('Color(0xFF1D9BF0)'));
     expect(source, contains('weight: FontWeight.w900'));
-    expect(source, contains("rootBundle.load('assets/branding/tuktuk_promo_booking.webp')"));
-    expect(source, contains('canvas.drawImageRect(bookingArt'));
-    expect(source, contains('canvas.clipRRect(RRect.fromRectAndRadius(panel.deflate(7)'));
+    expect(source, contains('_promoReferenceBooking(canvas, bookingArea)'));
+    expect(source, contains('_promoLightFrame(canvas, ctaShape, neon'));
+    expect(source, contains('_promoGlossyPill(canvas, linkShape, modalityAccent)'));
+    expect(source, contains('painter.computeLineMetrics().last'));
+    expect(source, contains('final vehicleRibbon = ui.Path()'));
+    expect(source, contains('final bottomBand = ui.Path()'));
     expect(source, contains('italic: true'));
     expect(source, contains('final lowerSweep = ui.Path()'));
     expect(source, contains('final module = story ? 6.0 : 5.0;'));
@@ -333,12 +357,12 @@ void main() {
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
     expect(source, contains('Solicita mi servicio desde este enlace:'));
-    expect(source, isNot(contains("_promoText(canvas, 'Solicita mi'")));
-    expect(source, isNot(contains("_promoText(canvas, 'servicio'")));
+    expect(source, contains("_promoText(canvas, 'Solicita mi'"));
+    expect(source, contains("_promoText(canvas, 'servicio'"));
     expect(source, contains('rootBundle.load(artwork)'));
     expect(source, contains('final vehicleSweep = ui.Path()'));
-    expect(source, isNot(contains('final pin = ui.Path()')));
-    expect(source, isNot(contains('final arrowHead = ui.Path()')));
+    expect(source, contains('final pin = ui.Path()'));
+    expect(source, contains('final arrow = ui.Path()'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
     expect(source, contains("'Agencia TukTuk'"));
     expect(source, isNot(contains("_promoText(canvas, 'MI TUKTUK'")));
