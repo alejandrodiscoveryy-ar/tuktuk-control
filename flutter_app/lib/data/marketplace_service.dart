@@ -498,6 +498,22 @@ String marketplaceRidePaymentLabel(String? value) => switch (value) {
       _ => 'No especificado',
     };
 
+class MarketplaceImpulsaWithdrawal {
+  const MarketplaceImpulsaWithdrawal({required this.id, required this.amount, required this.status});
+  final String id;
+  final double amount;
+  final String status;
+  factory MarketplaceImpulsaWithdrawal.fromMap(Map map) => MarketplaceImpulsaWithdrawal(id: _marketText(map['id']) ?? '', amount: _marketNumber(map['amount']), status: _marketText(map['status']) ?? '');
+}
+class MarketplaceWalletTransition {
+  const MarketplaceWalletTransition({required this.active,required this.debt,required this.cash,required this.promo,required this.impulsa,required this.available,required this.reserved,required this.minimum,required this.creditLimit,required this.canWithdraw,required this.creditAvailable,required this.withdrawalsEnabled,required this.reversalPending,required this.withdrawals});
+  final bool active, canWithdraw, creditAvailable, withdrawalsEnabled, reversalPending;
+  final double debt, cash, promo, impulsa, available, reserved, minimum, creditLimit;
+  final List<MarketplaceImpulsaWithdrawal> withdrawals;
+  factory MarketplaceWalletTransition.fromMap(Map map) => MarketplaceWalletTransition(
+    active:_marketBool(map['active']), debt:_marketNumber(map['debt_cup']), cash:_marketNumber(map['cash_balance']), promo:_marketNumber(map['promotional_balance']), impulsa:_marketNumber(map['impulsa_balance']), available:_marketNumber(map['impulsa_available']), reserved:_marketNumber(map['withdrawal_reserved']), minimum:_marketNumber(map['withdrawal_minimum_cup']), creditLimit:_marketNumber(map['credit_limit_cup']), canWithdraw:_marketBool(map['can_withdraw']), creditAvailable:_marketBool(map['credit_available']), withdrawalsEnabled:_marketBool(map['withdrawals_enabled']), reversalPending:_marketBool(map['reversal_pending']), withdrawals:_marketMaps(map['withdrawals']).map(MarketplaceImpulsaWithdrawal.fromMap).toList());
+}
+
 class MarketplaceAvailableJob {
   const MarketplaceAvailableJob({
     required this.id,
@@ -505,6 +521,7 @@ class MarketplaceAvailableJob {
     required this.finalPrice,
     required this.currency,
     this.ridePaymentMethod,
+    this.commissionRate, this.commissionAmount, this.missingBalance, this.canAccept,
     this.status,
     this.originText,
     this.destinationText,
@@ -545,12 +562,19 @@ class MarketplaceAvailableJob {
   final double finalPrice;
   final String currency;
   final String? ridePaymentMethod;
+  final double? commissionRate, commissionAmount, missingBalance;
+  final bool? canAccept;
+  bool get usesInitialCredit => canAccept == true && (commissionAmount ?? 0)>0 && (missingBalance ?? 0)>0;
   final DateTime? publishedAt;
   final DateTime? expiresAt;
   final DateTime? createdAt;
 
   factory MarketplaceAvailableJob.fromMap(Map map) => MarketplaceAvailableJob(
         id: _marketText(map['job_id'] ?? map['id']) ?? '',
+        commissionRate: map['commission_rate']==null?null:_marketNumber(map['commission_rate']),
+        commissionAmount: map['commission_amount']==null?null:_marketNumber(map['commission_amount']),
+        missingBalance: map['missing_balance']==null?null:_marketNumber(map['missing_balance']),
+        canAccept: map['can_accept']==null?null:_marketBool(map['can_accept']),
         status: _marketText(map['status']),
         serviceCode: _marketText(map['service_code']) ?? '',
         originText: _marketText(map['origin_text']),
@@ -1309,6 +1333,10 @@ class MarketplaceService {
 
   Future<MarketplaceWallet> wallet() =>
       _one('get_my_marketplace_wallet').then(MarketplaceWallet.fromMap);
+
+  Future<MarketplaceWalletTransition> walletTransition() => _one('get_my_marketplace_wallet_transition_v1').then(MarketplaceWalletTransition.fromMap);
+  Future<void> requestImpulsaWithdrawal(double amount,String key) async { await _one('request_my_marketplace_impulsa_withdrawal_v1',{'target_amount':amount,'target_key':key}); }
+  Future<void> cancelImpulsaWithdrawal(String id,String key) async { await _one('cancel_my_marketplace_impulsa_withdrawal_v1',{'target_id':id,'target_key':key}); }
 
   Future<List<MarketplacePaymentMethod>> paymentMethods() =>
       _list('list_my_marketplace_payment_methods').then(
