@@ -144,8 +144,8 @@ void main() {
       expect(panelPixel.g, lessThan(85));
       expect(panelPixel.b, lessThan(100));
       final qr = marketplaceDriverPromoQr(code);
-      final x = story ? 686 : 679;
-      final y = story ? 1194 : 684;
+      const x = 686;
+      final y = story ? 1194 : 679;
       const module = 6;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
@@ -214,7 +214,8 @@ void main() {
           }
         }
         expect(changes, greaterThan(25), reason: category);
-        final x = story ? 686 : 679, y = story ? 1194 : 684;
+        const x = 686;
+        final y = story ? 1194 : 679;
         final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * 6;
         for (var dy = 0; dy < size; dy += 6) {
           for (var dx = 0; dx < size; dx += 6) {
@@ -280,7 +281,7 @@ void main() {
     expect(source, contains('vehicleGlyph.paint'));
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
     expect(source, contains('Rect.fromLTWH(500, 345, 650, 300)'));
-    expect(source, contains('final qrX = story ? 686.0 : 679.0;'));
+    expect(source, contains('const qrX = 686.0;'));
     expect(source, contains('identityVerified ? 58.0 : 0.0'));
     expect(source, contains('Rect.fromLTWH(40, 1135, 1000, 430)'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
