@@ -11,18 +11,24 @@ const _promoModalityArtwork = <String, String>{
 };
 
 /// Same URL for the copy, PNG QR and customer entry. Never use a driver UUID.
-Uri marketplaceDriverPromoUri(String code) {
+String? marketplaceDriverPromoAlias(Object? value) =>
+    value is String && RegExp(r'^[a-z0-9][a-z0-9-]{1,31}$').hasMatch(value) && !value.endsWith('-') ? value : null;
+
+Uri marketplaceDriverPromoUri(String code, {String? alias}) {
   if (!RegExp(r'^[0-9a-f]{32}$').hasMatch(code)) {
     throw ArgumentError('Invalid promotion code');
   }
-  return Uri.https('www.vrixora.com', '/cliente/tuk/', {'conductor': code});
+  final shortAlias = marketplaceDriverPromoAlias(alias);
+  return shortAlias == null
+      ? Uri.https('www.vrixora.com', '/cliente/tuk/', {'conductor': code})
+      : Uri.https('www.vrixora.com', '/tuk/$shortAlias');
 }
 
-String marketplaceDriverPromoCopy(String name, String code, {bool identityVerified = false}) =>
+String marketplaceDriverPromoCopy(String name, String code, {bool identityVerified = false, String? alias}) =>
     '¡Tu próximo viaje comienza conmigo!\n\n'
     'Soy $name, ${identityVerified ? 'conductor verificado' : 'conductor'} de la Agencia TukTuk.\n\n'
     'Solicita mi servicio desde este enlace:\n\n'
-    '${marketplaceDriverPromoUri(code)}\n\n'
+    '${marketplaceDriverPromoUri(code, alias: alias)}\n\n'
     'Agencia TukTuk. Tu conductor de confianza, a un toque.';
 
 String _promoCategoryLabel(String code) => switch (code) {
@@ -36,9 +42,9 @@ String _promoServiceLabel(String code) => switch (code) {
 };
 
 /// Fixed-size integer QR modules, black on white, four-module quiet zone.
-QrImage marketplaceDriverPromoQr(String code) {
+QrImage marketplaceDriverPromoQr(String code, {String? alias}) {
   final qr = QrCode(6, QrErrorCorrectLevel.M)
-    ..addData(marketplaceDriverPromoUri(code).toString());
+    ..addData(marketplaceDriverPromoUri(code, alias: alias).toString());
   return QrImage(qr);
 }
 
@@ -314,7 +320,7 @@ void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color acc
 /// No photos or generated files are uploaded by this renderer.
 Future<Uint8List> renderMarketplaceDriverPromoCard({
   required String name, required String code, required String modality,
-  required bool story, Uint8List? photoBytes, Uint8List? logoBytes,
+  required bool story, Uint8List? photoBytes, Uint8List? logoBytes, String? alias,
   ProjectIdentity identity = ProjectIdentity.fallback,
   bool identityVerified = false,
   String vehicleCategory = 'light_car',
@@ -576,7 +582,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     // Overlay the real code in the center of the original white well.
     // Integer modules and four full white modules of quiet zone preserve
     // the scanner contract. The surrounding graphic is not resized with QR.
-    final qr = marketplaceDriverPromoQr(code);
+    final qr = marketplaceDriverPromoQr(code, alias: alias);
     const module = 6.0;
     final qrSize = (qr.moduleCount + 8) * module;
     const qrX = 686.0;
@@ -634,17 +640,17 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 14;
+const _marketplacePromoArtworkVersion = 15;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
   required Uri? photoUrl, required ProjectIdentity identity,
   Object? profileUpdatedAt,
-  String? photoAssetId,
+  String? photoAssetId, String? alias,
   bool identityVerified = false,
   String vehicleCategory = 'light_car',
 }) => sha256.convert(utf8.encode(jsonEncode([
-  _marketplacePromoArtworkVersion, actor, code, name, modality, photoAuthorized, identityVerified, vehicleCategory,
+  _marketplacePromoArtworkVersion, actor, code, alias, name, modality, photoAuthorized, identityVerified, vehicleCategory,
   photoUrl == null ? null : '${photoUrl.scheme}://${photoUrl.host}${photoUrl.path}',
   profileUpdatedAt?.toString(), photoAssetId, identity.projectId, identity.iconUrl,
   identity.primaryColorHex, identity.secondaryColorHex,
@@ -702,13 +708,13 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _enabled = false;
   bool _sharing = false, _identityVerified = false;
-  String? _error, _code, _photoAssetId;
+  String? _error, _code, _photoAssetId, _alias;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
   String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
-  String? get _copy => _code == null ? null : marketplaceDriverPromoCopy(_name.text.trim(), _code!, identityVerified: _identityVerified);
+  String? get _copy => _code == null ? null : marketplaceDriverPromoCopy(_name.text.trim(), _code!, identityVerified: _identityVerified, alias: _alias);
 
   @override
   void initState() {
@@ -767,6 +773,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (code is! String) throw StateError('PROMO_CODE_INVALID');
       marketplaceDriverPromoUri(code);
       stage = 'enlace';
+      final alias = identityVerified ? marketplaceDriverPromoAlias(await _client.rpc('my_marketplace_promo_alias_v1').timeout(const Duration(seconds: 8))) : null;
+      if (!mounted || !_sameUser || revision != _revision) return;
+      if (identityVerified && alias == null) throw StateError('PROMO_ALIAS_UNAVAILABLE');
       // The administrator has already activated this profile and personal QR.
       // The authenticated driver only retrieves the approved metadata.
       final raw = result;
@@ -797,7 +806,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (!mounted || !_sameUser || revision != _revision) return;
       final identity = widget.store.projectIdentity;
       final fingerprint = marketplacePromoCacheFingerprint(
-        actor: actor, code: code, name: name, modality: modality,
+        actor: actor, code: code, alias: alias, name: name, modality: modality,
         photoAuthorized: photoAuthorized, photoUrl: photoKey,
         identity: identity, photoAssetId: _photoAssetId,
         identityVerified: identityVerified, vehicleCategory: vehicleCategory,
@@ -805,7 +814,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final cached = force ? null : _cache.read(actor, fingerprint);
       if (cached != null) {
         setState(() {
-          _name.text = name; _code = code;
+          _name.text = name; _code = code; _alias = alias;
           _squareBytes = cached.square; _storyBytes = cached.story;
         });
         return;
@@ -820,8 +829,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       stage = 'tarjeta';
       final logo = await loadMarketplacePromoBrandLogo(identity);
       if (!mounted || !_sameUser || revision != _revision) return;
-      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
-      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
+      final square = await renderMarketplaceDriverPromoCard(name: name, code: code, alias: alias, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
+      final story = await renderMarketplaceDriverPromoCard(name: name, code: code, alias: alias, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
       if (!mounted || !_sameUser || revision != _revision) return;
       // If the configured official icon failed to load, do not persist a
       // degraded rendering; a later visit can retry the correct identity.
@@ -833,7 +842,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         }
       }
       if (!mounted || !_sameUser || revision != _revision) return;
-      setState(() { _name.text = name; _code = code; _squareBytes = square; _storyBytes = story; });
+      setState(() { _name.text = name; _code = code; _alias = alias; _squareBytes = square; _storyBytes = story; });
     } catch (_) {
       if (mounted && revision == _revision) {
         setState(() {
@@ -847,6 +856,27 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       }
     } finally {
       if (mounted && revision == _revision) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _editAlias() async {
+    if (!_sameUser || !_enabled || _busy || _sharing || _alias == null) return;
+    var value = _alias!;
+    final selected = await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('Personaliza tu enlace'),
+      content: TextFormField(initialValue: value, onChanged: (text) => value = text,
+        maxLength: 32, decoration: const InputDecoration(prefixText: 'vrixora.com/tuk/', helperText: 'Letras sin acentos, números y guiones.')),
+      actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancelar')),
+        FilledButton(onPressed: () => Navigator.pop(dialogContext, value.trim().toLowerCase()), child: const Text('Guardar'))],
+    ));
+    if (!mounted || !_sameUser || selected == null || selected == _alias) return;
+    if (marketplaceDriverPromoAlias(selected) == null) { toast(context, 'Escribe un nombre válido de 2 a 32 caracteres.'); return; }
+    setState(() => _busy = true);
+    try {
+      await _client.rpc('my_marketplace_promo_alias_v1', params: {'target_alias': selected});
+      if (mounted && _sameUser) await _load(force: true);
+    } catch (_) {
+      if (mounted && _sameUser) { setState(() => _busy = false); toast(context, 'No se pudo guardar. El nombre puede estar ocupado.'); }
     }
   }
 
@@ -1053,13 +1083,19 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                   ListTile(
                     leading: const Icon(Icons.link),
                     title: const Text('Mi enlace personal'),
-                    subtitle: const Text('Toca para copiar'),
+                    subtitle: SelectableText(marketplaceDriverPromoUri(_code!, alias: _alias).toString().replaceFirst('https://www.', '')),
                     trailing: IconButton(
                       tooltip: 'Copiar enlace',
-                      onPressed: () => _copyText(marketplaceDriverPromoUri(_code!).toString()),
+                      onPressed: () => _copyText(marketplaceDriverPromoUri(_code!, alias: _alias).toString()),
                       icon: const Icon(Icons.copy_outlined),
                     ),
-                    onTap: () => _copyText(marketplaceDriverPromoUri(_code!).toString()),
+                    onTap: () => _copyText(marketplaceDriverPromoUri(_code!, alias: _alias).toString()),
+                  ),
+                  if (_alias != null) ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('Personalizar mi enlace'),
+                    subtitle: const Text('Al cambiarlo, descarga tus tarjetas nuevas.'),
+                    onTap: _busy || _sharing ? null : _editAlias,
                   ),
                   const Divider(height: 1),
                   ExpansionTile(
@@ -1099,14 +1135,14 @@ class MarketplaceSharedPromoCards extends StatefulWidget {
 }
 
 class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCards> {
-  late Future<(String, Uint8List, Uint8List)> _cards;
+  late Future<(String, Uint8List, Uint8List, String)> _cards;
   @override
   void initState() {
     super.initState();
     _cards = _load();
   }
 
-  Future<(String, Uint8List, Uint8List)> _load() async {
+  Future<(String, Uint8List, Uint8List, String)> _load() async {
     final client = Supabase.instance.client;
     final response = await client.functions.invoke('marketplace-customer-gateway',
       body: {'operation': 'promo_profile', 'params': {'target_code': widget.code}});
@@ -1131,19 +1167,21 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
     final photo = photoUrl is String ? await downloadMarketplacePromoPortrait(Uri.parse(photoUrl)) : null;
     final logo = await loadMarketplacePromoBrandLogo(identity);
     final modality = '${_promoCategoryLabel(category)} · $services';
-    final square = await renderMarketplaceDriverPromoCard(name: name, code: widget.code,
+    final alias = marketplaceDriverPromoAlias(raw['promo_alias']);
+    if (alias == null) throw StateError('PROMO_ALIAS_UNAVAILABLE');
+    final square = await renderMarketplaceDriverPromoCard(name: name, code: widget.code, alias: alias,
       modality: modality, story: false, photoBytes: photo, logoBytes: logo,
       identity: identity, identityVerified: true, vehicleCategory: category);
-    final story = await renderMarketplaceDriverPromoCard(name: name, code: widget.code,
+    final story = await renderMarketplaceDriverPromoCard(name: name, code: widget.code, alias: alias,
       modality: modality, story: true, photoBytes: photo, logoBytes: logo,
       identity: identity, identityVerified: true, vehicleCategory: category);
-    return (name, square, story);
+    return (name, square, story, alias);
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFF101619),
-    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List)>(
+    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List, String)>(
       future: _cards,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -1153,8 +1191,8 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
         ]));
         }
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final (name, square, story) = snapshot.data!;
-        final link = marketplaceDriverPromoUri(widget.code).toString();
+        final (name, square, story, alias) = snapshot.data!;
+        final link = marketplaceDriverPromoUri(widget.code, alias: alias).toString();
         final message = '¡Tu próximo viaje comienza conmigo!\n\nSoy $name, conductor verificado de la Agencia TukTuk.\n\nSolicita mi servicio desde este enlace:\n$link\n\nAgencia TukTuk. Tu conductor de confianza, a un toque.';
         Widget card(Uint8List bytes, bool vertical) {
           final file = vertical ? 'tuktuk-historia.png' : 'tuktuk-cuadrada.png';

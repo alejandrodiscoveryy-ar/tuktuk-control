@@ -31,6 +31,16 @@ void main() {
     expect(marketplaceDriverPromoQr(code).moduleCount, 41);
   });
 
+  test('commercial link is short and shared by copy and QR', () {
+    final uri = marketplaceDriverPromoUri(code, alias: 'gerson');
+    expect(uri.toString(), 'https://www.vrixora.com/tuk/gerson');
+    expect(marketplaceDriverPromoCopy('Gerson', code, alias: 'gerson'), contains(uri.toString()));
+    expect(marketplaceDriverPromoCopy('Gerson', code, alias: 'gerson'), isNot(contains(code)));
+    expect(marketplaceDriverPromoQr(code, alias: 'gerson').moduleCount, 41);
+    expect(marketplaceDriverPromoAlias('../gerson'), isNull);
+    expect(marketplaceDriverPromoAlias('gerson-'), isNull);
+  });
+
   testWidgets('agency promotion uses only the approved master icon', (tester) async {
     const identity = ProjectIdentity(
       projectId: 'test', name: 'TukTuk Conductor',
@@ -97,11 +107,12 @@ void main() {
       String modality = 'Auto · Pasajeros', bool authorized = true,
       String url = 'https://example.com/photo/one.png?token=first',
       ProjectIdentity identity = ProjectIdentity.fallback, bool verified = false,
-      String? photoAssetId}) =>
-        marketplacePromoCacheFingerprint(actor: actor, code: code, name: name,
+      String? photoAssetId, String? alias}) =>
+        marketplacePromoCacheFingerprint(actor: actor, code: code, alias: alias, name: name,
           modality: modality, photoAuthorized: authorized, photoUrl: Uri.parse(url),
           identity: identity, identityVerified: verified, photoAssetId: photoAssetId);
     final original = key();
+    expect(key(alias: 'gerson'), isNot(original));
     expect(key(verified: true), isNot(original));
     expect(key(photoAssetId: 'new-photo'), isNot(original));
     expect(key(url: 'https://example.com/photo/one.png?token=second'), original);
@@ -133,7 +144,7 @@ void main() {
   for (final story in [false, true]) {
     testWidgets('export embeds QR modules with quiet zone in ${story ? 'story' : 'square'} PNG', (tester) async {
       final bytes = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
-        name: 'Gerson', code: code, modality: 'Triciclo · Pasajeros', story: story));
+        name: 'Gerson', code: code, alias: 'gerson', modality: 'Triciclo · Pasajeros', story: story));
       expect(bytes, isNotNull);
       final png = img.decodePng(bytes!)!;
       expect(png.width, 1080);
@@ -143,7 +154,7 @@ void main() {
       expect(panelPixel.r, lessThan(65));
       expect(panelPixel.g, lessThan(85));
       expect(panelPixel.b, lessThan(100));
-      final qr = marketplaceDriverPromoQr(code);
+      final qr = marketplaceDriverPromoQr(code, alias: 'gerson');
       const x = 686;
       final y = story ? 1194 : 668;
       const module = 6;
@@ -254,7 +265,7 @@ void main() {
     expect(source, isNot(contains('_ensurePublished')));
     expect(source, isNot(contains('Al compartir, descargar o copiar el enlace')));
     expect(source, contains('active Mi TukTuk desde Administración'));
-    expect(source, contains('_copyText(marketplaceDriverPromoUri(_code!).toString())'));
+    expect(source, contains('_copyText(marketplaceDriverPromoUri(_code!, alias: _alias).toString())'));
     expect(source, contains('ExpansionTile('));
     expect(source, contains('showDialog<bool>'));
     expect(source, contains('confirmed == true && mounted'));
@@ -269,7 +280,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 14;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 15;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
