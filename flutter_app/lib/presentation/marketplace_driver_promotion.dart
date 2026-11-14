@@ -342,7 +342,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final lime = Color.lerp(primary, const Color(0xFF84FF62), .90)!;
     final artworkCategory = vehicleCategory == 'confort' ? 'comfort' : vehicleCategory;
     final modalityAccent = switch (artworkCategory) {
-      'tricycle' => const Color(0xFFFB923C),
+      'tricycle' => const Color(0xFFF97316),
+      'light_car' => const Color(0xFF06B6D4),
       'motorcycle' => const Color(0xFF4ADE80),
       'bicitaxi' => const Color(0xFFC084FC),
       'comfort' => const Color(0xFFFACC15),
@@ -416,7 +417,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       Paint()..color = accent.withValues(alpha: .65)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9));
     final vehicleArea = story
       ? const Rect.fromLTWH(525, 250, 520, 345)
-      : const Rect.fromLTWH(650, 184, 400, 330);
+      : const Rect.fromLTWH(718, 184, 332, 330);
     final vehicleGlow = vehicleArea.inflate(75);
     canvas.drawOval(vehicleGlow, Paint()..shader = RadialGradient(colors: [
       modalityAccent.withValues(alpha: .32), modalityAccent.withValues(alpha: 0),
