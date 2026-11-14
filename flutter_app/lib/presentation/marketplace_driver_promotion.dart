@@ -1130,7 +1130,9 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
     final category = raw['category_code'] as String;
     final services = (raw['service_codes'] as List).whereType<String>()
       .map(_promoServiceLabel).where((label) => label.isNotEmpty).toSet().join(' · ');
-    if (services.isEmpty) throw StateError('PROMO_SERVICE_UNAVAILABLE');
+    if (services.isEmpty) {
+      throw StateError('PROMO_SERVICE_UNAVAILABLE');
+    }
     final identity = ProjectIdentity.fromRpc(await client.rpc('get_public_project_identity',
       params: {'target_project_id': _projectId}));
     if (identity == null || identity.projectId != _projectId) throw StateError('BRAND_UNAVAILABLE');
