@@ -514,9 +514,9 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawCircle(photoRect.center, photoRadius + 14,
       Paint()..color = const Color(0xFF07121D));
     canvas.drawCircle(photoRect.center, photoRadius + 9,
-      Paint()..shader = LinearGradient(
+      Paint()..shader = const LinearGradient(
         begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [white, neon, const Color(0xFF008BFF)],
+        colors: [white, neon, Color(0xFF008BFF)],
       ).createShader(portraitGlow));
     canvas.drawCircle(photoRect.center, photoRadius + 3,
       Paint()..color = const Color(0xFF101C29));
@@ -536,8 +536,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     canvas.restore();
 
-    final nameArea = story ? const Rect.fromLTWH(486, 302, 536, 145)
-      : const Rect.fromLTWH(367, 237, 337, 110);
+    final nameArea = story ? const Rect.fromLTWH(486, 302, 536, 118)
+      : const Rect.fromLTWH(367, 237, 337, 80);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
       fontSize: story ? 88 : 64, minFontSize: 32, center: false,
       identityVerified: identityVerified);
@@ -681,7 +681,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       linkArea.width - 151, story ? 55 : 48, white, center: true, lines: 1,
       minFontSize: 17, weight: FontWeight.w900, boxHeight: linkArea.height);
     canvas.drawRRect(ctaShape, Paint()..style = PaintingStyle.stroke..strokeWidth = 5
-      ..shader = LinearGradient(colors: [white, neon, const Color(0xFF008BFF), neon]).createShader(ctaFrame));
+      ..shader = const LinearGradient(colors: [white, neon, Color(0xFF008BFF), neon]).createShader(ctaFrame));
     final footerY = story ? 1708.0 : 1015.0;
     _promoText(canvas, 'Tu conductor de confianza, a un toque.', 120,
       footerY, 840, story ? 35 : 24, white,
@@ -692,7 +692,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         Paint()..shader = LinearGradient(colors: [accent, white, accent]).createShader(dash));
     }
     final lowerSweep = ui.Path()..moveTo(-40, height - 28.0)
-      ..cubicTo(280, height - 100.0, 710, height + 42.0, 1140, height - 105.0);
+      ..cubicTo(280, height - 48.0, 710, height + 42.0, 1140, height - 38.0);
     canvas.drawPath(lowerSweep, Paint()..style = PaintingStyle.stroke
       ..strokeWidth = 25..color = neon.withValues(alpha: .83)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16));
