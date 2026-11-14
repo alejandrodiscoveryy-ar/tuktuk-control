@@ -105,8 +105,7 @@ Color _promoBrandColor(String hex, Color fallback) {
 void _promoText(Canvas canvas, String value, double x, double y, double width,
     double fontSize, Color color, {bool center = false,
     FontWeight weight = FontWeight.w700, int lines = 2,
-    double? minFontSize, double letterSpacing = 0, double? boxHeight, bool italic = false,
-    ui.Shader? shader, List<Shadow>? shadows}) {
+    double? minFontSize, double? boxHeight, List<Shadow>? shadows}) {
   final painter = TextPainter(
     textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
@@ -115,10 +114,8 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   var size = fontSize;
   while (true) {
     painter.text = TextSpan(text: value, style: TextStyle(
-      color: shader == null ? color : null,
-      foreground: shader == null ? null : (Paint()..shader = shader),
-      shadows: shadows, fontFamily: 'ImpulsaMontserrat', fontSize: size, fontWeight: weight, height: 1.10,
-      letterSpacing: letterSpacing, fontStyle: italic ? FontStyle.italic : FontStyle.normal));
+      color: color, shadows: shadows, fontFamily: 'ImpulsaMontserrat',
+      fontSize: size, fontWeight: weight, height: 1.10));
     painter.layout(minWidth: width, maxWidth: width);
     if (!painter.didExceedMaxLines || minFontSize == null || size <= minFontSize) {
       break;
@@ -139,7 +136,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   final gap = identityVerified ? 12.0 : 0.0;
   final painter = TextPainter(textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
-    maxLines: 2, ellipsis: '…');
+    );
   var size = fontSize;
   final available = area.width - badgeSize - gap;
   while (true) {
@@ -147,10 +144,9 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
       color: Colors.white, fontFamily: 'ImpulsaMontserrat', fontSize: size, fontWeight: FontWeight.w800,
       height: 1.06, letterSpacing: -1.3));
     painter.layout(maxWidth: available);
-    if ((!painter.didExceedMaxLines && painter.height <= area.height) || size <= minFontSize) {
-      break;
-    }
-    size = max(minFontSize, size - 2);
+    if (painter.height <= area.height || size <= 12) break;
+    // Fit even unusually long legal names without truncating them.
+    size = max(12.0, size - (size > minFontSize ? 2 : 1));
   }
   final total = painter.width + gap + badgeSize;
   final x = center ? area.left + (area.width - total) / 2 : area.left;
