@@ -2,6 +2,7 @@ part of '../main.dart';
 
 String marketplaceAcceptErrorMessage(Object error) {
   final code = error.toString().toUpperCase();
+  if (code.contains('MARKETPLACE_DEBT_PENDING')) return 'Liquida la deuda de tu primera carrera antes de aceptar otra. Recarga tu billetera.';
   if (code.contains('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE')) {
     return 'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.';
   }
@@ -1744,7 +1745,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _acceptJob(MarketplaceAvailableJob job) async {
     final vehicleId = _selectedVehicleId;
 
-    if (vehicleId == null || _acceptingJobId != null) return;
+    if (vehicleId == null || _acceptingJobId != null || job.canAccept==false) return;
 
     setState(() => _acceptingJobId = job.id);
 
@@ -1752,6 +1753,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _acceptKeys[job.id] = key;
 
     try {
+      if(job.usesInitialCredit){
+        final confirmed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Primera carrera a crédito'),content:Text('Comisión: ${_marketplaceMoneyLabel(job.commissionAmount!,job.currency)}. Si no recargas durante el viaje, quedarás con una deuda de ${_marketplaceMoneyLabel(job.missingBalance!,job.currency)}. Deberás liquidarla antes de aceptar otra carrera. ¿Aceptas?'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Volver')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Aceptar a crédito'))]));
+        if(confirmed!=true||!mounted)return;
+      }
       if (_marketplaceJobStartsNow(job)) {
         await _service.acceptAndStart(job.id, vehicleId, key);
       } else {
@@ -4885,6 +4890,9 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             key: ValueKey('work-map-offer-payment-${job.id}'),
             method: job.ridePaymentMethod,
           ),
+          if(job.commissionAmount!=null) Padding(padding:const EdgeInsets.only(top:6),child:Text('Comisión ${((job.commissionRate??0)*100).toStringAsFixed(0)}% · ${_marketplaceMoneyLabel(job.commissionAmount!,job.currency)} | Neto: ${_marketplaceMoneyLabel(job.finalPrice-job.commissionAmount!,job.currency)}',style:const TextStyle(fontSize:12,color:Color(0xFFADC8D2)))),
+          if(job.usesInitialCredit) Padding(padding:const EdgeInsets.only(top:4),child:Text('Crédito inicial · deuda prevista: ${_marketplaceMoneyLabel(job.missingBalance!,job.currency)}',style:const TextStyle(fontSize:12,color:Colors.amber))),
+          if(job.canAccept==false) const Padding(padding:EdgeInsets.only(top:4),child:Text('Revisa tu saldo o deuda en Billetera antes de aceptar.',style:TextStyle(fontSize:12,color:Colors.amber))),
           const Divider(height: 16),
           Flexible(
             fit: FlexFit.loose,
@@ -4936,7 +4944,7 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             height: 48,
             child: FilledButton.icon(
               key: ValueKey('work-map-offer-accept-${job.id}'),
-              onPressed: widget.acceptanceLocked && !widget.accepting
+              onPressed: job.canAccept==false || (widget.acceptanceLocked && !widget.accepting)
                   ? null
                   : widget.onAccept,
               icon: widget.accepting

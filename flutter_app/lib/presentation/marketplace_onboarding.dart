@@ -369,6 +369,10 @@ class _MarketplaceOnboardingScreenState
   String? _vehicleCreateName;
 
   MarketplaceWallet? _wallet;
+  MarketplaceWalletTransition? _walletTransition;
+  String? _walletTransitionUser;
+  bool _withdrawalBusy = false;
+  final Map<String,String> _withdrawalKeys = {};
   bool _walletLoading = false;
   String? _walletError;
   List<MarketplaceTopup> _topups = const [];
@@ -1253,6 +1257,7 @@ class _MarketplaceOnboardingScreenState
 
       setState(() {
         _wallet = _previewWallet();
+        _walletTransition = null;
         _walletLoading = false;
         _walletError = null;
       });
@@ -1268,12 +1273,16 @@ class _MarketplaceOnboardingScreenState
     }
 
     try {
+      final userId = widget.store.user?.id;
       final wallet = await _service.wallet();
-
-      if (!mounted) return;
+      MarketplaceWalletTransition? transition;
+      try { transition = await _service.walletTransition(); } catch (_) { /* The old wallet remains available during a staged server deployment. */ }
+      if (!mounted || widget.store.user?.id != userId) return;
 
       setState(() {
         _wallet = wallet;
+        _walletTransition = transition;
+        _walletTransitionUser = userId;
         _walletLoading = false;
         _walletError = null;
       });
@@ -1282,6 +1291,7 @@ class _MarketplaceOnboardingScreenState
 
       setState(() {
         _wallet = null;
+        _walletTransition = null;
         _walletLoading = false;
         _walletError = 'No se pudo consultar tu billetera Marketplace.';
       });
@@ -2243,9 +2253,77 @@ class _MarketplaceOnboardingScreenState
     await Future.wait([_loadWallet(), _loadTopups()]);
   }
 
+  Future<void> _requestImpulsaWithdrawal(MarketplaceWalletTransition policy) async {
+    final uid = widget.store.user?.id;
+    if (_withdrawalBusy || !policy.canWithdraw || uid == null) return;
+    setState(() => _withdrawalBusy = true);
+    try {
+      String value = policy.minimum.toStringAsFixed(2);
+      final amount = await showDialog<double>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setDialogState) {
+        final n=double.tryParse(value.replaceAll(',', '.'));
+        final valid=n!=null && n.isFinite && n>=policy.minimum && n<=policy.available && (n*100-(n*100).round()).abs()<0.000001;
+        return AlertDialog(title: const Text('Retirar ganancias Impulsa'), content: Column(mainAxisSize:MainAxisSize.min,children:[
+          Text('Disponible: ${_marketplaceMoneyLabel(policy.available,'CUP')}. Mínimo: ${_marketplaceMoneyLabel(policy.minimum,'CUP')}. El importe se reserva hasta que la administración confirme el pago externo.'),
+          const SizedBox(height:12),
+          TextFormField(initialValue:value, keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Importe CUP'),onChanged:(v)=>setDialogState(()=>value=v)),
+        ]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancelar')),FilledButton(onPressed:valid?()=>Navigator.pop(ctx,n):null,child:const Text('Solicitar retirada'))]);
+      }));
+      if(amount==null || !mounted || widget.store.user?.id!=uid)return;
+      final fingerprint='request:$uid:${amount.toStringAsFixed(2)}';
+      final key=_withdrawalKeys.putIfAbsent(fingerprint,_marketplaceUuidV4);
+      await _service.requestImpulsaWithdrawal(amount,key);
+      _withdrawalKeys.remove(fingerprint);
+      if(mounted && widget.store.user?.id==uid)toast(context,'Solicitud registrada. El importe queda reservado.');
+    } catch (_) { if(mounted && widget.store.user?.id==uid)toast(context,'No se pudo confirmar la solicitud. Consulta tu billetera antes de reintentar.'); }
+    finally { if(mounted){setState(()=>_withdrawalBusy=false);if(widget.store.user?.id==uid)await _loadWallet();} }
+  }
+
+  Future<void> _cancelImpulsaWithdrawal(MarketplaceImpulsaWithdrawal request) async {
+    final uid=widget.store.user?.id;
+    if(_withdrawalBusy||uid==null)return;
+    setState(()=>_withdrawalBusy=true);
+    try {
+      final confirmed=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Cancelar retirada'),content:const Text('El saldo reservado volverá a estar disponible si todavía no se ha pagado.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Volver')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Cancelar solicitud'))]));
+      if(confirmed!=true||!mounted||widget.store.user?.id!=uid)return;
+      final fingerprint='cancel:$uid:${request.id}';
+      final key=_withdrawalKeys.putIfAbsent(fingerprint,_marketplaceUuidV4);
+      await _service.cancelImpulsaWithdrawal(request.id,key);
+      _withdrawalKeys.remove(fingerprint);
+      if(mounted&&widget.store.user?.id==uid)toast(context,'Solicitud cancelada.');
+    }catch(_){if(mounted&&widget.store.user?.id==uid)toast(context,'No se pudo confirmar la cancelación.');}
+    finally{if(mounted){setState(()=>_withdrawalBusy=false);if(widget.store.user?.id==uid)await _loadWallet();}}
+  }
+
+  Widget _buildImpulsaWallet(BuildContext context,MarketplaceWalletTransition policy) {
+    String money(double value)=>_marketplaceMoneyLabel(value,'CUP');
+    return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const SizedBox(height:12),
+      if(policy.debt>0) Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:Colors.red.withValues(alpha:.12),borderRadius:BorderRadius.circular(14)),child:Text('Deuda pendiente: ${money(policy.debt)}. Recarga para liquidarla antes de aceptar otra carrera. Las ganancias Impulsa también pueden cubrirla.',style:const TextStyle(fontWeight:FontWeight.w800))),
+      if(policy.creditAvailable) Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text('Primera carrera a crédito disponible · hasta ${money(policy.creditLimit)} de deuda. Solo una vez.')),
+      const SizedBox(height:8),
+      _walletValue(context,'Recargas personales',money(policy.cash)),
+      const SizedBox(height:8),
+      _walletValue(context,'Bonos por referidos · no retirables',money(policy.promo)),
+      const SizedBox(height:8),
+      _walletValue(context,'Ganancias Impulsa disponibles',money(policy.available),emphasize:true),
+      const SizedBox(height:8),
+      Text('Ganancias totales: ${money(policy.impulsa)} · Retirada reservada: ${money(policy.reserved)}',style:TextStyle(color:appMutedColor(context),fontSize:12)),
+      const SizedBox(height:8),
+      if(policy.minimum>0) LinearProgressIndicator(value:(policy.available/policy.minimum).clamp(0.0,1.0).toDouble()),
+      const SizedBox(height:6),
+      Text('Retirada mínima: ${money(policy.minimum)}. Solo ganancias comerciales disponibles; no recargas ni bonos.'),
+      if(policy.reversalPending)const Text('Hay una corrección pendiente de ganancias.'),
+      const SizedBox(height:8),
+      FilledButton.icon(onPressed:policy.canWithdraw&&!_withdrawalBusy?()=>_requestImpulsaWithdrawal(policy):null,icon:const Icon(Icons.payments_outlined),label:const Text('Solicitar retirada')),
+      if(!policy.withdrawalsEnabled)const Text('Las retiradas están desactivadas por administración.'),
+      for(final request in policy.withdrawals) ListTile(contentPadding:EdgeInsets.zero,title:Text(money(request.amount)),subtitle:Text(switch(request.status){'requested'=>'Pendiente de pago','paid'=>'Pagada','rejected'=>'Rechazada','cancelled'=>'Cancelada',_=>request.status}),trailing:request.status=='requested'?TextButton(onPressed:_withdrawalBusy?null:()=>_cancelImpulsaWithdrawal(request),child:const Text('Cancelar')):null),
+    ]);
+  }
+
   Widget _buildWalletCard(BuildContext context) {
     final wallet = _wallet;
     final access = _access;
+    final transition = _walletTransitionUser==widget.store.user?.id?_walletTransition:null;
 
     return GlassCard(
       child: Column(
@@ -2265,9 +2343,7 @@ class _MarketplaceOnboardingScreenState
           ),
           const SizedBox(height: 8),
           Text(
-            'La billetera se usa para cubrir las comisiones de Trabajos cuando '
-            'la promoción inicial ya terminó. Control y Estadísticas siguen '
-            'disponibles independientemente de este saldo.',
+            transition?.active==true ? 'Comisiones, recargas, referidos y ganancias Impulsa en tu billetera.': 'La billetera se usa para cubrir las comisiones de Trabajos cuando la promoción inicial ya terminó. Control y Estadísticas siguen disponibles independientemente de este saldo.',
             style: TextStyle(color: appMutedColor(context), height: 1.35),
           ),
           const SizedBox(height: 14),
@@ -2323,7 +2399,7 @@ class _MarketplaceOnboardingScreenState
                 ),
               ],
             ),
-            if (wallet.realBalance != null &&
+            if (transition?.active==true) _buildImpulsaWallet(context,transition!) else if (wallet.realBalance != null &&
                 wallet.promotionalBalance != null &&
                 wallet.realAvailableBalance != null &&
                 wallet.promotionalAvailableBalance != null) ...[
@@ -2388,7 +2464,7 @@ class _MarketplaceOnboardingScreenState
             const SizedBox(height: 10),
             _walletValue(
               context,
-              'Reservado para trabajos',
+              'Importe reservado',
               _marketplaceMoneyLabel(wallet.reservedBalance, wallet.currency),
             ),
             const SizedBox(height: 16),
@@ -2406,7 +2482,7 @@ class _MarketplaceOnboardingScreenState
               ],
             ),
             const SizedBox(height: 8),
-            if (access?.trialActive == true) ...[
+            if(transition?.active==true) ...[const Text('Las recargas liquidan primero la deuda. Después necesitas saldo suficiente para cubrir cada comisión; los bonos promocionales no se retiran.')] else if (access?.trialActive == true) ...[
               Text(
                 'Durante la promoción inicial no se reserva ni se descuenta '
                 'comisión. Puedes tener saldo en la billetera sin perder '
@@ -2422,7 +2498,7 @@ class _MarketplaceOnboardingScreenState
               ),
             ],
             const SizedBox(height: 14),
-            Text(
+            if(transition?.active!=true) Text(
               'El saldo real y el saldo promocional pueden utilizarse para '
               'cubrir comisiones. Una recarga no inicia, reinicia ni amplía '
               'la promoción.',
