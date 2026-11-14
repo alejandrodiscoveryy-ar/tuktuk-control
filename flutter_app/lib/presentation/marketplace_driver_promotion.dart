@@ -504,7 +504,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         accent.withValues(alpha: 0)]).createShader(identityRule));
 
     final servicePill = story
-      ? const Rect.fromLTWH(155, 885, 770, 108)
+      ? const Rect.fromLTWH(155, 935, 770, 108)
       : const Rect.fromLTWH(448, 540, 570, 65);
     final pill = RRect.fromRectAndRadius(servicePill, Radius.circular(servicePill.height / 2));
     canvas.drawRRect(pill, Paint()..color = accent.withValues(alpha: .50)
@@ -549,7 +549,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     // This local asset contains the original lettering, light effects,
     // pin, arrow and empty white QR well. No personal data or mock QR.
     final panel = story
-      ? const Rect.fromLTWH(40, 1060, 1000, 430)
+      ? const Rect.fromLTWH(40, 1135, 1000, 430)
       : const Rect.fromLTWH(40, 620, 1000, 405);
     final bookingData = await rootBundle.load('assets/branding/tuktuk_promo_booking.webp');
     final bookingArt = await _promoDecode(bookingData.buffer.asUint8List(
@@ -574,7 +574,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     const module = 6.0;
     final qrSize = (qr.moduleCount + 8) * module;
     const qrX = 686.0;
-    final qrY = story ? 1119.0 : 668.0;
+    final qrY = story ? 1194.0 : 668.0;
     canvas.drawRect(Rect.fromLTWH(qrX, qrY, qrSize, qrSize), Paint()..color = white);
     final dark = Paint()..color = const Color(0xFF000000)..isAntiAlias = false;
     for (var row = 0; row < qr.moduleCount; row++) {
@@ -585,7 +585,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         }
       }
     }
-    final footerY = story ? 1570.0 : 1035.0;
+    final footerY = story ? 1690.0 : 1035.0;
     _promoText(canvas, 'Tu conductor de confianza, a un toque.', 120,
       footerY, 840, story ? 35 : 24, white,
       center: true, weight: FontWeight.w700, lines: 1, minFontSize: 20, italic: true);
