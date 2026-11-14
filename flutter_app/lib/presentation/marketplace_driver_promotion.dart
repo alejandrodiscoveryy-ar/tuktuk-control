@@ -384,8 +384,8 @@ void _promoReferenceBooking(Canvas canvas, Rect area) {
   canvas.save();
   canvas.translate(area.left, area.top);
   canvas.scale(unit, unit);
-  final pinArea = const Rect.fromLTWH(15, 18, 153, 188);
-  final base = const Rect.fromLTWH(8, 167, 166, 53);
+  const pinArea = Rect.fromLTWH(15, 18, 153, 188);
+  const base = Rect.fromLTWH(8, 167, 166, 53);
   canvas.drawOval(base, Paint()..style = PaintingStyle.stroke..strokeWidth = 12
     ..color = green.withValues(alpha: .60)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
   canvas.drawOval(base, Paint()..style = PaintingStyle.stroke..strokeWidth = 8
@@ -408,7 +408,7 @@ void _promoReferenceBooking(Canvas canvas, Rect area) {
     begin: Alignment.topLeft, end: Alignment.bottomRight,
     colors: [Color(0xFFE3FFFF), cyan, Color(0xFF00A4D6)],
     stops: [0, .30, 1]).createShader(pinArea));
-  final center = const Offset(91, 80);
+  const center = Offset(91, 80);
   canvas.drawCircle(center, 32, Paint()..style = PaintingStyle.stroke..strokeWidth = 13
     ..shader = const LinearGradient(colors: [Color(0xFF84F9FF), cyan,
       Color(0xFF007EAA)]).createShader(Rect.fromCircle(center: center, radius: 32)));
@@ -680,7 +680,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     canvas.restore();
 
-    final nameArea = story ? const Rect.fromLTWH(463, 304, 559, 145)
+    final nameArea = story ? const Rect.fromLTWH(463, 304, 559, 120)
       : const Rect.fromLTWH(364, 236, 340, 108);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
       fontSize: story ? 97 : 76, minFontSize: 30, center: false,
