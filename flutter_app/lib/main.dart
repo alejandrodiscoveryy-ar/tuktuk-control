@@ -157,7 +157,7 @@ void main() async {
   final adminPromoCode = kIsWeb ? Uri.base.queryParameters['promo_card'] : null;
   if (adminPromoCode != null && RegExp(r'^[0-9a-f]{32}$').hasMatch(adminPromoCode)) {
     runApp(MaterialApp(debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(), home: MarketplaceSharedPromoCards(code: adminPromoCode)));
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF06B6D4), brightness: Brightness.dark), scaffoldBackgroundColor: const Color(0xFF101619)), home: MarketplaceSharedPromoCards(code: adminPromoCode)));
     return;
   }
   if (_marketplaceCustomerEntry) {
