@@ -28,6 +28,18 @@ void main() {
     expect(webIndex, contains('recentJobs.set(marketplaceJobId, now)'));
   });
 
+  test('recupera ofertas pendientes sin depender de FCM o un nuevo GPS', () {
+    expect(jobs, contains('const Duration(seconds: 30)'));
+    expect(jobs, contains('_recoverAvailableWhileWorking()'));
+    expect(jobs, contains('_availableRecoveryTimer?.cancel()'));
+    expect(jobs, contains('_availableRequest != null'));
+    expect(jobs, contains('_workOnboardingUserId != widget.store.user?.id'));
+    expect(jobs, contains('_recoveredOfferIds.add(job.id)'));
+    expect(jobs, contains('_alertRecoveredOffers(jobs, requestUserId)'));
+    expect(push, contains('notifyMarketplaceRecoveredWebJob(String jobId)'));
+    expect(push, contains('marketplaceJobId: jobId'));
+  });
+
   test('service worker muestra aviso de carrera distinguible', () {
     expect(worker, contains("data.kind === 'marketplace_job_available'"));
     expect(worker, contains('requireInteraction: isJob'));
