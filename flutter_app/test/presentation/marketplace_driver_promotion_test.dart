@@ -31,6 +31,27 @@ void main() {
     expect(marketplaceDriverPromoQr(code).moduleCount, 41);
   });
 
+  test('public card lookup retries a database timeout once and never retries missing profile', () async {
+    var calls = 0;
+    final profile = await loadMarketplaceSharedPromoProfile(() async {
+      calls++;
+      if (calls == 1) throw StateError('canceling statement due to statement timeout');
+      return {'data': {'public_name': 'Demo', 'verified': true, 'promo_alias': 'demo'}};
+    }, pause: (_) async {});
+    expect(calls, 2);
+    expect(profile?['promo_alias'], 'demo');
+    calls = 0;
+    expect(await loadMarketplaceSharedPromoProfile(() async {
+      calls++; return {'data': null};
+    }, pause: (_) async {}), isNull);
+    expect(calls, 1);
+    calls = 0;
+    await expectLater(loadMarketplaceSharedPromoProfile(() async {
+      calls++; throw StateError('CUSTOMER_RATE_LIMITED');
+    }, pause: (_) async {}), throwsStateError);
+    expect(calls, 1);
+  });
+
   test('commercial link is short and shared by copy and QR', () {
     final uri = marketplaceDriverPromoUri(code, alias: 'gerson');
     expect(uri.toString(), 'https://www.vrixora.com/tuk/gerson');
