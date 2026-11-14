@@ -149,19 +149,37 @@ void main() {
       iconUrl: 'https://example.com/icon.png')), isNot(original));
   });
 
-  test('approved booking asset contains no illustrative QR', () {
-    final artwork = img.decodeWebP(File('assets/branding/tuktuk_promo_booking.webp').readAsBytesSync())!;
-    expect(artwork.width, 850);
-    expect(artwork.height, 365);
-    // The reserved well must be blank; only the renderer may add a QR.
-    for (var y = 55; y < 300; y += 4) {
-      for (var x = 550; x < 795; x += 4) {
-        final p = artwork.getPixel(x, y);
-        expect(p.r, greaterThan(230));
-        expect(p.g, greaterThan(230));
-        expect(p.b, greaterThan(230));
+  test('all ten reference masters are full resolution with no sample QR or portrait', () {
+    for (final category in ['tricycle', 'light_car', 'motorcycle', 'bicitaxi', 'comfort']) {
+      for (final story in [false, true]) {
+        final asset = marketplacePromoMasterAsset(category, story: story);
+        final artwork = img.decodeWebP(File(asset).readAsBytesSync())!;
+        expect(artwork.width, 1080);
+        expect(artwork.height, story ? 1920 : 1080);
+        final x = story ? 705 : 706;
+        final y = story ? 1210 : 610;
+        // Compression can change whites by one or two values, but there
+        // must not be a single black illustrative QR module in this well.
+        for (var dy = 0; dy < (story ? 265 : 220); dy += 7) {
+          for (var dx = 0; dx < (story ? 270 : 235); dx += 7) {
+            final p = artwork.getPixel(x + dx, y + dy);
+            expect(p.r, greaterThan(230), reason: '$category $story $dx,$dy');
+            expect(p.g, greaterThan(230));
+            expect(p.b, greaterThan(230));
+          }
+        }
+        // Interior of the portrait well must be uniformly blank, not
+        // contain the reference driver's portrait or any other photo.
+        for (var dy = -75; dy <= 75; dy += 15) {
+          for (var dx = -75; dx <= 75; dx += 15) {
+            final p = artwork.getPixel((story ? 258 : 201) + dx, (story ? 477 : 315) + dy);
+            expect(p.r, lessThan(20)); expect(p.g, lessThan(45)); expect(p.b, lessThan(65));
+          }
+        }
       }
     }
+    expect(marketplacePromoMasterAsset('confort', story: true),
+      marketplacePromoMasterAsset('comfort', story: true));
   });
 
   for (final story in [false, true]) {
@@ -176,8 +194,8 @@ void main() {
       final panelPixel = png.getPixel(50, story ? 1520 : 879);
       expect(panelPixel.r < 230 || panelPixel.g < 230 || panelPixel.b < 230, isTrue);
       final qr = marketplaceDriverPromoQr(code, alias: 'gerson');
-      final x = story ? 690 : 704;
-      final y = story ? 1192 : 594;
+      final x = story ? 694 : 701;
+      final y = story ? 1197 : 601;
       final module = story ? 6 : 5;
       final qrSize = (qr.moduleCount + 8) * module;
       // All four sides preserve a full four-module white quiet zone.
@@ -246,8 +264,8 @@ void main() {
           }
         }
         expect(changes, greaterThan(25), reason: category);
-        final x = story ? 690 : 704;
-        final y = story ? 1192 : 594;
+        final x = story ? 694 : 701;
+        final y = story ? 1197 : 601;
         final module = story ? 6 : 5;
         final size = (marketplaceDriverPromoQr(code).moduleCount + 8) * module;
         for (var dy = 0; dy < size; dy += module) {
@@ -270,7 +288,7 @@ void main() {
       final a = img.decodePng(await card('gerson'))!;
       final b = img.decodePng(await card('otro-conductor'))!;
       var different = 0;
-      for (var y = story ? 1530 : 889; y < (story ? 1642 : 971); y++) {
+      for (var y = story ? 1516 : 861; y < (story ? 1610 : 939); y++) {
         for (var x = 180; x < 1000; x++) {
           final p = a.getPixel(x, y), q = b.getPixel(x, y);
           if (p.r != q.r || p.g != q.g || p.b != q.b) different++;
@@ -321,31 +339,30 @@ void main() {
     expect(source, contains('loadMarketplacePromoBrandLogo(identity)'));
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
-    expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 17;'));
+    expect(source, contains('_promoFitImage(canvas, logo, logoArea)'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 18;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
     expect(source, contains('_promoVehicleWatermark(canvas, vehicleCategory, vehicleArea, accent)'));
     expect(source, contains('identityVerified, vehicleCategory'));
     expect(source, contains('Color(0xFF1D9BF0)'));
-    expect(source, contains('weight: FontWeight.w900'));
-    expect(source, contains('_promoReferenceBooking(canvas, bookingArea)'));
-    expect(source, contains('_promoLightFrame(canvas, ctaShape, neon'));
-    expect(source, contains('_promoGlossyPill(canvas, linkShape, modalityAccent)'));
+    expect(source, contains('weight: FontWeight.w800'));
+    expect(source, contains('marketplacePromoMasterAsset(category, story: story)'));
+    expect(source, contains('canvas.drawImageRect(master,'));
+    expect(source, contains('master?.dispose()'));
     expect(source, contains('painter.computeLineMetrics().last'));
-    expect(source, contains('final vehicleRibbon = ui.Path()'));
-    expect(source, contains('final bottomBand = ui.Path()'));
-    expect(source, contains('italic: true'));
-    expect(source, contains('final lowerSweep = ui.Path()'));
+    expect(source, contains("if (artworkCategory != 'tricycle')"));
+    expect(source, contains('alignment: Alignment.bottomCenter'));
+    expect(source, contains('BlendMode.dstIn'));
     expect(source, contains('final module = story ? 6.0 : 5.0;'));
     expect(source, contains('Icons.directions_car'));
     expect(source, contains('vehicleGlyph.paint'));
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
-    expect(source, contains('Rect.fromLTWH(425, 550, 600, 440)'));
-    expect(source, contains('final qrX = story ? 690.0 : 704.0;'));
+    expect(source, contains('Rect.fromLTWH(394, 552, 615, 435)'));
+    expect(source, contains('final qrX = story ? 694.0 : 701.0;'));
     expect(source, contains('identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0'));
-    expect(source, contains('Rect.fromLTWH(40, 1160, 1000, 365)'));
+    expect(source, contains('Rect.fromLTWH(232, 1516, 680, 94)'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
     expect(source, contains('_load(force: true)'));
@@ -357,14 +374,12 @@ void main() {
     expect(source, isNot(contains('Si no estoy disponible')));
     expect(source, isNot(contains('Toda una flota a tu disposición')));
     expect(source, contains('Solicita mi servicio desde este enlace:'));
-    expect(source, contains("_promoText(canvas, 'Solicita mi'"));
-    expect(source, contains("_promoText(canvas, 'servicio'"));
+    expect(source, isNot(contains("_promoText(canvas, 'Solicita mi'")));
+    expect(source, contains("fontFamily: 'ImpulsaMontserrat'"));
     expect(source, contains('rootBundle.load(artwork)'));
-    expect(source, contains('final vehicleSweep = ui.Path()'));
-    expect(source, contains('final pin = ui.Path()'));
-    expect(source, contains('final arrow = ui.Path()'));
+    expect(source, contains('final stage = story'));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));
-    expect(source, contains("'Agencia TukTuk'"));
+    expect(source, contains('official campaign lockup'));
     expect(source, isNot(contains("_promoText(canvas, 'MI TUKTUK'")));
     expect(source, contains('identity.primaryColorHex'));
     expect(source, contains('identity.secondaryColorHex'));
