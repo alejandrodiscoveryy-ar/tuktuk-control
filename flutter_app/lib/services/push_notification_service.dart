@@ -20,6 +20,20 @@ void prepareMarketplaceWebJobAlertActivation() =>
 // A voluntary audible preview: never a guarantee of background sound on Android.
 void playMarketplaceWebJobSoundTest() => playWebJobSoundTest();
 
+// Recovered offers use the same web alert path and job-id deduplication as FCM.
+void notifyMarketplaceRecoveredWebJob(String jobId) {
+  if (!kIsWeb) return;
+  if (marketplaceJobIdFromPush({
+        'kind': 'marketplace_job_available',
+        'job_id': jobId,
+      }) == null) return;
+  showWebForegroundNotification(
+    title: 'Nueva solicitud disponible',
+    body: 'Abre Trabajos para ver una solicitud disponible.',
+    marketplaceJobId: jobId,
+  );
+}
+
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukJobNotificationChannelId = 'tuktuk_nuevas_carreras_v1';
