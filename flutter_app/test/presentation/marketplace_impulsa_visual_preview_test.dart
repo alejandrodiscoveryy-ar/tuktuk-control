@@ -29,7 +29,12 @@ void main() {
         }
       });
     }
-    final logo = File('assets/branding/tuktuk_logo.png').readAsBytesSync();
+    // Never use the legacy Control asset for campaign visual review.
+    // The CI supplies the current official master icon from project branding.
+    final logoPath = Platform.environment['IMPULSA_OFFICIAL_ICON'];
+    expect(logoPath, isNotNull, reason: 'Official TukTuk master icon is required');
+    final logo = File(logoPath!).readAsBytesSync();
+    expect(img.decodeImage(logo), isNotNull);
     const identity = ProjectIdentity(
       projectId: 'impulsa-review', name: 'Agencia TukTuk',
       primaryColorHex: '#06B6D4', secondaryColorHex: '#0F172A',
