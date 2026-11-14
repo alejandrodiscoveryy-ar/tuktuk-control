@@ -1154,10 +1154,12 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
     body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List)>(
       future: _cards,
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (snapshot.hasError) {
+          return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('Perfil promocional no disponible.'),
           TextButton(onPressed: () => setState(() => _cards = _load()), child: const Text('Reintentar')),
         ]));
+        }
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final (name, square, story) = snapshot.data!;
         final link = marketplaceDriverPromoUri(widget.code).toString();
