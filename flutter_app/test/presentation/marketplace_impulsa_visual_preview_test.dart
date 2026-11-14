@@ -12,20 +12,22 @@ void main() {
     final directory = Directory(path)..createSync(recursive: true);
     final fonts = Platform.environment['IMPULSA_FONT_DIR'];
     if (fonts != null) {
-      final loader = FontLoader('Roboto');
-      for (final filename in ['Roboto-Regular.ttf', 'Roboto-Bold.ttf', 'Roboto-Medium.ttf']) {
-        final file = File('$fonts/$filename');
-        if (file.existsSync()) {
-          loader.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+      await tester.runAsync(() async {
+        final loader = FontLoader('Roboto');
+        for (final filename in ['Roboto-Regular.ttf', 'Roboto-Bold.ttf', 'Roboto-Medium.ttf']) {
+          final file = File('$fonts/$filename');
+          if (file.existsSync()) {
+            loader.addFont(Future.value(ByteData.sublistView(file.readAsBytesSync())));
+          }
         }
-      }
-      await tester.runAsync(loader.load);
-      final icons = File('$fonts/MaterialIcons-Regular.otf');
-      if (icons.existsSync()) {
-        final iconLoader = FontLoader('MaterialIcons');
-        iconLoader.addFont(Future.value(ByteData.sublistView(icons.readAsBytesSync())));
-        await tester.runAsync(iconLoader.load);
-      }
+        await loader.load();
+        final icons = File('$fonts/MaterialIcons-Regular.otf');
+        if (icons.existsSync()) {
+          final iconLoader = FontLoader('MaterialIcons');
+          iconLoader.addFont(Future.value(ByteData.sublistView(icons.readAsBytesSync())));
+          await iconLoader.load();
+        }
+      });
     }
     final logo = File('assets/branding/tuktuk_logo.png').readAsBytesSync();
     const profiles = {
