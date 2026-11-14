@@ -232,10 +232,10 @@ void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color acc
   final detail = Paint()..color = accent.withValues(alpha: .48)
     ..style = PaintingStyle.stroke..strokeWidth = 1.8
     ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-  final fill = Paint()..shader = LinearGradient(
+  final fill = Paint()..shader = const LinearGradient(
     begin: Alignment.topCenter, end: Alignment.bottomCenter,
-    colors: [const Color(0xFF168DB4), const Color(0xFF12465F), const Color(0xFF061624)],
-    stops: const [0, .36, 1],
+    colors: [Color(0xFF168DB4), Color(0xFF12465F), Color(0xFF061624)],
+    stops: [0, .36, 1],
   ).createShader(const Rect.fromLTWH(0, 0, 600, 220));
   final glow = Paint()..shader = RadialGradient(colors: [
     accent.withValues(alpha: .30), accent.withValues(alpha: 0),
@@ -244,8 +244,8 @@ void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color acc
   void wheel(double x, double y, double radius) {
     final center = Offset(x, y);
     canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF030C15));
-    canvas.drawCircle(center, radius * .78, Paint()..shader = RadialGradient(colors: [
-      const Color(0xFF9AC4D1), const Color(0xFF173849), const Color(0xFF07131D),
+    canvas.drawCircle(center, radius * .78, Paint()..shader = const RadialGradient(colors: [
+      Color(0xFF9AC4D1), Color(0xFF173849), Color(0xFF07131D),
     ]).createShader(Rect.fromCircle(center: center, radius: radius * .78)));
     for (var i = 0; i < 10; i++) {
       final a = i * pi / 5;
