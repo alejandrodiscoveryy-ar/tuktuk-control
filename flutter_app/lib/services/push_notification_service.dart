@@ -26,7 +26,9 @@ void notifyMarketplaceRecoveredWebJob(String jobId) {
   if (marketplaceJobIdFromPush({
         'kind': 'marketplace_job_available',
         'job_id': jobId,
-      }) == null) return;
+      }) == null) {
+    return;
+  }
   showWebForegroundNotification(
     title: 'Nueva solicitud disponible',
     body: 'Abre Trabajos para ver una solicitud disponible.',
