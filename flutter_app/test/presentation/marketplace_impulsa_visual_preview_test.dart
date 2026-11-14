@@ -30,6 +30,10 @@ void main() {
       });
     }
     final logo = File('assets/branding/tuktuk_logo.png').readAsBytesSync();
+    const identity = ProjectIdentity(
+      projectId: 'impulsa-review', name: 'Agencia TukTuk',
+      primaryColorHex: '#06B6D4', secondaryColorHex: '#0F172A',
+    );
     const profiles = {
       'tricycle': 'Triciclo · Carga · Mensajería · Pasajeros',
       'light_car': 'Auto · Pasajeros',
@@ -42,7 +46,7 @@ void main() {
         final bytes = await tester.runAsync(() => renderMarketplaceDriverPromoCard(
           name: 'Conductor Demo', code: '0123456789abcdef0123456789abcdef',
           modality: entry.value, story: story, logoBytes: logo,
-          identityVerified: true, vehicleCategory: entry.key));
+          identity: identity, identityVerified: true, vehicleCategory: entry.key));
         expect(bytes, isNotNull);
         final png = img.decodePng(bytes!)!;
         expect(png.width, 1080);
