@@ -368,7 +368,7 @@ void _promoGlossyPill(Canvas canvas, RRect shape, Color hue) {
   final streak = Rect.fromLTWH(rect.left + rect.width * .09, rect.top + 3,
     rect.width * .29, 3);
   canvas.drawRRect(RRect.fromRectAndRadius(streak, const Radius.circular(2)),
-    Paint()..shader = LinearGradient(colors: [Colors.transparent, Colors.white,
+    Paint()..shader = const LinearGradient(colors: [Colors.transparent, Colors.white,
       Colors.transparent]).createShader(streak));
 }
 
