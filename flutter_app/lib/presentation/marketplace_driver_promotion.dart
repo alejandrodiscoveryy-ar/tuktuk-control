@@ -360,8 +360,6 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         ? Color.lerp(primary, white, .48)!
         : primary;
     final lime = Color.lerp(primary, const Color(0xFF84FF62), .90)!;
-    const panelDark = Color(0xFF0B1C2A);
-    const panelDeep = Color(0xFF102E3B);
     // A campaign artwork, not an app screen: the dark stage, energetic
     // diagonal ribbons and a luminous portrait anchor the composition.
     canvas.drawRect(bounds, Paint()..shader = LinearGradient(
@@ -489,7 +487,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.restore();
 
     final nameArea = story ? const Rect.fromLTWH(494, 615, 530, 145)
-      : const Rect.fromLTWH(448, 350, 570, 125);
+      : const Rect.fromLTWH(448, 330, 570, 100);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
       fontSize: story ? 92 : 78, minFontSize: 32, center: false,
       identityVerified: identityVerified);
@@ -498,14 +496,14 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       : 'Conductor de la Agencia TukTuk', nameArea.left, roleY,
       nameArea.width, story ? 35 : 29, white, lines: 2,
       weight: FontWeight.w600, minFontSize: 23);
-    final identityRule = Rect.fromLTWH(nameArea.left, story ? 900 : 553, nameArea.width, 5);
+    final identityRule = Rect.fromLTWH(nameArea.left, story ? 900 : 521, nameArea.width, 5);
     canvas.drawRRect(RRect.fromRectAndRadius(identityRule, const Radius.circular(3)),
       Paint()..shader = LinearGradient(colors: [lime, accent,
         accent.withValues(alpha: 0)]).createShader(identityRule));
 
     final servicePill = story
       ? const Rect.fromLTWH(155, 957, 770, 108)
-      : const Rect.fromLTWH(448, 574, 570, 68);
+      : const Rect.fromLTWH(448, 540, 570, 65);
     final pill = RRect.fromRectAndRadius(servicePill, Radius.circular(servicePill.height / 2));
     canvas.drawRRect(pill, Paint()..shader = LinearGradient(
       colors: [lime.withValues(alpha: .33), accent.withValues(alpha: .14),
@@ -515,7 +513,25 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final miniVehicle = Rect.fromLTWH(servicePill.left + 16,
       servicePill.center.dy - servicePill.height * .31,
       servicePill.height * 1.45, servicePill.height * .62);
-    _promoVehicleWatermark(canvas, vehicleCategory, miniVehicle, white);
+    final modalityIcon = switch (vehicleCategory) {
+      'motorcycle' => Icons.two_wheeler,
+      'bicycle' || 'bicitaxi' => Icons.pedal_bike,
+      'tricycle' => Icons.electric_rickshaw,
+      'van' => Icons.airport_shuttle,
+      'truck' => Icons.local_shipping,
+      _ => Icons.directions_car,
+    };
+    final vehicleGlyph = TextPainter(
+      text: TextSpan(text: String.fromCharCode(modalityIcon.codePoint),
+        style: TextStyle(fontFamily: modalityIcon.fontFamily,
+          package: modalityIcon.fontPackage, color: white,
+          fontSize: servicePill.height * .72)),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+    vehicleGlyph.paint(canvas, Offset(
+      miniVehicle.center.dx - vehicleGlyph.width / 2,
+      miniVehicle.center.dy - vehicleGlyph.height / 2));
+    vehicleGlyph.dispose();
     final dividerX = miniVehicle.right + 14;
     canvas.drawLine(Offset(dividerX, servicePill.top + 17),
       Offset(dividerX, servicePill.bottom - 17),
@@ -525,27 +541,31 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       story ? 43 : 29, white, center: true, lines: 2, minFontSize: 23,
       boxHeight: servicePill.height, weight: FontWeight.w800);
 
-    // Glossy dark reservation panel, styled exactly like the approved concept.
+    // Use the actual approved static campaign artwork, not a redrawing.
+    // This local asset contains the original lettering, light effects,
+    // pin, arrow and empty white QR well. No personal data or mock QR.
     final panel = story
-      ? const Rect.fromLTWH(46, 1135, 988, 510)
-      : const Rect.fromLTWH(51, 662, 978, 362);
-    final panelShape = RRect.fromRectAndRadius(panel, const Radius.circular(44));
-    canvas.drawRRect(panelShape.shift(const Offset(0, 9)),
-      Paint()..color = Colors.black.withValues(alpha: .24));
-    canvas.drawRRect(panelShape, Paint()..shader = const LinearGradient(
-      begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [panelDark, panelDeep],
-    ).createShader(panel));
-    canvas.drawRRect(panelShape, Paint()..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5 ..color = accent.withValues(alpha: .85));
+      ? const Rect.fromLTWH(40, 1135, 1000, 430)
+      : const Rect.fromLTWH(40, 620, 1000, 430);
+    final bookingData = await rootBundle.load('assets/branding/tuktuk_promo_booking.webp');
+    final bookingArt = await _promoDecode(bookingData.buffer.asUint8List(
+      bookingData.offsetInBytes, bookingData.lengthInBytes));
+    try {
+      canvas.drawImageRect(bookingArt, Rect.fromLTWH(0, 0,
+        bookingArt.width.toDouble(), bookingArt.height.toDouble()), panel,
+        Paint()..filterQuality = FilterQuality.high);
+    } finally {
+      bookingArt.dispose();
+    }
+
+    // Overlay the real code in the center of the original white well.
+    // Integer modules and four full white modules of quiet zone preserve
+    // the scanner contract. The surrounding graphic is not resized with QR.
     final qr = marketplaceDriverPromoQr(code);
-    const module = 7.0;
+    const module = 6.0;
     final qrSize = (qr.moduleCount + 8) * module;
-    final qrX = story ? 655.0 : 666.0;
-    final qrY = story ? 1218.0 : 673.0;
-    final qrFrame = Rect.fromLTWH(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
-    canvas.drawRRect(RRect.fromRectAndRadius(qrFrame, const Radius.circular(18)),
-      Paint()..color = accent.withValues(alpha: .65));
+    const qrX = 686.0;
+    final qrY = story ? 1194.0 : 679.0;
     canvas.drawRect(Rect.fromLTWH(qrX, qrY, qrSize, qrSize), Paint()..color = white);
     final dark = Paint()..color = const Color(0xFF000000)..isAntiAlias = false;
     for (var row = 0; row < qr.moduleCount; row++) {
@@ -556,45 +576,9 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
         }
       }
     }
-    final pinX = story ? 143.0 : 121.0;
-    final pinY = story ? 1335.0 : 794.0;
-    final pin = ui.Path()..moveTo(pinX, pinY + 60)
-      ..cubicTo(pinX - 22, pinY + 30, pinX - 42, pinY + 3, pinX - 42, pinY - 19)
-      ..cubicTo(pinX - 42, pinY - 74, pinX + 42, pinY - 74, pinX + 42, pinY - 19)
-      ..cubicTo(pinX + 42, pinY + 3, pinX + 22, pinY + 30, pinX, pinY + 60)..close();
-    canvas.drawOval(Rect.fromCenter(center: Offset(pinX, pinY + 65),
-      width: 87, height: 30), Paint()..color = lime..style = PaintingStyle.stroke..strokeWidth = 7);
-    canvas.drawPath(pin, Paint()..color = accent..style = PaintingStyle.stroke
-      ..strokeWidth = 8..strokeJoin = StrokeJoin.round);
-    canvas.drawCircle(Offset(pinX, pinY - 19), 15, Paint()..color = accent
-      ..style = PaintingStyle.stroke..strokeWidth = 7);
-
-    final callX = story ? 215.0 : 193.0;
-    final callY = story ? 1228.0 : 722.0;
-    final callWidth = qrX - callX - 36;
-    _promoText(canvas, 'Solicita mi', callX, callY, callWidth,
-      story ? 55 : 46, white, lines: 1, minFontSize: 30, weight: FontWeight.w900);
-    _promoText(canvas, 'servicio', callX, callY + (story ? 65 : 53), callWidth,
-      story ? 77 : 65, lime, lines: 1, minFontSize: 35, weight: FontWeight.w900);
-    _promoText(canvas, 'desde este enlace', callX, callY + (story ? 154 : 128), callWidth,
-      story ? 39 : 34, white, lines: 1, minFontSize: 23, weight: FontWeight.w700);
-    final arrowY = story ? 1495.0 : 926.0;
-    final arrow = ui.Path()..moveTo(callX + 12, arrowY)
-      ..quadraticBezierTo(callX + callWidth * .50, arrowY + 65,
-        callX + callWidth - 18, arrowY + 4);
-    final arrowHead = ui.Path()..moveTo(callX + callWidth - 55, arrowY - 13)
-      ..lineTo(callX + callWidth - 18, arrowY + 4)
-      ..lineTo(callX + callWidth - 43, arrowY + 42);
-    final arrowPaint = Paint()..color = lime..style = PaintingStyle.stroke
-      ..strokeWidth = 9..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(arrow, arrowPaint);
-    canvas.drawPath(arrowHead, arrowPaint);
-    final dividerY = story ? 1205.0 : 697.0;
-    canvas.drawLine(Offset(qrX - 25, dividerY), Offset(qrX - 25, panel.bottom - 28),
-      Paint()..color = accent.withValues(alpha: .5)..strokeWidth = 2);
     _promoText(canvas, 'Tu conductor de confianza, a un toque.', 64,
-      story ? 1716 : 1041, 952, story ? 35 : 25, white,
-      center: true, weight: FontWeight.w700, lines: 1, minFontSize: 21);
+      story ? 1675 : 1052, 952, story ? 35 : 22, white,
+      center: true, weight: FontWeight.w700, lines: 1, minFontSize: 20);
     final picture = recorder.endRecording();
     try {
       final image = await picture.toImage(width, height);
@@ -616,7 +600,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 9;
+const _marketplacePromoArtworkVersion = 10;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
