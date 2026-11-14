@@ -292,6 +292,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   Timer? _operationalLocationTimer;
   Timer? _presenceHeartbeatTimer;
+  Timer? _availableRecoveryTimer;
+  String? _recoveredOffersOwnerId;
+  final Set<String> _recoveredOfferIds = <String>{};
   bool _presenceHeartbeatInFlight = false;
   StreamSubscription<Position>? _activeOperationalLocationSubscription;
   bool? _operationalLocationStreamActiveService;
@@ -339,6 +342,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _presenceHeartbeatTimer = Timer.periodic(const Duration(minutes: 2), (_) {
       unawaited(_sendPresenceHeartbeat());
     });
+    // Web fallback: recover published offers even if FCM or GPS refresh was missed.
+    if (kIsWeb) {
+      _availableRecoveryTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _recoverAvailableWhileWorking(),
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_load());
     });
@@ -349,6 +359,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     super.didUpdateWidget(oldWidget);
 
     if (!oldWidget.isVisible && widget.isVisible) {
+      if (kIsWeb) unawaited(_load(refreshHistory: false));
       _syncOperationalLocationSampling(
         immediate: true,
         requestPermission: true,
@@ -361,6 +372,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _stopOperationalLocationSampling();
     _operationalGpsReadinessTimer?.cancel();
     _presenceHeartbeatTimer?.cancel();
+    _availableRecoveryTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
@@ -1006,6 +1018,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
       configureMarketplaceWebJobAlerts(false);
       _marketplaceDriverWorking.value = false;
+      _recoveredOffersOwnerId = null;
+      _recoveredOfferIds.clear();
 
       _stopOperationalLocationSampling();
       _updateMarketplaceDriverProfileNeedsSetup(null);
@@ -1098,6 +1112,53 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
+  void _recoverAvailableWhileWorking() {
+    if (!mounted ||
+        _operationalLifecycleState != AppLifecycleState.resumed ||
+        _loading ||
+        _updatingAvailability ||
+        _loadRequest != null ||
+        _availableRequest != null ||
+        _active.isNotEmpty ||
+        _scheduled.isNotEmpty ||
+        _scopeErrors.containsKey('active') ||
+        _scopeErrors.containsKey('scheduled') ||
+        widget.store.user?.id == null ||
+        _workOnboardingUserId != widget.store.user?.id) {
+      return;
+    }
+    final vehicle = _vehicleById(_selectedVehicleId);
+    if (_vehicleReadyForWork(vehicle) &&
+        vehicle?.isAvailable == true &&
+        vehicle?.acceptingJobs == true) {
+      unawaited(_loadAvailable());
+    }
+  }
+
+  void _alertRecoveredOffers(
+    List<MarketplaceAvailableJob> jobs,
+    String? userId,
+  ) {
+    if (!kIsWeb || userId == null) return;
+    if (_recoveredOffersOwnerId != userId) {
+      _recoveredOffersOwnerId = userId;
+      _recoveredOfferIds.clear();
+    }
+    final vehicle = _vehicleById(_selectedVehicleId);
+    if (!_vehicleReadyForWork(vehicle) ||
+        vehicle?.isAvailable != true ||
+        vehicle?.acceptingJobs != true ||
+        _active.isNotEmpty ||
+        _scheduled.isNotEmpty) {
+      return;
+    }
+    for (final job in jobs) {
+      if (_recoveredOfferIds.add(job.id)) {
+        notifyMarketplaceRecoveredWebJob(job.id);
+      }
+    }
+  }
+
   Future<void>? _availableRequest;
 
   Future<void> _loadAvailable() =>
@@ -1150,9 +1211,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     try {
+      final requestUserId = widget.store.user?.id;
       final jobs = await _service.available(vehicleId);
 
-      if (!mounted || vehicleId != _selectedVehicleId) return;
+      if (!mounted ||
+          vehicleId != _selectedVehicleId ||
+          widget.store.user?.id != requestUserId) {
+        return;
+      }
 
       setState(() {
         _available = jobs;
@@ -1160,6 +1226,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       });
 
       _setMarketplaceAvailableJobCount(jobs.length);
+      _alertRecoveredOffers(jobs, requestUserId);
     } catch (_) {
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
