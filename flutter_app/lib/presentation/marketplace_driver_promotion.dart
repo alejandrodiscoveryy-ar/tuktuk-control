@@ -970,7 +970,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             icon: const Icon(Icons.share_outlined, size: 18),
             label: const Text('Compartir', textAlign: TextAlign.center),
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               minimumSize: const Size(0, 44),
             ),
           ),
@@ -981,7 +981,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             icon: const Icon(Icons.download_outlined, size: 18),
             label: const Text('Descargar', textAlign: TextAlign.center),
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               minimumSize: const Size(0, 44),
             ),
           ),
@@ -999,10 +999,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     return ListView(padding: const EdgeInsets.all(16), children: [
       Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 600),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Mi TukTuk', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          const Text('Tu conductor de confianza, a un toque.', style: TextStyle(color: kMuted)),
-          const SizedBox(height: 16),
           if (_busy) const LinearProgressIndicator(),
           if (_error != null) ...[
             Text(_error!, style: const TextStyle(color: kDanger)),
@@ -1011,7 +1007,35 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           if (!_enabled && !_busy && _error == null)
             const Text('Tu ficha estará disponible cuando la Agencia TukTuk verifique tu identidad y active Mi TukTuk desde Administración.'),
           if (_enabled) ...[
-            const SizedBox(height: 12),
+            Row(children: [
+              const Expanded(child: Text('Mis tarjetas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+              IconButton(tooltip: 'Actualizar tarjeta',
+                onPressed: _busy ? null : () => _load(force: true),
+                icon: const Icon(Icons.refresh)),
+              PopupMenuButton<String>(
+                tooltip: 'Opciones de perfil',
+                enabled: !_busy && _sameUser,
+                onSelected: (value) async {
+                  if (value != 'revoke') return;
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('¿Desactivar perfil público?'),
+                      content: const Text('Tu enlace personal dejará de estar disponible para solicitar tu servicio.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
+                        TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Desactivar')),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && mounted) await _revoke();
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'revoke', child: Text('Desactivar mi perfil público')),
+                ],
+              ),
+            ]),
+            const SizedBox(height: 8),
             if (_squareBytes != null && _storyBytes != null)
               LayoutBuilder(builder: (context, constraints) {
                 final square = _formatCard(context, story: false, ready: ready);
@@ -1031,29 +1055,42 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                 );
               }),
             if (previewReady) ...[
+              const SizedBox(height: 12),
+              Card(
+                margin: EdgeInsets.zero,
+                child: Column(children: [
+                  ListTile(
+                    leading: const Icon(Icons.link),
+                    title: const Text('Mi enlace personal'),
+                    subtitle: const Text('Toca para copiar'),
+                    trailing: IconButton(
+                      tooltip: 'Copiar enlace',
+                      onPressed: () => _copyText(marketplaceDriverPromoUri(_code!).toString()),
+                      icon: const Icon(Icons.copy_outlined),
+                    ),
+                    onTap: () => _copyText(marketplaceDriverPromoUri(_code!).toString()),
+                  ),
+                  const Divider(height: 1),
+                  ExpansionTile(
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: const Text('Mensaje para compartir'),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          SelectableText(copy),
+                          TextButton.icon(onPressed: () => _copyText(copy),
+                            icon: const Icon(Icons.copy), label: const Text('Copiar mensaje')),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ]),
+              ),
               const SizedBox(height: 8),
-              Text('Compartir incluye la tarjeta elegida, tu mensaje y el enlace personal.',
+              Text('Compartir incluye la tarjeta, el mensaje y tu enlace.',
                 style: TextStyle(color: appMutedColor(context), fontSize: 12)),
             ],
-            const SizedBox(height: 12),
-            if (previewReady) ...[
-              TextButton.icon(onPressed: () => _load(force: true),
-                icon: const Icon(Icons.refresh), label: const Text('Actualizar tarjeta')),
-              const SizedBox(height: 12),
-              const Text('Tu enlace personal', style: TextStyle(fontWeight: FontWeight.w800)),
-              SelectableText(marketplaceDriverPromoUri(_code!).toString()),
-              TextButton.icon(onPressed: ready ? () => _copyText(marketplaceDriverPromoUri(_code!).toString()) : null,
-                icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
-              const SizedBox(height: 8),
-              const Text('Mensaje para compartir', style: TextStyle(fontWeight: FontWeight.w800)),
-              SelectableText(copy),
-              TextButton.icon(onPressed: ready ? () => _copyText(copy) : null, icon: const Icon(Icons.copy),
-                label: const Text('Copiar mensaje')),
-              const Text('Si tu red social no admite compartir imagen y texto juntos, descarga la tarjeta y pega el mensaje completo en tu publicación.', style: TextStyle(color: kMuted, fontSize: 12)),
-            ],
-            const SizedBox(height: 16),
-            OutlinedButton(onPressed: _busy || !_sameUser ? null : _revoke,
-              child: const Text('Desactivar mi perfil público')),
           ],
         ]),
       )),
