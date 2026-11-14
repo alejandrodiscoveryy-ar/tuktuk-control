@@ -1,156 +1,14 @@
 part of '../main.dart';
 
+// Local, reusable illustrations extracted from the approved campaign artwork.
+// Only vehicle pixels: no reference driver's portrait, name, badge or QR.
 const _promoModalityArtwork = <String, String>{
-  'tricycle':
-    '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',
-  'motorcycle':
-    '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',
-  'bicitaxi':
-    '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'
-    'roHN0EKszRulTp87dAAA',
-  'comfort':
-    'UklGRhoFAABXRUJQVlA4IA4FAAAQGgCdASp4ADoAP0WSvVkwKaYjqRjsKgAoiWgAyYCFjbDLvhRxNwSza1sz/+2AZjILu55I/ysF'
-    'Vjgi9S0HhMpb1IuQAUtOV08VbPTHCtzS5Fcjgx5o8DeJHdSjKug4EgH1lCadUZEhm3N7ugXPm+qxlhb+jX5mZ0b6oyFimWqDfjhN'
-    'qJA/K6eqhzsiCyglzogx5Pc+VDoCXfKzOxggiacfmUUk69s23muoRCDf/vv1Mtx4vNZjr8pVQSGzin/d7enmj/jcsk+skbN39ahO'
-    'PdeNT0djewC6dkOcAP7jTFTfFom7l+Rru0glMypwNHuPjm5WBuTo7wJsxN5h/scE1LM76rBAazeqDkfUTyNG+EgJfc0Qp4BqCCGm'
-    'Th480SQDXcMHR1Toud5+ch42wzIRPRgKSXMKQhnxgZkCOyJo/GGHRXmVCz+8SMnd4SKd0Gbdc7LuB8b36qvu3QDVZyqTu+DSDudX'
-    '+Xii1VPSOPM1GZYraonxxd939X2mg4we4RcZymUgnatFoBf58mbAqwV19H9t3MJv3OMH+3YUvdoPnh1RZCuh4ZYKBGj/6vR0Qq/E'
-    '7jJN6WSP8jegeIijgJvZgTKjk7rWwZ4BczcQo7MdzJ3RTzpGNITluP2n2PNcT8LSVvRcPkB4C4idODuKdKKrvsYvHrKTyS7J8P2A'
-    'JdkNj3arRPAM2btm/FU6Rjhy4/MpGK0DXrNfW5ooOtheZb01uJy65FvcvHe8BO+t8AHLq1Wa8iXo03C7TkHV15B0xmhUkcWVrX/w'
-    '2bITj6CLLaqDjTF+FvT/NVINcH9+/g8aajPE3TkU5CY1+7mEF5NZiGn4vmRB0QZb2OVgUXLiz6FdkuNA8hB8Q0wbnnkV56LzGCsP'
-    'xHylARFqSbO2TUk9506ZnfmIGFlsT/g6/Mudn0I0ub5Z3CiPu7ff539PMwHW4pcw2rkhJ6HpZQjhIhXWtKOU0FoWZtcqaCITyeX7'
-    'a0FLCVkx6gO4hfVo9wiku0dNvW2Apk89XwP0gqRwCpHYTAsaelO2noguk0AfimaAhqQd3AdVEuwEOzcpoyLQCRNLz+ynrBUjA2C+'
-    'fSSWWTwpp1U/2sFvSiy5bvInnIq2a3Pga9jmYt1ToqGmgDNFXX31t9Jqmu9mYDa2nE/lhksZga5AS1IxeQaJ8qnbBdqqK5miqU6H'
-    'O7egHhcYdHHRKRQAxsybisJ3dZs3lW3H5D/ibNO5P8mShB6MHNWc+izYoPIbF8yMc4Jg7pfIz7wjJYP+aU9U3cHHmd0Eex6zepPh'
-    'uvGNTa65vUC8zzM73SqPBqLGgIBfQOJpbV6dISVIEU3YhXmb+bMPZmvlTYhQJSOWfAhckuA2TbhSKUZuFfAZVcFMlxzr2ZJXmXPQ'
-    'Yq1Zagw606VKZDDbtV+CLnz43/5tCW38VMuEZA5egW27rMo59brTph3+rzBhIGmOak6jRCPBZd61R8hshDfhjE5fqExAKkPhs3vM'
-    'HnRJ9fALUCFzpjGuPX7sKbHAQKFGmHgUF+PMU3b19m2KuAYOdCVI5kV7e7N+WZzFLN4lljJtJopdM3oocpCV3iZoZJnXKEKjfj4M'
-    '2saJKwXsuR/6u7L9LDJgLuls04AqIaUVBW3YCLS/vc5mTi3fR+oG9gy1kW46rrgt+SNnX3z9IZ0rz63rxH/BwJPAOSyEuD/AwypW'
-    '3BRA0vqfcRdRzg6uchLaWw4I4Qzz8H0AdHaJDaVxspB/xbajQgAA',
+  'tricycle': 'assets/branding/impulsa/tricycle.webp',
+  'light_car': 'assets/branding/impulsa/light_car.webp',
+  'motorcycle': 'assets/branding/impulsa/motorcycle.webp',
+  'comfort': 'assets/branding/impulsa/comfort.webp',
+  'bicitaxi': 'assets/branding/impulsa/bicitaxi.webp',
 };
-
-
-
-// Cropped car artwork from the approved campaign, local and reusable.
-const _promoApprovedCarArtwork =
-    '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'
-    'iEIgKZ2gQhUKhuqEKCxVO1KEK1MX/9k=';
 
 /// Same URL for the copy, PNG QR and customer entry. Never use a driver UUID.
 Uri marketplaceDriverPromoUri(String code) {
@@ -246,7 +104,7 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   var size = fontSize;
   while (true) {
     painter.text = TextSpan(text: value, style: TextStyle(color: color,
-      fontSize: size, fontWeight: weight, height: 1.10,
+      fontFamily: 'Roboto', fontSize: size, fontWeight: weight, height: 1.10,
       letterSpacing: letterSpacing, fontStyle: italic ? FontStyle.italic : FontStyle.normal));
     painter.layout(minWidth: width, maxWidth: width);
     if (!painter.didExceedMaxLines || minFontSize == null || size <= minFontSize) {
@@ -264,7 +122,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   required double fontSize, required double minFontSize, required bool center,
   required bool identityVerified,
 }) {
-  final badgeSize = identityVerified ? 76.0 : 0.0;
+  final badgeSize = identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0;
   final gap = identityVerified ? 16.0 : 0.0;
   final painter = TextPainter(textDirection: ui.TextDirection.ltr,
     textAlign: center ? TextAlign.center : TextAlign.left,
@@ -273,7 +131,7 @@ double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   final available = area.width - badgeSize - gap;
   while (true) {
     painter.text = TextSpan(text: name, style: TextStyle(
-      color: Colors.white, fontSize: size, fontWeight: FontWeight.w900,
+      color: Colors.white, fontFamily: 'Roboto', fontSize: size, fontWeight: FontWeight.w900,
       height: 1.10, letterSpacing: -1.8));
     painter.layout(maxWidth: available);
     if ((!painter.didExceedMaxLines && painter.height <= area.height) || size <= minFontSize) {
@@ -557,37 +415,51 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     canvas.drawRRect(RRect.fromRectAndRadius(brandRule, const Radius.circular(4)),
       Paint()..color = accent.withValues(alpha: .65)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9));
     final vehicleArea = story
-      ? const Rect.fromLTWH(520, 240, 540, 340)
-      : const Rect.fromLTWH(590, 195, 470, 200);
+      ? const Rect.fromLTWH(525, 250, 520, 345)
+      : const Rect.fromLTWH(650, 184, 400, 330);
+    final vehicleGlow = vehicleArea.inflate(75);
+    canvas.drawOval(vehicleGlow, Paint()..shader = RadialGradient(colors: [
+      modalityAccent.withValues(alpha: .32), modalityAccent.withValues(alpha: 0),
+    ]).createShader(vehicleGlow));
+    // The modality-colored sweep follows the approved campaign composition.
+    final vehicleSweep = ui.Path()
+      ..moveTo(vehicleArea.left - 110, vehicleArea.bottom - 30)
+      ..cubicTo(vehicleArea.left + 80, vehicleArea.top + 25,
+        vehicleArea.right - 90, vehicleArea.top + 20,
+        vehicleArea.right + 100, vehicleArea.top - 55);
+    canvas.drawPath(vehicleSweep, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 27..strokeCap = StrokeCap.round
+      ..color = modalityAccent.withValues(alpha: .24)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 19));
+    canvas.drawPath(vehicleSweep, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 5..strokeCap = StrokeCap.round
+      ..shader = LinearGradient(colors: [modalityAccent.withValues(alpha: 0),
+        modalityAccent, white.withValues(alpha: .8), modalityAccent])
+        .createShader(vehicleGlow));
+    final ground = Rect.fromLTWH(vehicleArea.left + 8,
+      vehicleArea.bottom - 20, vehicleArea.width - 16, 34);
+    canvas.drawOval(ground, Paint()..color = const Color(0xFF000810)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+    canvas.drawOval(ground.inflate(7), Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = 3..color = modalityAccent.withValues(alpha: .75)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
     final artwork = _promoModalityArtwork[artworkCategory];
-    if (vehicleCategory == 'light_car' || artwork != null) {
-      // The original approved car illustration, with its edges faded into
-      // the campaign background. The original personal portrait, badge,
-      // wordmark and QR are NOT baked into this asset.
-      final car = await _promoDecode(base64Decode(artwork ?? _promoApprovedCarArtwork));
+    if (artwork != null) {
+      final asset = await rootBundle.load(artwork);
+      final vehicle = await _promoDecode(asset.buffer.asUint8List(
+        asset.offsetInBytes, asset.lengthInBytes));
       try {
-        canvas.saveLayer(vehicleArea, Paint());
-        _promoFitImage(canvas, car, vehicleArea, cover: false);
-        canvas.drawRect(vehicleArea, Paint()..blendMode = BlendMode.dstIn
-          ..shader = const LinearGradient(begin: Alignment.topCenter,
-            end: Alignment.bottomCenter, colors: [Colors.transparent,
-              Colors.white, Colors.white, Colors.transparent],
-            stops: [0, .05, .82, 1]).createShader(vehicleArea));
-        canvas.drawRect(vehicleArea, Paint()..blendMode = BlendMode.dstIn
-          ..shader = const LinearGradient(colors: [Colors.transparent,
-            Colors.white, Colors.white, Colors.transparent],
-            stops: [0, .12, .92, 1]).createShader(vehicleArea));
-        canvas.restore();
+        _promoFitImage(canvas, vehicle, vehicleArea);
       } finally {
-        car.dispose();
+        vehicle.dispose();
       }
     } else {
       _promoVehicleWatermark(canvas, vehicleCategory, vehicleArea, accent);
     }
 
     final photoRect = story
-        ? const Rect.fromLTWH(65, 365, 400, 400)
-        : const Rect.fromLTWH(66, 236, 350, 350);
+        ? const Rect.fromLTWH(65, 365, 370, 370)
+        : const Rect.fromLTWH(66, 220, 310, 310);
     final photoRadius = photoRect.width / 2;
     final portraitGlow = Rect.fromCircle(center: photoRect.center, radius: photoRadius + 47);
     canvas.drawCircle(photoRect.center, photoRadius + 47,
@@ -619,32 +491,33 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     }
     canvas.restore();
 
-    final nameArea = story ? const Rect.fromLTWH(494, 570, 530, 145)
-      : const Rect.fromLTWH(448, 330, 570, 100);
+    final nameArea = story ? const Rect.fromLTWH(465, 590, 555, 145)
+      : const Rect.fromLTWH(400, 318, 305, 110);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
-      fontSize: story ? 92 : 78, minFontSize: 32, center: false,
+      fontSize: story ? 88 : 64, minFontSize: 32, center: false,
       identityVerified: identityVerified);
     final roleY = nameBottom + 10;
     _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
       : 'Conductor de la Agencia TukTuk', nameArea.left, roleY,
-      nameArea.width, story ? 35 : 29, white, lines: 2,
+      nameArea.width, story ? 35 : 25, white, lines: 2,
       weight: FontWeight.w600, minFontSize: 23);
-    final identityRule = Rect.fromLTWH(nameArea.left, story ? 825 : 521, nameArea.width, 5);
+    final identityRule = Rect.fromLTWH(nameArea.left, story ? 825 : 515, story ? nameArea.width : 620, 5);
     canvas.drawRRect(RRect.fromRectAndRadius(identityRule, const Radius.circular(3)),
       Paint()..shader = LinearGradient(colors: [lime, accent,
         accent.withValues(alpha: 0)]).createShader(identityRule));
 
     final servicePill = story
       ? const Rect.fromLTWH(155, 935, 770, 108)
-      : const Rect.fromLTWH(448, 540, 570, 65);
+      : const Rect.fromLTWH(145, 538, 790, 70);
     final pill = RRect.fromRectAndRadius(servicePill, Radius.circular(servicePill.height / 2));
     canvas.drawRRect(pill, Paint()..color = modalityAccent.withValues(alpha: .50)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
     canvas.drawRRect(pill, Paint()..shader = LinearGradient(
-      colors: [modalityAccent.withValues(alpha: .68), modalityAccent.withValues(alpha: .19),
-        const Color(0xFF0A2635)]).createShader(servicePill));
+      colors: [modalityAccent.withValues(alpha: .86),
+        Color.lerp(modalityAccent, const Color(0xFF071C29), .52)!,
+        Color.lerp(modalityAccent, const Color(0xFF071C29), .78)!]).createShader(servicePill));
     canvas.drawRRect(pill, Paint()..style = PaintingStyle.stroke
-      ..strokeWidth = 3 ..color = modalityAccent);
+      ..strokeWidth = 4 ..color = modalityAccent);
     final miniVehicle = Rect.fromLTWH(servicePill.left + 16,
       servicePill.center.dy - servicePill.height * .31,
       servicePill.height * 1.45, servicePill.height * .62);
@@ -674,7 +547,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
       Paint()..color = modalityAccent..strokeWidth = 2);
     _promoText(canvas, modality, dividerX + 17,
       servicePill.top, servicePill.right - dividerX - 30,
-      story ? 43 : 29, white, center: true, lines: 2, minFontSize: 23,
+      story ? 43 : 32, white, center: true, lines: 2, minFontSize: 23,
       boxHeight: servicePill.height, weight: FontWeight.w800);
 
     // Use the actual approved static campaign artwork, not a redrawing.
@@ -734,6 +607,11 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
           primary.withValues(alpha: .08), accent, primary.withValues(alpha: .35),
         ]).createShader(bounds));
     }
+    canvas.drawRRect(RRect.fromRectAndRadius(
+      Rect.fromLTWH(4, 4, width - 8.0, height - 8.0), const Radius.circular(32)),
+      Paint()..style = PaintingStyle.stroke..strokeWidth = 3
+      ..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [accent, accent.withValues(alpha: .18), accent]).createShader(bounds));
     final picture = recorder.endRecording();
     try {
       final image = await picture.toImage(width, height);
@@ -755,7 +633,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 13;
+const _marketplacePromoArtworkVersion = 14;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,

@@ -269,7 +269,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 13;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 14;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
@@ -286,9 +286,9 @@ void main() {
     expect(source, contains('Icons.directions_car'));
     expect(source, contains('vehicleGlyph.paint'));
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
-    expect(source, contains('Rect.fromLTWH(520, 240, 540, 340)'));
+    expect(source, contains('Rect.fromLTWH(525, 250, 520, 345)'));
     expect(source, contains('const qrX = 686.0;'));
-    expect(source, contains('identityVerified ? 76.0 : 0.0'));
+    expect(source, contains('identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0'));
     expect(source, contains('Rect.fromLTWH(40, 1135, 1000, 430)'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
@@ -303,8 +303,8 @@ void main() {
     expect(source, contains('Solicita mi servicio desde este enlace:'));
     expect(source, isNot(contains("_promoText(canvas, 'Solicita mi'")));
     expect(source, isNot(contains("_promoText(canvas, 'servicio'")));
-    expect(source, contains('base64Decode(artwork ?? _promoApprovedCarArtwork)'));
-    expect(source, contains('BlendMode.dstIn'));
+    expect(source, contains('rootBundle.load(artwork)'));
+    expect(source, contains('final vehicleSweep = ui.Path()'));
     expect(source, isNot(contains('final pin = ui.Path()')));
     expect(source, isNot(contains('final arrowHead = ui.Path()')));
     expect(source, contains("'Conductor de la Agencia TukTuk'"));

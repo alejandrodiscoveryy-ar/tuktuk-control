@@ -42,6 +42,7 @@ flutter:
     - assets/branding/tuktuk_logo_transparent.png
     - assets/branding/tuktuk_welcome.png
     - assets/branding/tuktuk_promo_booking.webp
+    - assets/branding/impulsa/
     - assets/branding/vrixora_solutions.png
     - assets/map_markers/pickup_green.png
     - assets/map_markers/destination_red.png
