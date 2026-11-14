@@ -503,7 +503,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
     final servicePill = story
       ? const Rect.fromLTWH(155, 957, 770, 108)
-      : const Rect.fromLTWH(448, 550, 570, 68);
+      : const Rect.fromLTWH(448, 540, 570, 65);
     final pill = RRect.fromRectAndRadius(servicePill, Radius.circular(servicePill.height / 2));
     canvas.drawRRect(pill, Paint()..shader = LinearGradient(
       colors: [lime.withValues(alpha: .33), accent.withValues(alpha: .14),
@@ -546,7 +546,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     // pin, arrow and empty white QR well. No personal data or mock QR.
     final panel = story
       ? const Rect.fromLTWH(40, 1135, 1000, 430)
-      : const Rect.fromLTWH(51, 630, 978, 420);
+      : const Rect.fromLTWH(40, 620, 1000, 430);
     final bookingData = await rootBundle.load('assets/branding/tuktuk_promo_booking.webp');
     final bookingArt = await _promoDecode(bookingData.buffer.asUint8List(
       bookingData.offsetInBytes, bookingData.lengthInBytes));
@@ -564,8 +564,8 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final qr = marketplaceDriverPromoQr(code);
     const module = 6.0;
     final qrSize = (qr.moduleCount + 8) * module;
-    final qrX = story ? 686.0 : 679.0;
-    final qrY = story ? 1194.0 : 684.0;
+    const qrX = 686.0;
+    final qrY = story ? 1194.0 : 679.0;
     canvas.drawRect(Rect.fromLTWH(qrX, qrY, qrSize, qrSize), Paint()..color = white);
     final dark = Paint()..color = const Color(0xFF000000)..isAntiAlias = false;
     for (var row = 0; row < qr.moduleCount; row++) {
