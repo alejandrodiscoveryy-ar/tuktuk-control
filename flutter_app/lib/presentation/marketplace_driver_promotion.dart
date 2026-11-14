@@ -1356,6 +1356,35 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
 }
 
  
+/// Retry one transient read failure, never a revoked or missing profile.
+/// The callback returns the existing gateway JSON envelope.
+Future<Map<String, dynamic>?> loadMarketplaceSharedPromoProfile(
+  Future<dynamic> Function() request, {Future<void> Function(Duration)? pause}) async {
+  for (var attempt = 0; attempt < 2; attempt++) {
+    try {
+      final envelope = await request().timeout(const Duration(seconds: 22));
+      if (envelope is! Map) throw StateError('PROMO_RESPONSE_INVALID');
+      if (envelope['error'] != null) throw StateError(envelope['error'].toString());
+      final raw = envelope['data'];
+      if (raw == null) return null;
+      if (raw is! Map) throw StateError('PROMO_RESPONSE_INVALID');
+      return Map<String, dynamic>.from(raw);
+    } catch (error) {
+      final detail = error is FunctionException ? error.details : error;
+      final message = detail.toString().toLowerCase();
+      final retryable = error is TimeoutException ||
+        (error is FunctionException && error.status >= 500) ||
+        message.contains('statement timeout') ||
+        message.contains('connection timeout') ||
+        message.contains('failed to fetch') ||
+        message.contains('networkerror');
+      if (!retryable || attempt == 1) rethrow;
+      await (pause ?? Future<void>.delayed)(const Duration(milliseconds: 800));
+    }
+  }
+  throw StateError('PROMO_RESPONSE_INVALID');
+}
+
 /// Public, consented artwork only. The same renderer is used by Mi TukTuk.
 class MarketplaceSharedPromoCards extends StatefulWidget {
   const MarketplaceSharedPromoCards({required this.code, super.key});
@@ -1374,11 +1403,12 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
 
   Future<(String, Uint8List, Uint8List, String)> _load() async {
     final client = Supabase.instance.client;
-    final response = await client.functions.invoke('marketplace-customer-gateway',
-      body: {'operation': 'promo_profile', 'params': {'target_code': widget.code}});
-    final envelope = response.data;
-    final raw = envelope is Map ? envelope['data'] : null;
-    if (raw is! Map || raw['verified'] != true ||
+    final raw = await loadMarketplaceSharedPromoProfile(() async {
+      final response = await client.functions.invoke('marketplace-customer-gateway',
+        body: {'operation': 'promo_profile', 'params': {'target_code': widget.code}});
+      return response.data;
+    });
+    if (raw == null || raw['verified'] != true ||
         raw['public_name'] is! String || raw['category_code'] is! String ||
         raw['service_codes'] is! List) {
       throw StateError('PROMO_UNAVAILABLE');
@@ -1416,7 +1446,11 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Perfil promocional no disponible.'),
+          Text(snapshot.error is StateError &&
+            (snapshot.error as StateError).message == 'PROMO_UNAVAILABLE'
+            ? 'Perfil promocional no disponible.'
+            : 'No se pudieron cargar las tarjetas en este momento. Intenta nuevamente.',
+            textAlign: TextAlign.center),
           TextButton(onPressed: () => setState(() => _cards = _load()), child: const Text('Reintentar')),
         ]));
         }
