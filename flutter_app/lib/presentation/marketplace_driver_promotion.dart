@@ -226,23 +226,32 @@ void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color acc
   canvas.save();
   canvas.translate(area.left, area.top);
   canvas.scale(area.width / 600, area.height / 220);
-  final stroke = Paint()..color = accent.withValues(alpha: .40)
+  final stroke = Paint()..color = accent.withValues(alpha: .75)
     ..style = PaintingStyle.stroke..strokeWidth = 2.4
     ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-  final detail = Paint()..color = accent.withValues(alpha: .24)
+  final detail = Paint()..color = accent.withValues(alpha: .48)
     ..style = PaintingStyle.stroke..strokeWidth = 1.8
     ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
-  final fill = Paint()..shader = LinearGradient(
+  final fill = Paint()..shader = const LinearGradient(
     begin: Alignment.topCenter, end: Alignment.bottomCenter,
-    colors: [accent.withValues(alpha: .20), const Color(0xFF081D2B).withValues(alpha: .40)],
+    colors: [Color(0xFF168DB4), Color(0xFF12465F), Color(0xFF061624)],
+    stops: [0, .36, 1],
   ).createShader(const Rect.fromLTWH(0, 0, 600, 220));
   final glow = Paint()..shader = RadialGradient(colors: [
-    accent.withValues(alpha: .13), accent.withValues(alpha: 0),
+    accent.withValues(alpha: .30), accent.withValues(alpha: 0),
   ]).createShader(const Rect.fromLTWH(0, 0, 600, 220));
   canvas.drawRect(const Rect.fromLTWH(0, 0, 600, 220), glow);
   void wheel(double x, double y, double radius) {
     final center = Offset(x, y);
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF091827));
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF030C15));
+    canvas.drawCircle(center, radius * .78, Paint()..shader = const RadialGradient(colors: [
+      Color(0xFF9AC4D1), Color(0xFF173849), Color(0xFF07131D),
+    ]).createShader(Rect.fromCircle(center: center, radius: radius * .78)));
+    for (var i = 0; i < 10; i++) {
+      final a = i * pi / 5;
+      canvas.drawLine(center + Offset(cos(a), sin(a)) * radius * .18,
+        center + Offset(cos(a), sin(a)) * radius * .65, detail);
+    }
     canvas.drawCircle(center, radius, stroke);
     canvas.drawCircle(center, radius * .53, detail);
     canvas.drawCircle(center, radius * .13, Paint()..color = accent.withValues(alpha: .32));
@@ -250,6 +259,15 @@ void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color acc
   void body(ui.Path path) {
     canvas.drawPath(path, fill);
     canvas.drawPath(path, stroke);
+    canvas.save();
+    canvas.clipPath(path);
+    final b = path.getBounds();
+    canvas.drawRect(b, Paint()..shader = LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [Colors.white.withValues(alpha: .42), Colors.transparent, accent.withValues(alpha: .22)],
+      stops: const [0, .42, 1],
+    ).createShader(b));
+    canvas.restore();
   }
   void line(double x1, double y1, double x2, double y2) {
     canvas.drawLine(Offset(x1, y1), Offset(x2, y2), detail);
@@ -326,6 +344,8 @@ void _promoVehicleWatermark(Canvas canvas, String category, Rect area, Color acc
     wheel(146, 172, 40);
     wheel(463, 172, 40);
   }
+  canvas.drawOval(const Rect.fromLTWH(35, 195, 530, 20), Paint()
+    ..color = accent.withValues(alpha: .26)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 9));
   canvas.drawLine(const Offset(25, 213), const Offset(575, 213), detail);
   canvas.restore();
 }
@@ -623,7 +643,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 11;
+const _marketplacePromoArtworkVersion = 12;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,

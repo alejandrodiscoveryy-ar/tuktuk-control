@@ -266,7 +266,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('Rect.fromLTWH(72, headerY, iconSize, iconSize)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 11;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 12;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
