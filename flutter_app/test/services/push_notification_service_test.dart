@@ -19,6 +19,19 @@ void main() {
     marketplaceJobPushPending.value = false;
   });
 
+  test('cancellation refreshes the active ride without creating a new offer', () {
+    marketplaceJobPushPending.value = false;
+    final revision = marketplaceJobRefreshRequests.value;
+    handleForegroundPushData({
+      'kind': 'marketplace_job_cancelled',
+      'job_id': '12345678-1234-4123-8123-123456789012',
+    });
+    expect(marketplaceJobRefreshRequests.value, revision + 1);
+    expect(marketplaceJobPushPending.value, isFalse);
+    handleForegroundPushData({'kind': 'marketplace_job_cancelled', 'job_id': 'invalid'});
+    expect(marketplaceJobRefreshRequests.value, revision + 1);
+  });
+
   test('other or invalid pushes do not request job refresh', () {
     marketplaceJobPushPending.value = false;
     final revision = marketplaceJobRefreshRequests.value;
