@@ -4783,7 +4783,6 @@ class _CustomerServiceSpecifications extends StatelessWidget {
     this.unloadHelp = false,
     this.urgent = false,
     this.stopCount,
-    super.key,
   });
 
   final String? notes;
