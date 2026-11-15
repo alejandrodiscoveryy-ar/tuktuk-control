@@ -474,6 +474,38 @@ void main() {
     expect(find.text('Pago: Transferencia'), findsOneWidget);
   });
 
+  testWidgets('cargo requirements and customer notes are visible before and after accepting', (tester) async {
+    const id = '12345678-1234-4123-8123-123456789012';
+    const note = 'Muebles delicados. Subir a segunda planta.';
+    service.availableJobs = [
+      const MarketplaceAvailableJob(
+        id: id, serviceCode: 'cargo', finalPrice: 1500, currency: 'CUP',
+        customerNotes: note, cargoWeightKg: 150, cargoVolumeM3: 1.5,
+        loadHelp: true, unloadHelp: true, cargoLengthCm: 120,
+      ),
+    ];
+    await open(tester);
+    expect(find.text('Especificaciones del servicio'), findsOneWidget);
+    expect(find.text(note), findsOneWidget);
+    expect(find.text('Peso: 150 kg'), findsOneWidget);
+    expect(find.text('Requiere ayuda para cargar'), findsOneWidget);
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': id, 'status': 'en_route', 'service_code': 'cargo',
+        'final_price': 1500, 'currency': 'CUP',
+        'customer_notes': note, 'cargo_weight_kg': 150,
+        'cargo_volume_m3': 1.5, 'load_help': true, 'unload_help': true,
+      }),
+    ];
+    service.successfulAccept = true;
+    await tester.tap(find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012')));
+    await pumpJobs(tester);
+    expect(service.atomicAcceptCalls, 1);
+    expect(find.text(note), findsOneWidget);
+    expect(find.text('Requiere ayuda para descargar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('visual history fetches only one page', () async {
     final paged = _PagedService();
     final jobs = await paged.jobs('history');
