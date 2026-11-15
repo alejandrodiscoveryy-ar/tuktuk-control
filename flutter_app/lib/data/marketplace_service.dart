@@ -520,6 +520,11 @@ class MarketplaceAvailableJob {
     this.cargoWidthCm,
     this.cargoHeightCm,
     this.requiredBodyType,
+    this.customerNotes,
+    this.loadHelp = false,
+    this.unloadHelp = false,
+    this.urgent = false,
+    this.stopCount,
     this.publishedAt,
     this.expiresAt,
     this.createdAt,
@@ -542,6 +547,11 @@ class MarketplaceAvailableJob {
   final double? cargoWidthCm;
   final double? cargoHeightCm;
   final String? requiredBodyType;
+  final String? customerNotes;
+  final bool loadHelp;
+  final bool unloadHelp;
+  final bool urgent;
+  final int? stopCount;
   final double finalPrice;
   final String currency;
   final String? ridePaymentMethod;
@@ -585,6 +595,11 @@ class MarketplaceAvailableJob {
             ? null
             : _marketNumber(map['cargo_height_cm']),
         requiredBodyType: _marketText(map['required_body_type']),
+        customerNotes: _marketText(map['customer_notes']),
+        loadHelp: map['load_help'] == true,
+        unloadHelp: map['unload_help'] == true,
+        urgent: map['urgent'] == true,
+        stopCount: map['stop_count'] == null ? null : _marketInt(map['stop_count']),
         finalPrice: _marketNumber(map['final_price']),
         currency: _marketText(map['currency']) ?? 'CUP',
         ridePaymentMethod: marketplaceRidePaymentMethod(map['ride_payment_method']),
@@ -621,6 +636,11 @@ class MarketplaceJob {
     this.cargoWidthCm,
     this.cargoHeightCm,
     this.requiredBodyType,
+    this.customerNotes,
+    this.loadHelp = false,
+    this.unloadHelp = false,
+    this.urgent = false,
+    this.stopCount,
     this.vehicleId,
     this.commissionAmountSnapshot,
     this.trialStartedAtSnapshot,
@@ -662,6 +682,11 @@ class MarketplaceJob {
   final double? cargoWidthCm;
   final double? cargoHeightCm;
   final String? requiredBodyType;
+  final String? customerNotes;
+  final bool loadHelp;
+  final bool unloadHelp;
+  final bool urgent;
+  final int? stopCount;
   final double finalPrice;
   final String currency;
   final String? ridePaymentMethod;
@@ -743,6 +768,11 @@ class MarketplaceJob {
             ? null
             : _marketNumber(map['cargo_height_cm']),
         requiredBodyType: _marketText(map['required_body_type']),
+        customerNotes: _marketText(map['customer_notes']),
+        loadHelp: map['load_help'] == true,
+        unloadHelp: map['unload_help'] == true,
+        urgent: map['urgent'] == true,
+        stopCount: map['stop_count'] == null ? null : _marketInt(map['stop_count']),
         finalPrice: _marketNumber(map['final_price']),
         currency: _marketText(map['currency']) ?? 'CUP',
         ridePaymentMethod: marketplaceRidePaymentMethod(map['ride_payment_method']),
@@ -1342,7 +1372,7 @@ class MarketplaceService {
       }).then(MarketplaceTopup.fromMap);
 
   Future<List<MarketplaceAvailableJob>> available(String vehicleId) => _list(
-        'list_my_marketplace_available_jobs_with_payment',
+        'list_my_marketplace_available_jobs_with_details',
         {'target_vehicle_id': vehicleId},
       ).then((items) => items.map(MarketplaceAvailableJob.fromMap).toList());
 
@@ -1369,7 +1399,7 @@ class MarketplaceService {
   Future<List<MarketplaceJob>> jobsPage(String scope,
           {MarketplaceJob? before}) =>
       _list(
-        'list_my_marketplace_jobs_with_payment',
+        'list_my_marketplace_jobs_with_details',
         {
           'target_scope': scope,
           'target_limit': 50,
