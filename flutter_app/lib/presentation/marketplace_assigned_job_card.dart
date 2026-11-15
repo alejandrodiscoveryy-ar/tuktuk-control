@@ -276,14 +276,20 @@ class _AssignedJobCard extends StatelessWidget {
               ],
             ),
           ],
-          if (job.passengerCount != null) ...[
-            const SizedBox(height: 8),
-            Text('${job.passengerCount} pasajero(s)'),
-          ],
-          if (job.cargoWeightKg != null) ...[
-            const SizedBox(height: 8),
-            Text('Carga: ${job.cargoWeightKg!.toStringAsFixed(0)} kg'),
-          ],
+          _CustomerServiceSpecifications(
+            notes: job.customerNotes,
+            passengers: job.passengerCount,
+            weight: job.cargoWeightKg,
+            volume: job.cargoVolumeM3,
+            length: job.cargoLengthCm,
+            width: job.cargoWidthCm,
+            height: job.cargoHeightCm,
+            bodyType: job.requiredBodyType,
+            loadHelp: job.loadHelp,
+            unloadHelp: job.unloadHelp,
+            urgent: job.urgent,
+            stopCount: job.stopCount,
+          ),
           const SizedBox(height: 12),
           Text(
             _marketplaceJobBillingLabel(job),
