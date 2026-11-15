@@ -19,6 +19,21 @@ void main() {
     marketplaceJobPushPending.value = false;
   });
 
+  test('cancellation refreshes without triggering a new offer or its sound', () {
+    marketplaceJobPushPending.value = false;
+    final revision = marketplaceJobRefreshRequests.value;
+    const data = {
+      'kind': 'marketplace_job_cancelled',
+      'job_id': '12345678-1234-4123-8123-123456789012',
+    };
+    handleForegroundPushData(data);
+    expect(marketplaceJobPushPending.value, isFalse);
+    expect(marketplaceJobRefreshRequests.value, revision + 1);
+    expect(notificationChannelForPush(data), tuktukNotificationChannelId);
+    handleForegroundPushData({'kind': 'marketplace_job_cancelled', 'job_id': 'invalid'});
+    expect(marketplaceJobRefreshRequests.value, revision + 1);
+  });
+
   test('other or invalid pushes do not request job refresh', () {
     marketplaceJobPushPending.value = false;
     final revision = marketplaceJobRefreshRequests.value;
