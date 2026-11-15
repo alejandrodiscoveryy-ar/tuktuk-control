@@ -2142,12 +2142,36 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _cancelJob(MarketplaceJob job) async {
     if (_busyJobId != null || !_marketplaceJobCanDriverCancel(job)) return;
 
-    const reasons = [
-      'Cliente no se presentó',
+    // A no-show requires a server-recorded arrival and the configured wait.
+    // When the query is unavailable, other cancellation reasons still work.
+    Map<String, dynamic>? options;
+    if (job.status == 'pickup') {
+      setState(() => _busyJobId = job.id);
+      try {
+        options = await _service.cancellationOptions(job.id);
+      } catch (_) {
+        options = null;
+      } finally {
+        if (mounted) setState(() => _busyJobId = null);
+      }
+      if (!mounted) return;
+    }
+    final canReportNoShow = options?['can_report_no_show'] == true;
+    final remaining = options?['remaining_seconds'];
+    final noShowHint = job.status != 'pickup'
+        ? 'Para declarar que el cliente no se presentó, primero notifica tu llegada.'
+        : canReportNoShow
+            ? null
+            : remaining is num && remaining > 0
+                ? 'Espera aún ${(remaining / 60).ceil()} min antes de declarar que el cliente no se presentó. Vuelve a abrir este menú al terminar la espera.'
+                : 'No se pudo confirmar la llegada y la espera. Actualiza el servicio antes de declarar que el cliente no se presentó.';
+    final reasons = [
+      if (canReportNoShow) 'Cliente no se presentó',
       'Problema con el vehículo',
       'No puedo realizar el servicio',
       'Dirección o punto de recogida incorrecto',
       'Acuerdo con el cliente',
+      'Emergencia',
       'Otro',
     ];
 
@@ -2204,6 +2228,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                         'en el historial del servicio.',
                         style: TextStyle(color: appMutedColor(context)),
                       ),
+                      if (noShowHint != null) ...[
+                        const SizedBox(height: 8),
+                        Text(noShowHint, style: TextStyle(
+                          color: appMutedColor(context), fontSize: 12,
+                        )),
+                      ],
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
@@ -2325,13 +2355,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       await _refreshAfterJobMutation();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-
+      final code = error.toString().toUpperCase();
       toast(
         context,
-        'No se pudo cancelar el trabajo. Actualiza la sección '
-        'y vuelve a intentarlo.',
+        code.contains('NO_SHOW_REQUIRES_ARRIVAL')
+            ? 'Notifica tu llegada antes de declarar que el cliente no se presentó.'
+            : code.contains('NO_SHOW_WAIT_REQUIRED')
+                ? 'Todavía no se ha cumplido el tiempo mínimo de espera. Consulta de nuevo los motivos.'
+                : 'No se pudo cancelar el trabajo. Actualiza la sección y vuelve a intentarlo.',
       );
     } finally {
       if (mounted) {
