@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'flutter_app/lib/data/record_store.dart'
+      - 'flutter_app/lib/data/marketplace_service.dart'
+      - 'flutter_app/lib/presentation/marketplace_assigned_job_card.dart'
+      - 'flutter_app/test/domain/marketplace_models_test.dart'
       - 'flutter_app/lib/presentation/marketplace_jobs.dart'
       - 'flutter_app/lib/presentation/screens.dart'
       - 'flutter_app/lib/services/push_notification_service.dart'
@@ -39,6 +42,7 @@ jobs:
       - name: Run sync and manual record regression tests
         working-directory: flutter_app
         run: |
+          flutter test test/domain/marketplace_models_test.dart
           flutter test test/domain/marketplace_mixed_odometer_test.dart
           flutter test test/domain/sync_test.dart
           flutter test test/presentation/marketplace_records_read_only_test.dart
