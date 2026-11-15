@@ -1504,6 +1504,9 @@ class MarketplaceService {
   Future<MarketplaceDriverRatingSummary> ratingSummary() => _one(
         'get_my_marketplace_rating_summary',
       ).then(MarketplaceDriverRatingSummary.fromMap);
+  Future<Map<String, dynamic>> cancellationPolicy(String jobId) =>
+      _one('get_my_marketplace_cancellation_policy', {'target_job_id': jobId});
+
   Future<MarketplaceJob> cancel(
     String jobId,
     String reason,
