@@ -4264,24 +4264,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           308.0,
                           410.0,
                         ),
-                        child: PageView.builder(
+                        child: _AvailableJobsNavigator(
                           key: const ValueKey('work-map-offers-pager'),
-                          itemCount: _available.length,
-                          itemBuilder: (context, index) {
-                            final job = _available[index];
-                            return Align(
-                              alignment: Alignment.bottomCenter,
-                              child: _AvailableJobCard(
-                                key: ValueKey('work-map-offer-${job.id}'),
-                                job: job,
-                                accepting: _acceptingJobId == job.id,
-                                acceptanceLocked: _acceptingJobId != null,
-                                onAccept: () => _acceptJob(job),
-                                position: index + 1,
-                                total: _available.length,
-                              ),
-                            );
-                          },
+                          jobs: _available,
+                          acceptingJobId: _acceptingJobId,
+                          onAccept: _acceptJob,
                         ),
                       )
                     : _scheduled.isNotEmpty
@@ -4884,6 +4871,68 @@ class _RidePaymentLabel extends StatelessWidget {
       );
 }
 
+// Explicit navigation: changing the displayed offer never accepts or rejects it.
+class _AvailableJobsNavigator extends StatefulWidget {
+  const _AvailableJobsNavigator({
+    required this.jobs,
+    required this.acceptingJobId,
+    required this.onAccept,
+    super.key,
+  });
+
+  final List<MarketplaceAvailableJob> jobs;
+  final String? acceptingJobId;
+  final ValueChanged<MarketplaceAvailableJob> onAccept;
+
+  @override
+  State<_AvailableJobsNavigator> createState() => _AvailableJobsNavigatorState();
+}
+
+class _AvailableJobsNavigatorState extends State<_AvailableJobsNavigator> {
+  String? _selectedJobId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedJobId = widget.jobs.isEmpty ? null : widget.jobs.first.id;
+  }
+
+  @override
+  void didUpdateWidget(covariant _AvailableJobsNavigator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.jobs.any((job) => job.id == _selectedJobId)) {
+      _selectedJobId = widget.jobs.isEmpty ? null : widget.jobs.first.id;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.jobs.isEmpty) return const SizedBox.shrink();
+    final found = widget.jobs.indexWhere((job) => job.id == _selectedJobId);
+    final index = found < 0 ? 0 : found;
+    final job = widget.jobs[index];
+    final locked = widget.acceptingJobId != null;
+    void select(int next) => setState(() => _selectedJobId = widget.jobs[next].id);
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: _AvailableJobCard(
+        key: ValueKey('work-map-offer-${job.id}'),
+        job: job,
+        accepting: widget.acceptingJobId == job.id,
+        acceptanceLocked: locked,
+        onAccept: () => widget.onAccept(job),
+        position: index + 1,
+        total: widget.jobs.length,
+        onPrevious: !locked && index > 0 ? () => select(index - 1) : null,
+        onNext: !locked && index + 1 < widget.jobs.length
+            ? () => select(index + 1)
+            : null,
+      ),
+    );
+  }
+}
+
 class _AvailableJobCard extends StatefulWidget {
   const _AvailableJobCard({
     required this.job,
@@ -4892,6 +4941,8 @@ class _AvailableJobCard extends StatefulWidget {
     required this.onAccept,
     required this.position,
     required this.total,
+    this.onPrevious,
+    this.onNext,
     super.key,
   });
 
@@ -4901,6 +4952,8 @@ class _AvailableJobCard extends StatefulWidget {
   final VoidCallback onAccept;
   final int position;
   final int total;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   @override
   State<_AvailableJobCard> createState() => _AvailableJobCardState();
@@ -4947,16 +5000,6 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                         fontSize: 15,
                       ),
                     ),
-                    if (widget.total > 1)
-                      Text(
-                        'Solicitud ${widget.position} de ${widget.total} · desliza para ver otras',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFFADC8D2),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -4978,6 +5021,51 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
               ),
             ],
           ),
+          if (widget.total > 1)
+            Row(
+              key: const ValueKey('work-map-offer-navigation'),
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('work-map-offer-previous'),
+                  onPressed: widget.onPrevious,
+                  icon: const Icon(Icons.chevron_left_rounded, size: 19),
+                  label: const Text('Anterior'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF98D4FF),
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    '${widget.position} de ${widget.total} viajes',
+                    key: const ValueKey('work-map-offer-count'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFADC8D2),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  key: const ValueKey('work-map-offer-next'),
+                  onPressed: widget.onNext,
+                  iconAlignment: IconAlignment.end,
+                  icon: const Icon(Icons.chevron_right_rounded, size: 19),
+                  label: const Text('Siguiente'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF98D4FF),
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 5),
           _RidePaymentLabel(
             key: ValueKey('work-map-offer-payment-${job.id}'),
