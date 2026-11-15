@@ -30,7 +30,7 @@ void main() {
     expect(source, contains('onPressed: () => unawaited(_centerWorkMap())'));
     expect(source, contains('_workMapZoom = (_workMapZoom + 1)'));
     expect(source, contains('_workMapZoom = (_workMapZoom - 1)'));
-    expect(source, contains('onAccept: () => _acceptJob(job)'));
+    expect(source, contains('onAccept: _acceptJob'));
   });
 
   test('Carrera activa conserva mapa, menú y acceso a su gestión', () {
@@ -66,7 +66,7 @@ void main() {
     expect(home, contains('_available.isNotEmpty ||'));
     expect(home, contains('_error != null)'));
     expect(home.replaceAll(RegExp(r'\s+'), ' '), contains('bottom: bottomNavInset + (_available.isNotEmpty'));
-    expect(home, contains('onAccept: () => _acceptJob(job)'));
+    expect(home, contains('onAccept: _acceptJob'));
     expect(home, contains("'work-map-advance-job'"));
   });
 
