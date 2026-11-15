@@ -5022,49 +5022,72 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             ],
           ),
           if (widget.total > 1)
-            Row(
-              key: const ValueKey('work-map-offer-navigation'),
-              children: [
-                TextButton.icon(
-                  key: const ValueKey('work-map-offer-previous'),
-                  onPressed: widget.onPrevious,
-                  icon: const Icon(Icons.chevron_left_rounded, size: 19),
-                  label: const Text('Anterior'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF98D4FF),
-                    minimumSize: const Size(44, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    '${widget.position} de ${widget.total} viajes',
-                    key: const ValueKey('work-map-offer-count'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFFADC8D2),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+            SizedBox(
+              height: 44,
+              child: Row(
+                key: const ValueKey('work-map-offer-navigation'),
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      key: const ValueKey('work-map-offer-previous'),
+                      onPressed: widget.onPrevious,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF98D4FF),
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chevron_left_rounded, size: 18),
+                            Text('Anterior', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                TextButton.icon(
-                  key: const ValueKey('work-map-offer-next'),
-                  onPressed: widget.onNext,
-                  iconAlignment: IconAlignment.end,
-                  icon: const Icon(Icons.chevron_right_rounded, size: 19),
-                  label: const Text('Siguiente'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF98D4FF),
-                    minimumSize: const Size(44, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '${widget.position} de ${widget.total} viajes',
+                        key: const ValueKey('work-map-offer-count'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFADC8D2),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: TextButton(
+                      key: const ValueKey('work-map-offer-next'),
+                      onPressed: widget.onNext,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF98D4FF),
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Siguiente', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                            Icon(Icons.chevron_right_rounded, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           const SizedBox(height: 5),
           _RidePaymentLabel(
