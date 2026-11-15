@@ -4113,6 +4113,21 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                             'Sin dirección',
                                         expanded: _workRideDetailsExpanded,
                                       ),
+                                      if (_workRideDetailsExpanded)
+                                        _CustomerServiceSpecifications(
+                                          notes: active.customerNotes,
+                                          passengers: active.passengerCount,
+                                          weight: active.cargoWeightKg,
+                                          volume: active.cargoVolumeM3,
+                                          length: active.cargoLengthCm,
+                                          width: active.cargoWidthCm,
+                                          height: active.cargoHeightCm,
+                                          bodyType: active.requiredBodyType,
+                                          loadHelp: active.loadHelp,
+                                          unloadHelp: active.unloadHelp,
+                                          urgent: active.urgent,
+                                          stopCount: active.stopCount,
+                                        ),
                                       TextButton.icon(
                                         key: const ValueKey(
                                           'work-map-toggle-details',
@@ -4129,7 +4144,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                         label: Text(
                                           _workRideDetailsExpanded
                                               ? 'Ocultar detalles'
-                                              : 'Ver detalles de la ruta',
+                                              : active.customerNotes?.trim().isNotEmpty == true
+                                                  ? 'Ver detalles y notas del cliente'
+                                                  : 'Ver detalles de la ruta',
                                         ),
                                         style: TextButton.styleFrom(
                                           foregroundColor: const Color(
@@ -4247,24 +4264,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                           308.0,
                           410.0,
                         ),
-                        child: PageView.builder(
+                        child: _AvailableJobsNavigator(
                           key: const ValueKey('work-map-offers-pager'),
-                          itemCount: _available.length,
-                          itemBuilder: (context, index) {
-                            final job = _available[index];
-                            return Align(
-                              alignment: Alignment.bottomCenter,
-                              child: _AvailableJobCard(
-                                key: ValueKey('work-map-offer-${job.id}'),
-                                job: job,
-                                accepting: _acceptingJobId == job.id,
-                                acceptanceLocked: _acceptingJobId != null,
-                                onAccept: () => _acceptJob(job),
-                                position: index + 1,
-                                total: _available.length,
-                              ),
-                            );
-                          },
+                          jobs: _available,
+                          acceptingJobId: _acceptingJobId,
+                          onAccept: _acceptJob,
                         ),
                       )
                     : _scheduled.isNotEmpty
@@ -4754,6 +4758,87 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 }
 
+// Customer requirements must stay visible before acceptance and during the ride.
+class _CustomerServiceSpecifications extends StatelessWidget {
+  const _CustomerServiceSpecifications({
+    this.notes,
+    this.passengers,
+    this.weight,
+    this.volume,
+    this.length,
+    this.width,
+    this.height,
+    this.bodyType,
+    this.loadHelp = false,
+    this.unloadHelp = false,
+    this.urgent = false,
+    this.stopCount,
+  });
+
+  final String? notes;
+  final int? passengers;
+  final double? weight, volume, length, width, height;
+  final String? bodyType;
+  final bool loadHelp, unloadHelp, urgent;
+  final int? stopCount;
+
+  String _quantity(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = <String>[
+      if (passengers != null && passengers! > 0)
+        '${passengers!} pasajero(s)',
+      if (weight != null && weight! > 0) 'Peso: ${_quantity(weight!)} kg',
+      if (volume != null && volume! > 0) 'Volumen: ${_quantity(volume!)} m³',
+      if (length != null && length! > 0) 'Largo: ${_quantity(length!)} cm',
+      if (width != null && width! > 0) 'Ancho: ${_quantity(width!)} cm',
+      if (height != null && height! > 0) 'Alto: ${_quantity(height!)} cm',
+      if (bodyType?.trim().isNotEmpty == true) 'Carrocería: ${bodyType!.trim()}',
+      if (loadHelp) 'Requiere ayuda para cargar',
+      if (unloadHelp) 'Requiere ayuda para descargar',
+      if (urgent) 'Servicio urgente',
+      if (stopCount != null && stopCount! > 0) 'Paradas adicionales: $stopCount',
+    ];
+    final comment = notes?.trim() ?? '';
+    if (lines.isEmpty && comment.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF58E6B3).withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF58E6B3).withValues(alpha: .30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.assignment_outlined, size: 16, color: Color(0xFF58E6B3)),
+                SizedBox(width: 7),
+                Expanded(child: Text('Especificaciones del servicio', style: TextStyle(fontWeight: FontWeight.w800))),
+              ],
+            ),
+            for (final line in lines)
+              Padding(padding: const EdgeInsets.only(top: 4), child: Text(line)),
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              const Text('Notas del cliente', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 3),
+              Text(comment, key: const ValueKey('work-customer-notes'), softWrap: true),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RidePaymentLabel extends StatelessWidget {
   const _RidePaymentLabel({required this.method, super.key});
 
@@ -4786,6 +4871,68 @@ class _RidePaymentLabel extends StatelessWidget {
       );
 }
 
+// Explicit navigation: changing the displayed offer never accepts or rejects it.
+class _AvailableJobsNavigator extends StatefulWidget {
+  const _AvailableJobsNavigator({
+    required this.jobs,
+    required this.acceptingJobId,
+    required this.onAccept,
+    super.key,
+  });
+
+  final List<MarketplaceAvailableJob> jobs;
+  final String? acceptingJobId;
+  final ValueChanged<MarketplaceAvailableJob> onAccept;
+
+  @override
+  State<_AvailableJobsNavigator> createState() => _AvailableJobsNavigatorState();
+}
+
+class _AvailableJobsNavigatorState extends State<_AvailableJobsNavigator> {
+  String? _selectedJobId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedJobId = widget.jobs.isEmpty ? null : widget.jobs.first.id;
+  }
+
+  @override
+  void didUpdateWidget(covariant _AvailableJobsNavigator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.jobs.any((job) => job.id == _selectedJobId)) {
+      _selectedJobId = widget.jobs.isEmpty ? null : widget.jobs.first.id;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.jobs.isEmpty) return const SizedBox.shrink();
+    final found = widget.jobs.indexWhere((job) => job.id == _selectedJobId);
+    final index = found < 0 ? 0 : found;
+    final job = widget.jobs[index];
+    final locked = widget.acceptingJobId != null;
+    void select(int next) => setState(() => _selectedJobId = widget.jobs[next].id);
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: _AvailableJobCard(
+        key: ValueKey('work-map-offer-${job.id}'),
+        job: job,
+        accepting: widget.acceptingJobId == job.id,
+        acceptanceLocked: locked,
+        onAccept: () => widget.onAccept(job),
+        position: index + 1,
+        total: widget.jobs.length,
+        onPrevious: !locked && index > 0 ? () => select(index - 1) : null,
+        onNext: !locked && index + 1 < widget.jobs.length
+            ? () => select(index + 1)
+            : null,
+      ),
+    );
+  }
+}
+
 class _AvailableJobCard extends StatefulWidget {
   const _AvailableJobCard({
     required this.job,
@@ -4794,6 +4941,8 @@ class _AvailableJobCard extends StatefulWidget {
     required this.onAccept,
     required this.position,
     required this.total,
+    this.onPrevious,
+    this.onNext,
     super.key,
   });
 
@@ -4803,6 +4952,8 @@ class _AvailableJobCard extends StatefulWidget {
   final VoidCallback onAccept;
   final int position;
   final int total;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
 
   @override
   State<_AvailableJobCard> createState() => _AvailableJobCardState();
@@ -4849,16 +5000,6 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                         fontSize: 15,
                       ),
                     ),
-                    if (widget.total > 1)
-                      Text(
-                        'Solicitud ${widget.position} de ${widget.total} · desliza para ver otras',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFFADC8D2),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -4880,6 +5021,74 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
               ),
             ],
           ),
+          if (widget.total > 1)
+            SizedBox(
+              height: 44,
+              child: Row(
+                key: const ValueKey('work-map-offer-navigation'),
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      key: const ValueKey('work-map-offer-previous'),
+                      onPressed: widget.onPrevious,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF98D4FF),
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chevron_left_rounded, size: 18),
+                            Text('Anterior', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '${widget.position} de ${widget.total} viajes',
+                        key: const ValueKey('work-map-offer-count'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFADC8D2),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      key: const ValueKey('work-map-offer-next'),
+                      onPressed: widget.onNext,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF98D4FF),
+                        minimumSize: Size.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Siguiente', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                            Icon(Icons.chevron_right_rounded, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 5),
           _RidePaymentLabel(
             key: ValueKey('work-map-offer-payment-${job.id}'),
@@ -4911,21 +5120,22 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                           ? 'Solicitud para ahora'
                           : 'Programado: ${_marketplaceJobDateLabel(job.scheduledFor)}',
                     ),
-                    if (job.passengerCount != null) ...[
-                      const SizedBox(height: 6),
-                      Text('${job.passengerCount} pasajero(s)'),
-                    ],
-                    if (job.cargoWeightKg != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'Carga: ${job.cargoWeightKg!.toStringAsFixed(0)} kg',
-                      ),
-                    ],
-                    if (job.requiredBodyType?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 6),
-                      Text('Carrocería requerida: ${job.requiredBodyType}'),
-                    ],
                   ],
+                  if (_detailsExpanded)
+                    _CustomerServiceSpecifications(
+                      notes: job.customerNotes,
+                      passengers: job.passengerCount,
+                      weight: job.cargoWeightKg,
+                      volume: job.cargoVolumeM3,
+                      length: job.cargoLengthCm,
+                      width: job.cargoWidthCm,
+                      height: job.cargoHeightCm,
+                      bodyType: job.requiredBodyType,
+                      loadHelp: job.loadHelp,
+                      unloadHelp: job.unloadHelp,
+                      urgent: job.urgent,
+                      stopCount: job.stopCount,
+                    ),
                 ],
               ),
             ),
@@ -4966,7 +5176,11 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
               size: 18,
             ),
             label: Text(
-              _detailsExpanded ? 'Ocultar detalles' : 'Más detalles',
+              _detailsExpanded
+                  ? 'Ocultar detalles'
+                  : job.customerNotes?.trim().isNotEmpty == true
+                      ? 'Más detalles · notas del cliente'
+                      : 'Más detalles',
             ),
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,

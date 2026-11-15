@@ -3,10 +3,14 @@ on:
   pull_request:
     paths:
       - 'flutter_app/lib/data/record_store.dart'
+      - 'flutter_app/lib/data/marketplace_service.dart'
+      - 'flutter_app/lib/presentation/marketplace_assigned_job_card.dart'
+      - 'flutter_app/test/domain/marketplace_models_test.dart'
       - 'flutter_app/lib/presentation/marketplace_jobs.dart'
       - 'flutter_app/lib/presentation/screens.dart'
       - 'flutter_app/lib/services/push_notification_service.dart'
       - 'flutter_app/test/presentation/marketplace_jobs_refresh_test.dart'
+      - 'flutter_app/test/presentation/marketplace_map_offer_price_pins_contract_test.dart'
       - 'flutter_app/test/services/push_notification_service_test.dart'
       - 'flutter_app/test/domain/marketplace_mixed_odometer_test.dart'
       - '.github/workflows/validate-conductor-sync-web.yml'
@@ -39,10 +43,12 @@ jobs:
       - name: Run sync and manual record regression tests
         working-directory: flutter_app
         run: |
+          flutter test test/domain/marketplace_models_test.dart
           flutter test test/domain/marketplace_mixed_odometer_test.dart
           flutter test test/domain/sync_test.dart
           flutter test test/presentation/marketplace_records_read_only_test.dart
           flutter test test/presentation/marketplace_jobs_refresh_test.dart
+          flutter test test/presentation/marketplace_map_offer_price_pins_contract_test.dart
           flutter test test/services/push_notification_service_test.dart
           flutter test test/domain/web_oauth_redirect_test.dart
       - name: Compile web, without publishing it

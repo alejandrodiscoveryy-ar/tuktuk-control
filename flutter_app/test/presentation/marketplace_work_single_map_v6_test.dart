@@ -18,7 +18,7 @@ void main() {
     expect(home, contains('_contactJob(active)'));
     expect(home, contains('_cancelJob(active)'));
     expect(home, isNot(contains('Gestionar servicio en curso')));
-    expect(home, contains('onAccept: () => _acceptJob(job)'));
+    expect(home, contains('onAccept: _acceptJob'));
   });
 
   test('evaluacion y retorno preservan estado real del servidor', () {

@@ -4,6 +4,50 @@ import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+
+  test('offer and assigned job retain customer requirements and notes', () {
+    final payload = <String, dynamic>{
+      'job_id': 'details-job',
+      'service_code': 'cargo',
+      'status': 'en_route',
+      'billing_mode': 'wallet_commission',
+      'final_price': 1200,
+      'currency': 'CUP',
+      'ride_payment_method': 'transfer',
+      'customer_notes': 'Muebles delicados. Subir a segunda planta.',
+      'cargo_weight_kg': 150.5,
+      'cargo_volume_m3': 1.5,
+      'cargo_length_cm': 120,
+      'cargo_width_cm': 80,
+      'cargo_height_cm': 90,
+      'required_body_type': 'closed',
+      'load_help': true,
+      'unload_help': true,
+      'urgent': true,
+      'stop_count': 2,
+    };
+    final offer = MarketplaceAvailableJob.fromMap(payload);
+    final assigned = MarketplaceJob.fromMap(payload);
+    expect(offer.customerNotes, payload['customer_notes']);
+    expect(assigned.customerNotes, payload['customer_notes']);
+    expect(offer.cargoWeightKg, 150.5);
+    expect(assigned.cargoVolumeM3, 1.5);
+    expect(offer.cargoLengthCm, 120);
+    expect(assigned.cargoWidthCm, 80);
+    expect(offer.cargoHeightCm, 90);
+    expect(assigned.requiredBodyType, 'closed');
+    expect(offer.loadHelp, isTrue);
+    expect(assigned.unloadHelp, isTrue);
+    expect(offer.urgent, isTrue);
+    expect(assigned.stopCount, 2);
+    expect(offer.ridePaymentMethod, 'transfer');
+    expect(assigned.ridePaymentMethod, 'transfer');
+    final old = MarketplaceAvailableJob.fromMap({'job_id': 'old'});
+    expect(old.customerNotes, isNull);
+    expect(old.loadHelp, isFalse);
+    expect(old.stopCount, isNull);
+  });
+
   test('la forma de pago de carrera se lee sin confundirla con la billetera', () {
     for (final code in ['cash', 'transfer', null, 'card']) {
       final payload = {'job_id': 'job', 'service_code': 'passenger', 'final_price': 1500, 'currency': 'CUP', 'ride_payment_method': code, 'billing_mode': 'wallet_commission'};

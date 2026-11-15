@@ -474,6 +474,55 @@ void main() {
     expect(find.text('Pago: Transferencia'), findsOneWidget);
   });
 
+  testWidgets('cargo details stay folded and are accessible before and after accepting', (tester) async {
+    const id = '12345678-1234-4123-8123-123456789012';
+    const note = 'Muebles delicados. Subir a segunda planta.';
+    service.availableJobs = [
+      const MarketplaceAvailableJob(
+        id: id, serviceCode: 'cargo', finalPrice: 1500, currency: 'CUP',
+        customerNotes: note, cargoWeightKg: 150, cargoVolumeM3: 1.5,
+        loadHelp: true, unloadHelp: true, cargoLengthCm: 120,
+      ),
+    ];
+    await open(tester);
+    final toggle = find.byKey(const ValueKey('work-map-offer-toggle-12345678-1234-4123-8123-123456789012'));
+    final accept = find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012'));
+    expect(find.text(note), findsNothing);
+    expect(find.text('Más detalles · notas del cliente'), findsOneWidget);
+    expect(accept, findsOneWidget);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await pumpJobs(tester);
+    expect(find.text('Especificaciones del servicio'), findsOneWidget);
+    expect(find.text(note), findsOneWidget);
+    expect(find.text('Peso: 150 kg'), findsOneWidget);
+    expect(find.text('Requiere ayuda para cargar'), findsOneWidget);
+    expect(accept, findsOneWidget);
+    await tester.tap(toggle);
+    await pumpJobs(tester);
+    expect(find.text(note), findsNothing);
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': id, 'status': 'en_route', 'service_code': 'cargo',
+        'final_price': 1500, 'currency': 'CUP',
+        'customer_notes': note, 'cargo_weight_kg': 150,
+        'cargo_volume_m3': 1.5, 'load_help': true, 'unload_help': true,
+      }),
+    ];
+    service.successfulAccept = true;
+    await tester.tap(find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012')));
+    await pumpJobs(tester);
+    expect(service.atomicAcceptCalls, 1);
+    expect(find.text(note), findsNothing);
+    final activeToggle = find.byKey(const ValueKey('work-map-toggle-details'));
+    await tester.ensureVisible(activeToggle);
+    await tester.tap(activeToggle);
+    await pumpJobs(tester);
+    expect(find.text(note), findsOneWidget);
+    expect(find.text('Requiere ayuda para descargar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('visual history fetches only one page', () async {
     final paged = _PagedService();
     final jobs = await paged.jobs('history');
@@ -1156,9 +1205,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('varias ofertas: pasar de ficha sin separar precio de aceptar', (
+  testWidgets('varias ofertas: anterior y siguiente sin aceptar ni rechazar', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     service.availableJobs = [
       offer,
       const MarketplaceAvailableJob(
@@ -1172,19 +1227,34 @@ void main() {
     ];
     await open(tester);
     final pager = find.byKey(const ValueKey('work-map-offers-pager'));
+    final previous = find.byKey(const ValueKey('work-map-offer-previous'));
+    final next = find.byKey(const ValueKey('work-map-offer-next'));
     expect(pager, findsOneWidget);
-    await tester.drag(pager, const Offset(-600, 0));
+    expect(find.text('1 de 2 viajes'), findsOneWidget);
+    expect(tester.widget<TextButton>(previous).onPressed, isNull);
+    expect(tester.widget<TextButton>(next).onPressed, isNotNull);
+
+    await tester.tap(next);
     await pumpJobs(tester);
-    expect(
-      find.byKey(const ValueKey('work-map-offer-price-segundo-precio')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('work-map-offer-accept-segundo-precio')),
-      findsOneWidget,
-    );
+    expect(find.text('2 de 2 viajes'), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-offer-price-segundo-precio')), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-offer-accept-segundo-precio')), findsOneWidget);
+    expect(tester.widget<TextButton>(next).onPressed, isNull);
+    expect(tester.widget<TextButton>(previous).onPressed, isNotNull);
+
+    // A swipe no longer changes or dismisses the current offer.
+    await tester.drag(pager, const Offset(240, 0));
+    await pumpJobs(tester);
+    expect(find.text('2 de 2 viajes'), findsOneWidget);
+    await tester.tap(previous);
+    await pumpJobs(tester);
+    expect(find.text('1 de 2 viajes'), findsOneWidget);
+    expect(service.atomicAcceptCalls, 0);
+    expect(service.legacyAcceptCalls, 0);
+    expect(service.availableJobs.length, 2);
     expect(tester.takeException(), isNull);
   });
+
   testWidgets('telefono pequeno: contacto visible y detalles plegables', (
     tester,
   ) async {
@@ -1230,6 +1300,7 @@ void main() {
     });
     await open(tester);
     expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-offer-navigation')), findsNothing);
     final toggle = find.byKey(ValueKey('work-map-offer-toggle-${offer.id}'));
     expect(toggle, findsOneWidget);
     await tester.ensureVisible(toggle);

@@ -23,7 +23,12 @@ void main() {
       expect(accept, greaterThan(scroll));
       expect(card, contains('Expanded('));
       expect(card, contains("'work-map-offer-toggle-"));
-      expect(source, contains('PageView.builder('));
+      expect(source, contains('_AvailableJobsNavigator('));
+      expect(source, isNot(contains('PageView.builder(')));
+      expect(card, contains("'work-map-offer-navigation'"));
+      expect(card, contains("'work-map-offer-previous'"));
+      expect(card, contains("'work-map-offer-next'"));
+      expect(card, isNot(contains('desliza para ver otras')));
     },
   );
 
