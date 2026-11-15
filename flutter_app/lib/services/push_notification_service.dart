@@ -65,6 +65,15 @@ final marketplaceJobRefreshRequests = ValueNotifier<int>(0);
 final marketplaceJobPushPending = ValueNotifier<bool>(false);
 
 void handleForegroundPushData(Map<String, dynamic> data) {
+  // A cancellation refreshes the current job, never behaves as a new offer.
+  if (data['kind'] == 'marketplace_job_cancelled') {
+    if (marketplaceJobIdFromPush({
+      'kind': 'marketplace_job_available', 'job_id': data['job_id'],
+    }) != null) {
+      marketplaceJobRefreshRequests.value++;
+    }
+    return;
+  }
   if (marketplaceJobIdFromPush(data) == null) return;
   marketplaceJobPushPending.value = true;
   marketplaceJobRefreshRequests.value++;

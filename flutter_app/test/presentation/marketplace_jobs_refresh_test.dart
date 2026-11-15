@@ -192,6 +192,16 @@ class _JobsService extends MarketplaceService {
     return pending == null ? availableJobs : pending!.future;
   }
 
+  Map<String, dynamic> cancellationOptionData = {
+    'can_report_no_show': false,
+    'arrival_recorded': true,
+    'remaining_seconds': 120,
+  };
+
+  @override
+  Future<Map<String, dynamic>> cancellationOptions(String jobId) async =>
+      cancellationOptionData;
+
   @override
   Future<MarketplaceJob> accept(
     String jobId,
@@ -1290,6 +1300,48 @@ void main() {
     expect(find.byKey(const ValueKey('work-map-cancel-job')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final entry in [
+    ('en_route', false),
+    ('pickup', false),
+    ('pickup', true),
+  ]) {
+    testWidgets('no-show requires recorded arrival and wait: $entry', (tester) async {
+      service.cancellationOptionData = {
+        'can_report_no_show': entry.$2,
+        'arrival_recorded': entry.$1 == 'pickup',
+        'remaining_seconds': entry.$2 ? 0 : 120,
+      };
+      service.active = [
+        MarketplaceJob.fromMap({
+          'job_id': offer.id, 'status': entry.$1,
+          'next_driver_action': entry.$1 == 'pickup' ? 'start_service' : 'mark_pickup',
+          'origin_text': 'Origen', 'destination_text': 'Destino',
+          'final_price': 2000, 'currency': 'CUP',
+        }),
+      ];
+      await open(tester);
+      final toggle = find.byKey(const ValueKey('work-map-toggle-details'));
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await pumpJobs(tester);
+      final cancel = find.byKey(const ValueKey('work-map-cancel-job'));
+      await tester.ensureVisible(cancel);
+      await tester.tap(cancel);
+      await pumpJobs(tester);
+      expect(find.text('Motivo de cancelación'), findsOneWidget);
+      if (entry.$1 == 'en_route') {
+        expect(find.textContaining('primero notifica tu llegada'), findsOneWidget);
+      } else if (!entry.$2) {
+        expect(find.textContaining('Espera aún 2 min'), findsOneWidget);
+      }
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await pumpJobs(tester);
+      expect(find.text('Cliente no se presentó'), entry.$2 ? findsOneWidget : findsNothing);
+      expect(find.text('Problema con el vehículo'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 
   testWidgets('solicitud plegable conserva accion de aceptar', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
