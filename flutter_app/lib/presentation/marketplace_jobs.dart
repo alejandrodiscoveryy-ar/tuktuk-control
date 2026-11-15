@@ -4113,6 +4113,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                             'Sin dirección',
                                         expanded: _workRideDetailsExpanded,
                                       ),
+                                      _CustomerServiceSpecifications(
+                                        notes: active.customerNotes,
+                                        passengers: active.passengerCount,
+                                        weight: active.cargoWeightKg,
+                                        volume: active.cargoVolumeM3,
+                                        length: active.cargoLengthCm,
+                                        width: active.cargoWidthCm,
+                                        height: active.cargoHeightCm,
+                                        bodyType: active.requiredBodyType,
+                                        loadHelp: active.loadHelp,
+                                        unloadHelp: active.unloadHelp,
+                                        urgent: active.urgent,
+                                        stopCount: active.stopCount,
+                                      ),
                                       TextButton.icon(
                                         key: const ValueKey(
                                           'work-map-toggle-details',
@@ -4754,6 +4768,88 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 }
 
+// Customer requirements must stay visible before acceptance and during the ride.
+class _CustomerServiceSpecifications extends StatelessWidget {
+  const _CustomerServiceSpecifications({
+    this.notes,
+    this.passengers,
+    this.weight,
+    this.volume,
+    this.length,
+    this.width,
+    this.height,
+    this.bodyType,
+    this.loadHelp = false,
+    this.unloadHelp = false,
+    this.urgent = false,
+    this.stopCount,
+    super.key,
+  });
+
+  final String? notes;
+  final int? passengers;
+  final double? weight, volume, length, width, height;
+  final String? bodyType;
+  final bool loadHelp, unloadHelp, urgent;
+  final int? stopCount;
+
+  String _quantity(double value) => value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = <String>[
+      if (passengers != null && passengers! > 0)
+        '${passengers!} pasajero(s)',
+      if (weight != null && weight! > 0) 'Peso: ${_quantity(weight!)} kg',
+      if (volume != null && volume! > 0) 'Volumen: ${_quantity(volume!)} m³',
+      if (length != null && length! > 0) 'Largo: ${_quantity(length!)} cm',
+      if (width != null && width! > 0) 'Ancho: ${_quantity(width!)} cm',
+      if (height != null && height! > 0) 'Alto: ${_quantity(height!)} cm',
+      if (bodyType?.trim().isNotEmpty == true) 'Carrocería: ${bodyType!.trim()}',
+      if (loadHelp) 'Requiere ayuda para cargar',
+      if (unloadHelp) 'Requiere ayuda para descargar',
+      if (urgent) 'Servicio urgente',
+      if (stopCount != null && stopCount! > 0) 'Paradas adicionales: $stopCount',
+    ];
+    final comment = notes?.trim() ?? '';
+    if (lines.isEmpty && comment.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF58E6B3).withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF58E6B3).withValues(alpha: .30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.assignment_outlined, size: 16, color: Color(0xFF58E6B3)),
+                SizedBox(width: 7),
+                Expanded(child: Text('Especificaciones del servicio', style: TextStyle(fontWeight: FontWeight.w800))),
+              ],
+            ),
+            for (final line in lines)
+              Padding(padding: const EdgeInsets.only(top: 4), child: Text(line)),
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              const Text('Notas del cliente', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 3),
+              Text(comment, key: const ValueKey('work-customer-notes'), softWrap: true),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RidePaymentLabel extends StatelessWidget {
   const _RidePaymentLabel({required this.method, super.key});
 
@@ -4911,21 +5007,21 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                           ? 'Solicitud para ahora'
                           : 'Programado: ${_marketplaceJobDateLabel(job.scheduledFor)}',
                     ),
-                    if (job.passengerCount != null) ...[
-                      const SizedBox(height: 6),
-                      Text('${job.passengerCount} pasajero(s)'),
-                    ],
-                    if (job.cargoWeightKg != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'Carga: ${job.cargoWeightKg!.toStringAsFixed(0)} kg',
-                      ),
-                    ],
-                    if (job.requiredBodyType?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 6),
-                      Text('Carrocería requerida: ${job.requiredBodyType}'),
-                    ],
                   ],
+                  _CustomerServiceSpecifications(
+                    notes: job.customerNotes,
+                    passengers: job.passengerCount,
+                    weight: job.cargoWeightKg,
+                    volume: job.cargoVolumeM3,
+                    length: job.cargoLengthCm,
+                    width: job.cargoWidthCm,
+                    height: job.cargoHeightCm,
+                    bodyType: job.requiredBodyType,
+                    loadHelp: job.loadHelp,
+                    unloadHelp: job.unloadHelp,
+                    urgent: job.urgent,
+                    stopCount: job.stopCount,
+                  ),
                 ],
               ),
             ),
