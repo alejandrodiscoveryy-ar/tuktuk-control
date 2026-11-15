@@ -4113,20 +4113,21 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                             'Sin dirección',
                                         expanded: _workRideDetailsExpanded,
                                       ),
-                                      _CustomerServiceSpecifications(
-                                        notes: active.customerNotes,
-                                        passengers: active.passengerCount,
-                                        weight: active.cargoWeightKg,
-                                        volume: active.cargoVolumeM3,
-                                        length: active.cargoLengthCm,
-                                        width: active.cargoWidthCm,
-                                        height: active.cargoHeightCm,
-                                        bodyType: active.requiredBodyType,
-                                        loadHelp: active.loadHelp,
-                                        unloadHelp: active.unloadHelp,
-                                        urgent: active.urgent,
-                                        stopCount: active.stopCount,
-                                      ),
+                                      if (_workRideDetailsExpanded)
+                                        _CustomerServiceSpecifications(
+                                          notes: active.customerNotes,
+                                          passengers: active.passengerCount,
+                                          weight: active.cargoWeightKg,
+                                          volume: active.cargoVolumeM3,
+                                          length: active.cargoLengthCm,
+                                          width: active.cargoWidthCm,
+                                          height: active.cargoHeightCm,
+                                          bodyType: active.requiredBodyType,
+                                          loadHelp: active.loadHelp,
+                                          unloadHelp: active.unloadHelp,
+                                          urgent: active.urgent,
+                                          stopCount: active.stopCount,
+                                        ),
                                       TextButton.icon(
                                         key: const ValueKey(
                                           'work-map-toggle-details',
@@ -4143,7 +4144,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                         label: Text(
                                           _workRideDetailsExpanded
                                               ? 'Ocultar detalles'
-                                              : 'Ver detalles de la ruta',
+                                              : active.customerNotes?.trim().isNotEmpty == true
+                                                  ? 'Ver detalles y notas del cliente'
+                                                  : 'Ver detalles de la ruta',
                                         ),
                                         style: TextButton.styleFrom(
                                           foregroundColor: const Color(
@@ -5007,20 +5010,21 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                           : 'Programado: ${_marketplaceJobDateLabel(job.scheduledFor)}',
                     ),
                   ],
-                  _CustomerServiceSpecifications(
-                    notes: job.customerNotes,
-                    passengers: job.passengerCount,
-                    weight: job.cargoWeightKg,
-                    volume: job.cargoVolumeM3,
-                    length: job.cargoLengthCm,
-                    width: job.cargoWidthCm,
-                    height: job.cargoHeightCm,
-                    bodyType: job.requiredBodyType,
-                    loadHelp: job.loadHelp,
-                    unloadHelp: job.unloadHelp,
-                    urgent: job.urgent,
-                    stopCount: job.stopCount,
-                  ),
+                  if (_detailsExpanded)
+                    _CustomerServiceSpecifications(
+                      notes: job.customerNotes,
+                      passengers: job.passengerCount,
+                      weight: job.cargoWeightKg,
+                      volume: job.cargoVolumeM3,
+                      length: job.cargoLengthCm,
+                      width: job.cargoWidthCm,
+                      height: job.cargoHeightCm,
+                      bodyType: job.requiredBodyType,
+                      loadHelp: job.loadHelp,
+                      unloadHelp: job.unloadHelp,
+                      urgent: job.urgent,
+                      stopCount: job.stopCount,
+                    ),
                 ],
               ),
             ),
@@ -5061,7 +5065,11 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
               size: 18,
             ),
             label: Text(
-              _detailsExpanded ? 'Ocultar detalles' : 'Más detalles',
+              _detailsExpanded
+                  ? 'Ocultar detalles'
+                  : job.customerNotes?.trim().isNotEmpty == true
+                      ? 'Más detalles · notas del cliente'
+                      : 'Más detalles',
             ),
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
