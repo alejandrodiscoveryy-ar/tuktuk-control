@@ -2142,12 +2142,27 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   Future<void> _cancelJob(MarketplaceJob job) async {
     if (_busyJobId != null || !_marketplaceJobCanDriverCancel(job)) return;
 
-    const reasons = [
-      'Cliente no se presentó',
+    bool noShowAllowed = false;
+    int? waitMinutes;
+    if (job.status == 'pickup') {
+      try {
+        final policy = await _service.cancellationPolicy(job.id);
+        noShowAllowed = policy['no_show_allowed'] == true;
+        waitMinutes = policy['no_show_wait_minutes'] is num
+            ? (policy['no_show_wait_minutes'] as num).toInt()
+            : null;
+      } catch (_) {
+        // Unverified arrival/wait never unlocks the no-show reason.
+      }
+      if (!mounted || _busyJobId != null) return;
+    }
+    final reasons = [
+      if (noShowAllowed) 'Cliente no se presentó',
       'Problema con el vehículo',
       'No puedo realizar el servicio',
       'Dirección o punto de recogida incorrecto',
       'Acuerdo con el cliente',
+      'Emergencia',
       'Otro',
     ];
 
@@ -2204,8 +2219,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                         'en el historial del servicio.',
                         style: TextStyle(color: appMutedColor(context)),
                       ),
+                      if (!noShowAllowed) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          job.status != 'pickup'
+                              ? 'Puedes indicar que el cliente no se presentó después de notificar tu llegada.'
+                              : 'La ausencia del cliente se habilita tras la espera de ${waitMinutes == null ? "la política vigente" : "$waitMinutes minutos"}. Vuelve a abrir este menú para actualizar.',
+                          style: TextStyle(fontSize: 12, color: appMutedColor(context)),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Motivo de cancelación',
                         ),
@@ -2325,13 +2350,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!mounted) return;
 
       await _refreshAfterJobMutation();
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-
       toast(
         context,
-        'No se pudo cancelar el trabajo. Actualiza la sección '
-        'y vuelve a intentarlo.',
+        error.toString().contains('MARKETPLACE_NO_SHOW_WAIT_REQUIRED')
+            ? 'Todavía no puedes declarar la ausencia del cliente. Espera el tiempo indicado.'
+            : 'No se pudo cancelar el trabajo. Actualiza la sección y vuelve a intentarlo.',
       );
     } finally {
       if (mounted) {
