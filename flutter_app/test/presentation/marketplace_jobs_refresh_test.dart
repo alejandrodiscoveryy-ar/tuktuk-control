@@ -474,7 +474,7 @@ void main() {
     expect(find.text('Pago: Transferencia'), findsOneWidget);
   });
 
-  testWidgets('cargo requirements and customer notes are visible before and after accepting', (tester) async {
+  testWidgets('cargo details stay folded and are accessible before and after accepting', (tester) async {
     const id = '12345678-1234-4123-8123-123456789012';
     const note = 'Muebles delicados. Subir a segunda planta.';
     service.availableJobs = [
@@ -485,10 +485,22 @@ void main() {
       ),
     ];
     await open(tester);
+    final toggle = find.byKey(const ValueKey('work-map-offer-toggle-12345678-1234-4123-8123-123456789012'));
+    final accept = find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012'));
+    expect(find.text(note), findsNothing);
+    expect(find.text('Más detalles · notas del cliente'), findsOneWidget);
+    expect(accept, findsOneWidget);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await pumpJobs(tester);
     expect(find.text('Especificaciones del servicio'), findsOneWidget);
     expect(find.text(note), findsOneWidget);
     expect(find.text('Peso: 150 kg'), findsOneWidget);
     expect(find.text('Requiere ayuda para cargar'), findsOneWidget);
+    expect(accept, findsOneWidget);
+    await tester.tap(toggle);
+    await pumpJobs(tester);
+    expect(find.text(note), findsNothing);
     service.active = [
       MarketplaceJob.fromMap({
         'job_id': id, 'status': 'en_route', 'service_code': 'cargo',
@@ -501,6 +513,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012')));
     await pumpJobs(tester);
     expect(service.atomicAcceptCalls, 1);
+    expect(find.text(note), findsNothing);
+    final activeToggle = find.byKey(const ValueKey('work-map-toggle-details'));
+    await tester.ensureVisible(activeToggle);
+    await tester.tap(activeToggle);
+    await pumpJobs(tester);
     expect(find.text(note), findsOneWidget);
     expect(find.text('Requiere ayuda para descargar'), findsOneWidget);
     expect(tester.takeException(), isNull);
