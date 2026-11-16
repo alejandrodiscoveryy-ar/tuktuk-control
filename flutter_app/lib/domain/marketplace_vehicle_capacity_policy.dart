@@ -34,3 +34,18 @@ double? marketplaceResolvedCargoCapacity({
   if (!marketplaceNeedsCargoCapacity(services)) return null;
   return enteredCapacity;
 }
+
+/// Matrícula en altas nuevas; conserva la excepción de vehículos operativos.
+bool marketplaceRequiresVehicleRegistration({
+  required String? category,
+  required String? propulsion,
+  required bool previouslyOperational,
+  required String? savedRegistration,
+}) {
+  if (propulsion == 'human') return false;
+  const categories = {
+    'car', 'light_car', 'motorcycle', 'tricycle', 'van', 'truck',
+  };
+  if (!categories.contains(category)) return false;
+  return !previouslyOperational || (savedRegistration?.trim().isNotEmpty ?? false);
+}
