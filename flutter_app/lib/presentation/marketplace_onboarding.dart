@@ -324,12 +324,12 @@ class _MarketplaceOnboardingScreenState
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _registration = TextEditingController();
+  final _vehicleColor = TextEditingController();
   final _brand = TextEditingController();
   final _model = TextEditingController();
   final _year = TextEditingController();
   final _passengers = TextEditingController();
   final _cargoKg = TextEditingController();
-  final _bodyType = TextEditingController();
   final _otherCategory = TextEditingController();
 
   MarketplaceOnboarding? _data;
@@ -460,6 +460,7 @@ class _MarketplaceOnboardingScreenState
       final count = double.tryParse(text.replaceAll(',', '.'));
       return count != null && count >= 0 && count <= 100000;
     }
+    if (field == 'color') return text.length <= 40;
     return text.length <= (field == 'registration' ? 32 : 160);
   }
 
@@ -542,7 +543,8 @@ class _MarketplaceOnboardingScreenState
       final mapping = <String, TextEditingController>{
         'brand': _brand, 'model': _model, 'registration': _registration,
         'year': _year, 'passengers': _passengers, 'cargo_kg': _cargoKg,
-        'body_type': _bodyType, 'other_category': _otherCategory,
+        'other_category': _otherCategory,
+        'color': _vehicleColor,
       };
       for (final entry in mapping.entries) {
         final value = fields[entry.key];
@@ -682,7 +684,9 @@ class _MarketplaceOnboardingScreenState
         _marketplaceOptionalInt(_year.text) == null) {
       issues['year'] = 'Introduce un año válido o deja el campo vacío.';
     }
-    if (_registration.text.trim().length > 32) {
+    if (_requiresRegistration(vehicle) && _registration.text.trim().isEmpty) {
+      issues['registration'] = 'Indica la chapa de tu vehículo.';
+    } else if (_registration.text.trim().length > 32) {
       issues['registration'] = 'La chapa admite un máximo de 32 caracteres.';
     }
     if (_vehiclePhotoBytes == null && vehicle.mainPhotoAssetId == null &&
@@ -691,6 +695,16 @@ class _MarketplaceOnboardingScreenState
     }
     return issues;
   }
+
+  bool _requiresRegistration(MarketplaceVehicle? vehicle) =>
+      marketplaceRequiresVehicleRegistration(
+        category: _selectedCategory,
+        propulsion: _selectedPropulsion,
+        previouslyOperational: vehicle != null &&
+            (vehicle.onboardingComplete ||
+                vehicle.marketplaceStatus == 'active'),
+        savedRegistration: vehicle?.registration,
+      );
 
   String? _registrationError(String field) =>
       _showFieldErrors ? _registrationErrors()[field] : null;
@@ -707,7 +721,7 @@ class _MarketplaceOnboardingScreenState
         'Plazas de moto (opcional)' => 'passengers',
         'Carga (kg)' => 'cargoKg',
         'Año' => 'year',
-        'Chapa (opcional)' => 'registration',
+        'Chapa' || 'Chapa (opcional)' => 'registration',
         _ => '',
       });
 
@@ -784,12 +798,12 @@ class _MarketplaceOnboardingScreenState
     // los datos del servidor y no debe borrar lo escrito pero aun no enviado.
     final vehicleFields = <TextEditingController, String>{
       _registration: _registration.text,
+      _vehicleColor: _vehicleColor.text,
       _brand: _brand.text,
       _model: _model.text,
       _year: _year.text,
       _passengers: _passengers.text,
       _cargoKg: _cargoKg.text,
-      _bodyType: _bodyType.text,
       _otherCategory: _otherCategory.text,
     };
     final category = _selectedCategory;
@@ -893,7 +907,8 @@ class _MarketplaceOnboardingScreenState
       _name: 'name', _phone: 'phone', _registration: 'registration',
       _brand: 'brand', _model: 'model', _year: 'year',
       _passengers: 'passengers', _cargoKg: 'cargo_kg',
-      _bodyType: 'body_type', _otherCategory: 'other_category',
+      _otherCategory: 'other_category',
+      _vehicleColor: 'color',
     };
     for (final entry in fields.entries) {
       entry.key.addListener(() {
@@ -917,12 +932,12 @@ class _MarketplaceOnboardingScreenState
     _name.dispose();
     _phone.dispose();
     _registration.dispose();
+    _vehicleColor.dispose();
     _brand.dispose();
     _model.dispose();
     _year.dispose();
     _passengers.dispose();
     _cargoKg.dispose();
-    _bodyType.dispose();
     _otherCategory.dispose();
     _registrationScroll.dispose();
     super.dispose();
@@ -1178,13 +1193,13 @@ class _MarketplaceOnboardingScreenState
     _selectedPropulsion = vehicle?.propulsionCode;
 
     _registration.text = vehicle?.registration ?? '';
+    _vehicleColor.text = vehicle?.color ?? '';
     _brand.text = vehicle?.brand ?? '';
     _model.text = vehicle?.model ?? '';
     _year.text = vehicle?.year?.toString() ?? '';
     _passengers.text = vehicle?.passengerCapacity?.toString() ??
         (_selectedCategory == 'motorcycle' ? '1' : '');
     _cargoKg.text = vehicle?.cargoCapacityKg?.toString() ?? '';
-    _bodyType.text = vehicle?.bodyType ?? '';
     _otherCategory.text = vehicle?.categoryOtherDescription ?? '';
 
     _selectedServices
@@ -1922,6 +1937,7 @@ class _MarketplaceOnboardingScreenState
     final brand = _brand.text.trim();
     final model = _model.text.trim();
     final registration = _registration.text.trim();
+    final color = _vehicleColor.text.trim();
 
     if (brand.isEmpty) {
       toast(context, 'Escribe la marca del vehículo.');
@@ -1935,6 +1951,14 @@ class _MarketplaceOnboardingScreenState
     final vehicleName = '$brand $model'.trim();
     if (vehicleName.length > 80) {
       toast(context, 'Marca y modelo juntos no pueden superar 80 caracteres.');
+      return;
+    }
+    if (_requiresRegistration(vehicle) && registration.isEmpty) {
+      toast(context, 'Indica la chapa de tu vehículo.');
+      return;
+    }
+    if (color.length > 40) {
+      toast(context, 'El color no puede superar 40 caracteres.');
       return;
     }
     if (registration.length > 32) {
@@ -2005,7 +2029,7 @@ class _MarketplaceOnboardingScreenState
       // updates legacy synchronization when the selected vehicle has a sync row.
       // The new RPC must be installed and audited BEFORE publishing this UI.
       final response = await Supabase.instance.client.rpc(
-        'save_my_marketplace_vehicle_profile',
+        'save_my_marketplace_vehicle_profile_v2',
         params: {
           'target_vehicle_id': vehicle.id,
           'target_category_code': category,
@@ -2021,12 +2045,12 @@ class _MarketplaceOnboardingScreenState
           'target_cargo_length_cm': vehicle.cargoLengthCm,
           'target_cargo_width_cm': vehicle.cargoWidthCm,
           'target_cargo_height_cm': vehicle.cargoHeightCm,
-          'target_body_type':
-              _bodyType.text.trim().isEmpty ? null : _bodyType.text.trim(),
+          'target_body_type': vehicle.bodyType, // Conservar datos históricos.
           'target_main_photo_asset_id': photoAssetId,
           'target_service_codes': services,
           'target_vehicle_name': vehicleName,
           'target_registration': registration.isEmpty ? null : registration,
+          'target_color': color.isEmpty ? null : color,
         },
       );
       if (response is! Map) {
@@ -2964,6 +2988,7 @@ class _MarketplaceOnboardingScreenState
                                     'Modelo',
                                     'Propulsión',
                                   ].contains(label) ||
+                                  (label == 'Chapa' && _requiresRegistration(vehicle)) ||
                                   (label == 'Pasajeros' &&
                                       (_selectedServices.contains(
                                             'passenger',
@@ -3392,6 +3417,15 @@ class _MarketplaceOnboardingScreenState
                                 ),
                               ),
                           ],
+                          if (_requiresRegistration(vehicle)) ...[
+                            const SizedBox(height: gap),
+                            edit(
+                              label: 'Chapa',
+                              icon: Icons.credit_card_outlined,
+                              controller: _registration,
+                              maxLength: 32,
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           ExpansionTile(
                             tilePadding: EdgeInsets.zero,
@@ -3400,27 +3434,38 @@ class _MarketplaceOnboardingScreenState
                               'Más datos del vehículo (opcional)',
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
-                            subtitle: const Text('Chapa, año y carrocería'),
+                            subtitle: Text(_requiresRegistration(vehicle)
+                                ? 'Año de fabricación y color'
+                                : 'Chapa, año de fabricación y color'),
                             children: [
-                              pair(
-                                edit(
-                                  label: 'Chapa (opcional)',
-                                  icon: Icons.credit_card_outlined,
-                                  controller: _registration,
-                                  maxLength: 32,
-                                ),
+                              if (!_requiresRegistration(vehicle))
+                                pair(
+                                  edit(
+                                    label: 'Chapa (opcional)',
+                                    icon: Icons.credit_card_outlined,
+                                    controller: _registration,
+                                    maxLength: 32,
+                                  ),
+                                  edit(
+                                    label: 'Año',
+                                    icon: Icons.calendar_today_outlined,
+                                    controller: _year,
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                )
+                              else
                                 edit(
                                   label: 'Año',
                                   icon: Icons.calendar_today_outlined,
                                   controller: _year,
                                   keyboardType: TextInputType.number,
                                 ),
-                              ),
                               const SizedBox(height: gap),
                               edit(
-                                label: 'Tipo de carrocería',
-                                icon: Icons.widgets_outlined,
-                                controller: _bodyType,
+                                label: 'Color (opcional)',
+                                icon: Icons.palette_outlined,
+                                controller: _vehicleColor,
+                                maxLength: 40,
                               ),
                               if (automaticMotorcyclePassenger) ...[
                                 const SizedBox(height: gap),
