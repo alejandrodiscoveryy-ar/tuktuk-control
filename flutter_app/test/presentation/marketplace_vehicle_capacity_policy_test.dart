@@ -3,11 +3,27 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('chapa obligatoria para nuevas altas matriculables', () {
-    for (final category in ['car', 'light_car', 'motorcycle', 'tricycle', 'van', 'truck']) {
+    for (final category in ['car', 'light_car', 'van', 'truck']) {
       expect(marketplaceRequiresVehicleRegistration(
         category: category, propulsion: 'electric',
         previouslyOperational: false, savedRegistration: null,
       ), isTrue);
+    }
+  });
+
+  test('motos y triciclos sin chapa pueden inscribirse con cualquier propulsión', () {
+    for (final category in ['motorcycle', 'tricycle']) {
+      for (final propulsion in ['electric', 'combustion', 'hybrid', 'human']) {
+        expect(
+          marketplaceRequiresVehicleRegistration(
+            category: category,
+            propulsion: propulsion,
+            previouslyOperational: false,
+            savedRegistration: null,
+          ),
+          isFalse,
+        );
+      }
     }
   });
 
