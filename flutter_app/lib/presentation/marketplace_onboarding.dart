@@ -698,7 +698,7 @@ class _MarketplaceOnboardingScreenState
         category: _selectedCategory,
         propulsion: _selectedPropulsion,
         previouslyOperational: vehicle != null &&
-            (vehicle.onboardingComplete || vehicle.isActive ||
+            (vehicle.onboardingComplete ||
                 vehicle.marketplaceStatus == 'active'),
         savedRegistration: vehicle?.registration,
       );
