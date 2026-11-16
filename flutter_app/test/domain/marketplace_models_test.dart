@@ -159,6 +159,13 @@ void main() {
     });
   });
 
+  test('el color del vehículo es opcional y compatible con respuestas antiguas', () {
+    expect(MarketplaceVehicle.fromMap({'vehicle_id': 'v'}).color, isNull);
+    expect(MarketplaceVehicle.fromMap({'vehicle_id': 'v', 'color': null}).color, isNull);
+    expect(MarketplaceVehicle.fromMap({'vehicle_id': 'v', 'color': 'Rojo'}).color, 'Rojo');
+    expect(MarketplaceVehicle.fromMap({'vehicle_id': 'v', 'color': '  '}).color, isNull);
+  });
+
   group('MarketplaceOnboarding', () {
     test('parsea conductor, vehículo, catálogos y assets', () {
       final onboarding = MarketplaceOnboarding.fromMap({
