@@ -35,7 +35,9 @@ double? marketplaceResolvedCargoCapacity({
   return enteredCapacity;
 }
 
-/// Matrícula en altas nuevas; conserva la excepción de vehículos operativos.
+/// Matrícula en altas nuevas de autos, furgonetas y camiones.
+/// Motos y triciclos pueden carecer de chapa, independientemente de su propulsión.
+/// Conserva la excepción de vehículos operativos.
 bool marketplaceRequiresVehicleRegistration({
   required String? category,
   required String? propulsion,
@@ -44,7 +46,7 @@ bool marketplaceRequiresVehicleRegistration({
 }) {
   if (propulsion == 'human') return false;
   const categories = {
-    'car', 'light_car', 'motorcycle', 'tricycle', 'van', 'truck',
+    'car', 'light_car', 'van', 'truck',
   };
   if (!categories.contains(category)) return false;
   return !previouslyOperational || (savedRegistration?.trim().isNotEmpty ?? false);
