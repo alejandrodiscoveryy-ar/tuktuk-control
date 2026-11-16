@@ -1,0 +1,46 @@
+name: "TukTuk · GPS, alertas y reconexion offline ($0)"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/tuktuk-gps-push-offline-free.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuktuk-resilience-offline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resilience-tests:
+    name: "Pruebas Flutter locales; sin APK, push ni produccion"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout sin credenciales persistentes
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Flutter estable versionada
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.4"
+          channel: stable
+          cache: true
+      - name: Preparar dependencias de pruebas locales
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Verificar GPS, reconexion y notificaciones con dobles de prueba
+        working-directory: flutter_app
+        run: |
+          flutter test \
+            test/services/marketplace_operational_gps_io_test.dart \
+            test/services/marketplace_job_push_channel_test.dart \
+            test/services/push_notification_service_test.dart \
+            test/services/push_token_registration_coordinator_test.dart \
+            test/presentation/marketplace_jobs_refresh_test.dart \
+            test/offline/offline_queue_test.dart \
+            --reporter expanded
