@@ -141,6 +141,7 @@ class MarketplaceVehicle {
     this.cargoWidthCm,
     this.cargoHeightCm,
     this.bodyType,
+    this.color,
     this.mainPhotoAssetId,
     this.marketplaceStatus,
   });
@@ -161,6 +162,7 @@ class MarketplaceVehicle {
   final double? cargoWidthCm;
   final double? cargoHeightCm;
   final String? bodyType;
+  final String? color;
   final String? mainPhotoAssetId;
   final String? marketplaceStatus;
   final List<String> services;
@@ -199,6 +201,7 @@ class MarketplaceVehicle {
             ? null
             : _marketNumber(map['cargo_height_cm']),
         bodyType: _marketText(map['body_type']),
+        color: _marketText(map['color']),
         mainPhotoAssetId: _marketText(map['main_photo_asset_id']),
         marketplaceStatus: _marketText(map['marketplace_status']),
         services: _marketStrings(map['services']),
