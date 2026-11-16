@@ -324,6 +324,7 @@ class _MarketplaceOnboardingScreenState
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _registration = TextEditingController();
+  final _vehicleColor = TextEditingController();
   final _brand = TextEditingController();
   final _model = TextEditingController();
   final _year = TextEditingController();
@@ -459,6 +460,7 @@ class _MarketplaceOnboardingScreenState
       final count = double.tryParse(text.replaceAll(',', '.'));
       return count != null && count >= 0 && count <= 100000;
     }
+    if (field == 'color') return text.length <= 40;
     return text.length <= (field == 'registration' ? 32 : 160);
   }
 
@@ -542,6 +544,7 @@ class _MarketplaceOnboardingScreenState
         'brand': _brand, 'model': _model, 'registration': _registration,
         'year': _year, 'passengers': _passengers, 'cargo_kg': _cargoKg,
         'other_category': _otherCategory,
+        'color': _vehicleColor,
       };
       for (final entry in mapping.entries) {
         final value = fields[entry.key];
@@ -795,6 +798,7 @@ class _MarketplaceOnboardingScreenState
     // los datos del servidor y no debe borrar lo escrito pero aun no enviado.
     final vehicleFields = <TextEditingController, String>{
       _registration: _registration.text,
+      _vehicleColor: _vehicleColor.text,
       _brand: _brand.text,
       _model: _model.text,
       _year: _year.text,
@@ -904,6 +908,7 @@ class _MarketplaceOnboardingScreenState
       _brand: 'brand', _model: 'model', _year: 'year',
       _passengers: 'passengers', _cargoKg: 'cargo_kg',
       _otherCategory: 'other_category',
+      _vehicleColor: 'color',
     };
     for (final entry in fields.entries) {
       entry.key.addListener(() {
@@ -927,6 +932,7 @@ class _MarketplaceOnboardingScreenState
     _name.dispose();
     _phone.dispose();
     _registration.dispose();
+    _vehicleColor.dispose();
     _brand.dispose();
     _model.dispose();
     _year.dispose();
@@ -1187,6 +1193,7 @@ class _MarketplaceOnboardingScreenState
     _selectedPropulsion = vehicle?.propulsionCode;
 
     _registration.text = vehicle?.registration ?? '';
+    _vehicleColor.text = vehicle?.color ?? '';
     _brand.text = vehicle?.brand ?? '';
     _model.text = vehicle?.model ?? '';
     _year.text = vehicle?.year?.toString() ?? '';
@@ -1930,6 +1937,7 @@ class _MarketplaceOnboardingScreenState
     final brand = _brand.text.trim();
     final model = _model.text.trim();
     final registration = _registration.text.trim();
+    final color = _vehicleColor.text.trim();
 
     if (brand.isEmpty) {
       toast(context, 'Escribe la marca del vehículo.');
@@ -1947,6 +1955,10 @@ class _MarketplaceOnboardingScreenState
     }
     if (_requiresRegistration(vehicle) && registration.isEmpty) {
       toast(context, 'Indica la chapa de tu vehículo.');
+      return;
+    }
+    if (color.length > 40) {
+      toast(context, 'El color no puede superar 40 caracteres.');
       return;
     }
     if (registration.length > 32) {
@@ -2017,7 +2029,7 @@ class _MarketplaceOnboardingScreenState
       // updates legacy synchronization when the selected vehicle has a sync row.
       // The new RPC must be installed and audited BEFORE publishing this UI.
       final response = await Supabase.instance.client.rpc(
-        'save_my_marketplace_vehicle_profile',
+        'save_my_marketplace_vehicle_profile_v2',
         params: {
           'target_vehicle_id': vehicle.id,
           'target_category_code': category,
@@ -2038,6 +2050,7 @@ class _MarketplaceOnboardingScreenState
           'target_service_codes': services,
           'target_vehicle_name': vehicleName,
           'target_registration': registration.isEmpty ? null : registration,
+          'target_color': color.isEmpty ? null : color,
         },
       );
       if (response is! Map) {
@@ -3422,8 +3435,8 @@ class _MarketplaceOnboardingScreenState
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                             subtitle: Text(_requiresRegistration(vehicle)
-                                ? 'Año de fabricación'
-                                : 'Chapa y año de fabricación'),
+                                ? 'Año de fabricación y color'
+                                : 'Chapa, año de fabricación y color'),
                             children: [
                               if (!_requiresRegistration(vehicle))
                                 pair(
@@ -3447,6 +3460,13 @@ class _MarketplaceOnboardingScreenState
                                   controller: _year,
                                   keyboardType: TextInputType.number,
                                 ),
+                              const SizedBox(height: gap),
+                              edit(
+                                label: 'Color (opcional)',
+                                icon: Icons.palette_outlined,
+                                controller: _vehicleColor,
+                                maxLength: 40,
+                              ),
                               if (automaticMotorcyclePassenger) ...[
                                 const SizedBox(height: gap),
                                 const Text(
