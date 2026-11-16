@@ -2,6 +2,39 @@ import 'package:control_tuk_tuk/domain/marketplace_vehicle_capacity_policy.dart'
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('chapa obligatoria para nuevas altas matriculables', () {
+    for (final category in ['car', 'light_car', 'motorcycle', 'tricycle', 'van', 'truck']) {
+      expect(marketplaceRequiresVehicleRegistration(
+        category: category, propulsion: 'electric',
+        previouslyOperational: false, savedRegistration: null,
+      ), isTrue);
+    }
+  });
+
+  test('bicicletas, bicitaxis y propulsión humana quedan exentos', () {
+    for (final category in ['bicycle', 'bicitaxi', 'tricycle']) {
+      expect(marketplaceRequiresVehicleRegistration(
+        category: category, propulsion: 'human',
+        previouslyOperational: false, savedRegistration: null,
+      ), isFalse);
+    }
+    expect(marketplaceRequiresVehicleRegistration(
+      category: 'bicitaxi', propulsion: null,
+      previouslyOperational: false, savedRegistration: null,
+    ), isFalse);
+  });
+
+  test('vehículo operativo sin chapa conserva excepción; con chapa no puede borrarla', () {
+    expect(marketplaceRequiresVehicleRegistration(
+      category: 'car', propulsion: 'combustion',
+      previouslyOperational: true, savedRegistration: null,
+    ), isFalse);
+    expect(marketplaceRequiresVehicleRegistration(
+      category: 'car', propulsion: 'combustion',
+      previouslyOperational: true, savedRegistration: 'P123456',
+    ), isTrue);
+  });
+
   test('motocicleta de pasajeros recibe una plaza sin escribirla', () {
     expect(
       marketplaceResolvedPassengerCapacity(
