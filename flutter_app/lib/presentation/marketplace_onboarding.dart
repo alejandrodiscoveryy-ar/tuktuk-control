@@ -1267,7 +1267,9 @@ class _MarketplaceOnboardingScreenState
     try {
       final debt = await _service.walletDebtCup();
       if (!mounted || widget.store.user?.id != userId ||
-          revision != _walletDebtRevision) return;
+          revision != _walletDebtRevision) {
+        return;
+      }
       setState(() {
         _walletDebtCup = debt;
         _walletDebtUserId = userId;
