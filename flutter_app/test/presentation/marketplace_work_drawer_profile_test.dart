@@ -79,6 +79,17 @@ void main() {
     expect(more, contains("title: const Text('Impulsa')"));
   });
 
+  test('palomita verificada junto al nombre depende del servidor', () {
+    final source = File('lib/presentation/marketplace_jobs.dart').readAsStringSync();
+    expect(source, contains('get_my_marketplace_impulsa_application_v1'));
+    expect(source, contains("response['verified'] == true"));
+    expect(source, contains('_workDrawerVerificationUserId == googleUser?.id'));
+    expect(source, contains("ValueKey('work-drawer-verified-badge')"));
+    expect(source, contains("color: Color(0xFF1D9BF0)"));
+    expect(source, contains('unawaited(_refreshWorkDrawerVerification())'));
+    expect(source, isNot(contains("googleUser?.userMetadata?['verified']")));
+  });
+
   test('Trabajo reutiliza referidos y conserva rutas operativas', () {
     final source = File(
       'lib/presentation/marketplace_jobs.dart',
