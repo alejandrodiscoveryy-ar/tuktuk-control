@@ -40,7 +40,7 @@ void main() {
       expect(walletCard, contains('No existe un depósito mínimo obligatorio'));
       expect(walletCard, contains("'Disponible para carreras'"));
       expect(walletCard, contains("'Ver desglose del saldo'"));
-      expect(walletCard, contains("'Recargas y ajustes'"));
+      expect(walletCard, contains("'Saldo real (recargas y créditos)'"));
       expect(walletCard, contains("'Bonificaciones para carreras'"));
       expect(walletCard, contains('wallet.availableBalance'));
       expect(walletCard, contains('wallet.realAvailableBalance!'));
