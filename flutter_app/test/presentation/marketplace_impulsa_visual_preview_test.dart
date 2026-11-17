@@ -66,5 +66,14 @@ void main() {
         File('${directory.path}/${entry.key}-${story ? "historia" : "cuadrada"}.png').writeAsBytesSync(bytes);
       }
     }
+    final printable = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
+      name: 'Frank Camilo Núñez Nieves',
+      code: '0123456789abcdef0123456789abcdef',
+      alias: 'frank', modality: 'Triciclo · Pasajeros',
+      identityVerified: true, logoBytes: logo));
+    expect(printable, isNotNull);
+    File('${directory.path}/presentacion-85x55.png').writeAsBytesSync(printable!);
+    final printPdf = marketplaceDriverPrintPdf(printable);
+    expect(printPdf.length, greaterThan(1000));
   });
 }
