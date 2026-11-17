@@ -4,9 +4,12 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'dart:typed_data';
 
-bool downloadPromoPng(Uint8List bytes, String name) {
+bool downloadPromoPng(Uint8List bytes, String name) =>
+    downloadPromoFile(bytes, name, 'image/png');
+
+bool downloadPromoFile(Uint8List bytes, String name, String mimeType) {
   try {
-    final url = html.Url.createObjectUrlFromBlob(html.Blob([bytes], 'image/png'));
+    final url = html.Url.createObjectUrlFromBlob(html.Blob([bytes], mimeType));
     final link = html.AnchorElement(href: url)..download = name;
     html.document.body?.append(link);
     link.click();
