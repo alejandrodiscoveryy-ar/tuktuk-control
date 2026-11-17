@@ -508,6 +508,10 @@ class MarketplaceAvailableJob {
     required this.finalPrice,
     required this.currency,
     this.ridePaymentMethod,
+    this.commissionRate,
+    this.commissionAmount,
+    this.missingBalance,
+    this.canAccept,
     this.status,
     this.originText,
     this.destinationText,
@@ -558,6 +562,17 @@ class MarketplaceAvailableJob {
   final double finalPrice;
   final String currency;
   final String? ridePaymentMethod;
+  final double? commissionRate;
+  final double? commissionAmount;
+  final double? missingBalance;
+  final bool? canAccept;
+
+  /// Solo ofrece el consentimiento si el servidor permite aceptar a crédito.
+  bool get usesInitialCredit =>
+      canAccept == true &&
+      (commissionAmount ?? 0) > 0 &&
+      (missingBalance ?? 0) > 0;
+
   final DateTime? publishedAt;
   final DateTime? expiresAt;
   final DateTime? createdAt;
@@ -606,6 +621,14 @@ class MarketplaceAvailableJob {
         finalPrice: _marketNumber(map['final_price']),
         currency: _marketText(map['currency']) ?? 'CUP',
         ridePaymentMethod: marketplaceRidePaymentMethod(map['ride_payment_method']),
+        commissionRate: map['commission_rate'] == null
+            ? null : _marketNumber(map['commission_rate']),
+        commissionAmount: map['commission_amount'] == null
+            ? null : _marketNumber(map['commission_amount']),
+        missingBalance: map['missing_balance'] == null
+            ? null : _marketNumber(map['missing_balance']),
+        canAccept: map['can_accept'] == null
+            ? null : _marketBool(map['can_accept']),
         publishedAt: _marketDate(map['published_at']),
         expiresAt: _marketDate(map['expires_at']),
         createdAt: _marketDate(map['created_at']),
@@ -1342,6 +1365,12 @@ class MarketplaceService {
 
   Future<MarketplaceWallet> wallet() =>
       _one('get_my_marketplace_wallet').then(MarketplaceWallet.fromMap);
+
+  /// Consulta solo lectura: la deuda nunca se mezcla con el saldo Impulsa.
+  Future<double> walletDebtCup() async {
+    final summary = await _one('get_my_marketplace_wallet_transition_v1');
+    return _marketNumber(summary['debt_cup']);
+  }
 
   Future<List<MarketplacePaymentMethod>> paymentMethods() =>
       _list('list_my_marketplace_payment_methods').then(
