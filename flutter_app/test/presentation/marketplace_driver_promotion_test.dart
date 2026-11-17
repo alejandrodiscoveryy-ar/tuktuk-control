@@ -328,10 +328,12 @@ void main() {
     expect(source, contains('Administración revisará los documentos'));
     expect(source, contains('_copyText(_taggedLink'));
     expect(source, contains('record_my_marketplace_impulsa_share_action_v1'));
-    expect(source, contains("'target_channel': _shareChannel"));
-    expect(source, contains("'target_campaign': _activeCampaign"));
-    expect(source, contains("'utm_source': _shareChannel"));
-    expect(source, contains("'utm_campaign': _activeCampaign!"));
+    expect(source, contains("'target_channel': 'unknown'"));
+    expect(source, contains("'target_campaign': null"));
+    expect(source, isNot(contains("const Text('Canal de difusión'")));
+    expect(source, isNot(contains("labelText: 'Campaña o grupo (opcional)'")));
+    expect(source, isNot(contains('DropdownButtonFormField<String>')));
+    expect(source, contains('marketplaceDriverPromoUri(_code!, alias: _alias).toString()'));
     expect(source, contains("action: 'message_copied'"));
     expect(source, contains('ExpansionTile('));
     expect(source, contains('showDialog<bool>'));
@@ -406,6 +408,7 @@ void main() {
     expect(source, contains("const ValueKey('impulsa-withdraw-request')"));
     expect(source, contains('withdraw_my_marketplace_impulsa_application_v1'));
     expect(source, contains('Condiciones de verificación e Impulsa'));
+    expect(source, contains('if (!_enabled) ...['));
     expect(source, contains('get_my_marketplace_wallet_transition_v1'));
     expect(source, contains('request_my_marketplace_impulsa_withdrawal_v1'));
     expect(source, contains("'target_amount': roundedAmount"));
