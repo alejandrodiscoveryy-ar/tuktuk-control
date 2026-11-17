@@ -34,11 +34,24 @@ void main() {
         isNot(contains('debe confirmarse un depósito inicial mínimo')),
       );
       expect(onboarding, isNot(contains('Depósito inicial confirmado')));
-      expect(onboarding, contains('no existe un depósito mínimo'));
-      expect(
-        onboarding,
-        contains('El saldo real y el saldo promocional pueden utilizarse'),
-      );
+      final walletCard = onboarding.split(
+        'Widget _buildWalletCard(BuildContext context) {',
+      ).last.split('Widget _walletValue(').first;
+      expect(walletCard, contains('No existe un depósito mínimo obligatorio'));
+      expect(walletCard, contains("'Disponible para carreras'"));
+      expect(walletCard, contains("'Ver desglose del saldo'"));
+      expect(walletCard, contains("'Saldo real (recargas y créditos)'"));
+      expect(walletCard, contains("'Bonificaciones para carreras'"));
+      expect(walletCard, contains('wallet.availableBalance'));
+      expect(walletCard, contains('wallet.realAvailableBalance!'));
+      expect(walletCard, contains('wallet.promotionalAvailableBalance!'));
+      expect(walletCard, contains('wallet.reservedBalance > 0'));
+      expect(walletCard, contains("'Recargar saldo'"));
+      expect(walletCard, contains('exclusivamente desde Impulsa.'));
+      expect(walletCard, isNot(contains("'Saldo total'")));
+      expect(walletCard, isNot(contains("'Real disponible'")));
+      expect(walletCard, isNot(contains("'Promo disponible'")));
+      expect(walletCard, isNot(contains('Comisión estándar:')));
     });
 
     test('referidos usa primer trabajo válido y monto del servidor', () {
