@@ -116,8 +116,8 @@ void main() {
     expect(source, isNot(contains("'Verificado', 841")));
     expect(source, contains("'Impulsa', 754, 71"));
     expect(source, contains("'TUK', brandLeft"));
-    expect(source, contains("const gold = Color(0xFFE5A84E)"));
-    expect(source, contains("const mint = Color(0xFF35D6A2)"));
+    expect(source, contains('const gold = Color(0xFFE5A84E)'));
+    expect(source, contains('const mint = Color(0xFF35D6A2)'));
     expect(source, contains('if (identityVerified) {'));
     expect(source, contains('final seal = ui.Path()'));
     expect(source, isNot(contains('0xFF0564DC')));
