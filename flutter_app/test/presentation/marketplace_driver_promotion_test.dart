@@ -326,7 +326,7 @@ void main() {
     expect(source, isNot(contains('Al compartir, descargar o copiar el enlace')));
     expect(source, contains('active Mi TukTuk desde Administración'));
     expect(source, contains('_copyText(_taggedLink'));
-    expect(source, contains("record_my_marketplace_impulsa_share_action_v1"));
+    expect(source, contains('record_my_marketplace_impulsa_share_action_v1'));
     expect(source, contains("'target_channel': _shareChannel"));
     expect(source, contains("'target_campaign': _activeCampaign"));
     expect(source, contains("'utm_source': _shareChannel"));
