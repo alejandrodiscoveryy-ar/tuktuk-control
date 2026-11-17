@@ -32,7 +32,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
 
     // Delicate curved light-blue center, keeping the approved horizontal
     // composition and navy footer. No vehicle rendering anywhere.
-    final body = Path()
+    final body = ui.Path()
       ..moveTo(0, 123)
       ..cubicTo(172, 182, 341, 140, 530, 107)
       ..cubicTo(695, 77, 835, 118, 1004, 170)
@@ -44,7 +44,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
       begin: Alignment.topLeft, end: Alignment.bottomRight,
       colors: [Color(0xFFEAF5FF), Color(0xFFF8FBFF), Color(0xFFC9E7FF)],
     ).createShader(const Rect.fromLTWH(0, 110, 1004, 490)));
-    final bottomLine = Path()..moveTo(0, 562)
+    final bottomLine = ui.Path()..moveTo(0, 562)
       ..cubicTo(135, 520, 241, 532, 354, 547)
       ..cubicTo(566, 574, 791, 585, 1004, 548);
     canvas.drawPath(bottomLine, Paint()..color = const Color(0xFF27C6FF)
@@ -52,8 +52,9 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
 
     // Agency identity: use the centrally configured real project icon,
     // never the obsolete Conductor brand asset or an invented car graphic.
-    if (icon != null) _promoFitImage(canvas, icon,
-      const Rect.fromLTWH(41, 24, 96, 93));
+    if (icon != null) {
+      _promoFitImage(canvas, icon, const Rect.fromLTWH(41, 24, 96, 93));
+    }
     _promoText(canvas, 'Agencia', icon == null ? 58 : 148, 24,
       icon == null ? 290 : 300, 27, Colors.white,
       lines: 1, minFontSize: 22, weight: FontWeight.w700);
@@ -82,7 +83,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
         lines: 1, center: true, minFontSize: 18);
       canvas.drawCircle(const Offset(963, 48), 18,
         Paint()..color = const Color(0xFF1D9BF0));
-      final tick = Path()..moveTo(955, 48)
+      final tick = ui.Path()..moveTo(955, 48)
         ..lineTo(961, 54)..lineTo(973, 41);
       canvas.drawPath(tick, Paint()..color = Colors.white
         ..strokeWidth = 4..strokeCap = StrokeCap.round
@@ -96,7 +97,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     canvas.drawCircle(photoCircle.center, 125,
       Paint()..color = const Color(0xFF0E6BCF));
     canvas.save();
-    canvas.clipPath(Path()..addOval(photoCircle.deflate(9)));
+    canvas.clipPath(ui.Path()..addOval(photoCircle.deflate(9)));
     canvas.drawRect(photoCircle, Paint()..color = const Color(0xFF143D66));
     if (portrait != null) {
       _promoFitImage(canvas, portrait, photoCircle.deflate(9), cover: true);
@@ -136,7 +137,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
       canvas.save();
       canvas.translate(badgeCenter.dx - 17, badgeCenter.dy - 17);
       canvas.scale(34 / 32);
-      final seal = Path();
+      final seal = ui.Path();
       for (var i = 0; i < 32; i++) {
         final angle = i * pi / 16 - pi / 2;
         final radius = i.isEven ? 15.0 : 13.4;
@@ -150,7 +151,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
       }
       seal.close();
       canvas.drawPath(seal, Paint()..color = const Color(0xFF1D9BF0));
-      final mark = Path()
+      final mark = ui.Path()
         ..moveTo(9, 16)..lineTo(14, 21)..lineTo(23, 11);
       canvas.drawPath(mark, Paint()..color = Colors.white
         ..style = PaintingStyle.stroke..strokeWidth = 3.2
@@ -165,12 +166,12 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
       310, nameBottom + 10, 375, 23, mutedText,
       lines: 2, minFontSize: 16, weight: FontWeight.w700);
     final modalityName = modality.split(' · ').first.trim();
-    final modalityRect = const Rect.fromLTWH(310, 412, 360, 64);
+    const modalityRect = Rect.fromLTWH(310, 412, 360, 64);
     canvas.drawRRect(RRect.fromRectAndRadius(modalityRect,
       const Radius.circular(32)), Paint()..shader = const LinearGradient(
         colors: [Color(0xFF0B326D), Color(0xFF0566D2)],
       ).createShader(modalityRect));
-    _promoText(canvas, 'Modalidad: ' + modalityName, 329, 427, 320, 35,
+    _promoText(canvas, 'Modalidad: $modalityName', 329, 427, 320, 35,
       Colors.white, lines: 1, minFontSize: 19,
       weight: FontWeight.w800);
     final serviceList = modality.split(' · ').skip(1).join(' · ');
@@ -207,7 +208,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
         }
       }
     }
-    final cta = const Rect.fromLTWH(707, 476, 284, 75);
+    const cta = Rect.fromLTWH(707, 476, 284, 75);
     canvas.drawRRect(RRect.fromRectAndRadius(cta,
       const Radius.circular(30)), Paint()..color = const Color(0xFF064CB0));
     _promoText(canvas, 'Solicita mi servicio', 715, 485, 268, 25,
