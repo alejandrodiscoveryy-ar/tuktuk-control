@@ -735,6 +735,7 @@ class MarketplaceDriverPromotionScreen extends StatefulWidget {
 class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverPromotionScreen> {
   final _client = Supabase.instance.client;
   final _name = TextEditingController();
+  final _campaign = TextEditingController();
   final _cache = MarketplacePromoArtworkCache(Hive.box(_metaBox));
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
@@ -750,12 +751,18 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
   String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
+  String? get _activeCampaign {
+    final value = _campaign.text.trim().toLowerCase();
+    return RegExp(r'^[a-z0-9_-]{1,32}$').hasMatch(value) ? value : null;
+  }
   String? get _taggedLink {
     if (_code == null) return null;
     final base = marketplaceDriverPromoUri(_code!, alias: _alias);
-    if (_shareChannel == 'unknown') return base.toString();
+    if (_shareChannel == 'unknown' && _activeCampaign == null) return base.toString();
     return base.replace(queryParameters: {
-      ...base.queryParameters, 'utm_source': _shareChannel,
+      ...base.queryParameters,
+      if (_shareChannel != 'unknown') 'utm_source': _shareChannel,
+      if (_activeCampaign != null) 'utm_campaign': _activeCampaign!,
     }).toString();
   }
   String? get _copy {
@@ -768,7 +775,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     if (!_sameUser || !_enabled) return;
     try {
       await _client.rpc('record_my_marketplace_impulsa_share_action_v1',
-        params: {'target_action': action, 'target_channel': _shareChannel})
+        params: {'target_action': action, 'target_channel': _shareChannel,
+          'target_campaign': _activeCampaign})
         .timeout(const Duration(seconds: 4));
     } catch (_) {
       // The share UI must keep working during network outages.
@@ -801,6 +809,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     _revision++; _earningsRevision++;
     _auth?.cancel();
     _name.dispose();
+    _campaign.dispose();
     super.dispose();
   }
 
@@ -1172,6 +1181,19 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                   DropdownMenuItem(value:'other', child: Text('Otro canal')),
                 ],
                 onChanged: (value) { if(value!=null) setState(() => _shareChannel=value); },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _campaign,
+                maxLength: 32,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]'))],
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  isDense: true, border: OutlineInputBorder(),
+                  labelText: 'Campaña o grupo (opcional)',
+                  hintText: 'ej: grupo-centro',
+                  helperText: 'Etiqueta para comparar acciones; evita datos personales.',
+                ),
               ),
               const SizedBox(height: 10),
             ],
