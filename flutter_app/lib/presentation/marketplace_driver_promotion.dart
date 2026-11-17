@@ -342,7 +342,7 @@ Future<ui.Image> _promoLoadMaster(String category, bool story) async {
   return _promoDecode(asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes));
 }
 
-/// Renders the real exported PNG, shared by Mi TukTuk and the Admin viewer.
+/// Renders the real exported PNG, shared by Impulsa and the Admin viewer.
 /// No original reference portrait, sample name, alias or illustrative QR is
 /// included in the master assets. No generated files are uploaded.
 Future<Uint8List> renderMarketplaceDriverPromoCard({
@@ -741,6 +741,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _enabled = false;
   bool _sharing = false, _identityVerified = false;
+  bool _applicationLoading = true, _applicationSubmitting = false;
+  bool _applicationDocumentsReady = false, _applicationVerified = false;
+  bool _acceptImpulsaRules = false, _acceptPublicProfile = false, _acceptPhoto = false;
+  String _applicationStatus = 'not_requested';
+  String? _applicationError;
+  int _applicationRevision = 0;
   String _shareChannel = 'unknown';
   String? _error, _code, _photoAssetId, _alias;
   Uint8List? _squareBytes, _storyBytes, _printBytes;
@@ -748,9 +754,14 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   int _earningsRevision = 0;
   MarketplaceImpulsaEarnings? _earnings;
   bool _earningsBusy = false, _earningsUnavailable = false;
+  Map<String, dynamic>? _withdrawalAccount;
+  bool _withdrawalLoading = false, _withdrawalRequestBusy = false;
+  String? _withdrawalError, _withdrawalRequestKey;
+  num? _withdrawalRequestAmount;
+  int _withdrawalRevision = 0;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
-  String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
+  String _fileNameFor(bool story) => story ? 'Impulsa-historia.png' : 'Impulsa-cuadrada.png';
   String? get _activeCampaign {
     final value = _campaign.text.trim().toLowerCase();
     return RegExp(r'^[a-z0-9_-]{1,32}$').hasMatch(value) ? value : null;
@@ -795,22 +806,434 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         setState(() {
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
           _photoAssetId = null; _earnings = null; _earningsBusy = false; _earningsUnavailable = false;
+          _withdrawalRevision++; _withdrawalAccount = null;
+          _withdrawalError = null; _withdrawalRequestKey = null;
+          _withdrawalRequestAmount = null; _withdrawalLoading = false; _withdrawalRequestBusy = false;
           _squareBytes = null; _storyBytes = null; _printBytes = null;
-          _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
+          _applicationRevision++;
+          _applicationStatus = 'not_requested';
+          _applicationLoading = false;
+          _applicationVerified = false;
+          _applicationDocumentsReady = false;
+          _applicationError = null;
+          _error = 'Inicia sesión nuevamente para abrir Impulsa.';
         });
       }
     });
     unawaited(_load());
+    unawaited(_loadApplication());
     unawaited(_loadEarnings());
+    unawaited(_loadWithdrawalAccount());
   }
 
   @override
   void dispose() {
-    _revision++; _earningsRevision++;
+    _revision++; _earningsRevision++; _applicationRevision++; _withdrawalRevision++;
     _auth?.cancel();
     _name.dispose();
     _campaign.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadApplication() async {
+    if (!_sameUser || !mounted) return;
+    final revision = ++_applicationRevision;
+    setState(() { _applicationLoading = true; _applicationError = null; });
+    try {
+      final response = await _client.rpc('get_my_marketplace_impulsa_application_v1')
+        .timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser || revision != _applicationRevision) return;
+      if (response is! Map) throw const FormatException('IMPULSA_APPLICATION_INVALID');
+      setState(() {
+        _applicationStatus = response['status']?.toString() ?? 'not_requested';
+        _applicationDocumentsReady = response['documents_ready'] == true;
+        _applicationVerified = response['verified'] == true;
+      });
+    } catch (_) {
+      if (mounted && _sameUser && revision == _applicationRevision) {
+        setState(() {
+          _applicationError = 'No se pudo consultar la solicitud. Comprueba tu conexión o inténtalo después.';
+        });
+      }
+    } finally {
+      if (mounted && _sameUser && revision == _applicationRevision) {
+        setState(() => _applicationLoading = false);
+      }
+    }
+  }
+
+  Future<void> _submitImpulsaRequest() async {
+    if (_applicationSubmitting || !_sameUser || !_applicationDocumentsReady ||
+        !_acceptImpulsaRules || !_acceptPublicProfile || !_acceptPhoto) {
+      return;
+    }
+    setState(() { _applicationSubmitting = true; _applicationError = null; });
+    try {
+      final result = await _client.rpc('request_my_marketplace_impulsa_verification_v1',
+        params: {
+          'target_accept_terms': true,
+          'target_authorize_public_profile': true,
+          'target_authorize_photo': true,
+        }).timeout(const Duration(seconds: 15));
+      if (!mounted || !_sameUser) return;
+      if (result is! Map || result['status'] != 'pending') {
+        throw const FormatException('IMPULSA_APPLICATION_NOT_PENDING');
+      }
+      setState(() {
+        _applicationStatus = 'pending';
+        _acceptImpulsaRules = false;
+        _acceptPublicProfile = false;
+        _acceptPhoto = false;
+      });
+      await _loadApplication();
+    } catch (_) {
+      if (mounted && _sameUser) {
+        setState(() => _applicationError =
+          'No se pudo enviar la solicitud. Verifica tus documentos y vuelve a intentarlo.');
+      }
+    } finally {
+      if (mounted && _sameUser) setState(() => _applicationSubmitting = false);
+    }
+  }
+
+  Future<void> _withdrawImpulsaRequest() async {
+    if (!_sameUser || _applicationStatus != 'pending' || _applicationSubmitting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Retirar solicitud?'),
+        content: const Text('La Agencia no podrá aprobarla. Podrás solicitar nuevamente la verificación cuando quieras.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Retirar solicitud')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !_sameUser) return;
+    setState(() { _applicationSubmitting = true; _applicationError = null; });
+    try {
+      await _client.rpc('withdraw_my_marketplace_impulsa_application_v1')
+        .timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser) return;
+      await _loadApplication();
+    } catch (_) {
+      if (mounted && _sameUser) {
+        setState(() => _applicationError = 'No se pudo retirar la solicitud. Vuelve a intentarlo.');
+      }
+    } finally {
+      if (mounted && _sameUser) setState(() => _applicationSubmitting = false);
+    }
+  }
+
+  Future<void> _openMyDocuments() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Documentos del conductor')),
+        body: MarketplaceOnboardingScreen(store: widget.store, driverOnly: true),
+      ),
+    ));
+    if (mounted && _sameUser) await _loadApplication();
+  }
+
+  Widget _impulsaVerification() {
+    final verified = _identityVerified || _applicationVerified;
+    final pending = _applicationStatus == 'pending';
+    final approved = _applicationStatus == 'approved';
+    final active = _enabled && verified;
+    final color = verified ? const Color(0xFF1D9BF0)
+      : pending ? const Color(0xFFE5A84E) : appMutedColor(context);
+    final statusText = active ? 'Conductor verificado · Impulsa activo'
+      : verified ? 'Identidad verificada · solicita tu activación Impulsa'
+      : pending ? 'Verificación en revisión administrativa'
+      : approved ? 'Solicitud aprobada · esperando activación'
+      : _applicationStatus == 'rejected' ? 'Solicitud rechazada · puedes corregir y reenviar'
+      : 'Solicita tu verificación';
+    return Card(child: Padding(padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(verified ? Icons.verified_rounded : Icons.verified_outlined,
+            color: color, size: 28),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Impulsa', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              Text(_applicationLoading && !active ? 'Consultando verificación…' : statusText,
+                style: const TextStyle(fontSize: 12)),
+            ])),
+          IconButton(tooltip: 'Actualizar estado', onPressed: _applicationLoading || _applicationSubmitting
+            ? null : () { unawaited(_loadApplication()); unawaited(_load(force: true)); },
+            icon: const Icon(Icons.refresh)),
+        ]),
+        if (_applicationLoading && !active) const LinearProgressIndicator(),
+        if (!active && !_applicationLoading && _applicationError != null)
+          Padding(padding: const EdgeInsets.only(top: 8),
+            child: Text(_applicationError!, style: const TextStyle(color: kDanger))),
+        if (!active && !_applicationLoading && _applicationError == null &&
+            !pending && !approved) ...[
+          const SizedBox(height: 12),
+          Text(verified
+            ? 'Tu identidad está verificada. Para reactivar Impulsa debes autorizar de nuevo tu perfil y esperar la aprobación administrativa.'
+            : 'Solicita tu incorporación a Impulsa. La insignia azul aparece únicamente cuando Administración comprueba y aprueba tu identidad.',
+            style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          const ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text('Condiciones de verificación e Impulsa',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            children: [
+              Text('La Agencia TukTuk comprobará personalmente tu identidad con los documentos registrados. La solicitud no es una verificación automática.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 7),
+              Text('Tras la aprobación, se podrá mostrar tu nombre público, foto autorizada, modalidad, servicios, enlace y QR para captar clientes.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 7),
+              Text('Los beneficios y comisiones comerciales se calcularán según las reglas vigentes de Impulsa para viajes reales. Puedes desactivar tu perfil promocional.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 7),
+              Text('Tu aceptación se registra con fecha y versión impulsa-self-service-v1. Puedes retirar una solicitud pendiente antes de que la Agencia la apruebe.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 8),
+            ],
+          ),
+          if (!_applicationDocumentsReady) ...[
+            const Text('Para solicitarlo, registra las dos caras de tu carnet o licencia en tu expediente.',
+              style: TextStyle(fontSize: 12)),
+            TextButton.icon(onPressed: _openMyDocuments,
+              icon: const Icon(Icons.badge_outlined),
+              label: const Text('Completar documentos')),
+          ] else ...[
+            CheckboxListTile(
+              key: const ValueKey('impulsa-accept-terms'),
+              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Acepto las condiciones de Impulsa y la revisión administrativa de mis documentos.'),
+              value: _acceptImpulsaRules,
+              onChanged: (v) => setState(() => _acceptImpulsaRules = v == true)),
+            CheckboxListTile(
+              key: const ValueKey('impulsa-consent-public'),
+              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Autorizo publicar mi nombre, modalidad, enlace y QR personal para que los clientes puedan solicitar mi servicio.'),
+              value: _acceptPublicProfile,
+              onChanged: (v) => setState(() => _acceptPublicProfile = v == true)),
+            CheckboxListTile(
+              key: const ValueKey('impulsa-consent-photo'),
+              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Autorizo publicar mi foto de perfil actual en mis tarjetas de Impulsa.'),
+              value: _acceptPhoto,
+              onChanged: (v) => setState(() => _acceptPhoto = v == true)),
+            const Text('La solicitud se registra con fecha y versión de consentimiento. No garantiza aprobación; puedes desactivar tu perfil público posteriormente.',
+              style: TextStyle(fontSize: 11)),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              key: const ValueKey('impulsa-request-verification'),
+              onPressed: _applicationSubmitting || !_acceptImpulsaRules || !_acceptPublicProfile || !_acceptPhoto
+                ? null : _submitImpulsaRequest,
+              icon: const Icon(Icons.verified_user_outlined),
+              label: Text(_applicationSubmitting ? 'Enviando solicitud…' : 'Solicitar verificación')),
+          ],
+        ],
+        if (pending && !_applicationLoading) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Text('Tu solicitud fue recibida. Administración revisará los documentos y tu autorización antes de activar las herramientas de Impulsa.',
+              style: TextStyle(fontSize: 12))),
+          Align(alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('impulsa-withdraw-request'),
+              onPressed: _applicationSubmitting ? null : _withdrawImpulsaRequest,
+              child: const Text('Retirar solicitud'))),
+        ],
+        if (approved && !active) const Padding(
+          padding: EdgeInsets.only(top: 10),
+          child: Text('La solicitud está aprobada; actualiza el estado. Si no aparecen tus tarjetas, contacta a la Agencia TukTuk.',
+            style: TextStyle(fontSize: 12))),
+      ])));
+  }
+
+
+  num? _safeMoney(Object? raw) {
+    final value = raw is num ? raw : num.tryParse(raw?.toString() ?? '');
+    return value != null && value.isFinite && value >= 0 ? value : null;
+  }
+
+  String _moneyCup(num value) => '${value.toStringAsFixed(2)} CUP';
+
+  Future<void> _loadWithdrawalAccount() async {
+    if (!mounted || !_sameUser) return;
+    final revision = ++_withdrawalRevision;
+    setState(() { _withdrawalLoading = true; _withdrawalError = null; });
+    try {
+      final response = await _client.rpc('get_my_marketplace_wallet_transition_v1')
+        .timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser || revision != _withdrawalRevision) return;
+      if (response is! Map || _safeMoney(response['impulsa_available']) == null ||
+          _safeMoney(response['withdrawal_minimum_cup']) == null ||
+          response['can_withdraw'] is! bool) {
+        throw const FormatException('INVALID_IMPULSA_WITHDRAWALS');
+      }
+      setState(() => _withdrawalAccount = Map<String,dynamic>.from(response));
+    } catch (_) {
+      if (mounted && _sameUser && revision == _withdrawalRevision) {
+        setState(() {
+          _withdrawalAccount = null;
+          _withdrawalError = 'No se pudo consultar el saldo retirable. Revisa tu conexión.';
+        });
+      }
+    } finally {
+      if (mounted && _sameUser && revision == _withdrawalRevision) {
+        setState(() => _withdrawalLoading = false);
+      }
+    }
+  }
+
+  Future<void> _requestImpulsaWithdrawal() async {
+    if (!mounted || !_sameUser || !_enabled || _withdrawalRequestBusy ||
+        _withdrawalLoading) {
+      return;
+    }
+    final data = _withdrawalAccount;
+    final amount = _safeMoney(data?['impulsa_available']);
+    final minimum = _safeMoney(data?['withdrawal_minimum_cup']);
+    if (data == null || data['can_withdraw'] != true ||
+        data['withdrawals_enabled'] != true || amount == null ||
+        minimum == null || amount < minimum || amount <= 0) {
+      return;
+    }
+    final roundedAmount = num.parse(amount.toStringAsFixed(2));
+    if (roundedAmount < minimum || roundedAmount > 100000000) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Solicitar retiro de Impulsa'),
+        content: Text('Solicitarás el retiro de ${_moneyCup(roundedAmount)} de tus ganancias comerciales disponibles. '
+          'Las recargas y los bonos para trabajar no se pueden retirar. '
+          'La Agencia TukTuk revisará la solicitud antes del pago.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Solicitar retiro')),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted || !_sameUser) return;
+    // Reuse the idempotency key while the previous response is uncertain.
+    if (_withdrawalRequestKey == null || _withdrawalRequestAmount != roundedAmount) {
+      _withdrawalRequestKey = _marketplaceUuid();
+      _withdrawalRequestAmount = roundedAmount;
+    }
+    setState(() { _withdrawalRequestBusy = true; _withdrawalError = null; });
+    try {
+      final response = await _client.rpc('request_my_marketplace_impulsa_withdrawal_v1',
+        params: {
+          'target_amount': roundedAmount,
+          'target_key': _withdrawalRequestKey,
+        }).timeout(const Duration(seconds: 18));
+      if (!mounted || !_sameUser) return;
+      if (response is! Map || response['status']?.toString() != 'requested') {
+        throw const FormatException('IMPULSA_WITHDRAWAL_INVALID_RESPONSE');
+      }
+      _withdrawalRequestKey = null;
+      _withdrawalRequestAmount = null;
+      toast(context, 'Solicitud de retiro registrada. Consulta su estado en Impulsa.');
+      await _loadWithdrawalAccount();
+    } catch (_) {
+      if (mounted && _sameUser) {
+        setState(() => _withdrawalError =
+          'No se pudo confirmar la solicitud. Consulta el historial antes de reintentar; no se generará una solicitud duplicada.');
+      }
+    } finally {
+      if (mounted && _sameUser) setState(() => _withdrawalRequestBusy = false);
+    }
+  }
+
+  Widget _impulsaWithdrawalPanel() {
+    final values = _withdrawalAccount;
+    final available = _safeMoney(values?['impulsa_available']);
+    final minimum = _safeMoney(values?['withdrawal_minimum_cup']);
+    final held = _safeMoney(values?['withdrawal_reserved']);
+    final canWithdraw = _sameUser && _enabled && !_withdrawalLoading &&
+      !_withdrawalRequestBusy && values?['can_withdraw'] == true &&
+      values?['withdrawals_enabled'] == true &&
+      available != null && minimum != null && available >= minimum;
+    final history = values?['withdrawals'] is List
+      ? (values!['withdrawals'] as List).whereType<Map>().take(8).toList()
+      : <Map>[];
+    return Card(child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.account_balance_wallet_outlined),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('Retiradas Impulsa',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+          IconButton(tooltip: 'Actualizar saldo Impulsa',
+            onPressed: _withdrawalLoading || _withdrawalRequestBusy
+              ? null : _loadWithdrawalAccount,
+            icon: const Icon(Icons.refresh)),
+        ]),
+        const SizedBox(height: 8),
+        if (_withdrawalLoading) const LinearProgressIndicator(),
+        if (values != null && available != null && minimum != null) ...[
+          Text('Disponible para retirar: ${_moneyCup(available)}',
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          Text('Umbral mínimo: ${_moneyCup(minimum)}',
+            style: const TextStyle(fontSize: 12)),
+          if (held != null && held > 0)
+            Text('Reservado en solicitudes: ${_moneyCup(held)}',
+              style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 8),
+          if (values['ready'] != true || values['active'] != true ||
+              values['withdrawals_enabled'] != true)
+            const Text('Las retiradas todavía no están habilitadas por la Agencia TukTuk.',
+              style: TextStyle(fontSize: 12))
+          else if (!canWithdraw && available < minimum)
+            Text('Te faltan ${_moneyCup(minimum - available)} de ganancias disponibles para alcanzar el umbral.',
+              style: const TextStyle(fontSize: 12))
+          else if (!canWithdraw && values['can_withdraw'] != true)
+            const Text('El retiro no está disponible por ahora. Puede haber una deuda, reserva o ajuste pendiente.',
+              style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            key: const ValueKey('impulsa-request-withdrawal'),
+            onPressed: canWithdraw ? _requestImpulsaWithdrawal : null,
+            icon: const Icon(Icons.payments_outlined),
+            label: Text(_withdrawalRequestBusy ? 'Registrando solicitud…' : 'Solicitar retiro'),
+          ),
+          const SizedBox(height: 5),
+          const Text('Solo puedes retirar las ganancias comerciales de Impulsa. '
+            'La Billetera general mantiene las recargas, bonos y saldo para trabajar.',
+            style: TextStyle(fontSize: 11)),
+          if (history.isNotEmpty) ...[
+            const Divider(height: 20),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Historial de solicitudes'),
+              children: history.map((entry) {
+                final status = switch (entry['status']?.toString()) {
+                  'requested' => 'Solicitada',
+                  'paid' => 'Pagada',
+                  'rejected' => 'Rechazada',
+                  'cancelled' => 'Cancelada',
+                  _ => 'En revisión',
+                };
+                final amount = _safeMoney(entry['amount']) ?? 0;
+                return ListTile(
+                  dense: true, title: Text(status),
+                  trailing: Text(_moneyCup(amount)),
+                );
+              }).toList(),
+            ),
+          ],
+        ] else if (!_withdrawalLoading && _withdrawalError == null)
+          const Text('Saldo de retiro no disponible.', style: TextStyle(fontSize: 12)),
+        if (_withdrawalError != null) ...[
+          const SizedBox(height: 6),
+          Text(_withdrawalError!, style: const TextStyle(color: kDanger, fontSize: 12)),
+        ],
+      ]),
+    ));
   }
 
   Future<void> _loadEarnings() async {
@@ -845,7 +1268,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final result = await _client.rpc('prepare_my_marketplace_promo_card_v1');
       if (!mounted || !_sameUser || revision != _revision) return;
       if (result is! Map) throw StateError('PROMO_PROFILE_INVALID');
-      final enabled = result['enabled'] == true;
+      // Verified identity is required before any Impulsa tools are unlocked.
+      final enabled = result['enabled'] == true && result['identity_verified'] == true;
       final identityVerified = enabled && result['identity_verified'] == true;
       setState(() {
         _enabled = enabled;
@@ -958,7 +1382,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           'fotografía' => 'No se pudo cargar tu fotografía autorizada. Reintenta sin desactivar tu perfil.',
           'tarjeta' => 'No se pudo generar la imagen de tu tarjeta. Reintenta.',
           'enlace' => 'No se pudo consultar tu enlace personal. Reintenta.',
-          _ => 'No se pudo consultar tu perfil de Mi TukTuk. Reintenta.',
+          _ => 'No se pudo consultar tu perfil de Impulsa. Reintenta.',
         };
         });
       }
@@ -1016,7 +1440,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     try {
       final box = context.findRenderObject() as RenderBox?;
       final result = await SharePlus.instance.share(ShareParams(
-        title: 'Mi TukTuk', text: copy,
+        title: 'Impulsa', text: copy,
         files: [XFile.fromData(bytes, mimeType: 'image/png', name: fileName)],
         fileNameOverrides: [fileName],
         sharePositionOrigin: box == null ? null : box.localToGlobal(Offset.zero) & box.size,
@@ -1065,8 +1489,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   Future<void> _downloadPrintCard({required bool pdf}) async {
     final card = _printBytes;
     if (!_sameUser || !_enabled || _busy || card == null) return;
-    final file = pdf ? 'Mi-TukTuk-presentacion-85x55.pdf'
-      : 'Mi-TukTuk-presentacion-300dpi.png';
+    final file = pdf ? 'Impulsa-presentacion-85x55.pdf'
+      : 'Impulsa-presentacion-300dpi.png';
     try {
       final bytes = pdf ? marketplaceDriverPrintPdf(card) : card;
       final mime = pdf ? 'application/pdf' : 'image/png';
@@ -1150,7 +1574,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.memory(art, fit: BoxFit.contain, gaplessPlayback: true,
-                        semanticLabel: 'Tarjeta Mi TukTuk $label'),
+                        semanticLabel: 'Tarjeta Impulsa $label'),
                     ),
               ),
             ),
@@ -1196,9 +1620,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             Text(_error!, style: const TextStyle(color: kDanger)),
             TextButton(onPressed: _busy ? null : _load, child: const Text('Reintentar')),
           ],
-          if (!_enabled && !_busy && _error == null)
-            const Text('Tu ficha estará disponible cuando la Agencia TukTuk verifique tu identidad y active Mi TukTuk desde Administración.'),
-          if (_sameUser && _earnings != null)
+          _impulsaVerification(),
+          const SizedBox(height: 10),
+          if (_sameUser && _enabled && _earnings != null)
             _MarketplaceImpulsaEarningsCard(earnings: _earnings!, refresh: () => unawaited(_loadEarnings()), loading: _earningsBusy)
           else if (_sameUser && _enabled && _earningsBusy)
             const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator())
@@ -1207,6 +1631,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
               const Expanded(child: Text('Ganancias comerciales aún no disponibles.', style: TextStyle(fontSize: 12))),
               TextButton(onPressed: () => unawaited(_loadEarnings()), child: const Text('Consultar')),
             ])),
+          if (_sameUser && _enabled)
+            _impulsaWithdrawalPanel(),
           if (_enabled) ...[
             Row(children: [
               const Expanded(child: Text('Mis tarjetas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
@@ -1376,7 +1802,7 @@ Future<Map<String, dynamic>?> loadMarketplaceSharedPromoProfile(
   throw StateError('PROMO_RESPONSE_INVALID');
 }
 
-/// Public, consented artwork only. The same renderer is used by Mi TukTuk.
+/// Public, consented artwork only. The same renderer is used by Impulsa.
 class MarketplaceSharedPromoCards extends StatefulWidget {
   const MarketplaceSharedPromoCards({required this.code, super.key});
   final String code;

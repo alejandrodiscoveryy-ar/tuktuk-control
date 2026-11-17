@@ -3404,14 +3404,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                               color: kPrimary,
                             ),
                             title: const Text(
-                              'Mi TukTuk',
+                              'Impulsa',
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
-                            subtitle: const Text('Tus tarjetas y enlace personal'),
+                            subtitle: const Text('Verificación, tarjetas y enlace personal'),
                             trailing: const Icon(Icons.chevron_right_rounded),
                             onTap: () => _openWorkDrawerPage(
                               context,
-                              'Mi TukTuk',
+                              'Impulsa',
                               MarketplaceDriverPromotionScreen(store: widget.store),
                             ),
                           ),

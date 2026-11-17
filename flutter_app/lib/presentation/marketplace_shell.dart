@@ -189,11 +189,11 @@ class MarketplaceMoreScreen extends StatelessWidget {
               icon: Icons.campaign_outlined,
               color: Color(0xFFFB923C),
             ),
-            title: const Text('Mi TukTuk'),
+            title: const Text('Impulsa'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
-              title: 'Mi TukTuk',
+              title: 'Impulsa',
               child: MarketplaceDriverPromotionScreen(store: store),
             ),
           ),

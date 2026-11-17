@@ -63,7 +63,7 @@ void main() {
     },
   );
 
-  test('Mi TukTuk es la primera opción del perfil de Trabajo y también está en Más', () {
+  test('Impulsa es la primera opción del perfil de Trabajo y también está en Más', () {
     final work = File('lib/presentation/marketplace_jobs.dart').readAsStringSync();
     final more = File('lib/presentation/marketplace_shell.dart').readAsStringSync();
     final header = work.indexOf('_workDrawerDriverHeader(),');
@@ -75,6 +75,8 @@ void main() {
     expect(work.substring(promo, scheduled),
       contains('MarketplaceDriverPromotionScreen(store: widget.store)'));
     expect(more, contains('MarketplaceDriverPromotionScreen(store: store)'));
+    expect(work.substring(promo, scheduled), contains("'Impulsa'"));
+    expect(more, contains("title: const Text('Impulsa')"));
   });
 
   test('Trabajo reutiliza referidos y conserva rutas operativas', () {
