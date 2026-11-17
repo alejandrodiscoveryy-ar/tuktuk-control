@@ -887,6 +887,37 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
+  Future<void> _withdrawImpulsaRequest() async {
+    if (!_sameUser || _applicationStatus != 'pending' || _applicationSubmitting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Retirar solicitud?'),
+        content: const Text('La Agencia no podrá aprobarla. Podrás solicitar nuevamente la verificación cuando quieras.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Retirar solicitud')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || !_sameUser) return;
+    setState(() { _applicationSubmitting = true; _applicationError = null; });
+    try {
+      await _client.rpc('withdraw_my_marketplace_impulsa_application_v1')
+        .timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser) return;
+      await _loadApplication();
+    } catch (_) {
+      if (mounted && _sameUser) {
+        setState(() => _applicationError = 'No se pudo retirar la solicitud. Vuelve a intentarlo.');
+      }
+    } finally {
+      if (mounted && _sameUser) setState(() => _applicationSubmitting = false);
+    }
+  }
+
   Future<void> _openMyDocuments() async {
     await Navigator.of(context).push<void>(MaterialPageRoute(
       builder: (_) => Scaffold(
@@ -936,6 +967,25 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           const Text('Solicita tu incorporación a Impulsa. La insignia azul aparece únicamente cuando Administración comprueba y aprueba tu identidad.',
             style: TextStyle(fontSize: 12)),
           const SizedBox(height: 10),
+          const ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text('Condiciones de verificación e Impulsa',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            children: [
+              Text('La Agencia TukTuk comprobará personalmente tu identidad con los documentos registrados. La solicitud no es una verificación automática.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 7),
+              Text('Tras la aprobación, se podrá mostrar tu nombre público, foto autorizada, modalidad, servicios, enlace y QR para captar clientes.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 7),
+              Text('Los beneficios y comisiones comerciales se calcularán según las reglas vigentes de Impulsa para viajes reales. Puedes desactivar tu perfil promocional.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 7),
+              Text('Tu aceptación se registra con fecha y versión impulsa-self-service-v1. Puedes retirar una solicitud pendiente antes de que la Agencia la apruebe.',
+                style: TextStyle(fontSize: 12)),
+              SizedBox(height: 8),
+            ],
+          ),
           if (!_applicationDocumentsReady) ...[
             const Text('Para solicitarlo, registra las dos caras de tu carnet o licencia en tu expediente.',
               style: TextStyle(fontSize: 12)),
@@ -972,10 +1022,17 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
               label: Text(_applicationSubmitting ? 'Enviando solicitud…' : 'Solicitar verificación')),
           ],
         ],
-        if (pending && !_applicationLoading) const Padding(
-          padding: EdgeInsets.only(top: 10),
-          child: Text('Tu solicitud fue recibida. Administración revisará los documentos y tu autorización antes de activar las herramientas de Impulsa.',
-            style: TextStyle(fontSize: 12))),
+        if (pending && !_applicationLoading) ...[
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Text('Tu solicitud fue recibida. Administración revisará los documentos y tu autorización antes de activar las herramientas de Impulsa.',
+              style: TextStyle(fontSize: 12))),
+          Align(alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('impulsa-withdraw-request'),
+              onPressed: _applicationSubmitting ? null : _withdrawImpulsaRequest,
+              child: const Text('Retirar solicitud'))),
+        ],
         if (approved && !active) const Padding(
           padding: EdgeInsets.only(top: 10),
           child: Text('La solicitud está aprobada; actualiza el estado. Si no aparecen tus tarjetas, contacta a la Agencia TukTuk.',
