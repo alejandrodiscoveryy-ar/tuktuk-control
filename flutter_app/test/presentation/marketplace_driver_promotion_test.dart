@@ -411,10 +411,10 @@ void main() {
     expect(source, contains("'target_amount': roundedAmount"));
     expect(source, contains("'target_key': _withdrawalRequestKey"));
     expect(source, contains("values?['can_withdraw'] == true"));
-    expect(source, contains("available >= minimum"));
+    expect(source, contains('available >= minimum'));
     expect(source, contains("const ValueKey('impulsa-request-withdrawal')"));
-    expect(source, contains("_withdrawalRequestKey = _marketplaceUuid()"));
-    expect(source, contains("Solo puedes retirar las ganancias comerciales de Impulsa"));
+    expect(source, contains('_withdrawalRequestKey = _marketplaceUuid()'));
+    expect(source, contains('Solo puedes retirar las ganancias comerciales de Impulsa'));
     expect(source, contains('MarketplaceOnboardingScreen(store: widget.store, driverOnly: true)'));
     expect(source, contains('_sameUser && _enabled && _earnings != null'));
     expect(source, isNot(contains("'Mi TukTuk'")));
