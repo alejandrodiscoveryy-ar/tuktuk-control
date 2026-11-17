@@ -6,7 +6,7 @@ import 'package:image/image.dart' as img;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('Export ten synthetic Impulsa review PNGs', (tester) async {
+  testWidgets('Export Impulsa review PNGs and physical horizontal cards', (tester) async {
     final path = Platform.environment['IMPULSA_PREVIEW_DIR'];
     if (path == null) return;
     final directory = Directory(path)..createSync(recursive: true);
@@ -64,6 +64,21 @@ void main() {
         expect(png.width, 1080);
         expect(png.height, story ? 1920 : 1080);
         File('${directory.path}/${entry.key}-${story ? "historia" : "cuadrada"}.png').writeAsBytesSync(bytes);
+        if (!story) {
+          final print = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
+            name: entry.key == 'tricycle' ? 'Frank Camilo Núñez Nieves'
+              : 'Conductor Demo',
+            code: '0123456789abcdef0123456789abcdef',
+            alias: entry.key == 'tricycle' ? 'frank' : 'conductor-demo',
+            modality: entry.value, logoBytes: logo, identityVerified: true));
+          expect(print, isNotNull);
+          final horizontal = img.decodePng(print!)!;
+          expect(horizontal.width, 1004);
+          expect(horizontal.height, 650);
+          File('${directory.path}/${entry.key}-presentacion.png').writeAsBytesSync(print);
+          File('${directory.path}/${entry.key}-presentacion.pdf')
+            .writeAsBytesSync(marketplaceDriverPrintPdf(print));
+        }
       }
     }
     final printable = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
