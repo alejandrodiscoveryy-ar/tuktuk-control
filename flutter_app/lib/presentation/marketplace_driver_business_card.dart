@@ -111,18 +111,18 @@ Uint8List marketplaceDriverPrintPdf(Uint8List png) {
   end();
   begin(4);
   write('<< /Type /XObject /Subtype /Image /Width 1004 /Height 650 '
-    '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Length '+rgb.length.toString()+' >>\nstream\n');
+    '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${rgb.length} >>\nstream\n');
   out.add(rgb);
   write('\nendstream');
   end();
   begin(5);
   const commands = 'q\n240.94488 0 0 155.90551 0 0 cm\n/Im0 Do\nQ\n';
-  write('<< /Length '+commands.length.toString()+' >>\nstream\n'+commands+'endstream');
+  write('<< /Length ${commands.length} >>\nstream\n${commands}endstream');
   end();
   final start = out.length;
   write('xref\n0 6\n0000000000 65535 f \n');
   for (final offset in positions.skip(1)) {
-    write(offset.toString().padLeft(10, '0')+' 00000 n \n');
+    write("${offset.toString().padLeft(10, '0')} 00000 n \n");
   }
   write('trailer\n<< /Root 1 0 R /Size 6 >>\nstartxref\n$start\n%%EOF\n');
   return out.takeBytes();
