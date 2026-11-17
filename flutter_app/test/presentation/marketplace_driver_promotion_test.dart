@@ -311,7 +311,7 @@ void main() {
     expect(source, contains('_downloadCard(story: story)'));
     expect(source, contains('_artworkFor(story)'));
     expect(source, contains('_fileNameFor(story)'));
-    expect(source, contains("story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png'"));
+    expect(source, contains("story ? 'Impulsa-historia.png' : 'Impulsa-cuadrada.png'"));
     expect(source, contains('text: copy'));
   });
 
@@ -321,10 +321,11 @@ void main() {
     expect(source, isNot(contains('publish_my_marketplace_promo_card_v1')));
     expect(source, contains('revoke_my_marketplace_promo_card_v1'));
     expect(source, isNot(contains('Activar mi perfil')));
-    expect(source, isNot(contains('CheckboxListTile')));
+    expect(source, contains('CheckboxListTile'));
+    expect(source, contains('request_my_marketplace_impulsa_verification_v1'));
     expect(source, isNot(contains('_ensurePublished')));
     expect(source, isNot(contains('Al compartir, descargar o copiar el enlace')));
-    expect(source, contains('active Mi TukTuk desde Administración'));
+    expect(source, contains('Administración revisará los documentos'));
     expect(source, contains('_copyText(_taggedLink'));
     expect(source, contains('record_my_marketplace_impulsa_share_action_v1'));
     expect(source, contains("'target_channel': _shareChannel"));
