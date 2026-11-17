@@ -23,7 +23,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     if (photoBytes != null) portrait = await _promoDecode(photoBytes);
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    const full = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
+    const full = Rect.fromLTWH(0, 0, 1004, 650);
     canvas.drawRect(full, Paint()..color = Colors.white);
     canvas.drawRect(full, Paint()..shader = const LinearGradient(
       begin: Alignment.topLeft, end: Alignment.bottomRight,
