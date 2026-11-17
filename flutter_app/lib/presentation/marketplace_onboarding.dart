@@ -27,12 +27,6 @@ String _marketplaceMoneyLabel(double value, String currency) {
   return '$formatted $currency';
 }
 
-String _marketplacePercentLabel(double rate) {
-  final percent = rate * 100;
-  final decimals = percent == percent.roundToDouble() ? 0 : 2;
-  return '${percent.toStringAsFixed(decimals)}%';
-}
-
 String marketplaceTopupStatusLabel(String status) => switch (status) {
       'requested' => 'Pendiente',
       'confirmed' || 'reconciled' => 'Confirmada',
