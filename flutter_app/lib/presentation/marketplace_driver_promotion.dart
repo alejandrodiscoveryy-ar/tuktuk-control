@@ -342,7 +342,7 @@ Future<ui.Image> _promoLoadMaster(String category, bool story) async {
   return _promoDecode(asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes));
 }
 
-/// Renders the real exported PNG, shared by Mi TukTuk and the Admin viewer.
+/// Renders the real exported PNG, shared by Impulsa and the Admin viewer.
 /// No original reference portrait, sample name, alias or illustrative QR is
 /// included in the master assets. No generated files are uploaded.
 Future<Uint8List> renderMarketplaceDriverPromoCard({
@@ -1013,7 +1013,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final result = await _client.rpc('prepare_my_marketplace_promo_card_v1');
       if (!mounted || !_sameUser || revision != _revision) return;
       if (result is! Map) throw StateError('PROMO_PROFILE_INVALID');
-      final enabled = result['enabled'] == true;
+      // Verified identity is required before any Impulsa tools are unlocked.
+      final enabled = result['enabled'] == true && result['identity_verified'] == true;
       final identityVerified = enabled && result['identity_verified'] == true;
       setState(() {
         _enabled = enabled;
@@ -1126,7 +1127,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           'fotografía' => 'No se pudo cargar tu fotografía autorizada. Reintenta sin desactivar tu perfil.',
           'tarjeta' => 'No se pudo generar la imagen de tu tarjeta. Reintenta.',
           'enlace' => 'No se pudo consultar tu enlace personal. Reintenta.',
-          _ => 'No se pudo consultar tu perfil de Mi TukTuk. Reintenta.',
+          _ => 'No se pudo consultar tu perfil de Impulsa. Reintenta.',
         };
         });
       }
@@ -1233,8 +1234,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   Future<void> _downloadPrintCard({required bool pdf}) async {
     final card = _printBytes;
     if (!_sameUser || !_enabled || _busy || card == null) return;
-    final file = pdf ? 'Mi-TukTuk-presentacion-85x55.pdf'
-      : 'Mi-TukTuk-presentacion-300dpi.png';
+    final file = pdf ? 'Impulsa-presentacion-85x55.pdf'
+      : 'Impulsa-presentacion-300dpi.png';
     try {
       final bytes = pdf ? marketplaceDriverPrintPdf(card) : card;
       final mime = pdf ? 'application/pdf' : 'image/png';
@@ -1318,7 +1319,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.memory(art, fit: BoxFit.contain, gaplessPlayback: true,
-                        semanticLabel: 'Tarjeta Mi TukTuk $label'),
+                        semanticLabel: 'Tarjeta Impulsa $label'),
                     ),
               ),
             ),
@@ -1544,7 +1545,7 @@ Future<Map<String, dynamic>?> loadMarketplaceSharedPromoProfile(
   throw StateError('PROMO_RESPONSE_INVALID');
 }
 
-/// Public, consented artwork only. The same renderer is used by Mi TukTuk.
+/// Public, consented artwork only. The same renderer is used by Impulsa.
 class MarketplaceSharedPromoCards extends StatefulWidget {
   const MarketplaceSharedPromoCards({required this.code, super.key});
   final String code;
