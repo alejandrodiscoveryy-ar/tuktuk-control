@@ -26,7 +26,7 @@ void main() {
     final header = picture.getPixel(600, 24);
     expect(header.r, lessThan(45)); // No blue header fill.
     expect(header.b, lessThan(55));
-    final impulse = picture.getPixel(760, 82);
+    final impulse = picture.getPixel(760, 117);
     expect(impulse.r, greaterThan(impulse.b)); // Warm orange mark.
     final qr = marketplaceDriverPromoQr(code, alias: 'conductor-ejemplo');
     const x = 727, y = 200, module = 5;
