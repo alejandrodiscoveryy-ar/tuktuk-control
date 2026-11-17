@@ -1,0 +1,38 @@
+name: "TukTuk · Impulsa difusión Conductor (solo Web)"
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'flutter_app/lib/presentation/marketplace_driver_promotion.dart'
+      - 'flutter_app/test/presentation/marketplace_driver_promotion_test.dart'
+      - '.github/workflows/impulsa-communication-conductor.yml'
+permissions:
+  contents: read
+jobs:
+  conductor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+      - name: Instalar dependencias
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Analizar Conductor
+        working-directory: flutter_app
+        run: flutter analyze --no-fatal-infos
+      - name: Probar las tarjetas y enlaces Impulsa
+        working-directory: flutter_app
+        run: flutter test test/presentation/marketplace_driver_promotion_test.dart
+      - name: Preparar branding web sin publicar
+        working-directory: flutter_app
+        run: dart run tool/sync_project_branding.dart --web
+      - name: Compilar WebApp de prueba, sin APK ni despliegue
+        working-directory: flutter_app
+        run: flutter build web --release --base-href /tuktuk/app/ --no-tree-shake-icons
