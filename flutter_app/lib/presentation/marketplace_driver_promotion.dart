@@ -741,7 +741,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _enabled = false;
   bool _sharing = false, _identityVerified = false;
-  String _shareChannel = "unknown";
+  String _shareChannel = 'unknown';
   String? _error, _code, _photoAssetId, _alias;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
@@ -1030,7 +1030,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
-  Future<void> _copyText(String text, {String action = "link_copied"}) async {
+  Future<void> _copyText(String text, {String action = 'link_copied'}) async {
     if (!_sameUser || !_enabled || _squareBytes == null || _storyBytes == null) return;
     try {
       await Clipboard.setData(ClipboardData(text: text));
