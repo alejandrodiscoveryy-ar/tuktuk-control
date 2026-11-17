@@ -2269,24 +2269,6 @@ class _MarketplaceOnboardingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.account_balance_wallet_outlined),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Billetera',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tu saldo se utiliza para cubrir comisiones de carreras. '
-            'Las recargas y bonificaciones son para trabajar, no para retirar.',
-            style: TextStyle(color: appMutedColor(context), height: 1.35),
-          ),
           if (_walletLoading)
             const Center(
               child: Padding(
@@ -2314,6 +2296,12 @@ class _MarketplaceOnboardingScreenState
               _marketplaceMoneyLabel(wallet.availableBalance, wallet.currency),
               emphasize: true,
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Recargas y bonos para cubrir comisiones. '
+              'No son retirables.',
+              style: TextStyle(color: appMutedColor(context), fontSize: 12),
+            ),
             if (wallet.reservedBalance > 0) ...[
               const SizedBox(height: 8),
               Text(
@@ -2337,7 +2325,7 @@ class _MarketplaceOnboardingScreenState
                   ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Recargas y ajustes'),
+                    title: const Text('Saldo real (recargas y créditos)'),
                     trailing: Text(_marketplaceMoneyLabel(
                       wallet.realAvailableBalance!, wallet.currency,
                     )),
