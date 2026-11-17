@@ -1624,8 +1624,6 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           const SizedBox(height: 10),
           if (_sameUser && _enabled && _earnings != null)
             _MarketplaceImpulsaEarningsCard(earnings: _earnings!, refresh: () => unawaited(_loadEarnings()), loading: _earningsBusy)
-          if (_sameUser && _enabled)
-            _impulsaWithdrawalPanel(),
           else if (_sameUser && _enabled && _earningsBusy)
             const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator())
           else if (_sameUser && _enabled && _earningsUnavailable)
@@ -1633,6 +1631,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
               const Expanded(child: Text('Ganancias comerciales aún no disponibles.', style: TextStyle(fontSize: 12))),
               TextButton(onPressed: () => unawaited(_loadEarnings()), child: const Text('Consultar')),
             ])),
+          if (_sameUser && _enabled)
+            _impulsaWithdrawalPanel(),
           if (_enabled) ...[
             Row(children: [
               const Expanded(child: Text('Mis tarjetas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
