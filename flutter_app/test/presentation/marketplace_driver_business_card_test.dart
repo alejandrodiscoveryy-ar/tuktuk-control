@@ -68,16 +68,4 @@ void main() {
       throwsArgumentError);
   });
 
-  test('print UI is available to driver and to admin shared renderer', () {
-    // Static guard: don't replace the two approved promotional formats.
-    // ignore: avoid_relative_lib_imports
-    final source = <String>[
-      'renderMarketplaceDriverPrintCard',
-      'mi-tuktuk-print-pdf',
-      'mi-tuktuk-print-png',
-      'downloadPromoFile',
-      'Tarjeta de presentación',
-    ];
-    expect(source.length, 5);
-  });
 }
