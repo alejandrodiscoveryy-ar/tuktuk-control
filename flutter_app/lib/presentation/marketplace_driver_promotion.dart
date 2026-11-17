@@ -741,6 +741,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _enabled = false;
   bool _sharing = false, _identityVerified = false;
+  bool _applicationLoading = true, _applicationSubmitting = false;
+  bool _applicationDocumentsReady = false, _applicationVerified = false;
+  bool _acceptImpulsaRules = false, _acceptPublicProfile = false, _acceptPhoto = false;
+  String _applicationStatus = 'not_requested';
+  String? _applicationError;
+  int _applicationRevision = 0;
   String _shareChannel = 'unknown';
   String? _error, _code, _photoAssetId, _alias;
   Uint8List? _squareBytes, _storyBytes, _printBytes;
@@ -750,7 +756,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   bool _earningsBusy = false, _earningsUnavailable = false;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
-  String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
+  String _fileNameFor(bool story) => story ? 'Impulsa-historia.png' : 'Impulsa-cuadrada.png';
   String? get _activeCampaign {
     final value = _campaign.text.trim().toLowerCase();
     return RegExp(r'^[a-z0-9_-]{1,32}$').hasMatch(value) ? value : null;
@@ -796,21 +802,183 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
           _photoAssetId = null; _earnings = null; _earningsBusy = false; _earningsUnavailable = false;
           _squareBytes = null; _storyBytes = null; _printBytes = null;
-          _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
+          _applicationRevision++;
+          _applicationStatus = 'not_requested';
+          _applicationLoading = false;
+          _applicationVerified = false;
+          _applicationDocumentsReady = false;
+          _applicationError = null;
+          _error = 'Inicia sesión nuevamente para abrir Impulsa.';
         });
       }
     });
     unawaited(_load());
+    unawaited(_loadApplication());
     unawaited(_loadEarnings());
   }
 
   @override
   void dispose() {
-    _revision++; _earningsRevision++;
+    _revision++; _earningsRevision++; _applicationRevision++;
     _auth?.cancel();
     _name.dispose();
     _campaign.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadApplication() async {
+    if (!_sameUser || !mounted) return;
+    final revision = ++_applicationRevision;
+    setState(() { _applicationLoading = true; _applicationError = null; });
+    try {
+      final response = await _client.rpc('get_my_marketplace_impulsa_application_v1')
+        .timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser || revision != _applicationRevision) return;
+      if (response is! Map) throw const FormatException('IMPULSA_APPLICATION_INVALID');
+      setState(() {
+        _applicationStatus = response['status']?.toString() ?? 'not_requested';
+        _applicationDocumentsReady = response['documents_ready'] == true;
+        _applicationVerified = response['verified'] == true;
+      });
+    } catch (_) {
+      if (mounted && _sameUser && revision == _applicationRevision) {
+        setState(() {
+          _applicationError = 'No se pudo consultar la solicitud. Comprueba tu conexión o inténtalo después.';
+        });
+      }
+    } finally {
+      if (mounted && _sameUser && revision == _applicationRevision) {
+        setState(() => _applicationLoading = false);
+      }
+    }
+  }
+
+  Future<void> _submitImpulsaRequest() async {
+    if (_applicationSubmitting || !_sameUser || !_applicationDocumentsReady ||
+        !_acceptImpulsaRules || !_acceptPublicProfile || !_acceptPhoto) return;
+    setState(() { _applicationSubmitting = true; _applicationError = null; });
+    try {
+      final result = await _client.rpc('request_my_marketplace_impulsa_verification_v1',
+        params: {
+          'target_accept_terms': true,
+          'target_authorize_public_profile': true,
+          'target_authorize_photo': true,
+        }).timeout(const Duration(seconds: 15));
+      if (!mounted || !_sameUser) return;
+      if (result is! Map || result['status'] != 'pending') {
+        throw const FormatException('IMPULSA_APPLICATION_NOT_PENDING');
+      }
+      setState(() {
+        _applicationStatus = 'pending';
+        _acceptImpulsaRules = false;
+        _acceptPublicProfile = false;
+        _acceptPhoto = false;
+      });
+      await _loadApplication();
+    } catch (_) {
+      if (mounted && _sameUser) {
+        setState(() => _applicationError =
+          'No se pudo enviar la solicitud. Verifica tus documentos y vuelve a intentarlo.');
+      }
+    } finally {
+      if (mounted && _sameUser) setState(() => _applicationSubmitting = false);
+    }
+  }
+
+  Future<void> _openMyDocuments() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('Documentos del conductor')),
+        body: MarketplaceOnboardingScreen(store: widget.store, driverOnly: true),
+      ),
+    ));
+    if (mounted && _sameUser) await _loadApplication();
+  }
+
+  Widget _impulsaVerification() {
+    final verified = _identityVerified || _applicationVerified;
+    final pending = _applicationStatus == 'pending';
+    final approved = _applicationStatus == 'approved';
+    final active = _enabled && verified;
+    final color = verified ? const Color(0xFF1D9BF0)
+      : pending ? const Color(0xFFE5A84E) : appMutedColor(context);
+    final statusText = active ? 'Conductor verificado · Impulsa activo'
+      : verified ? 'Identidad verificada · esperando activación Impulsa'
+      : pending ? 'Verificación en revisión administrativa'
+      : approved ? 'Solicitud aprobada · esperando activación'
+      : _applicationStatus == 'rejected' ? 'Solicitud rechazada · puedes corregir y reenviar'
+      : 'Solicita tu verificación';
+    return Card(child: Padding(padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(verified ? Icons.verified_rounded : Icons.verified_outlined,
+            color: color, size: 28),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Impulsa', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              Text(_applicationLoading && !active ? 'Consultando verificación…' : statusText,
+                style: const TextStyle(fontSize: 12)),
+            ])),
+          IconButton(tooltip: 'Actualizar estado', onPressed: _applicationLoading || _applicationSubmitting
+            ? null : () { unawaited(_loadApplication()); unawaited(_load(force: true)); },
+            icon: const Icon(Icons.refresh)),
+        ]),
+        if (_applicationLoading && !active) const LinearProgressIndicator(),
+        if (!active && !_applicationLoading && _applicationError != null)
+          Padding(padding: const EdgeInsets.only(top: 8),
+            child: Text(_applicationError!, style: const TextStyle(color: kDanger))),
+        if (!active && !_applicationLoading && _applicationError == null &&
+            !pending && !approved && !verified) ...[
+          const SizedBox(height: 12),
+          const Text('Solicita tu incorporación a Impulsa. La insignia azul aparece únicamente cuando Administración comprueba y aprueba tu identidad.',
+            style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          if (!_applicationDocumentsReady) ...[
+            const Text('Para solicitarlo, registra las dos caras de tu carnet o licencia en tu expediente.',
+              style: TextStyle(fontSize: 12)),
+            TextButton.icon(onPressed: _openMyDocuments,
+              icon: const Icon(Icons.badge_outlined),
+              label: const Text('Completar documentos')),
+          ] else ...[
+            CheckboxListTile(
+              key: const ValueKey('impulsa-accept-terms'),
+              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Acepto las condiciones de Impulsa y la revisión administrativa de mis documentos.'),
+              value: _acceptImpulsaRules,
+              onChanged: (v) => setState(() => _acceptImpulsaRules = v == true)),
+            CheckboxListTile(
+              key: const ValueKey('impulsa-consent-public'),
+              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Autorizo publicar mi nombre, modalidad, enlace y QR personal para que los clientes puedan solicitar mi servicio.'),
+              value: _acceptPublicProfile,
+              onChanged: (v) => setState(() => _acceptPublicProfile = v == true)),
+            CheckboxListTile(
+              key: const ValueKey('impulsa-consent-photo'),
+              dense: true, contentPadding: EdgeInsets.zero, controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Autorizo publicar mi foto de perfil actual en mis tarjetas de Impulsa.'),
+              value: _acceptPhoto,
+              onChanged: (v) => setState(() => _acceptPhoto = v == true)),
+            const Text('La solicitud se registra con fecha y versión de consentimiento. No garantiza aprobación; puedes desactivar tu perfil público posteriormente.',
+              style: TextStyle(fontSize: 11)),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              key: const ValueKey('impulsa-request-verification'),
+              onPressed: _applicationSubmitting || !_acceptImpulsaRules || !_acceptPublicProfile || !_acceptPhoto
+                ? null : _submitImpulsaRequest,
+              icon: const Icon(Icons.verified_user_outlined),
+              label: Text(_applicationSubmitting ? 'Enviando solicitud…' : 'Solicitar verificación')),
+          ],
+        ],
+        if (pending && !_applicationLoading) const Padding(
+          padding: EdgeInsets.only(top: 10),
+          child: Text('Tu solicitud fue recibida. Administración revisará los documentos y tu autorización antes de activar las herramientas de Impulsa.',
+            style: TextStyle(fontSize: 12))),
+        if (approved && !active) const Padding(
+          padding: EdgeInsets.only(top: 10),
+          child: Text('La solicitud está aprobada; actualiza el estado. Si no aparecen tus tarjetas, contacta a la Agencia TukTuk.',
+            style: TextStyle(fontSize: 12))),
+      ])));
   }
 
   Future<void> _loadEarnings() async {
@@ -1016,7 +1184,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     try {
       final box = context.findRenderObject() as RenderBox?;
       final result = await SharePlus.instance.share(ShareParams(
-        title: 'Mi TukTuk', text: copy,
+        title: 'Impulsa', text: copy,
         files: [XFile.fromData(bytes, mimeType: 'image/png', name: fileName)],
         fileNameOverrides: [fileName],
         sharePositionOrigin: box == null ? null : box.localToGlobal(Offset.zero) & box.size,
@@ -1196,9 +1364,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             Text(_error!, style: const TextStyle(color: kDanger)),
             TextButton(onPressed: _busy ? null : _load, child: const Text('Reintentar')),
           ],
-          if (!_enabled && !_busy && _error == null)
-            const Text('Tu ficha estará disponible cuando la Agencia TukTuk verifique tu identidad y active Mi TukTuk desde Administración.'),
-          if (_sameUser && _earnings != null)
+          _impulsaVerification(),
+          const SizedBox(height: 10),
+          if (_sameUser && _enabled && _earnings != null)
             _MarketplaceImpulsaEarningsCard(earnings: _earnings!, refresh: () => unawaited(_loadEarnings()), loading: _earningsBusy)
           else if (_sameUser && _enabled && _earningsBusy)
             const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator())
