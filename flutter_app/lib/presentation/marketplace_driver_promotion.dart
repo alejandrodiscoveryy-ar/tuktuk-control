@@ -936,7 +936,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final color = verified ? const Color(0xFF1D9BF0)
       : pending ? const Color(0xFFE5A84E) : appMutedColor(context);
     final statusText = active ? 'Conductor verificado · Impulsa activo'
-      : verified ? 'Identidad verificada · esperando activación Impulsa'
+      : verified ? 'Identidad verificada · solicita tu activación Impulsa'
       : pending ? 'Verificación en revisión administrativa'
       : approved ? 'Solicitud aprobada · esperando activación'
       : _applicationStatus == 'rejected' ? 'Solicitud rechazada · puedes corregir y reenviar'
@@ -962,10 +962,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           Padding(padding: const EdgeInsets.only(top: 8),
             child: Text(_applicationError!, style: const TextStyle(color: kDanger))),
         if (!active && !_applicationLoading && _applicationError == null &&
-            !pending && !approved && !verified) ...[
+            !pending && !approved) ...[
           const SizedBox(height: 12),
-          const Text('Solicita tu incorporación a Impulsa. La insignia azul aparece únicamente cuando Administración comprueba y aprueba tu identidad.',
-            style: TextStyle(fontSize: 12)),
+          Text(verified
+            ? 'Tu identidad está verificada. Para reactivar Impulsa debes autorizar de nuevo tu perfil y esperar la aprobación administrativa.'
+            : 'Solicita tu incorporación a Impulsa. La insignia azul aparece únicamente cuando Administración comprueba y aprueba tu identidad.',
+            style: const TextStyle(fontSize: 12)),
           const SizedBox(height: 10),
           const ExpansionTile(
             tilePadding: EdgeInsets.zero,
