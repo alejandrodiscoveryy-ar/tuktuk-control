@@ -37,17 +37,18 @@ void main() {
       final walletCard = onboarding.split(
         'Widget _buildWalletCard(BuildContext context) {',
       ).last.split('Widget _walletValue(').first;
-      expect(walletCard, contains('No existe un depósito mínimo obligatorio'));
-      expect(walletCard, contains("'Disponible para carreras'"));
-      expect(walletCard, contains("'Ver desglose del saldo'"));
-      expect(walletCard, contains("'Saldo real (recargas y créditos)'"));
-      expect(walletCard, contains("'Bonificaciones para carreras'"));
+      expect(walletCard, contains("'Tu dinero para trabajar'"));
+      expect(walletCard, contains("'Saldo disponible para carreras'"));
+      expect(walletCard, contains("'¿De dónde sale ese saldo?'"));
+      expect(walletCard, contains("'Recargas y otros abonos'"));
+      expect(walletCard, contains("'Bonificaciones'"));
       expect(walletCard, contains('wallet.availableBalance'));
       expect(walletCard, contains('wallet.realAvailableBalance!'));
       expect(walletCard, contains('wallet.promotionalAvailableBalance!'));
       expect(walletCard, contains('wallet.reservedBalance > 0'));
       expect(walletCard, contains("'Recargar saldo'"));
-      expect(walletCard, contains('exclusivamente desde Impulsa.'));
+      expect(walletCard, contains('desde Impulsa.'));
+      expect(walletCard, isNot(contains('ExpansionTile(')));
       expect(walletCard, isNot(contains("'Saldo total'")));
       expect(walletCard, isNot(contains("'Real disponible'")));
       expect(walletCard, isNot(contains("'Promo disponible'")));
