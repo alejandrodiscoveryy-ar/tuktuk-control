@@ -720,6 +720,10 @@ void main() {
   });
   test('acceptance messages distinguish wallet, profile and other errors', () {
     expect(
+      marketplaceAcceptErrorMessage('MARKETPLACE_DEBT_PENDING'),
+      contains('deuda de comisiones pendiente'),
+    );
+    expect(
       marketplaceAcceptErrorMessage('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE'),
       'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.',
     );
