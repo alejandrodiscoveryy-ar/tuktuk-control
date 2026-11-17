@@ -115,7 +115,10 @@ void main() {
     final source = File('lib/presentation/marketplace_driver_business_card.dart').readAsStringSync();
     expect(source, isNot(contains("'Verificado', 841")));
     expect(source, contains("'Impulsa', 754, 71"));
-    expect(source, contains("'TUK', brandLeft"));
+    expect(source, contains("'Agencia TukTuk', icon == null ? 55 : 149"));
+    expect(source, isNot(contains("'TUK', brandLeft")));
+    expect(source, isNot(contains("'Agencia TukTuk', 55, 581")));
+    expect(source, contains("'Tu conductor de confianza, a un toque.'"));
     expect(source, contains('const gold = Color(0xFFE5A84E)'));
     expect(source, contains('const mint = Color(0xFF35D6A2)'));
     expect(source, contains('if (identityVerified) {'));
