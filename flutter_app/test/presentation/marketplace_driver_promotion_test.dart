@@ -402,6 +402,9 @@ void main() {
     expect(source, contains("const ValueKey('impulsa-consent-public')"));
     expect(source, contains("const ValueKey('impulsa-consent-photo')"));
     expect(source, contains("const ValueKey('impulsa-request-verification')"));
+    expect(source, contains("const ValueKey('impulsa-withdraw-request')"));
+    expect(source, contains('withdraw_my_marketplace_impulsa_application_v1'));
+    expect(source, contains('Condiciones de verificación e Impulsa'));
     expect(source, contains('MarketplaceOnboardingScreen(store: widget.store, driverOnly: true)'));
     expect(source, contains('_sameUser && _enabled && _earnings != null'));
     expect(source, isNot(contains("'Mi TukTuk'")));
