@@ -1374,14 +1374,14 @@ class MarketplaceSharedPromoCards extends StatefulWidget {
 }
 
 class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCards> {
-  late Future<(String, Uint8List, Uint8List, String)> _cards;
+  late Future<(String, Uint8List, Uint8List, Uint8List, String)> _cards;
   @override
   void initState() {
     super.initState();
     _cards = _load();
   }
 
-  Future<(String, Uint8List, Uint8List, String)> _load() async {
+  Future<(String, Uint8List, Uint8List, Uint8List, String)> _load() async {
     final client = Supabase.instance.client;
     final raw = await loadMarketplaceSharedPromoProfile(() async {
       final response = await client.functions.invoke('marketplace-customer-gateway',
@@ -1415,13 +1415,16 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
     final story = await renderMarketplaceDriverPromoCard(name: name, code: widget.code, alias: alias,
       modality: modality, story: true, photoBytes: photo, logoBytes: logo,
       identity: identity, identityVerified: true, vehicleCategory: category);
-    return (name, square, story, alias);
+    final printable = await renderMarketplaceDriverPrintCard(
+      name: name, code: widget.code, alias: alias, modality: modality,
+      logoBytes: logo, identityVerified: true);
+    return (name, square, story, printable, alias);
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFF101619),
-    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List, String)>(
+    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List, Uint8List, String)>(
       future: _cards,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -1435,7 +1438,7 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
         ]));
         }
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final (name, square, story, alias) = snapshot.data!;
+        final (name, square, story, printable, alias) = snapshot.data!;
         final link = marketplaceDriverPromoUri(widget.code, alias: alias).toString();
         final message = '¡Tu próximo viaje comienza conmigo!\n\nSoy $name, conductor verificado de la Agencia TukTuk.\n\nSolicita mi servicio desde este enlace:\n$link\n\nAgencia TukTuk. Tu conductor de confianza, a un toque.';
         Widget card(Uint8List bytes, bool vertical) {
@@ -1472,6 +1475,33 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
             }
             return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: card(square, false)), const SizedBox(width: 16), Expanded(child: card(story, true))]);
           }),
+          const SizedBox(height: 18),
+          const Text('Tarjeta de presentación · 85 × 55 mm',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+          const Text('Blanca, una cara y preparada para imprimir',
+            style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          ConstrainedBox(constraints: const BoxConstraints(maxWidth: 540),
+            child: AspectRatio(aspectRatio: 85 / 55,
+              child: Image.memory(printable, fit: BoxFit.contain))),
+          Wrap(alignment: WrapAlignment.center, spacing: 10, children: [
+            FilledButton.icon(onPressed: () {
+              try {
+                final pdf = marketplaceDriverPrintPdf(printable);
+                if (!driver_promo_download.downloadPromoFile(pdf,
+                    'tuktuk-presentacion-85x55.pdf', 'application/pdf')) {
+                  toast(context, 'No se pudo descargar el PDF.');
+                }
+              } catch (_) { toast(context, 'No se pudo generar el PDF.'); }
+            }, icon: const Icon(Icons.picture_as_pdf), label: const Text('PDF para imprimir')),
+            OutlinedButton.icon(onPressed: () {
+              if (!driver_promo_download.downloadPromoFile(printable,
+                  'tuktuk-presentacion.png', 'image/png')) {
+                toast(context, 'No se pudo descargar el PNG.');
+              }
+            }, icon: const Icon(Icons.download), label: const Text('PNG')),
+          ]),
+          const SizedBox(height: 18),
           TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: link)),
             icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
           TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: message)),
