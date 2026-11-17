@@ -754,6 +754,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   int _earningsRevision = 0;
   MarketplaceImpulsaEarnings? _earnings;
   bool _earningsBusy = false, _earningsUnavailable = false;
+  Map<String, dynamic>? _withdrawalAccount;
+  bool _withdrawalLoading = false, _withdrawalRequestBusy = false;
+  String? _withdrawalError, _withdrawalRequestKey;
+  num? _withdrawalRequestAmount;
+  int _withdrawalRevision = 0;
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
   String _fileNameFor(bool story) => story ? 'Impulsa-historia.png' : 'Impulsa-cuadrada.png';
@@ -801,6 +806,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         setState(() {
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
           _photoAssetId = null; _earnings = null; _earningsBusy = false; _earningsUnavailable = false;
+          _withdrawalRevision++; _withdrawalAccount = null;
+          _withdrawalError = null; _withdrawalRequestKey = null;
+          _withdrawalRequestAmount = null; _withdrawalLoading = false; _withdrawalRequestBusy = false;
           _squareBytes = null; _storyBytes = null; _printBytes = null;
           _applicationRevision++;
           _applicationStatus = 'not_requested';
@@ -815,11 +823,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     unawaited(_load());
     unawaited(_loadApplication());
     unawaited(_loadEarnings());
+    unawaited(_loadWithdrawalAccount());
   }
 
   @override
   void dispose() {
-    _revision++; _earningsRevision++; _applicationRevision++;
+    _revision++; _earningsRevision++; _applicationRevision++; _withdrawalRevision++;
     _auth?.cancel();
     _name.dispose();
     _campaign.dispose();
@@ -1040,6 +1049,191 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           child: Text('La solicitud está aprobada; actualiza el estado. Si no aparecen tus tarjetas, contacta a la Agencia TukTuk.',
             style: TextStyle(fontSize: 12))),
       ])));
+  }
+
+
+  num? _safeMoney(Object? raw) {
+    final value = raw is num ? raw : num.tryParse(raw?.toString() ?? '');
+    return value != null && value.isFinite && value >= 0 ? value : null;
+  }
+
+  String _moneyCup(num value) => '${value.toStringAsFixed(2)} CUP';
+
+  Future<void> _loadWithdrawalAccount() async {
+    if (!mounted || !_sameUser) return;
+    final revision = ++_withdrawalRevision;
+    setState(() { _withdrawalLoading = true; _withdrawalError = null; });
+    try {
+      final response = await _client.rpc('get_my_marketplace_wallet_transition_v1')
+        .timeout(const Duration(seconds: 12));
+      if (!mounted || !_sameUser || revision != _withdrawalRevision) return;
+      if (response is! Map || _safeMoney(response['impulsa_available']) == null ||
+          _safeMoney(response['withdrawal_minimum_cup']) == null ||
+          response['can_withdraw'] is! bool) {
+        throw const FormatException('INVALID_IMPULSA_WITHDRAWALS');
+      }
+      setState(() => _withdrawalAccount = Map<String,dynamic>.from(response));
+    } catch (_) {
+      if (mounted && _sameUser && revision == _withdrawalRevision) {
+        setState(() {
+          _withdrawalAccount = null;
+          _withdrawalError = 'No se pudo consultar el saldo retirable. Revisa tu conexión.';
+        });
+      }
+    } finally {
+      if (mounted && _sameUser && revision == _withdrawalRevision) {
+        setState(() => _withdrawalLoading = false);
+      }
+    }
+  }
+
+  Future<void> _requestImpulsaWithdrawal() async {
+    if (!mounted || !_sameUser || !_enabled || _withdrawalRequestBusy ||
+        _withdrawalLoading) {
+      return;
+    }
+    final data = _withdrawalAccount;
+    final amount = _safeMoney(data?['impulsa_available']);
+    final minimum = _safeMoney(data?['withdrawal_minimum_cup']);
+    if (data == null || data['can_withdraw'] != true ||
+        data['withdrawals_enabled'] != true || amount == null ||
+        minimum == null || amount < minimum || amount <= 0) {
+      return;
+    }
+    final roundedAmount = num.parse(amount.toStringAsFixed(2));
+    if (roundedAmount < minimum || roundedAmount > 100000000) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Solicitar retiro de Impulsa'),
+        content: Text('Solicitarás el retiro de ${_moneyCup(roundedAmount)} de tus ganancias comerciales disponibles. '
+          'Las recargas y los bonos para trabajar no se pueden retirar. '
+          'La Agencia TukTuk revisará la solicitud antes del pago.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Solicitar retiro')),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted || !_sameUser) return;
+    // Reuse the idempotency key while the previous response is uncertain.
+    if (_withdrawalRequestKey == null || _withdrawalRequestAmount != roundedAmount) {
+      _withdrawalRequestKey = _marketplaceUuid();
+      _withdrawalRequestAmount = roundedAmount;
+    }
+    setState(() { _withdrawalRequestBusy = true; _withdrawalError = null; });
+    try {
+      final response = await _client.rpc('request_my_marketplace_impulsa_withdrawal_v1',
+        params: {
+          'target_amount': roundedAmount,
+          'target_key': _withdrawalRequestKey,
+        }).timeout(const Duration(seconds: 18));
+      if (!mounted || !_sameUser) return;
+      if (response is! Map || response['status']?.toString() != 'requested') {
+        throw const FormatException('IMPULSA_WITHDRAWAL_INVALID_RESPONSE');
+      }
+      _withdrawalRequestKey = null;
+      _withdrawalRequestAmount = null;
+      toast(context, 'Solicitud de retiro registrada. Consulta su estado en Impulsa.');
+      await _loadWithdrawalAccount();
+    } catch (_) {
+      if (mounted && _sameUser) {
+        setState(() => _withdrawalError =
+          'No se pudo confirmar la solicitud. Consulta el historial antes de reintentar; no se generará una solicitud duplicada.');
+      }
+    } finally {
+      if (mounted && _sameUser) setState(() => _withdrawalRequestBusy = false);
+    }
+  }
+
+  Widget _impulsaWithdrawalPanel() {
+    final values = _withdrawalAccount;
+    final available = _safeMoney(values?['impulsa_available']);
+    final minimum = _safeMoney(values?['withdrawal_minimum_cup']);
+    final held = _safeMoney(values?['withdrawal_reserved']);
+    final canWithdraw = _sameUser && _enabled && !_withdrawalLoading &&
+      !_withdrawalRequestBusy && values?['can_withdraw'] == true &&
+      values?['withdrawals_enabled'] == true &&
+      available != null && minimum != null && available >= minimum;
+    final history = values?['withdrawals'] is List
+      ? (values!['withdrawals'] as List).whereType<Map>().take(8).toList()
+      : <Map>[];
+    return Card(child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.account_balance_wallet_outlined),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('Retiradas Impulsa',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+          IconButton(tooltip: 'Actualizar saldo Impulsa',
+            onPressed: _withdrawalLoading || _withdrawalRequestBusy
+              ? null : _loadWithdrawalAccount,
+            icon: const Icon(Icons.refresh)),
+        ]),
+        const SizedBox(height: 8),
+        if (_withdrawalLoading) const LinearProgressIndicator(),
+        if (values != null && available != null && minimum != null) ...[
+          Text('Disponible para retirar: ${_moneyCup(available)}',
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          Text('Umbral mínimo: ${_moneyCup(minimum)}',
+            style: const TextStyle(fontSize: 12)),
+          if (held != null && held > 0)
+            Text('Reservado en solicitudes: ${_moneyCup(held)}',
+              style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 8),
+          if (values['ready'] != true || values['active'] != true ||
+              values['withdrawals_enabled'] != true)
+            const Text('Las retiradas todavía no están habilitadas por la Agencia TukTuk.',
+              style: TextStyle(fontSize: 12))
+          else if (!canWithdraw && available < minimum)
+            Text('Te faltan ${_moneyCup(minimum - available)} de ganancias disponibles para alcanzar el umbral.',
+              style: const TextStyle(fontSize: 12))
+          else if (!canWithdraw && values['can_withdraw'] != true)
+            const Text('El retiro no está disponible por ahora. Puede haber una deuda, reserva o ajuste pendiente.',
+              style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            key: const ValueKey('impulsa-request-withdrawal'),
+            onPressed: canWithdraw ? _requestImpulsaWithdrawal : null,
+            icon: const Icon(Icons.payments_outlined),
+            label: Text(_withdrawalRequestBusy ? 'Registrando solicitud…' : 'Solicitar retiro'),
+          ),
+          const SizedBox(height: 5),
+          const Text('Solo puedes retirar las ganancias comerciales de Impulsa. '
+            'La Billetera general mantiene las recargas, bonos y saldo para trabajar.',
+            style: TextStyle(fontSize: 11)),
+          if (history.isNotEmpty) ...[
+            const Divider(height: 20),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Historial de solicitudes'),
+              children: history.map((entry) {
+                final status = switch (entry['status']?.toString()) {
+                  'requested' => 'Solicitada',
+                  'paid' => 'Pagada',
+                  'rejected' => 'Rechazada',
+                  'cancelled' => 'Cancelada',
+                  _ => 'En revisión',
+                };
+                final amount = _safeMoney(entry['amount']) ?? 0;
+                return ListTile(
+                  dense: true, title: Text(status),
+                  trailing: Text(_moneyCup(amount)),
+                );
+              }).toList(),
+            ),
+          ],
+        ] else if (!_withdrawalLoading && _withdrawalError == null)
+          const Text('Saldo de retiro no disponible.', style: TextStyle(fontSize: 12)),
+        if (_withdrawalError != null) ...[
+          const SizedBox(height: 6),
+          Text(_withdrawalError!, style: const TextStyle(color: kDanger, fontSize: 12)),
+        ],
+      ]),
+    ));
   }
 
   Future<void> _loadEarnings() async {
@@ -1430,6 +1624,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           const SizedBox(height: 10),
           if (_sameUser && _enabled && _earnings != null)
             _MarketplaceImpulsaEarningsCard(earnings: _earnings!, refresh: () => unawaited(_loadEarnings()), loading: _earningsBusy)
+          if (_sameUser && _enabled)
+            _impulsaWithdrawalPanel(),
           else if (_sameUser && _enabled && _earningsBusy)
             const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator())
           else if (_sameUser && _enabled && _earningsUnavailable)
