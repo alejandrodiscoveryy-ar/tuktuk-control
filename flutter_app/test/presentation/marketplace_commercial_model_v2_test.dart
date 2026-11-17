@@ -19,6 +19,23 @@ void main() {
     shell = File('lib/presentation/marketplace_shell.dart').readAsStringSync();
   });
 
+  test('crédito a prueba de deuda y sin retiro desde la Billetera de trabajo', () {
+    final walletCard = onboarding.split(
+      'Widget _buildWalletCard(BuildContext context) {',
+    ).last.split('Widget _walletValue(').first;
+    expect(service, contains('get_my_marketplace_wallet_transition_v1'));
+    expect(service, contains("summary['debt_cup']"));
+    expect(walletCard, contains('marketplace-wallet-debt-warning'));
+    expect(walletCard, contains('_walletDebtUserId == widget.store.user?.id'));
+    expect(walletCard, contains('(_walletDebtCup ?? 0) > 0'));
+    expect(walletCard, contains('Recarga la billetera de trabajo'));
+    expect(walletCard, isNot(contains('Solicitar retiro')));
+    expect(jobs, contains('job.usesInitialCredit'));
+    expect(jobs, contains('job.canAccept == false'));
+    expect(jobs, contains('Aceptar a crédito'));
+    expect(jobs, contains('MARKETPLACE_DEBT_PENDING'));
+  });
+
   group('TUKTUK 2.0 · contrato comercial Prestador', () {
     test('la promoción ya no depende de un botón manual', () {
       expect(onboarding, isNot(contains('Comenzar 30 días gratis')));

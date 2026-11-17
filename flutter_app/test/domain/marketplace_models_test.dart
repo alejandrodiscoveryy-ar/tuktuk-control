@@ -5,6 +5,36 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
 
+  test('oferta: crédito inicial solo cuando servidor autoriza y hay comisión', () {
+    final eligible = MarketplaceAvailableJob.fromMap({
+      'job_id': 'j1', 'service_code': 'passenger', 'final_price': 2000,
+      'currency': 'CUP', 'commission_rate': '0.15',
+      'commission_amount': '300.00', 'missing_balance': '300.00',
+      'can_accept': true,
+    });
+    expect(eligible.canAccept, isTrue);
+    expect(eligible.usesInitialCredit, isTrue);
+    expect(eligible.commissionRate, closeTo(.15, .0001));
+    expect(eligible.commissionAmount, 300);
+    expect(eligible.missingBalance, 300);
+    final blocked = MarketplaceAvailableJob.fromMap({
+      'commission_amount': 300, 'missing_balance': 300,
+      'can_accept': false,
+    });
+    expect(blocked.canAccept, isFalse);
+    expect(blocked.usesInitialCredit, isFalse);
+    final funded = MarketplaceAvailableJob.fromMap({
+      'commission_amount': 300, 'missing_balance': 0,
+      'can_accept': true,
+    });
+    expect(funded.usesInitialCredit, isFalse);
+    final legacy = MarketplaceAvailableJob.fromMap({'job_id': 'legacy'});
+    expect(legacy.canAccept, isNull);
+    expect(legacy.commissionAmount, isNull);
+    expect(legacy.usesInitialCredit, isFalse);
+  });
+
+
   test('offer and assigned job retain customer requirements and notes', () {
     final payload = <String, dynamic>{
       'job_id': 'details-job',

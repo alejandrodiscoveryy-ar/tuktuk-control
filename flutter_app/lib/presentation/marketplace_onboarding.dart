@@ -363,6 +363,9 @@ class _MarketplaceOnboardingScreenState
   String? _vehicleCreateName;
 
   MarketplaceWallet? _wallet;
+  double? _walletDebtCup;
+  String? _walletDebtUserId;
+  int _walletDebtRevision = 0;
   bool _walletLoading = false;
   String? _walletError;
   List<MarketplaceTopup> _topups = const [];
@@ -1256,6 +1259,33 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
+  /// Deuda operativa solo lectura. Nunca incluye retiradas ni saldo Impulsa.
+  Future<void> _loadWalletDebt() async {
+    final userId = widget.store.user?.id;
+    final revision = ++_walletDebtRevision;
+    if (userId == null) return;
+    try {
+      final debt = await _service.walletDebtCup();
+      if (!mounted || widget.store.user?.id != userId ||
+          revision != _walletDebtRevision) {
+        return;
+      }
+      setState(() {
+        _walletDebtCup = debt;
+        _walletDebtUserId = userId;
+      });
+    } catch (_) {
+      // El resumen principal de la Billetera no depende de la nueva RPC.
+      if (mounted && widget.store.user?.id == userId &&
+          revision == _walletDebtRevision) {
+        setState(() {
+          _walletDebtCup = null;
+          _walletDebtUserId = null;
+        });
+      }
+    }
+  }
+
   Future<void> _loadWallet({bool showSpinner = true}) async {
     if (_localPreview) {
       if (!mounted) return;
@@ -1286,11 +1316,14 @@ class _MarketplaceOnboardingScreenState
         _walletLoading = false;
         _walletError = null;
       });
+      unawaited(_loadWalletDebt());
     } catch (_) {
       if (!mounted) return;
 
       setState(() {
         _wallet = null;
+        _walletDebtCup = null;
+        _walletDebtUserId = null;
         _walletLoading = false;
         _walletError = 'No se pudo consultar tu billetera Marketplace.';
       });
@@ -2303,6 +2336,24 @@ class _MarketplaceOnboardingScreenState
               _marketplaceMoneyLabel(wallet.availableBalance, wallet.currency),
               emphasize: true,
             ),
+            if (_walletDebtUserId == widget.store.user?.id &&
+                (_walletDebtCup ?? 0) > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                key: const ValueKey('marketplace-wallet-debt-warning'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Deuda pendiente: ${_marketplaceMoneyLabel(_walletDebtCup!, wallet.currency)}. '
+                  'Recarga la billetera de trabajo para regularizarla '
+                  'antes de aceptar otra carrera.',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
           ],
           FilledButton.icon(
