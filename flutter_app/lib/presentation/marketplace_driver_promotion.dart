@@ -855,7 +855,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
 
   Future<void> _submitImpulsaRequest() async {
     if (_applicationSubmitting || !_sameUser || !_applicationDocumentsReady ||
-        !_acceptImpulsaRules || !_acceptPublicProfile || !_acceptPhoto) return;
+        !_acceptImpulsaRules || !_acceptPublicProfile || !_acceptPhoto) {
+      return;
+    }
     setState(() { _applicationSubmitting = true; _applicationError = null; });
     try {
       final result = await _client.rpc('request_my_marketplace_impulsa_verification_v1',
