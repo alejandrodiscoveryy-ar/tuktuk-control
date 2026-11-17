@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -64,6 +65,7 @@ part 'data/marketplace_map_service.dart';
 part 'data/marketplace_image.dart';
 part 'presentation/marketplace_shell.dart';
 part 'presentation/marketplace_driver_promotion.dart';
+part 'presentation/marketplace_driver_business_card.dart';
 part 'presentation/marketplace_onboarding.dart';
 part 'presentation/marketplace_jobs.dart';
 part 'presentation/marketplace_assigned_job_card.dart';

@@ -743,7 +743,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   bool _sharing = false, _identityVerified = false;
   String _shareChannel = 'unknown';
   String? _error, _code, _photoAssetId, _alias;
-  Uint8List? _squareBytes, _storyBytes;
+  Uint8List? _squareBytes, _storyBytes, _printBytes;
   int _revision = 0;
   int _earningsRevision = 0;
   MarketplaceImpulsaEarnings? _earnings;
@@ -795,7 +795,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         setState(() {
           _enabled = false; _busy = false; _code = null; _identityVerified = false;
           _photoAssetId = null; _earnings = null; _earningsBusy = false; _earningsUnavailable = false;
-          _squareBytes = null; _storyBytes = null;
+          _squareBytes = null; _storyBytes = null; _printBytes = null;
           _error = 'Inicia sesión nuevamente para abrir Mi TukTuk.';
         });
       }
@@ -839,7 +839,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       setState(() { _busy = false; _error = 'Inicia sesión para crear tu tarjeta.'; });
       return;
     }
-    setState(() { _busy = true; _error = null; _squareBytes = null; _storyBytes = null; _code = null; });
+    setState(() { _busy = true; _error = null; _squareBytes = null; _storyBytes = null; _printBytes = null; _code = null; });
     var stage = 'perfil';
     try {
       final result = await _client.rpc('prepare_my_marketplace_promo_card_v1');
@@ -901,9 +901,25 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       );
       final cached = force ? null : _cache.read(actor, fingerprint);
       if (cached != null) {
+        final logoForPrint = await loadMarketplacePromoBrandLogo(identity);
+        // The horizontal card includes the authorized real portrait even
+        // when the old square/story cards are already present in the cache.
+        Uint8List? photoForPrint;
+        if (photoAuthorized && photoPath != null) {
+          final signed = await _client.storage.from('marketplace-media')
+            .createSignedUrl(photoPath, 120);
+          photoForPrint = await downloadMarketplacePromoPortrait(Uri.parse(signed));
+        }
+        if (!mounted || !_sameUser || revision != _revision) return;
+        final printCard = await renderMarketplaceDriverPrintCard(
+          name: name, code: code, alias: alias, modality: modality,
+          logoBytes: logoForPrint, photoBytes: photoForPrint,
+          identityVerified: identityVerified);
+        if (!mounted || !_sameUser || revision != _revision) return;
         setState(() {
           _name.text = name; _code = code; _alias = alias;
           _squareBytes = cached.square; _storyBytes = cached.story;
+          _printBytes = printCard;
         });
         return;
       }
@@ -919,6 +935,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       if (!mounted || !_sameUser || revision != _revision) return;
       final square = await renderMarketplaceDriverPromoCard(name: name, code: code, alias: alias, modality: modality, story: false, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
       final story = await renderMarketplaceDriverPromoCard(name: name, code: code, alias: alias, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
+      final printCard = await renderMarketplaceDriverPrintCard(
+        name: name, code: code, alias: alias, modality: modality,
+        photoBytes: photo, logoBytes: logo,
+        identityVerified: identityVerified);
       if (!mounted || !_sameUser || revision != _revision) return;
       // If the configured official icon failed to load, do not persist a
       // degraded rendering; a later visit can retry the correct identity.
@@ -930,7 +950,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         }
       }
       if (!mounted || !_sameUser || revision != _revision) return;
-      setState(() { _name.text = name; _code = code; _alias = alias; _squareBytes = square; _storyBytes = story; });
+      setState(() { _name.text = name; _code = code; _alias = alias; _squareBytes = square; _storyBytes = story; _printBytes = printCard; });
     } catch (_) {
       if (mounted && revision == _revision) {
         setState(() {
@@ -972,7 +992,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final actor = _actor;
     if (_busy || !_sameUser || actor == null) return;
     final revision = ++_revision;
-    setState(() { _busy = true; _error = null; _code = null; _squareBytes = null; _storyBytes = null; });
+    setState(() { _busy = true; _error = null; _code = null; _squareBytes = null; _storyBytes = null; _printBytes = null; });
     try {
       await _client.rpc('revoke_my_marketplace_promo_card_v1');
       if (!mounted || !_sameUser || revision != _revision) return;
@@ -1039,6 +1059,63 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     } catch (_) {
       if (mounted) toast(context, 'Selecciona el texto para copiarlo manualmente.');
     }
+  }
+
+
+  Future<void> _downloadPrintCard({required bool pdf}) async {
+    final card = _printBytes;
+    if (!_sameUser || !_enabled || _busy || card == null) return;
+    final file = pdf ? 'Mi-TukTuk-presentacion-85x55.pdf'
+      : 'Mi-TukTuk-presentacion-300dpi.png';
+    try {
+      final bytes = pdf ? marketplaceDriverPrintPdf(card) : card;
+      final mime = pdf ? 'application/pdf' : 'image/png';
+      if (kIsWeb && driver_promo_download.downloadPromoFile(bytes, file, mime)) {
+        unawaited(_recordCommunication('card_downloaded'));
+        return;
+      }
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile.fromData(bytes, mimeType: mime, name: file)],
+        fileNameOverrides: [file]));
+      unawaited(_recordCommunication('card_downloaded'));
+    } catch (_) {
+      if (mounted) toast(context, 'No se pudo descargar la tarjeta de presentación.');
+    }
+  }
+
+  Widget _printableCard(BuildContext context) {
+    final card = _printBytes;
+    if (card == null) return const SizedBox.shrink();
+    final canDownload = _sameUser && _enabled && !_busy;
+    return Card(child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('Tarjeta de presentación', style: TextStyle(
+          fontSize: 17, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        const Text('Diseño premium · 85 × 55 mm · imprimir al 100 %',
+          style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 12),
+        AspectRatio(aspectRatio: 85 / 55,
+          child: Image.memory(card, fit: BoxFit.contain,
+            semanticLabel: 'Tarjeta de presentación lista para imprimir')),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          FilledButton.icon(
+            key: const ValueKey('mi-tuktuk-print-pdf'),
+            onPressed: canDownload ? () => _downloadPrintCard(pdf: true) : null,
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Descargar PDF para imprimir'),
+          ),
+          OutlinedButton.icon(
+            key: const ValueKey('mi-tuktuk-print-png'),
+            onPressed: canDownload ? () => _downloadPrintCard(pdf: false) : null,
+            icon: const Icon(Icons.download_outlined),
+            label: const Text('Descargar PNG'),
+          ),
+        ]),
+      ]),
+    ));
   }
 
   Widget _formatCard(BuildContext context, {required bool story, required bool ready}) {
@@ -1215,6 +1292,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                   ],
                 );
               }),
+            if (previewReady && _printBytes != null) ...[
+              const SizedBox(height: 12),
+              _printableCard(context),
+            ],
             if (previewReady) ...[
               const SizedBox(height: 12),
               Card(
@@ -1304,14 +1385,14 @@ class MarketplaceSharedPromoCards extends StatefulWidget {
 }
 
 class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCards> {
-  late Future<(String, Uint8List, Uint8List, String)> _cards;
+  late Future<(String, Uint8List, Uint8List, Uint8List, String)> _cards;
   @override
   void initState() {
     super.initState();
     _cards = _load();
   }
 
-  Future<(String, Uint8List, Uint8List, String)> _load() async {
+  Future<(String, Uint8List, Uint8List, Uint8List, String)> _load() async {
     final client = Supabase.instance.client;
     final raw = await loadMarketplaceSharedPromoProfile(() async {
       final response = await client.functions.invoke('marketplace-customer-gateway',
@@ -1345,13 +1426,16 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
     final story = await renderMarketplaceDriverPromoCard(name: name, code: widget.code, alias: alias,
       modality: modality, story: true, photoBytes: photo, logoBytes: logo,
       identity: identity, identityVerified: true, vehicleCategory: category);
-    return (name, square, story, alias);
+    final printable = await renderMarketplaceDriverPrintCard(
+      name: name, code: widget.code, alias: alias, modality: modality,
+      photoBytes: photo, logoBytes: logo, identityVerified: true);
+    return (name, square, story, printable, alias);
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFF101619),
-    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List, String)>(
+    body: SafeArea(child: FutureBuilder<(String, Uint8List, Uint8List, Uint8List, String)>(
       future: _cards,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -1365,7 +1449,7 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
         ]));
         }
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final (name, square, story, alias) = snapshot.data!;
+        final (name, square, story, printable, alias) = snapshot.data!;
         final link = marketplaceDriverPromoUri(widget.code, alias: alias).toString();
         final message = '¡Tu próximo viaje comienza conmigo!\n\nSoy $name, conductor verificado de la Agencia TukTuk.\n\nSolicita mi servicio desde este enlace:\n$link\n\nAgencia TukTuk. Tu conductor de confianza, a un toque.';
         Widget card(Uint8List bytes, bool vertical) {
@@ -1402,6 +1486,33 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
             }
             return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: card(square, false)), const SizedBox(width: 16), Expanded(child: card(story, true))]);
           }),
+          const SizedBox(height: 18),
+          const Text('Tarjeta de presentación · 85 × 55 mm',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+          const Text('Horizontal, con foto autorizada y QR personal listo para imprimir',
+            style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 10),
+          ConstrainedBox(constraints: const BoxConstraints(maxWidth: 540),
+            child: AspectRatio(aspectRatio: 85 / 55,
+              child: Image.memory(printable, fit: BoxFit.contain))),
+          Wrap(alignment: WrapAlignment.center, spacing: 10, children: [
+            FilledButton.icon(onPressed: () {
+              try {
+                final pdf = marketplaceDriverPrintPdf(printable);
+                if (!driver_promo_download.downloadPromoFile(pdf,
+                    'tuktuk-presentacion-85x55.pdf', 'application/pdf')) {
+                  toast(context, 'No se pudo descargar el PDF.');
+                }
+              } catch (_) { toast(context, 'No se pudo generar el PDF.'); }
+            }, icon: const Icon(Icons.picture_as_pdf), label: const Text('PDF para imprimir')),
+            OutlinedButton.icon(onPressed: () {
+              if (!driver_promo_download.downloadPromoFile(printable,
+                  'tuktuk-presentacion.png', 'image/png')) {
+                toast(context, 'No se pudo descargar el PNG.');
+              }
+            }, icon: const Icon(Icons.download), label: const Text('PNG')),
+          ]),
+          const SizedBox(height: 18),
           TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: link)),
             icon: const Icon(Icons.link), label: const Text('Copiar enlace')),
           TextButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: message)),
