@@ -641,6 +641,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
   final MarketplaceImpulsaEarnings earnings;
   final VoidCallback refresh;
   final bool loading;
+
   String _cup(num value) => '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)} CUP';
   String _label(Object? state) => switch(state) {
     'pending' => 'Por acreditar', 'funding_required' => 'Pendiente de financiación',
@@ -648,83 +649,115 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
     'reversal_pending' => 'Ajuste pendiente', 'reversed' => 'Revertida',
     _ => 'Estado no disponible',
   };
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = appMutedColor(context);
     final d = earnings;
+
     Widget metric(String label, String value) => Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(border: Border.all(color: theme.dividerColor), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: TextStyle(color: muted, fontSize: 12)),
         const SizedBox(height: 4),
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
       ]),
     );
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(padding: const EdgeInsets.all(12), child: Column(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(padding: const EdgeInsets.all(14), child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            Icon(Icons.trending_up, color: theme.colorScheme.primary),
+            Icon(Icons.insights_outlined, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            const Expanded(child: Text('Mis ganancias Impulsa', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-            IconButton(tooltip: 'Actualizar ganancias', onPressed: loading ? null : refresh, icon: const Icon(Icons.refresh)),
+            const Expanded(child: Text('Resultados de Impulsa',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+            IconButton(tooltip: 'Actualizar resultados',
+              onPressed: loading ? null : refresh,
+              icon: const Icon(Icons.refresh)),
           ]),
           if (loading) const LinearProgressIndicator(),
-          Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(14)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Ganancias comerciales acreditadas', style: TextStyle(color: muted, fontSize: 12)),
-              const SizedBox(height: 5),
-              Text(_cup(d.credited), style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: theme.colorScheme.primary)),
-              Text('Histórico de créditos netos, no saldo disponible.', style: TextStyle(color: muted, fontSize: 11)),
-            ])),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+          Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(_cup(d.credited),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
+              color: theme.colorScheme.primary)),
+          Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
+            style: TextStyle(color: muted, fontSize: 11)),
+          const SizedBox(height: 12),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: metric('Solicitudes generadas', '${d.generated}')),
             const SizedBox(width: 8),
-            Expanded(child: metric('Viajes propios liquidados', '${d.ownTrips}')),
-          ]),
-          const SizedBox(height: 8),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: metric('Ahorro en comisión', _cup(d.ownSavings))),
-            const SizedBox(width: 8),
             Expanded(child: metric('Viajes de la flota acreditados', '${d.creditedTrips}')),
           ]),
-          const SizedBox(height: 8),
-          Text('Por acreditar: ${_cup(d.pending)}', style: TextStyle(color: muted, fontSize: 12)),
-          if (d.fundingRequired > 0) Text('Pendientes de financiación: ${_cup(d.fundingRequired)}', style: TextStyle(color: muted, fontSize: 12)),
-          if (d.reversalPending > 0) Text('Ajustes pendientes: ${_cup(d.reversalPending)}', style: TextStyle(color: muted, fontSize: 12)),
-          if (d.recent.isNotEmpty) ExpansionTile(
-            tilePadding: EdgeInsets.zero, childrenPadding: EdgeInsets.zero,
-            title: const Text('Historial comercial'),
-            children: d.recent.map((row) {
-              final id = row['job_id']?.toString() ?? '';
-              final value = num.tryParse(row['amount']?.toString() ?? '') ?? 0;
-              final rate = num.tryParse(row['commercial_rate']?.toString() ?? '');
-              final date = DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal();
-              return ListTile(contentPadding: EdgeInsets.zero, dense: true,
-                leading: const Icon(Icons.receipt_long_outlined),
-                title: Text(_label(row['state'])),
-                subtitle: Text([
-                  if (id.isNotEmpty) 'Viaje ${id.substring(0, min(8,id.length))}',
-                  if (rate != null) '${(rate*100).toStringAsFixed(2)}%',
-                  if (date != null) '${date.day}/${date.month}/${date.year}',
-                ].join(' · ')),
-                trailing: Text(_cup(value), style: const TextStyle(fontWeight: FontWeight.w700)),
-              );
-            }).toList(),
+          if (d.pending > 0) ...[
+            const SizedBox(height: 10),
+            Text('Ganancias por acreditar: ${_cup(d.pending)}',
+              style: TextStyle(color: muted, fontSize: 12)),
+          ],
+          ExpansionTile(
+            key: const ValueKey('impulsa-more-results'),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text('Ver más resultados', style: TextStyle(fontSize: 13)),
+            children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: metric('Viajes propios liquidados', '${d.ownTrips}')),
+                const SizedBox(width: 8),
+                Expanded(child: metric('Ahorro en comisión', _cup(d.ownSavings))),
+              ]),
+              if (d.fundingRequired > 0)
+                Padding(padding: const EdgeInsets.only(top: 8),
+                  child: Text('Pendientes de financiación: ${_cup(d.fundingRequired)}',
+                    style: TextStyle(color: muted, fontSize: 12))),
+              if (d.reversalPending > 0)
+                Padding(padding: const EdgeInsets.only(top: 8),
+                  child: Text('Ajustes pendientes: ${_cup(d.reversalPending)}',
+                    style: TextStyle(color: muted, fontSize: 12))),
+              if (d.recent.isNotEmpty) ExpansionTile(
+                title: const Text('Historial comercial'),
+                tilePadding: EdgeInsets.zero, childrenPadding: EdgeInsets.zero,
+                children: d.recent.map((row) {
+                  final id = row['job_id']?.toString() ?? '';
+                  final value = num.tryParse(row['amount']?.toString() ?? '') ?? 0;
+                  final rate = num.tryParse(row['commercial_rate']?.toString() ?? '');
+                  final date = DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal();
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero, dense: true,
+                    leading: const Icon(Icons.receipt_long_outlined),
+                    title: Text(_label(row['state'])),
+                    subtitle: Text([
+                      if (id.isNotEmpty) 'Viaje ${id.substring(0, min(8,id.length))}',
+                      if (rate != null) '${(rate*100).toStringAsFixed(2)}%',
+                      if (date != null) '${date.day}/${date.month}/${date.year}',
+                    ].join(' · ')),
+                    trailing: Text(_cup(value),
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  );
+                }).toList(),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text(
+                  'Los viajes de otros conductores generan comisiones comerciales '
+                  'cuando se liquidan. Tus propios viajes pueden tener una comisión reducida.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text('La comisión comercial se acredita tras liquidar viajes reales realizados por otro conductor. En tus viajes propios el beneficio es la comisión reducida.', style: TextStyle(fontSize: 12, color: muted)),
         ],
       )),
     );
   }
 }
-
 class MarketplaceDriverPromotionScreen extends StatefulWidget {
   const MarketplaceDriverPromotionScreen({required this.store, super.key});
   final RecordStore store;
@@ -1146,39 +1179,51 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final history = values?['withdrawals'] is List
       ? (values!['withdrawals'] as List).whereType<Map>().take(8).toList()
       : <Map>[];
+
     return Card(child: Padding(
       padding: const EdgeInsets.all(14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
           const Icon(Icons.account_balance_wallet_outlined),
           const SizedBox(width: 10),
-          const Expanded(child: Text('Retiradas Impulsa',
+          const Expanded(child: Text('Billetera Impulsa',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
-          IconButton(tooltip: 'Actualizar saldo Impulsa',
+          IconButton(
+            tooltip: 'Actualizar saldo Impulsa',
             onPressed: _withdrawalLoading || _withdrawalRequestBusy
               ? null : _loadWithdrawalAccount,
-            icon: const Icon(Icons.refresh)),
+            icon: const Icon(Icons.refresh),
+          ),
         ]),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_withdrawalLoading) const LinearProgressIndicator(),
         if (values != null && available != null && minimum != null) ...[
-          Text('Disponible para retirar: ${_moneyCup(available)}',
-            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-          Text('Umbral mínimo: ${_moneyCup(minimum)}',
+          const Text('Disponible para retirar', style: TextStyle(fontSize: 12)),
+          Text(_moneyCup(available),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 7),
+          Text('Mínimo para solicitar retiro: ${_moneyCup(minimum)}',
             style: const TextStyle(fontSize: 12)),
-          if (held != null && held > 0)
+          if (minimum > 0) ...[
+            const SizedBox(height: 6),
+            LinearProgressIndicator(
+              value: (available / minimum).clamp(0.0, 1.0).toDouble()),
+          ],
+          if (held != null && held > 0) ...[
+            const SizedBox(height: 7),
             Text('Reservado en solicitudes: ${_moneyCup(held)}',
               style: const TextStyle(fontSize: 12)),
-          const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 9),
           if (values['ready'] != true || values['active'] != true ||
               values['withdrawals_enabled'] != true)
-            const Text('Las retiradas todavía no están habilitadas por la Agencia TukTuk.',
+            const Text('Los retiros todavía no están habilitados.',
               style: TextStyle(fontSize: 12))
-          else if (!canWithdraw && available < minimum)
-            Text('Te faltan ${_moneyCup(minimum - available)} de ganancias disponibles para alcanzar el umbral.',
+          else if (available < minimum)
+            Text('Te faltan ${_moneyCup(minimum - available)} para llegar al mínimo.',
               style: const TextStyle(fontSize: 12))
-          else if (!canWithdraw && values['can_withdraw'] != true)
-            const Text('El retiro no está disponible por ahora. Puede haber una deuda, reserva o ajuste pendiente.',
+          else if (!canWithdraw)
+            const Text('No puedes solicitar el retiro ahora. Puede existir una deuda o un ajuste pendiente.',
               style: TextStyle(fontSize: 12)),
           const SizedBox(height: 10),
           FilledButton.icon(
@@ -1187,15 +1232,14 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             icon: const Icon(Icons.payments_outlined),
             label: Text(_withdrawalRequestBusy ? 'Registrando solicitud…' : 'Solicitar retiro'),
           ),
-          const SizedBox(height: 5),
-          const Text('Solo puedes retirar las ganancias comerciales de Impulsa. '
-            'La Billetera general mantiene las recargas, bonos y saldo para trabajar.',
+          const SizedBox(height: 7),
+          const Text('Solo ganancias comerciales. Nunca recargas ni bonos para trabajar.',
             style: TextStyle(fontSize: 11)),
           if (history.isNotEmpty) ...[
             const Divider(height: 20),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              title: const Text('Historial de solicitudes'),
+              title: const Text('Historial de retiros'),
               children: history.map((entry) {
                 final status = switch (entry['status']?.toString()) {
                   'requested' => 'Solicitada',
@@ -1213,7 +1257,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             ),
           ],
         ] else if (!_withdrawalLoading && _withdrawalError == null)
-          const Text('Saldo de retiro no disponible.', style: TextStyle(fontSize: 12)),
+          const Text('No se pudo consultar el saldo Impulsa.',
+            style: TextStyle(fontSize: 12)),
         if (_withdrawalError != null) ...[
           const SizedBox(height: 6),
           Text(_withdrawalError!, style: const TextStyle(color: kDanger, fontSize: 12)),
@@ -1611,17 +1656,17 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
             _impulsaVerification(),
             const SizedBox(height: 10),
           ],
+          if (_sameUser && _enabled)
+            _impulsaWithdrawalPanel(),
           if (_sameUser && _enabled && _earnings != null)
             _MarketplaceImpulsaEarningsCard(earnings: _earnings!, refresh: () => unawaited(_loadEarnings()), loading: _earningsBusy)
           else if (_sameUser && _enabled && _earningsBusy)
             const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator())
           else if (_sameUser && _enabled && _earningsUnavailable)
             Padding(padding: const EdgeInsets.only(bottom: 12), child: Row(children: [
-              const Expanded(child: Text('Ganancias comerciales aún no disponibles.', style: TextStyle(fontSize: 12))),
+              const Expanded(child: Text('Resultados comerciales aún no disponibles.', style: TextStyle(fontSize: 12))),
               TextButton(onPressed: () => unawaited(_loadEarnings()), child: const Text('Consultar')),
             ])),
-          if (_sameUser && _enabled)
-            _impulsaWithdrawalPanel(),
           if (_enabled) ...[
             Row(children: [
               const Expanded(child: Text('Mis tarjetas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
