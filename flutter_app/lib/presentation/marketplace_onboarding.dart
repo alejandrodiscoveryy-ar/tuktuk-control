@@ -2281,7 +2281,7 @@ class _MarketplaceOnboardingScreenState
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Billetera Marketplace',
+                  'Billetera',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
               ),
@@ -2289,20 +2289,10 @@ class _MarketplaceOnboardingScreenState
           ),
           const SizedBox(height: 8),
           Text(
-            'La billetera se usa para cubrir las comisiones de Trabajos cuando '
-            'la promoción inicial ya terminó. Control y Estadísticas siguen '
-            'disponibles independientemente de este saldo.',
+            'Tu saldo se utiliza para cubrir comisiones de carreras. '
+            'Las recargas y bonificaciones son para trabajar, no para retirar.',
             style: TextStyle(color: appMutedColor(context), height: 1.35),
           ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: _topupFormOpen || _topupsLoading || _localPreview
-                ? null
-                : _requestTopup,
-            icon: const Icon(Icons.add_card),
-            label: const Text('Recargar saldo'),
-          ),
-          const SizedBox(height: 14),
           if (_walletLoading)
             const Center(
               child: Padding(
@@ -2311,6 +2301,7 @@ class _MarketplaceOnboardingScreenState
               ),
             )
           else if (_walletError != null) ...[
+            const SizedBox(height: 12),
             Text(_walletError!),
             const SizedBox(height: 10),
             OutlinedButton.icon(
@@ -2318,145 +2309,103 @@ class _MarketplaceOnboardingScreenState
               icon: const Icon(Icons.refresh),
               label: const Text('Reintentar'),
             ),
-          ] else if (wallet == null)
-            const Text('No hay información de billetera disponible.')
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _walletValue(
-                    context,
-                    'Saldo total',
-                    _marketplaceMoneyLabel(
-                      wallet.totalBalance,
-                      wallet.currency,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _walletValue(
-                    context,
-                    'Disponible',
-                    _marketplaceMoneyLabel(
-                      wallet.availableBalance,
-                      wallet.currency,
-                    ),
-                    emphasize: true,
-                  ),
-                ),
-              ],
-            ),
-            if (wallet.realBalance != null &&
-                wallet.promotionalBalance != null &&
-                wallet.realAvailableBalance != null &&
-                wallet.promotionalAvailableBalance != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _walletValue(
-                      context,
-                      'Saldo real',
-                      _marketplaceMoneyLabel(
-                        wallet.realBalance!,
-                        wallet.currency,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _walletValue(
-                      context,
-                      'Promocional',
-                      _marketplaceMoneyLabel(
-                        wallet.promotionalBalance!,
-                        wallet.currency,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _walletValue(
-                      context,
-                      'Real disponible',
-                      _marketplaceMoneyLabel(
-                        wallet.realAvailableBalance!,
-                        wallet.currency,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _walletValue(
-                      context,
-                      'Promo disponible',
-                      _marketplaceMoneyLabel(
-                        wallet.promotionalAvailableBalance!,
-                        wallet.currency,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'El saldo real y el saldo promocional pueden cubrir comisiones. '
-                'El saldo promocional no es retirable como efectivo.',
-              ),
-            ],
-            const SizedBox(height: 10),
+          ] else if (wallet == null) ...[
+            const SizedBox(height: 12),
+            const Text('No hay información de billetera disponible.'),
+          ] else ...[
+            const SizedBox(height: 14),
             _walletValue(
               context,
-              'Reservado para trabajos',
-              _marketplaceMoneyLabel(wallet.reservedBalance, wallet.currency),
+              'Disponible para carreras',
+              _marketplaceMoneyLabel(wallet.availableBalance, wallet.currency),
+              emphasize: true,
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Icon(Icons.percent_rounded),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Comisión estándar: '
-                    '${_marketplacePercentLabel(wallet.commissionRate)}',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (access?.trialActive == true) ...[
+            if (wallet.reservedBalance > 0) ...[
+              const SizedBox(height: 8),
               Text(
-                'Durante la promoción inicial no se reserva ni se descuenta '
-                'comisión. Puedes tener saldo en la billetera sin perder '
-                'la promoción.',
-                style: TextStyle(color: appMutedColor(context), height: 1.35),
-              ),
-            ] else ...[
-              Text(
-                'Fuera de la promoción inicial no existe un depósito mínimo. '
-                'Las nuevas aceptaciones solo requieren saldo disponible '
-                'suficiente para cubrir la comisión correspondiente.',
-                style: TextStyle(color: appMutedColor(context), height: 1.35),
+                'Reservado en carreras: '
+                '${_marketplaceMoneyLabel(wallet.reservedBalance, wallet.currency)}',
+                style: TextStyle(color: appMutedColor(context), fontSize: 12),
               ),
             ],
-            const SizedBox(height: 14),
-            Text(
-              'El saldo real y el saldo promocional pueden utilizarse para '
-              'cubrir comisiones. Una recarga no inicia, reinicia ni amplía '
-              'la promoción.',
-              style: TextStyle(
-                color: appMutedColor(context),
-                fontSize: 12,
-                height: 1.35,
+            if (wallet.realAvailableBalance != null &&
+                wallet.promotionalAvailableBalance != null) ...[
+              const SizedBox(height: 4),
+              ExpansionTile(
+                key: const ValueKey('marketplace-wallet-breakdown'),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: const Text(
+                  'Ver desglose del saldo',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+                children: [
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Recargas y ajustes'),
+                    trailing: Text(_marketplaceMoneyLabel(
+                      wallet.realAvailableBalance!, wallet.currency,
+                    )),
+                  ),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Bonificaciones para carreras'),
+                    trailing: Text(_marketplaceMoneyLabel(
+                      wallet.promotionalAvailableBalance!, wallet.currency,
+                    )),
+                  ),
+                  if (wallet.reservedBalance > 0)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Saldo total, incluida reserva'),
+                      trailing: Text(_marketplaceMoneyLabel(
+                        wallet.totalBalance, wallet.currency,
+                      )),
+                    ),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      'Ambos saldos disponibles pueden cubrir comisiones. '
+                      'Las bonificaciones no son retirables.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
-            ),
+            ],
+            if (access?.trialActive == true) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Promoción inicial activa: las carreras cubiertas por esta '
+                'promoción no descuentan comisión.',
+                style: TextStyle(color: appMutedColor(context), fontSize: 12),
+              ),
+            ] else ...[
+              const SizedBox(height: 6),
+              Text(
+                'La comisión aplicable se informa en cada carrera. '
+                'No existe un depósito mínimo obligatorio para recargar.',
+                style: TextStyle(color: appMutedColor(context), fontSize: 12),
+              ),
+            ],
           ],
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _topupFormOpen || _topupsLoading || _localPreview
+                ? null
+                : _requestTopup,
+            icon: const Icon(Icons.add_card),
+            label: const Text('Recargar saldo'),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Las ganancias comerciales y solicitudes de retiro se gestionan '
+            'exclusivamente desde Impulsa.',
+            style: TextStyle(color: appMutedColor(context), fontSize: 12),
+          ),
         ],
       ),
     );
