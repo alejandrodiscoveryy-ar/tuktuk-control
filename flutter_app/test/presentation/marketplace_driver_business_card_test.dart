@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +11,7 @@ const code = '0123456789abcdef0123456789abcdef';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('business card is white, standard print size and uses the real QR', (tester) async {
+  testWidgets('approved premium card is horizontal, print sized and uses the real QR', (tester) async {
     final png = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
       name: 'Conductor Ejemplo', code: code, alias: 'conductor-ejemplo',
       modality: 'Auto · Pasajeros', identityVerified: true));
@@ -18,14 +19,20 @@ void main() {
     final picture = img.decodePng(png!)!;
     expect(picture.width, 1004);
     expect(picture.height, 650);
-    final paper = picture.getPixel(980, 600);
-    expect([paper.r, paper.g, paper.b], [255, 255, 255]);
+    final footer = picture.getPixel(980, 600);
+    expect(footer.b, greaterThan(footer.r)); // The approved blue footer.
     final qr = marketplaceDriverPromoQr(code, alias: 'conductor-ejemplo');
-    const x = 674, y = 217, module = 6;
+    const x = 727, y = 200, module = 5;
     final qrWidth = (qr.moduleCount + 8) * module;
     for (var z = 0; z < qrWidth; z += 3) {
-      final quietTop = picture.getPixel(x + z, y + 1);
-      expect([quietTop.r, quietTop.g, quietTop.b], [255, 255, 255]);
+      for (final pixel in [
+        picture.getPixel(x + z, y + 1),
+        picture.getPixel(x + z, y + qrWidth - 2),
+        picture.getPixel(x + 1, y + z),
+        picture.getPixel(x + qrWidth - 2, y + z),
+      ]) {
+        expect([pixel.r, pixel.g, pixel.b], [255, 255, 255]);
+      }
     }
     for (var row = 0; row < qr.moduleCount; row++) {
       for (var col = 0; col < qr.moduleCount; col++) {
@@ -66,6 +73,35 @@ void main() {
     expect(pdf.length, greaterThan(1004 * 650 * 3));
     expect(() => marketplaceDriverPrintPdf(Uint8List.fromList([0, 1])),
       throwsArgumentError);
+  });
+
+  testWidgets('authorized portrait is embedded and never replaced with a sample face', (tester) async {
+    final photo = img.Image(width: 16, height: 16);
+    img.fill(photo, color: img.ColorRgb8(242, 27, 76));
+    Future<img.Image> card(Uint8List? bytes) async {
+      final output = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
+        name: 'Ana Pérez', code: code, modality: 'Triciclo · Pasajeros',
+        identityVerified: true, photoBytes: bytes));
+      return img.decodePng(output!)!;
+    }
+    final placeholder = await card(null);
+    final portrait = await card(Uint8List.fromList(img.encodePng(photo)));
+    final before = placeholder.getPixel(160, 330);
+    final after = portrait.getPixel(160, 330);
+    expect([after.r, after.g, after.b], isNot([before.r, before.g, before.b]));
+    expect(after.r, greaterThan(200));
+    expect(after.g, lessThan(100));
+  });
+
+  test('premium template contains no fabricated driver statistics or vehicle artwork', () {
+    final source = File('lib/presentation/marketplace_driver_business_card.dart').readAsStringSync();
+    expect(source, isNot(contains('4.9')));
+    expect(source, isNot(contains('328 viajes')));
+    expect(source, isNot(contains('1,200')));
+    expect(source, isNot(contains('assets/branding/impulsa/light_car.webp')));
+    expect(source, contains('photoBytes'));
+    expect(source, contains('marketplaceDriverPromoQr(code, alias: alias)'));
+    expect(source, contains('Solicita mi servicio'));
   });
 
 }
