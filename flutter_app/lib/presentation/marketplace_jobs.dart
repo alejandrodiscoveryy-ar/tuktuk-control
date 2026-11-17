@@ -2,6 +2,9 @@ part of '../main.dart';
 
 String marketplaceAcceptErrorMessage(Object error) {
   final code = error.toString().toUpperCase();
+  if (code.contains('MARKETPLACE_DEBT_PENDING')) {
+    return 'Tienes una deuda de comisiones pendiente. Recarga la billetera de trabajo antes de aceptar otra carrera.';
+  }
   if (code.contains('INSUFFICIENT_MARKETPLACE_WALLET_BALANCE')) {
     return 'Saldo insuficiente para aceptar este trabajo. Recarga tu billetera y vuelve a intentarlo.';
   }
@@ -1751,6 +1754,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final vehicleId = _selectedVehicleId;
 
     if (vehicleId == null || _acceptingJobId != null) return;
+    if (job.canAccept == false) {
+      toast(context, 'No puedes aceptar esta carrera hasta regularizar tu saldo o deuda en Billetera.');
+      return;
+    }
 
     setState(() => _acceptingJobId = job.id);
 
@@ -1758,6 +1765,31 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _acceptKeys[job.id] = key;
 
     try {
+      if (job.usesInitialCredit) {
+        final approved = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Primera carrera a crédito'),
+            content: Text(
+              'Comisión prevista: ${_marketplaceMoneyLabel(job.commissionAmount!, job.currency)}. '
+              'El saldo que falta (${_marketplaceMoneyLabel(job.missingBalance!, job.currency)}) '
+              'podrá quedar como deuda. Tendrás que regularizarla para continuar aceptando carreras. '
+              '¿Aceptas estas condiciones?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Volver'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Aceptar a crédito'),
+              ),
+            ],
+          ),
+        );
+        if (approved != true || !mounted) return;
+      }
       if (_marketplaceJobStartsNow(job)) {
         await _service.acceptAndStart(job.id, vehicleId, key);
       } else {
@@ -5176,6 +5208,32 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             key: ValueKey('work-map-offer-payment-${job.id}'),
             method: job.ridePaymentMethod,
           ),
+          if ((job.commissionAmount ?? 0) > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Comisión: ${_marketplaceMoneyLabel(job.commissionAmount!, job.currency)}'
+                ' · Neto estimado: ${_marketplaceMoneyLabel(job.finalPrice - job.commissionAmount!, job.currency)}',
+                key: ValueKey('work-map-offer-commission-${job.id}'),
+                style: const TextStyle(fontSize: 12, color: Color(0xFFADC8D2)),
+              ),
+            ),
+          if (job.usesInitialCredit)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Crédito inicial disponible · falta ${_marketplaceMoneyLabel(job.missingBalance!, job.currency)}',
+                style: const TextStyle(fontSize: 12, color: Colors.amber),
+              ),
+            ),
+          if (job.canAccept == false)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'No puedes aceptar: revisa el saldo o deuda en Billetera.',
+                style: TextStyle(fontSize: 12, color: Colors.amber),
+              ),
+            ),
           const Divider(height: 16),
           Flexible(
             fit: FlexFit.loose,
@@ -5228,7 +5286,7 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             height: 48,
             child: FilledButton.icon(
               key: ValueKey('work-map-offer-accept-${job.id}'),
-              onPressed: widget.acceptanceLocked && !widget.accepting
+              onPressed: job.canAccept == false || (widget.acceptanceLocked && !widget.accepting)
                   ? null
                   : widget.onAccept,
               icon: widget.accepting
