@@ -418,8 +418,8 @@ void main() {
     expect(source, contains("const ValueKey('impulsa-request-withdrawal')"));
     expect(source, contains('_withdrawalRequestKey = _marketplaceUuid()'));
     expect(source, contains('Solo ganancias comerciales. Nunca recargas ni bonos para trabajar.'));
-    expect(source, contains("const Text('Billetera Impulsa'"));
-    expect(source, contains("const Text('Resultados de Impulsa'"));
+    expect(source, contains("Text('Billetera Impulsa'"));
+    expect(source, contains("Text('Resultados de Impulsa'"));
     expect(source, contains("'Total ganado por promoción'"));
     expect(source, contains("'Disponible para retirar'"));
     expect(source, contains('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.'));
