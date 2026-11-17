@@ -251,6 +251,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   late final TabController _tabController;
   int _workPanelIndex = -1;
   bool _workDrawerOpen = false;
+  bool _workDrawerIdentityVerified = false;
+  String? _workDrawerVerificationUserId;
+  int _workDrawerVerificationRevision = 0;
   bool _workRideDetailsExpanded = false;
   MarketplaceMapVisualConfiguration? _workMapVisual;
   LatLng? _workMapPosition;
@@ -1028,6 +1031,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       setState(() {
         _onboarding = null;
         _workOnboardingUserId = null;
+        _workDrawerVerificationRevision++;
+        _workDrawerVerificationUserId = null;
+        _workDrawerIdentityVerified = false;
         _workDriverPhotoKey = null;
         _workDriverPhotoRequest = null;
         _loading = false;
@@ -3258,6 +3264,34 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         onTap: () => _openWorkPanel(panel),
       );
 
+  Future<void> _refreshWorkDrawerVerification() async {
+    final userId = widget.store.user?.id;
+    final revision = ++_workDrawerVerificationRevision;
+    if (!mounted) return;
+    setState(() {
+      _workDrawerIdentityVerified = false;
+      _workDrawerVerificationUserId = userId;
+    });
+    if (userId == null) return;
+    bool verified = false;
+    try {
+      final response = await Supabase.instance.client
+          .rpc('get_my_marketplace_impulsa_application_v1')
+          .timeout(const Duration(seconds: 12));
+      verified = response is Map && response['verified'] == true;
+    } catch (_) {
+      // En ausencia de una confirmación del servidor nunca mostrar palomita.
+    }
+    if (!mounted || revision != _workDrawerVerificationRevision ||
+        widget.store.user?.id != userId) {
+      return;
+    }
+    setState(() {
+      _workDrawerVerificationUserId = userId;
+      _workDrawerIdentityVerified = verified;
+    });
+  }
+
   Widget _workDrawerDriverHeader() {
     final googleUser = widget.store.user;
     final photo = _googleProfilePhotoUrl(googleUser);
@@ -3269,6 +3303,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
     final phone = _onboarding?.phone?.trim();
     final email = googleUser?.email?.trim();
+    final showVerifiedBadge = _workDrawerIdentityVerified &&
+        _workDrawerVerificationUserId == googleUser?.id;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 4, 12),
       child: Row(
@@ -3293,16 +3329,30 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  driverName,
-                  key: const ValueKey('work-drawer-driver-name'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                Row(children: [
+                  Flexible(child: Text(
+                    driverName,
+                    key: const ValueKey('work-drawer-driver-name'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )),
+                  if (showVerifiedBadge) ...[
+                    const SizedBox(width: 5),
+                    const Tooltip(
+                      message: 'Conductor verificado por Agencia TukTuk',
+                      child: Icon(
+                        Icons.verified_rounded,
+                        key: ValueKey('work-drawer-verified-badge'),
+                        color: Color(0xFF1D9BF0),
+                        size: 21,
+                      ),
+                    ),
+                  ],
+                ]),
                 const SizedBox(height: 3),
                 Text(
                   phone == null || phone.isEmpty
@@ -3337,14 +3387,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
   void _openWorkDrawerPage(BuildContext context, String title, Widget child) {
     setState(() => _workDrawerOpen = false);
-    Navigator.of(context).push(
+    unawaited(Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(title)),
           body: AppBackground(child: SafeArea(child: child)),
         ),
       ),
-    );
+    ).then((_) {
+      if (title == 'Impulsa' && mounted) {
+        unawaited(_refreshWorkDrawerVerification());
+      }
+    }));
   }
 
   void _openWorkReferrals(BuildContext context) {
@@ -3632,7 +3686,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           child: InkWell(
             key: const ValueKey('work-map-open-menu'),
             customBorder: const CircleBorder(),
-            onTap: () => setState(() => _workDrawerOpen = true),
+            onTap: () {
+              setState(() => _workDrawerOpen = true);
+              unawaited(_refreshWorkDrawerVerification());
+            },
             child: Padding(
               padding: const EdgeInsets.all(4),
               child: ClipOval(
