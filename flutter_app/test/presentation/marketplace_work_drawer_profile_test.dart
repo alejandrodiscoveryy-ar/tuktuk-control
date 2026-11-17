@@ -85,7 +85,7 @@ void main() {
     expect(source, contains("response['verified'] == true"));
     expect(source, contains('_workDrawerVerificationUserId == googleUser?.id'));
     expect(source, contains("ValueKey('work-drawer-verified-badge')"));
-    expect(source, contains("color: Color(0xFF1D9BF0)"));
+    expect(source, contains('color: Color(0xFF1D9BF0)'));
     expect(source, contains('unawaited(_refreshWorkDrawerVerification())'));
     expect(source, isNot(contains("googleUser?.userMetadata?['verified']")));
   });
