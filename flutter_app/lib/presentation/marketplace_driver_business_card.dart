@@ -12,11 +12,15 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
   // Validate the link before drawing anything. The same URL powers the QR.
   marketplaceDriverPromoUri(code, alias: alias);
   const width = 1004, height = 650;
-  const navy = Color(0xFF061E57);
-  const royal = Color(0xFF0564DC);
-  const orange = Color(0xFFFF8509);
-  const darkText = Color(0xFF09204C);
-  const mutedText = Color(0xFF314B6E);
+  // TukTuk Cliente palette: charcoal, white, gold, orange and mint.
+  // Only the standard verified-name badge remains blue.
+  const charcoal = Color(0xFF050B10);
+  const charcoalSoft = Color(0xFF172028);
+  const gold = Color(0xFFE5A84E);
+  const orange = Color(0xFFFF963E);
+  const mint = Color(0xFF35D6A2);
+  const darkText = Color(0xFF172028);
+  const mutedText = Color(0xFF46525B);
   ui.Image? icon, portrait;
   try {
     if (logoBytes != null) icon = await _promoDecode(logoBytes);
@@ -27,11 +31,10 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     canvas.drawRect(full, Paint()..color = Colors.white);
     canvas.drawRect(full, Paint()..shader = const LinearGradient(
       begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [navy, royal, Color(0xFF06419B)],
+      colors: [charcoal, charcoalSoft, Color(0xFF09141C)],
     ).createShader(full));
 
-    // Delicate curved light-blue center, keeping the approved horizontal
-    // composition and navy footer. No vehicle rendering anywhere.
+    // Ivory center, curved composition and dark footer. No vehicle imagery.
     final body = ui.Path()
       ..moveTo(0, 123)
       ..cubicTo(172, 182, 341, 140, 530, 107)
@@ -42,52 +45,44 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
       ..close();
     canvas.drawPath(body, Paint()..shader = const LinearGradient(
       begin: Alignment.topLeft, end: Alignment.bottomRight,
-      colors: [Color(0xFFEAF5FF), Color(0xFFF8FBFF), Color(0xFFC9E7FF)],
+      colors: [Color(0xFFF6F8F7), Colors.white, Color(0xFFFFF3E5)],
     ).createShader(const Rect.fromLTWH(0, 110, 1004, 490)));
     final bottomLine = ui.Path()..moveTo(0, 562)
       ..cubicTo(135, 520, 241, 532, 354, 547)
       ..cubicTo(566, 574, 791, 585, 1004, 548);
-    canvas.drawPath(bottomLine, Paint()..color = const Color(0xFF27C6FF)
+    canvas.drawPath(bottomLine, Paint()..color = orange
       ..style = PaintingStyle.stroke..strokeWidth = 6);
 
-    // Agency identity: use the centrally configured real project icon,
-    // never the obsolete Conductor brand asset or an invented car graphic.
+    // Commercial wordmark: TUK white + TUK gold, as in TukTuk Cliente.
+    // Retain the centrally approved agency icon when configured.
     if (icon != null) {
-      _promoFitImage(canvas, icon, const Rect.fromLTWH(41, 24, 96, 93));
+      _promoFitImage(canvas, icon, const Rect.fromLTWH(38, 25, 90, 88));
     }
-    _promoText(canvas, 'Agencia', icon == null ? 58 : 148, 24,
-      icon == null ? 290 : 300, 27, Colors.white,
+    _promoText(canvas, 'Agencia', icon == null ? 60 : 148, 23,
+      icon == null ? 295 : 310, 28, Colors.white,
       lines: 1, minFontSize: 22, weight: FontWeight.w700);
-    _promoText(canvas, 'TukTuk', icon == null ? 55 : 147, 52,
-      icon == null ? 335 : 320, 49, Colors.white,
-      lines: 1, minFontSize: 33, weight: FontWeight.w800);
+    final brandLeft = icon == null ? 57.0 : 146.0;
+    _promoText(canvas, 'TUK', brandLeft, 55, 150, 48,
+      Colors.white, lines: 1, minFontSize: 39, weight: FontWeight.w800);
+    _promoText(canvas, 'TUK', brandLeft + 132, 55, 150, 48,
+      gold, lines: 1, minFontSize: 39, weight: FontWeight.w800);
 
-    // The Impulsa mark occupies its own dedicated space: no duplicated
-    // underlying image or overprinted brand artwork.
-    _promoText(canvas, 'TukTuk', 548, 24, 214, 30, Colors.white,
-      center: true, lines: 1, minFontSize: 24, weight: FontWeight.w800);
+    // Move the approved Impulsa mark into the former verification corner.
+    // It has its own clear area: no overprinted emblem or duplicated label.
+    canvas.drawLine(const Offset(719, 27), const Offset(719, 122),
+      Paint()..color = gold.withValues(alpha: .65)..strokeWidth = 2.2);
+    _promoText(canvas, 'TukTuk', 745, 24, 190, 30, Colors.white,
+      center: true, lines: 1, minFontSize: 23, weight: FontWeight.w800);
     final impulseBox = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(543, 64, 222, 58), const Radius.circular(22));
+      const Rect.fromLTWH(745, 64, 208, 58), const Radius.circular(22));
     canvas.drawRRect(impulseBox, Paint()..shader = const LinearGradient(
-      colors: [Color(0xFFFFA821), orange, Color(0xFFFF6F00)],
-    ).createShader(const Rect.fromLTWH(543, 64, 222, 58)));
-    _promoText(canvas, 'Impulsa', 558, 71, 192, 39, Colors.white,
-      center: true, lines: 1, minFontSize: 32, weight: FontWeight.w800);
-    for (final d in [0.0, 13.0, 26.0]) {
-      canvas.drawLine(Offset(780, 81 + d), Offset(824 - d * .7, 81 + d),
-        Paint()..color = Colors.white.withValues(alpha: .88)
-          ..strokeWidth = 3..strokeCap = StrokeCap.round);
-    }
-    if (identityVerified) {
-      _promoText(canvas, 'Verificado', 841, 65, 140, 22, Colors.white,
-        lines: 1, center: true, minFontSize: 18);
-      canvas.drawCircle(const Offset(963, 48), 18,
-        Paint()..color = const Color(0xFF1D9BF0));
-      final tick = ui.Path()..moveTo(955, 48)
-        ..lineTo(961, 54)..lineTo(973, 41);
-      canvas.drawPath(tick, Paint()..color = Colors.white
-        ..strokeWidth = 4..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round..style = PaintingStyle.stroke);
+      colors: [Color(0xFFFFAB35), orange, Color(0xFFFF7E1E)],
+    ).createShader(const Rect.fromLTWH(745, 64, 208, 58)));
+    _promoText(canvas, 'Impulsa', 754, 71, 187, 39, Colors.white,
+      center: true, lines: 1, minFontSize: 31, weight: FontWeight.w800);
+    for (final d in [0.0, 11.0, 22.0]) {
+      canvas.drawLine(Offset(962, 77 + d), Offset(992 - d * .65, 77 + d),
+        Paint()..color = mint..strokeWidth = 3..strokeCap = StrokeCap.round);
     }
 
     // The actual driver portrait, used only when sharing is authorized.
@@ -95,18 +90,18 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     canvas.drawCircle(photoCircle.center, 132,
       Paint()..color = Colors.white);
     canvas.drawCircle(photoCircle.center, 125,
-      Paint()..color = const Color(0xFF0E6BCF));
+      Paint()..color = gold);
     canvas.save();
     canvas.clipPath(ui.Path()..addOval(photoCircle.deflate(9)));
-    canvas.drawRect(photoCircle, Paint()..color = const Color(0xFF143D66));
+    canvas.drawRect(photoCircle, Paint()..color = charcoalSoft);
     if (portrait != null) {
       _promoFitImage(canvas, portrait, photoCircle.deflate(9), cover: true);
     } else {
       // Neutral placeholder when no photograph has been authorized.
       canvas.drawCircle(const Offset(160, 278), 39,
-        Paint()..color = const Color(0xFFBCD4EC));
+        Paint()..color = const Color(0xFFC6CDC9));
       canvas.drawOval(const Rect.fromLTWH(75, 326, 169, 142),
-        Paint()..color = const Color(0xFFBCD4EC));
+        Paint()..color = const Color(0xFFC6CDC9));
     }
     canvas.restore();
 
@@ -169,7 +164,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     const modalityRect = Rect.fromLTWH(310, 412, 360, 64);
     canvas.drawRRect(RRect.fromRectAndRadius(modalityRect,
       const Radius.circular(32)), Paint()..shader = const LinearGradient(
-        colors: [Color(0xFF0B326D), Color(0xFF0566D2)],
+        colors: [charcoalSoft, charcoal],
       ).createShader(modalityRect));
     _promoText(canvas, 'Modalidad: $modalityName', 329, 427, 320, 35,
       Colors.white, lines: 1, minFontSize: 19,
@@ -181,7 +176,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     }
     // The visible link and QR always resolve to the identical URL.
     _promoText(canvas, marketplaceDriverPromoDisplayLink(code, alias: alias),
-      314, 514, 359, 20, const Color(0xFF096CC7), lines: 1,
+      314, 514, 359, 20, const Color(0xFF865006), lines: 1,
       minFontSize: 12, weight: FontWeight.w800);
 
     // Real QR, on the right where the vehicle appeared in the visual concept.
@@ -192,7 +187,7 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     final qrFrame = RRect.fromRectAndRadius(
       Rect.fromLTWH(qrX - 14, qrY - 14, qrSize + 28, qrSize + 28),
       const Radius.circular(23));
-    canvas.drawRRect(qrFrame, Paint()..color = const Color(0xFF0864D1));
+    canvas.drawRRect(qrFrame, Paint()..color = gold);
     canvas.drawRRect(RRect.fromRectAndRadius(
       Rect.fromLTWH(qrX - 7, qrY - 7, qrSize + 14, qrSize + 14),
       const Radius.circular(17)), Paint()..color = Colors.white);
@@ -210,14 +205,14 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     }
     const cta = Rect.fromLTWH(707, 476, 284, 75);
     canvas.drawRRect(RRect.fromRectAndRadius(cta,
-      const Radius.circular(30)), Paint()..color = const Color(0xFF064CB0));
+      const Radius.circular(30)), Paint()..color = charcoal);
     _promoText(canvas, 'Solicita mi servicio', 715, 485, 268, 25,
       Colors.white, center: true, minFontSize: 20, lines: 1);
     _promoText(canvas, 'desde este enlace', 715, 516, 268, 24,
       Colors.white, center: true, minFontSize: 18, lines: 1);
 
     _promoText(canvas, 'Agencia TukTuk', 55, 581, 350, 31,
-      Colors.white, minFontSize: 26, lines: 1, weight: FontWeight.w800);
+      gold, minFontSize: 26, lines: 1, weight: FontWeight.w800);
     _promoText(canvas, 'Tu conductor de confianza, a un toque.',
       442, 585, 520, 24, Colors.white,
       minFontSize: 17, lines: 1, center: true);
