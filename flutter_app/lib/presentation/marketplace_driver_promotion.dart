@@ -735,11 +735,13 @@ class MarketplaceDriverPromotionScreen extends StatefulWidget {
 class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverPromotionScreen> {
   final _client = Supabase.instance.client;
   final _name = TextEditingController();
+  final _campaign = TextEditingController();
   final _cache = MarketplacePromoArtworkCache(Hive.box(_metaBox));
   late final String? _actor;
   StreamSubscription<AuthState>? _auth;
   bool _busy = true, _enabled = false;
   bool _sharing = false, _identityVerified = false;
+  String _shareChannel = 'unknown';
   String? _error, _code, _photoAssetId, _alias;
   Uint8List? _squareBytes, _storyBytes;
   int _revision = 0;
@@ -749,7 +751,37 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
   bool get _sameUser => _actor != null && _client.auth.currentUser?.id == _actor;
   Uint8List? _artworkFor(bool story) => story ? _storyBytes : _squareBytes;
   String _fileNameFor(bool story) => story ? 'Mi-TukTuk-historia.png' : 'Mi-TukTuk.png';
-  String? get _copy => _code == null ? null : marketplaceDriverPromoCopy(_name.text.trim(), _code!, identityVerified: _identityVerified, alias: _alias);
+  String? get _activeCampaign {
+    final value = _campaign.text.trim().toLowerCase();
+    return RegExp(r'^[a-z0-9_-]{1,32}$').hasMatch(value) ? value : null;
+  }
+  String? get _taggedLink {
+    if (_code == null) return null;
+    final base = marketplaceDriverPromoUri(_code!, alias: _alias);
+    if (_shareChannel == 'unknown' && _activeCampaign == null) return base.toString();
+    return base.replace(queryParameters: {
+      ...base.queryParameters,
+      if (_shareChannel != 'unknown') 'utm_source': _shareChannel,
+      if (_activeCampaign != null) 'utm_campaign': _activeCampaign!,
+    }).toString();
+  }
+  String? get _copy {
+    if (_code == null) return null;
+    final normal = marketplaceDriverPromoUri(_code!, alias: _alias).toString();
+    return marketplaceDriverPromoCopy(_name.text.trim(), _code!,
+      identityVerified: _identityVerified, alias: _alias).replaceFirst(normal, _taggedLink ?? normal);
+  }
+  Future<void> _recordCommunication(String action) async {
+    if (!_sameUser || !_enabled) return;
+    try {
+      await _client.rpc('record_my_marketplace_impulsa_share_action_v1',
+        params: {'target_action': action, 'target_channel': _shareChannel,
+          'target_campaign': _activeCampaign})
+        .timeout(const Duration(seconds: 4));
+    } catch (_) {
+      // The share UI must keep working during network outages.
+    }
+  }
 
   @override
   void initState() {
@@ -777,6 +809,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     _revision++; _earningsRevision++;
     _auth?.cancel();
     _name.dispose();
+    _campaign.dispose();
     super.dispose();
   }
 
@@ -959,6 +992,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final fileName = _fileNameFor(story);
     if (!_sameUser || !_enabled || bytes == null || copy == null || _sharing) return;
     setState(() => _sharing = true);
+    unawaited(_recordCommunication('share_attempt'));
     try {
       final box = context.findRenderObject() as RenderBox?;
       final result = await SharePlus.instance.share(ShareParams(
@@ -983,8 +1017,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     final bytes = _artworkFor(story);
     final fileName = _fileNameFor(story);
     if (!_sameUser || !_enabled || bytes == null) return;
-    if (kIsWeb && driver_promo_download.downloadPromoPng(bytes, fileName)) return;
+    if (kIsWeb && driver_promo_download.downloadPromoPng(bytes, fileName)) {
+      unawaited(_recordCommunication('card_downloaded'));
+      return;
+    }
     try {
+      unawaited(_recordCommunication('card_downloaded'));
       await SharePlus.instance.share(ShareParams(files: [XFile.fromData(bytes,
         mimeType: 'image/png', name: fileName)], fileNameOverrides: [fileName]));
     } catch (_) {
@@ -992,10 +1030,11 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     }
   }
 
-  Future<void> _copyText(String text) async {
+  Future<void> _copyText(String text, {String action = 'link_copied'}) async {
     if (!_sameUser || !_enabled || _squareBytes == null || _storyBytes == null) return;
     try {
       await Clipboard.setData(ClipboardData(text: text));
+      unawaited(_recordCommunication(action));
       if (mounted) toast(context, 'Copiado');
     } catch (_) {
       if (mounted) toast(context, 'Selecciona el texto para copiarlo manualmente.');
@@ -1121,6 +1160,43 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
               ),
             ]),
             const SizedBox(height: 8),
+            if (previewReady) ...[
+              const Text('Canal de difusión', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<String>(
+                initialValue: _shareChannel,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  isDense: true, border: OutlineInputBorder(),
+                  helperText: 'Sirve para identificar tu campaña; no confirma dónde se envió.',
+                ),
+                items: const [
+                  DropdownMenuItem(value:'unknown', child: Text('Sin indicar')),
+                  DropdownMenuItem(value:'whatsapp_private', child: Text('WhatsApp privado')),
+                  DropdownMenuItem(value:'whatsapp_groups', child: Text('Grupos de WhatsApp')),
+                  DropdownMenuItem(value:'whatsapp_status', child: Text('Estados de WhatsApp')),
+                  DropdownMenuItem(value:'facebook', child: Text('Facebook')),
+                  DropdownMenuItem(value:'instagram', child: Text('Instagram')),
+                  DropdownMenuItem(value:'qr', child: Text('Material impreso / QR')),
+                  DropdownMenuItem(value:'other', child: Text('Otro canal')),
+                ],
+                onChanged: (value) { if(value!=null) setState(() => _shareChannel=value); },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _campaign,
+                maxLength: 32,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]'))],
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  isDense: true, border: OutlineInputBorder(),
+                  labelText: 'Campaña o grupo (opcional)',
+                  hintText: 'ej: grupo-centro',
+                  helperText: 'Etiqueta para comparar acciones; evita datos personales.',
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (_squareBytes != null && _storyBytes != null)
               LayoutBuilder(builder: (context, constraints) {
                 final square = _formatCard(context, story: false, ready: ready);
@@ -1147,13 +1223,13 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                   ListTile(
                     leading: const Icon(Icons.link),
                     title: const Text('Mi enlace personal'),
-                    subtitle: SelectableText(marketplaceDriverPromoUri(_code!, alias: _alias).toString().replaceFirst('https://www.', '')),
+                    subtitle: SelectableText((_taggedLink ?? '').replaceFirst('https://www.', '')),
                     trailing: IconButton(
                       tooltip: 'Copiar enlace',
-                      onPressed: () => _copyText(marketplaceDriverPromoUri(_code!, alias: _alias).toString()),
+                      onPressed: () => _copyText(_taggedLink ?? ''),
                       icon: const Icon(Icons.copy_outlined),
                     ),
-                    onTap: () => _copyText(marketplaceDriverPromoUri(_code!, alias: _alias).toString()),
+                    onTap: () => _copyText(_taggedLink ?? ''),
                   ),
                   if (_alias != null) ListTile(
                     leading: const Icon(Icons.edit_outlined),
@@ -1170,7 +1246,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                           SelectableText(copy),
-                          TextButton.icon(onPressed: () => _copyText(copy),
+                          TextButton.icon(onPressed: () => _copyText(copy, action: 'message_copied'),
                             icon: const Icon(Icons.copy), label: const Text('Copiar mensaje')),
                         ]),
                       ),
