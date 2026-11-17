@@ -20,7 +20,14 @@ void main() {
     expect(picture.width, 1004);
     expect(picture.height, 650);
     final footer = picture.getPixel(980, 600);
-    expect(footer.b, greaterThan(footer.r)); // The approved blue footer.
+    expect(footer.r, lessThan(40)); // TukTuk charcoal footer.
+    expect(footer.g, lessThan(50));
+    expect(footer.b, lessThan(60));
+    final header = picture.getPixel(600, 24);
+    expect(header.r, lessThan(45)); // No blue header fill.
+    expect(header.b, lessThan(55));
+    final impulse = picture.getPixel(760, 82);
+    expect(impulse.r, greaterThan(impulse.b)); // Warm orange mark.
     final qr = marketplaceDriverPromoQr(code, alias: 'conductor-ejemplo');
     const x = 727, y = 200, module = 5;
     final qrWidth = (qr.moduleCount + 8) * module;
@@ -102,6 +109,19 @@ void main() {
     expect(source, contains('photoBytes'));
     expect(source, contains('marketplaceDriverPromoQr(code, alias: alias)'));
     expect(source, contains('Solicita mi servicio'));
+  });
+
+  test('Impulsa alone occupies the top-right, verification is by the name', () {
+    final source = File('lib/presentation/marketplace_driver_business_card.dart').readAsStringSync();
+    expect(source, isNot(contains("'Verificado', 841")));
+    expect(source, contains("'Impulsa', 754, 71"));
+    expect(source, contains("'TUK', brandLeft"));
+    expect(source, contains("const gold = Color(0xFFE5A84E)"));
+    expect(source, contains("const mint = Color(0xFF35D6A2)"));
+    expect(source, contains('if (identityVerified) {'));
+    expect(source, contains('final seal = ui.Path()'));
+    expect(source, isNot(contains('0xFF0564DC')));
+    expect(source, isNot(contains('0xFF0864D1')));
   });
 
 }
