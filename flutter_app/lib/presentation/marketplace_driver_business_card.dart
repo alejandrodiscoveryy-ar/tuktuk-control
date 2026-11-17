@@ -132,15 +132,30 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
       final badgeCenter = Offset(
         nameLeft + line.left + line.width + 22,
         nameTop + line.baseline - line.ascent / 2);
-      canvas.drawCircle(badgeCenter, 17,
-        Paint()..color = const Color(0xFF1D9BF0));
+      // Same scalloped, verified checkmark as the existing Impulsa cards.
+      canvas.save();
+      canvas.translate(badgeCenter.dx - 17, badgeCenter.dy - 17);
+      canvas.scale(34 / 32);
+      final seal = Path();
+      for (var i = 0; i < 32; i++) {
+        final angle = i * pi / 16 - pi / 2;
+        final radius = i.isEven ? 15.0 : 13.4;
+        final px = 16 + cos(angle) * radius;
+        final py = 16 + sin(angle) * radius;
+        if (i == 0) {
+          seal.moveTo(px, py);
+        } else {
+          seal.lineTo(px, py);
+        }
+      }
+      seal.close();
+      canvas.drawPath(seal, Paint()..color = const Color(0xFF1D9BF0));
       final mark = Path()
-        ..moveTo(badgeCenter.dx - 8, badgeCenter.dy)
-        ..lineTo(badgeCenter.dx - 2, badgeCenter.dy + 6)
-        ..lineTo(badgeCenter.dx + 9, badgeCenter.dy - 8);
+        ..moveTo(9, 16)..lineTo(14, 21)..lineTo(23, 11);
       canvas.drawPath(mark, Paint()..color = Colors.white
-        ..style = PaintingStyle.stroke..strokeWidth = 4
+        ..style = PaintingStyle.stroke..strokeWidth = 3.2
         ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
+      canvas.restore();
     }
     painter.dispose();
 
