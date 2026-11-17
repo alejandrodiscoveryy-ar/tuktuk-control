@@ -390,4 +390,21 @@ void main() {
     expect(source, contains('identity.primaryColorHex'));
     expect(source, contains('identity.secondaryColorHex'));
   });
+  test('Impulsa self-service cannot spoof verified badge or unlock cards', () {
+    final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
+    expect(source, contains('get_my_marketplace_impulsa_application_v1'));
+    expect(source, contains('request_my_marketplace_impulsa_verification_v1'));
+    expect(source, contains("result['enabled'] == true && result['identity_verified'] == true"));
+    expect(source, contains("response['verified'] == true"));
+    expect(source, contains("result['status'] != 'pending'"));
+    expect(source, contains('verified ? Icons.verified_rounded : Icons.verified_outlined'));
+    expect(source, contains("const ValueKey('impulsa-accept-terms')"));
+    expect(source, contains("const ValueKey('impulsa-consent-public')"));
+    expect(source, contains("const ValueKey('impulsa-consent-photo')"));
+    expect(source, contains("const ValueKey('impulsa-request-verification')"));
+    expect(source, contains('MarketplaceOnboardingScreen(store: widget.store, driverOnly: true)'));
+    expect(source, contains('_sameUser && _enabled && _earnings != null'));
+    expect(source, isNot(contains("'Mi TukTuk'")));
+  });
+
 }
