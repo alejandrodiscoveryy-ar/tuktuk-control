@@ -902,9 +902,19 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final cached = force ? null : _cache.read(actor, fingerprint);
       if (cached != null) {
         final logoForPrint = await loadMarketplacePromoBrandLogo(identity);
+        // The horizontal card includes the authorized real portrait even
+        // when the old square/story cards are already present in the cache.
+        Uint8List? photoForPrint;
+        if (photoAuthorized && photoPath != null) {
+          final signed = await _client.storage.from('marketplace-media')
+            .createSignedUrl(photoPath, 120);
+          photoForPrint = await downloadMarketplacePromoPortrait(Uri.parse(signed));
+        }
+        if (!mounted || !_sameUser || revision != _revision) return;
         final printCard = await renderMarketplaceDriverPrintCard(
           name: name, code: code, alias: alias, modality: modality,
-          logoBytes: logoForPrint, identityVerified: identityVerified);
+          logoBytes: logoForPrint, photoBytes: photoForPrint,
+          identityVerified: identityVerified);
         if (!mounted || !_sameUser || revision != _revision) return;
         setState(() {
           _name.text = name; _code = code; _alias = alias;
@@ -927,7 +937,8 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       final story = await renderMarketplaceDriverPromoCard(name: name, code: code, alias: alias, modality: modality, story: true, photoBytes: photo, logoBytes: logo, identity: identity, identityVerified: identityVerified, vehicleCategory: vehicleCategory);
       final printCard = await renderMarketplaceDriverPrintCard(
         name: name, code: code, alias: alias, modality: modality,
-        logoBytes: logo, identityVerified: identityVerified);
+        photoBytes: photo, logoBytes: logo,
+        identityVerified: identityVerified);
       if (!mounted || !_sameUser || revision != _revision) return;
       // If the configured official icon failed to load, do not persist a
       // degraded rendering; a later visit can retry the correct identity.
@@ -1082,7 +1093,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         const Text('Tarjeta de presentación', style: TextStyle(
           fontSize: 17, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        const Text('Una cara · 85 × 55 mm · fondo blanco · imprimir al 100 %',
+        const Text('Diseño premium · 85 × 55 mm · imprimir al 100 %',
           style: TextStyle(fontSize: 12)),
         const SizedBox(height: 12),
         AspectRatio(aspectRatio: 85 / 55,
@@ -1417,7 +1428,7 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
       identity: identity, identityVerified: true, vehicleCategory: category);
     final printable = await renderMarketplaceDriverPrintCard(
       name: name, code: widget.code, alias: alias, modality: modality,
-      logoBytes: logo, identityVerified: true);
+      photoBytes: photo, logoBytes: logo, identityVerified: true);
     return (name, square, story, printable, alias);
   }
 
@@ -1478,7 +1489,7 @@ class _MarketplaceSharedPromoCardsState extends State<MarketplaceSharedPromoCard
           const SizedBox(height: 18),
           const Text('Tarjeta de presentación · 85 × 55 mm',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-          const Text('Blanca, una cara y preparada para imprimir',
+          const Text('Horizontal, con foto autorizada y QR personal listo para imprimir',
             style: TextStyle(fontSize: 12)),
           const SizedBox(height: 10),
           ConstrainedBox(constraints: const BoxConstraints(maxWidth: 540),
