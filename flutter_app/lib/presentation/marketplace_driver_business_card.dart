@@ -53,14 +53,31 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     canvas.drawPath(bottomLine, Paint()..color = orange
       ..style = PaintingStyle.stroke..strokeWidth = 6);
 
-    // Official configured project icon and one clean agency name.
-    // Do not recreate an unofficial split "TUK TUK" wordmark on the card.
+    // Keep the approved stacked identity: "Agencia" over the two-tone
+    // "TUKTUK". Both color spans are in ONE text run, with no fixed gap.
+    // The configured icon remains unchanged.
     if (icon != null) {
       _promoFitImage(canvas, icon, const Rect.fromLTWH(38, 25, 90, 88));
     }
-    _promoText(canvas, 'Agencia TukTuk', icon == null ? 55 : 149, 48,
-      icon == null ? 510 : 460, 42, Colors.white,
-      lines: 1, minFontSize: 30, weight: FontWeight.w800);
+    final brandLeft = icon == null ? 57.0 : 146.0;
+    _promoText(canvas, 'Agencia', brandLeft + 2, 23, 310, 28,
+      Colors.white, lines: 1, minFontSize: 22,
+      weight: FontWeight.w700);
+    final brandPainter = TextPainter(
+      textDirection: ui.TextDirection.ltr,
+      maxLines: 1,
+      text: const TextSpan(
+        style: TextStyle(
+          fontFamily: 'ImpulsaMontserrat',
+          fontSize: 48, fontWeight: FontWeight.w800, height: 1.0),
+        children: [
+          TextSpan(text: 'TUK', style: TextStyle(color: Colors.white)),
+          TextSpan(text: 'TUK', style: TextStyle(color: gold)),
+        ],
+      ),
+    )..layout(maxWidth: 380);
+    brandPainter.paint(canvas, Offset(brandLeft, 55));
+    brandPainter.dispose();
 
     // Move the approved Impulsa mark into the former verification corner.
     // It has its own clear area: no overprinted emblem or duplicated label.
