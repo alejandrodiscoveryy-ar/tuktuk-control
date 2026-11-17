@@ -67,13 +67,14 @@ void main() {
       }
     }
     final printable = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
-      name: 'Frank Camilo Núñez Nieves',
+      name: 'Conductor Ejemplo Apellido Largo',
       code: '0123456789abcdef0123456789abcdef',
-      alias: 'frank', modality: 'Triciclo · Pasajeros',
+      alias: 'conductor-ejemplo', modality: 'Triciclo · Pasajeros',
       identityVerified: true, logoBytes: logo));
     expect(printable, isNotNull);
     File('${directory.path}/presentacion-85x55.png').writeAsBytesSync(printable!);
     final printPdf = marketplaceDriverPrintPdf(printable);
     expect(printPdf.length, greaterThan(1000));
+    File('${directory.path}/presentacion-85x55.pdf').writeAsBytesSync(printPdf);
   });
 }
