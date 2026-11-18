@@ -400,7 +400,9 @@ void main() {
     expect(source, contains('if (painter.height <= area.height || size <= 12) break'));
     expect(source, contains('final verificationTop = nameBottom + 6'));
     expect(source, contains('verificationTop, nameArea.width - verificationIndent'));
-    expect(source, isNot(contains("ellipsis: '…'")));
+    final nameFunction = source.split('double _promoVerifiedName(')[1]
+      .split('void _promoFitImage(')[0];
+    expect(nameFunction, isNot(contains('ellipsis:')));
   });
   test('Impulsa self-service cannot spoof verified badge or unlock cards', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
