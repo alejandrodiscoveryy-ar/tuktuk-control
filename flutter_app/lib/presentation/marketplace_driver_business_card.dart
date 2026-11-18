@@ -1,5 +1,29 @@
 part of '../main.dart';
 
+/// Fit the complete public name in the approved print-card name area.
+/// Keep short names large; allow up to three lines and never use an ellipsis.
+/// The same layout is exported to PNG and embedded losslessly in the PDF.
+TextPainter marketplaceDriverPrintNameLayout(String name) {
+  final painter = TextPainter(
+    textDirection: ui.TextDirection.ltr, maxLines: 3);
+  final publicName = name.trim().replaceAll(RegExp(r'\s+'), ' ');
+  var size = 46.0;
+  while (true) {
+    painter.text = TextSpan(text: publicName, style: TextStyle(
+      color: const Color(0xFF172028), fontSize: size,
+      fontFamily: 'ImpulsaMontserrat', fontWeight: FontWeight.w800,
+      height: 1.08));
+    painter.layout(maxWidth: 378);
+    if (!painter.didExceedMaxLines && painter.height <= 124) return painter;
+    if (size <= 12) {
+      painter.dispose();
+      // Better to reject an impossible layout than silently cut a surname.
+      throw StateError('PRINT_CARD_NAME_TOO_LONG');
+    }
+    size -= 1;
+  }
+}
+
 /// Horizontal premium card based on the approved Agencia TukTuk / Impulsa
 /// presentation design. Every personal element is rendered at export time:
 /// approved public name, authorized photo, verified badge, real QR and link.
@@ -13,13 +37,12 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
   marketplaceDriverPromoUri(code, alias: alias);
   const width = 1004, height = 650;
   // TukTuk Cliente palette: charcoal, white, gold, orange and mint.
-  // Only the standard verified-name badge remains blue.
+  // Only the standard verified-identity badge remains blue.
   const charcoal = Color(0xFF050B10);
   const charcoalSoft = Color(0xFF172028);
   const gold = Color(0xFFE5A84E);
   const orange = Color(0xFFFF963E);
   const mint = Color(0xFF35D6A2);
-  const darkText = Color(0xFF172028);
   const mutedText = Color(0xFF46525B);
   ui.Image? icon, portrait;
   try {
@@ -117,60 +140,24 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     }
     canvas.restore();
 
-    // Public name and the existing blue check, immediately after the last
-    // visible line of the name. Never show a badge for unverified accounts.
-    final publicName = name.trim();
-    final painter = TextPainter(textDirection: ui.TextDirection.ltr,
-      maxLines: 2, ellipsis: '…');
-    var fontSize = 46.0;
-    do {
-      painter.text = TextSpan(text: publicName, style: TextStyle(
-        color: darkText, fontSize: fontSize,
-        fontFamily: 'ImpulsaMontserrat', fontWeight: FontWeight.w800,
-        height: 1.08));
-      painter.layout(maxWidth: identityVerified ? 347 : 378);
-      if (painter.height <= 102 || fontSize <= 25) break;
-      fontSize -= 2;
-    } while (true);
+    // Short names retain their headline size; long names fit in up to three
+    // lines. The verification seal belongs to the subtitle, not the name.
     const nameTop = 220.0, nameLeft = 308.0;
+    final painter = marketplaceDriverPrintNameLayout(name);
     painter.paint(canvas, const Offset(nameLeft, nameTop));
     final nameBottom = nameTop + painter.height;
-    if (identityVerified) {
-      final line = painter.computeLineMetrics().last;
-      final badgeCenter = Offset(
-        nameLeft + line.left + line.width + 22,
-        nameTop + line.baseline - line.ascent / 2);
-      // Same scalloped, verified checkmark as the existing Impulsa cards.
-      canvas.save();
-      canvas.translate(badgeCenter.dx - 17, badgeCenter.dy - 17);
-      canvas.scale(34 / 32);
-      final seal = ui.Path();
-      for (var i = 0; i < 32; i++) {
-        final angle = i * pi / 16 - pi / 2;
-        final radius = i.isEven ? 15.0 : 13.4;
-        final px = 16 + cos(angle) * radius;
-        final py = 16 + sin(angle) * radius;
-        if (i == 0) {
-          seal.moveTo(px, py);
-        } else {
-          seal.lineTo(px, py);
-        }
-      }
-      seal.close();
-      canvas.drawPath(seal, Paint()..color = const Color(0xFF1D9BF0));
-      final mark = ui.Path()
-        ..moveTo(9, 16)..lineTo(14, 21)..lineTo(23, 11);
-      canvas.drawPath(mark, Paint()..color = Colors.white
-        ..style = PaintingStyle.stroke..strokeWidth = 3.2
-        ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
-      canvas.restore();
-    }
     painter.dispose();
 
+    final verificationTop = nameBottom + 8;
+    if (identityVerified) {
+      _promoVerifiedSeal(canvas, Offset(310, verificationTop + 1), 24);
+    }
+    final verificationIndent = identityVerified ? 32.0 : 0.0;
     _promoText(canvas,
       identityVerified ? 'Conductor verificado de la Agencia TukTuk'
         : 'Conductor de la Agencia TukTuk',
-      310, nameBottom + 10, 375, 23, mutedText,
+      310 + verificationIndent, verificationTop,
+      378 - verificationIndent, 23, mutedText,
       lines: 2, minFontSize: 16, weight: FontWeight.w700);
     final modalityName = modality.split(' · ').first.trim();
     const modalityRect = Rect.fromLTWH(310, 412, 360, 64);
