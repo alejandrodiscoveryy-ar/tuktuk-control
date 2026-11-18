@@ -44,7 +44,7 @@ Offset marketplaceDriverPrintBadgeOffset(TextPainter painter) {
   final last = painter.computeLineMetrics().last;
   const nameLeft = 308.0, nameTop = 220.0;
   return Offset(nameLeft + last.left + last.width + _printBadgeGap,
-    nameTop + last.baseline + last.ascent / 2 - _printBadgeSize / 2);
+    nameTop + last.baseline - last.ascent / 2 - _printBadgeSize / 2);
 }
 
 /// Horizontal premium card based on the approved Agencia TukTuk / Impulsa
