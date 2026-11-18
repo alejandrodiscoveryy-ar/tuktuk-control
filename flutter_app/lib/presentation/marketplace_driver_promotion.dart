@@ -127,62 +127,53 @@ void _promoText(Canvas canvas, String value, double x, double y, double width,
   painter.dispose();
 }
 
-/// The badge is part of the exported PNG, not merely the app preview.
+/// Shared verified badge. Drawn beside the subtitle, not over a long name.
+void _promoVerifiedSeal(Canvas canvas, Offset topLeft, double size, {
+  bool glow = false,
+}) {
+  canvas.save();
+  canvas.translate(topLeft.dx, topLeft.dy);
+  canvas.scale(size / 32);
+  final seal = ui.Path();
+  for (var i = 0; i < 32; i++) {
+    final angle = i * pi / 16 - pi / 2;
+    final radius = i.isEven ? 15.0 : 13.4;
+    final px = 16 + cos(angle) * radius;
+    final py = 16 + sin(angle) * radius;
+    if (i == 0) seal.moveTo(px, py);
+    else seal.lineTo(px, py);
+  }
+  seal.close();
+  if (glow) {
+    canvas.drawPath(seal, Paint()..color = const Color(0xFF00C8FF)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6));
+  }
+  canvas.drawPath(seal, Paint()..color = const Color(0xFF1D9BF0));
+  final check = ui.Path()..moveTo(9, 16)..lineTo(14, 21)..lineTo(23, 11);
+  canvas.drawPath(check, Paint()..color = Colors.white
+    ..style = PaintingStyle.stroke..strokeWidth = 3.2
+    ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
+  canvas.restore();
+}
+
+/// Scale name to fit its area; no ellipsis or badge stealing name width.
 double _promoVerifiedName(Canvas canvas, String name, Rect area, {
   required double fontSize, required double minFontSize, required bool center,
-  required bool identityVerified,
 }) {
-  final badgeSize = identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0;
-  final gap = identityVerified ? 12.0 : 0.0;
   final painter = TextPainter(textDirection: ui.TextDirection.ltr,
-    textAlign: center ? TextAlign.center : TextAlign.left,
-    );
+    textAlign: center ? TextAlign.center : TextAlign.left);
   var size = fontSize;
-  final available = area.width - badgeSize - gap;
   while (true) {
-    painter.text = TextSpan(text: name, style: TextStyle(
-      color: Colors.white, fontFamily: 'ImpulsaMontserrat', fontSize: size, fontWeight: FontWeight.w800,
-      height: 1.06, letterSpacing: -1.3));
-    painter.layout(maxWidth: available);
+    painter.text = TextSpan(text: name.trim().replaceAll(RegExp(r'\s+'), ' '),
+      style: TextStyle(color: Colors.white, fontFamily: 'ImpulsaMontserrat',
+        fontSize: size, fontWeight: FontWeight.w800,
+        height: 1.06, letterSpacing: -1.3));
+    painter.layout(maxWidth: area.width);
     if (painter.height <= area.height || size <= 12) break;
-    // Fit even unusually long legal names without truncating them.
     size = max(12.0, size - (size > minFontSize ? 2 : 1));
   }
-  final total = painter.width + gap + badgeSize;
-  final x = center ? area.left + (area.width - total) / 2 : area.left;
+  final x = center ? area.left + (area.width - painter.width) / 2 : area.left;
   painter.paint(canvas, Offset(x, area.top));
-  if (identityVerified) {
-    // Use the actual last line, not the paragraph's widest line: the blue
-    // seal must touch the name visually even when a full name wraps.
-    final line = painter.computeLineMetrics().last;
-    final sealSize = min(badgeSize, size * .91);
-    final origin = Offset(x + line.left + line.width + gap,
-      area.top + line.baseline - line.ascent / 2 - sealSize / 2 + 2);
-    canvas.save();
-    canvas.translate(origin.dx, origin.dy);
-    canvas.scale(sealSize / 32);
-    final badge = ui.Path();
-    for (var i = 0; i < 32; i++) {
-      final angle = i * pi / 16 - pi / 2;
-      final radius = i.isEven ? 15.0 : 13.4;
-      final px = 16 + cos(angle) * radius;
-      final py = 16 + sin(angle) * radius;
-      if (i == 0) {
-        badge.moveTo(px, py);
-      } else {
-        badge.lineTo(px, py);
-      }
-    }
-    badge.close();
-    canvas.drawPath(badge, Paint()..color = const Color(0xFF00C8FF)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.6));
-    canvas.drawPath(badge, Paint()..color = const Color(0xFF1D9BF0));
-    final check = ui.Path()..moveTo(9, 16)..lineTo(14, 21)..lineTo(23, 11);
-    canvas.drawPath(check, Paint()..color = Colors.white
-      ..style = PaintingStyle.stroke..strokeWidth = 3.2
-      ..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round);
-    canvas.restore();
-  }
   final bottom = area.top + painter.height;
   painter.dispose();
   return bottom;
@@ -462,11 +453,18 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final nameArea = story ? const Rect.fromLTWH(490, 302, 511, 121)
       : const Rect.fromLTWH(363, 236, 333, 94);
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
-      fontSize: story ? 94 : 77, minFontSize: 23, center: false,
-      identityVerified: identityVerified);
+      fontSize: story ? 94 : 77, minFontSize: 23, center: false);
+    final verificationTop = nameBottom + 6;
+    final verificationSealSize = story ? 30.0 : 24.0;
+    if (identityVerified) {
+      _promoVerifiedSeal(canvas, Offset(nameArea.left, verificationTop + 3),
+        verificationSealSize, glow: true);
+    }
+    final verificationIndent = identityVerified ? verificationSealSize + 8 : 0.0;
     _promoText(canvas, identityVerified ? 'Conductor verificado de la Agencia TukTuk'
-      : 'Conductor de la Agencia TukTuk', nameArea.left, nameBottom + 6,
-      nameArea.width, story ? 33 : 25, white, lines: 2, minFontSize: 18,
+      : 'Conductor de la Agencia TukTuk', nameArea.left + verificationIndent,
+      verificationTop, nameArea.width - verificationIndent,
+      story ? 33 : 25, white, lines: 2, minFontSize: 18,
       weight: FontWeight.w700,
       shadows: const [Shadow(color: Color(0xBB000916), offset: Offset(1, 2), blurRadius: 3)]);
 
@@ -551,7 +549,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
 
 /// A single local entry per account, versioned by artwork and public metadata.
 /// Signed photo query parameters expire and must never invalidate or be stored.
-const _marketplacePromoArtworkVersion = 19;
+const _marketplacePromoArtworkVersion = 20;
 String marketplacePromoCacheFingerprint({
   required String actor, required String code, required String name,
   required String modality, required bool photoAuthorized,
