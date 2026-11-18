@@ -3,7 +3,15 @@ part of '../main.dart';
 /// Fit the complete public name in the approved print-card name area.
 /// Keep short names large; allow up to three lines and never use an ellipsis.
 /// The same layout is exported to PNG and embedded losslessly in the PDF.
-TextPainter marketplaceDriverPrintNameLayout(String name) {
+const _printNameWidth = 378.0;
+const _printBadgeSize = 32.0;
+const _printBadgeGap = 8.0;
+
+/// Full public name, including last surname, must fit with its checkmark
+/// on the final line. Only verified identities reserve checkmark space.
+TextPainter marketplaceDriverPrintNameLayout(String name, {
+  bool identityVerified = false,
+}) {
   final painter = TextPainter(
     textDirection: ui.TextDirection.ltr, maxLines: 3);
   final publicName = name.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -13,15 +21,30 @@ TextPainter marketplaceDriverPrintNameLayout(String name) {
       color: const Color(0xFF172028), fontSize: size,
       fontFamily: 'ImpulsaMontserrat', fontWeight: FontWeight.w800,
       height: 1.08));
-    painter.layout(maxWidth: 378);
-    if (!painter.didExceedMaxLines && painter.height <= 124) return painter;
+    painter.layout(maxWidth: _printNameWidth);
+    final lines = painter.computeLineMetrics();
+    final last = lines.isEmpty ? null : lines.last;
+    final badgeFits = !identityVerified || (last != null &&
+      last.left + last.width + _printBadgeGap + _printBadgeSize
+        <= _printNameWidth);
+    if (!painter.didExceedMaxLines && painter.height <= 124 && badgeFits) {
+      return painter;
+    }
     if (size <= 12) {
       painter.dispose();
-      // Better to reject an impossible layout than silently cut a surname.
+      // Never silently cut a surname or paint a seal over the QR.
       throw StateError('PRINT_CARD_NAME_TOO_LONG');
     }
     size -= 1;
   }
+}
+
+/// Position the verified seal against the final surname, not the subtitle.
+Offset marketplaceDriverPrintBadgeOffset(TextPainter painter) {
+  final last = painter.computeLineMetrics().last;
+  const nameLeft = 308.0, nameTop = 220.0;
+  return Offset(nameLeft + last.left + last.width + _printBadgeGap,
+    nameTop + last.baseline + last.ascent / 2 - _printBadgeSize / 2);
 }
 
 /// Horizontal premium card based on the approved Agencia TukTuk / Impulsa
@@ -140,24 +163,24 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
     }
     canvas.restore();
 
-    // Short names retain their headline size; long names fit in up to three
-    // lines. The verification seal belongs to the subtitle, not the name.
+    // Full name in up to three lines. Attach the blue verified seal
+    // immediately after the last surname without overlapping the QR.
     const nameTop = 220.0, nameLeft = 308.0;
-    final painter = marketplaceDriverPrintNameLayout(name);
+    final painter = marketplaceDriverPrintNameLayout(name,
+      identityVerified: identityVerified);
     painter.paint(canvas, const Offset(nameLeft, nameTop));
     final nameBottom = nameTop + painter.height;
+    if (identityVerified) {
+      _promoVerifiedSeal(canvas, marketplaceDriverPrintBadgeOffset(painter),
+        _printBadgeSize);
+    }
     painter.dispose();
 
     final verificationTop = nameBottom + 8;
-    if (identityVerified) {
-      _promoVerifiedSeal(canvas, Offset(310, verificationTop + 1), 24);
-    }
-    final verificationIndent = identityVerified ? 32.0 : 0.0;
     _promoText(canvas,
       identityVerified ? 'Conductor verificado de la Agencia TukTuk'
         : 'Conductor de la Agencia TukTuk',
-      310 + verificationIndent, verificationTop,
-      378 - verificationIndent, 23, mutedText,
+      310, verificationTop, 378, 23, mutedText,
       lines: 2, minFontSize: 16, weight: FontWeight.w700);
     final modalityName = modality.split(' · ').first.trim();
     const modalityRect = Rect.fromLTWH(310, 412, 360, 64);
