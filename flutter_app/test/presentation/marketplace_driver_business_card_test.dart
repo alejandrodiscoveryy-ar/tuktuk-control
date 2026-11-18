@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:control_tuk_tuk/main.dart';
@@ -100,6 +101,31 @@ void main() {
     expect(after.g, lessThan(100));
   });
 
+  testWidgets('long public names fit completely without ellipsis in print and PDF', (tester) async {
+    const names = [
+      'Pedro Alejandro Cruz',
+      'María de los Ángeles Fernández Rodríguez',
+      'María de los Ángeles Fernández Rodríguez de la Cruz y Martínez',
+    ];
+    for (final name in names) {
+      final layout = marketplaceDriverPrintNameLayout(name);
+      expect(layout.text!.toPlainText(), name);
+      expect(layout.didExceedMaxLines, isFalse);
+      expect(layout.computeLineMetrics().length, lessThanOrEqualTo(3));
+      expect(layout.height, lessThanOrEqualTo(124));
+      expect((layout.text! as TextSpan).style!.fontSize!, lessThanOrEqualTo(46));
+      layout.dispose();
+
+      final png = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
+        name: name, code: code, modality: 'Triciclo · Pasajeros',
+        identityVerified: true));
+      final picture = img.decodePng(png!)!;
+      expect(picture.width, 1004);
+      expect(picture.height, 650);
+      expect(marketplaceDriverPrintPdf(png), isNotEmpty);
+    }
+  });
+
   test('premium template contains no fabricated driver statistics or vehicle artwork', () {
     final source = File('lib/presentation/marketplace_driver_business_card.dart').readAsStringSync();
     expect(source, isNot(contains('4.9')));
@@ -126,7 +152,7 @@ void main() {
     expect(source, contains('const gold = Color(0xFFE5A84E)'));
     expect(source, contains('const mint = Color(0xFF35D6A2)'));
     expect(source, contains('if (identityVerified) {'));
-    expect(source, contains('final seal = ui.Path()'));
+    expect(source, contains('_promoVerifiedSeal(canvas, Offset(310, verificationTop + 1), 24)'));
     expect(source, isNot(contains('0xFF0564DC')));
     expect(source, isNot(contains('0xFF0864D1')));
   });
