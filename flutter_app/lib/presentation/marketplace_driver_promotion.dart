@@ -458,7 +458,7 @@ Future<Uint8List> renderMarketplaceDriverPromoCard({
     final nameBottom = _promoVerifiedName(canvas, name, nameArea,
       fontSize: story ? 94 : 77, minFontSize: 23, center: false);
     final verificationTop = nameBottom + 6;
-    final verificationSealSize = story ? 30.0 : 24.0;
+    final verificationSealSize = story ? 45.0 : 36.0;
     if (identityVerified) {
       _promoVerifiedSeal(canvas, Offset(nameArea.left, verificationTop + 3),
         verificationSealSize, glow: true);
