@@ -140,8 +140,11 @@ void _promoVerifiedSeal(Canvas canvas, Offset topLeft, double size, {
     final radius = i.isEven ? 15.0 : 13.4;
     final px = 16 + cos(angle) * radius;
     final py = 16 + sin(angle) * radius;
-    if (i == 0) seal.moveTo(px, py);
-    else seal.lineTo(px, py);
+    if (i == 0) {
+      seal.moveTo(px, py);
+    } else {
+      seal.lineTo(px, py);
+    }
   }
   seal.close();
   if (glow) {
