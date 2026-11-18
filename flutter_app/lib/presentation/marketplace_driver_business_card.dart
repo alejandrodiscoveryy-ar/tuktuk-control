@@ -37,13 +37,12 @@ Future<Uint8List> renderMarketplaceDriverPrintCard({
   marketplaceDriverPromoUri(code, alias: alias);
   const width = 1004, height = 650;
   // TukTuk Cliente palette: charcoal, white, gold, orange and mint.
-  // Only the standard verified-name badge remains blue.
+  // Only the standard verified-identity badge remains blue.
   const charcoal = Color(0xFF050B10);
   const charcoalSoft = Color(0xFF172028);
   const gold = Color(0xFFE5A84E);
   const orange = Color(0xFFFF963E);
   const mint = Color(0xFF35D6A2);
-  const darkText = Color(0xFF172028);
   const mutedText = Color(0xFF46525B);
   ui.Image? icon, portrait;
   try {
