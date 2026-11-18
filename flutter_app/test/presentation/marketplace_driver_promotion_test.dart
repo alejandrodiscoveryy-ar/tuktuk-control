@@ -349,7 +349,7 @@ void main() {
     expect(source, contains('identity.iconUrl'));
     expect(source, isNot(contains('identity.logoUrl')));
     expect(source, contains('_promoFitImage(canvas, logo, logoArea)'));
-    expect(source, contains('const _marketplacePromoArtworkVersion = 19;'));
+    expect(source, contains('const _marketplacePromoArtworkVersion = 20;'));
     expect(source, contains("result['identity_verified'] == true"));
     expect(source, contains('identityVerified: identityVerified'));
     expect(source, contains('vehicleCategory: vehicleCategory'));
@@ -360,7 +360,7 @@ void main() {
     expect(source, contains('marketplacePromoMasterAsset(category, story: story)'));
     expect(source, contains('canvas.drawImageRect(master,'));
     expect(source, contains('master?.dispose()'));
-    expect(source, contains('painter.computeLineMetrics().last'));
+    expect(source, contains('_promoVerifiedSeal(canvas, Offset(nameArea.left, verificationTop + 3)'));
     expect(source, contains("if (artworkCategory != 'tricycle')"));
     expect(source, contains('alignment: Alignment.bottomCenter'));
     expect(source, contains('BlendMode.dstIn'));
@@ -370,7 +370,7 @@ void main() {
     expect(source, isNot(contains(r"_promoText(canvas, 'Tu próximo viaje\ncomienza conmigo'")));
     expect(source, contains('Rect.fromLTWH(394, 552, 615, 435)'));
     expect(source, contains('final qrX = story ? 694.0 : 701.0;'));
-    expect(source, contains('identityVerified ? (area.width < 400 ? 60.0 : 76.0) : 0.0'));
+    expect(source, contains('final verificationIndent = identityVerified ? verificationSealSize + 8 : 0.0'));
     expect(source, contains('Rect.fromLTWH(232, 1516, 680, 94)'));
     expect(source, contains('_cache.read(actor, fingerprint)'));
     expect(source, contains('_cache.save(actor, fingerprint, square, story)'));
@@ -392,6 +392,15 @@ void main() {
     expect(source, isNot(contains("_promoText(canvas, 'MI TUKTUK'")));
     expect(source, contains('identity.primaryColorHex'));
     expect(source, contains('identity.secondaryColorHex'));
+  });
+  test('social cards fit the complete name and put verified seal by the subtitle', () {
+    final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
+    expect(source, contains("name.trim().replaceAll(RegExp(r'\\s+'), ' ')"));
+    expect(source, contains('painter.layout(maxWidth: area.width)'));
+    expect(source, contains('if (painter.height <= area.height || size <= 12) break'));
+    expect(source, contains('final verificationTop = nameBottom + 6'));
+    expect(source, contains('verificationTop, nameArea.width - verificationIndent'));
+    expect(source, isNot(contains("ellipsis: '…'")));
   });
   test('Impulsa self-service cannot spoof verified badge or unlock cards', () {
     final source = File('lib/presentation/marketplace_driver_promotion.dart').readAsStringSync();
