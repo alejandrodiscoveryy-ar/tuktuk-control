@@ -103,17 +103,24 @@ void main() {
 
   testWidgets('long public names fit completely without ellipsis in print and PDF', (tester) async {
     const names = [
-      'Pedro Alejandro Cruz',
+      'Pedro Alejandro Cruz Pérez',
       'María de los Ángeles Fernández Rodríguez',
       'María de los Ángeles Fernández Rodríguez de la Cruz y Martínez',
     ];
     for (final name in names) {
-      final layout = marketplaceDriverPrintNameLayout(name);
+      final layout = marketplaceDriverPrintNameLayout(name,
+        identityVerified: true);
       expect(layout.text!.toPlainText(), name);
       expect(layout.didExceedMaxLines, isFalse);
       expect(layout.computeLineMetrics().length, lessThanOrEqualTo(3));
       expect(layout.height, lessThanOrEqualTo(124));
       expect((layout.text! as TextSpan).style!.fontSize!, lessThanOrEqualTo(46));
+      final last = layout.computeLineMetrics().last;
+      final badge = marketplaceDriverPrintBadgeOffset(layout);
+      expect(badge.dx, greaterThan(308 + last.left + last.width));
+      expect(badge.dx + 32, lessThanOrEqualTo(686));
+      expect(badge.dy, greaterThanOrEqualTo(220));
+      expect(badge.dy + 32, lessThan(220 + layout.height + 16));
       layout.dispose();
 
       final png = await tester.runAsync(() => renderMarketplaceDriverPrintCard(
@@ -122,6 +129,16 @@ void main() {
       final picture = img.decodePng(png!)!;
       expect(picture.width, 1004);
       expect(picture.height, 650);
+      var blueInName = 0;
+      for (var y = badge.dy.floor(); y < badge.dy.ceil() + 32; y++) {
+        for (var x = badge.dx.floor(); x < badge.dx.ceil() + 32; x++) {
+          final pixel = picture.getPixel(x, y);
+          if (pixel.r == 29 && pixel.g == 155 && pixel.b == 240) {
+            blueInName++;
+          }
+        }
+      }
+      expect(blueInName, greaterThan(40), reason: name);
       expect(marketplaceDriverPrintPdf(png), isNotEmpty);
     }
   });
@@ -152,7 +169,9 @@ void main() {
     expect(source, contains('const gold = Color(0xFFE5A84E)'));
     expect(source, contains('const mint = Color(0xFF35D6A2)'));
     expect(source, contains('if (identityVerified) {'));
-    expect(source, contains('_promoVerifiedSeal(canvas, Offset(310, verificationTop + 1), 24)'));
+    expect(source, contains('_promoVerifiedSeal(canvas, marketplaceDriverPrintBadgeOffset(painter)'));
+    expect(source, contains('last.left + last.width + _printBadgeGap'));
+    expect(source, isNot(contains('_promoVerifiedSeal(canvas, Offset(310, verificationTop + 1)')));
     expect(source, isNot(contains('0xFF0564DC')));
     expect(source, isNot(contains('0xFF0864D1')));
   });
