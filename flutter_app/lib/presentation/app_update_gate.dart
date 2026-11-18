@@ -105,6 +105,7 @@ class _AppUpdateGateState extends State<AppUpdateGate>
   AppUpdateDecision _decision = AppUpdateDecision.none;
   bool _checking = false;
   DateTime? _lastCheck;
+  StreamSubscription<AuthState>? _authSubscription;
 
   bool get _android => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
@@ -113,6 +114,11 @@ class _AppUpdateGateState extends State<AppUpdateGate>
     super.initState();
     if (!_android) return;
     WidgetsBinding.instance.addObserver(this);
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      if (event.session?.user != null && mounted) {
+        unawaited(_reportInstalledVersion());
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_checkForUpdates()));
   }
 
@@ -125,7 +131,11 @@ class _AppUpdateGateState extends State<AppUpdateGate>
 
   @override
   void dispose() {
-    if (_android) WidgetsBinding.instance.removeObserver(this);
+    if (_android) {
+      WidgetsBinding.instance.removeObserver(this);
+      final subscription = _authSubscription;
+      if (subscription != null) unawaited(subscription.cancel());
+    }
     super.dispose();
   }
 
@@ -150,6 +160,26 @@ class _AppUpdateGateState extends State<AppUpdateGate>
       // Missing platform channel: do not show false update warnings.
     }
     return null;
+  }
+
+  // Telemetría de la APK instalada, independiente de FCM y del aviso de actualización.
+  // Solo registra conductores autenticados; nunca bloquea la aplicación si falla.
+  Future<void> _reportInstalledVersion([_InstalledAppVersion? detected]) async {
+    if (!_android || !mounted || Supabase.instance.client.auth.currentUser == null) return;
+    final installed = detected ?? await _installedVersion();
+    if (installed == null || !RegExp(r'^\d+(?:\.\d+){1,3}$').hasMatch(installed.name)) return;
+    try {
+      await Supabase.instance.client.rpc(
+        'driver_report_android_install',
+        params: {
+          'target_project_id': _projectId,
+          'target_version': installed.name,
+          'target_build': installed.build,
+        },
+      ).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Red lenta, usuario no conductor o backend anterior: no afectar el trabajo.
+    }
   }
 
   void _applyRelease(_AppUpdateRelease? release, _InstalledAppVersion installed,
@@ -185,6 +215,7 @@ class _AppUpdateGateState extends State<AppUpdateGate>
     try {
       final installed = await _installedVersion();
       if (installed == null || !mounted) return;
+      unawaited(_reportInstalledVersion(installed));
       try {
         final remote = await Supabase.instance.client.rpc(
           'get_public_app_release',
