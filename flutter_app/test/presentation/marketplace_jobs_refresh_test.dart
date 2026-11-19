@@ -104,11 +104,21 @@ class _JobsService extends MarketplaceService {
   bool failIncome = false;
   int incomePageCalls = 0;
   bool acceptingJobs = true;
+  double debtCup = 0;
+  int debtQueries = 0;
+  bool failDebtQuery = false;
   List<MarketplaceJob> active = [];
   List<MarketplaceJob> history = [];
   int visualPageCalls = 0;
   String? lastHistoryCursor;
   Completer<List<MarketplaceAvailableJob>>? pending;
+
+  @override
+  Future<double> walletDebtCup() async {
+    debtQueries++;
+    if (failDebtQuery) throw const SocketException('offline debt query');
+    return debtCup;
+  }
 
   @override
   Future<MarketplaceOnboarding> onboarding() async {
@@ -395,6 +405,79 @@ void main() {
     await tester.tap(item);
     await pumpJobs(tester);
   }
+
+  testWidgets('la deuda aparece una sola vez al entrar y permite abrir Billetera',
+      (tester) async {
+    service.debtCup = 360;
+    await open(tester);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsOneWidget);
+    expect(find.textContaining('360 CUP'), findsWidgets);
+    expect(service.debtQueries, 1);
+
+    await tester.tap(find.byKey(const ValueKey('marketplace-startup-debt-topup')));
+    await pumpJobs(tester);
+    expect(find.text('Billetera'), findsOneWidget);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsNothing);
+    expect(service.debtQueries, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cerrar aviso no lo repite en recargas ni al reanudar',
+      (tester) async {
+    service.debtCup = 360;
+    await open(tester);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsOneWidget);
+    await tester.tap(find.text('Entendido'));
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsNothing);
+    expect(service.debtQueries, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sin deuda o sin conexión, mapa operativo sin alerta',
+      (tester) async {
+    service.failDebtQuery = true;
+    await open(tester);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('tuktuk-work-map-home')),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el aviso no aparece mientras Trabajo está oculto',
+      (tester) async {
+    service.debtCup = 360;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarketplaceJobsScreen(
+        store: store, service: service, isVisible: false,
+      )),
+    ));
+    await pumpJobs(tester);
+    expect(service.debtQueries, 0);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsNothing);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarketplaceJobsScreen(
+        store: store, service: service, isVisible: true,
+      )),
+    ));
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('marketplace-startup-debt-alert')),
+        findsOneWidget);
+    expect(service.debtQueries, 1);
+    await tester.tap(find.text('Entendido'));
+    await pumpJobs(tester);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Trabajos sin sesión ofrece acceso Google y permite reintentar OAuth', (tester) async {
     store.signedIn = false;
