@@ -254,6 +254,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   late final TabController _tabController;
   int _workPanelIndex = -1;
   bool _workDrawerOpen = false;
+  String? _debtNoticeCheckedUserId;
+  String? _debtNoticeLoadingUserId;
   bool _workDrawerIdentityVerified = false;
   String? _workDrawerVerificationUserId;
   int _workDrawerVerificationRevision = 0;
@@ -366,6 +368,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (!oldWidget.isVisible && widget.isVisible) {
       if (kIsWeb) unawaited(_load(refreshHistory: false));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_showDebtNoticeOnEntry());
+      });
       _syncOperationalLocationSampling(
         immediate: true,
         requestPermission: true,
@@ -508,6 +513,67 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (!mounted) return;
     setState(() => _managementRevision++);
     unawaited(_load());
+  }
+
+  // Aviso informativo una sola vez por sesión y conductor, sin tocar GPS,
+  // ofertas, billeteras ni el bloqueo de deuda del servidor.
+  Future<void> _showDebtNoticeOnEntry() async {
+    final userId = widget.store.user?.id;
+    if (!mounted || !widget.isVisible || userId == null ||
+        _workOnboardingUserId != userId || _workPanelIndex != -1 ||
+        _workDrawerOpen || _active.isNotEmpty ||
+        _debtNoticeCheckedUserId == userId ||
+        _debtNoticeLoadingUserId == userId) {
+      return;
+    }
+    _debtNoticeLoadingUserId = userId;
+    try {
+      final debt = await _service.walletDebtCup();
+      if (!mounted || widget.store.user?.id != userId ||
+          !widget.isVisible || _workPanelIndex != -1 ||
+          _workDrawerOpen || _active.isNotEmpty) {
+        return;
+      }
+      if (!debt.isFinite || debt < 0) return;
+      _debtNoticeCheckedUserId = userId;
+      if (debt == 0) return;
+
+      final openWallet = await showDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) => AlertDialog(
+          key: const ValueKey('marketplace-startup-debt-alert'),
+          title: const Text('Tienes una deuda pendiente'),
+          content: Text(
+            'Debes ${_marketplaceMoneyLabel(debt, 'CUP')} de comisiones. '
+            'Recarga tu billetera de trabajo para saldarla antes de aceptar '
+            'otra carrera. Después necesitarás saldo para la próxima comisión.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Entendido'),
+            ),
+            FilledButton.icon(
+              key: const ValueKey('marketplace-startup-debt-topup'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.add_card),
+              label: const Text('Recargar ahora'),
+            ),
+          ],
+        ),
+      );
+      if (openWallet == true && mounted &&
+          widget.store.user?.id == userId) {
+        _openWorkPanel(4);
+      }
+    } catch (_) {
+      // Un fallo de red no debe ocultar el mapa ni interrumpir el trabajo.
+    } finally {
+      if (_debtNoticeLoadingUserId == userId) {
+        _debtNoticeLoadingUserId = null;
+      }
+    }
   }
 
   MarketplaceVehicle? _vehicleById(String? id) {
@@ -1103,6 +1169,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       if (mounted) {
         setState(() => _loading = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_showDebtNoticeOnEntry());
+        });
         _syncOperationalLocationSampling(
           immediate: true,
           requestPermission: widget.isVisible,
