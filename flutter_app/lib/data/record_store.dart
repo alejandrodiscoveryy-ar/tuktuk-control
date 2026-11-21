@@ -2136,6 +2136,14 @@ class RecordStore extends ChangeNotifier {
         await _meta.put(_conductorAppBlockedUserKey, target.id);
         conductorAppAccessState = ConductorAppAccessState.suspended;
         _stopAutomaticSync();
+        notifyListeners();
+        // El cierre local corta la sesión de esta APK/WebApp sin revocar
+        // sesiones de Cliente, Admin u otros dispositivos del usuario.
+        try {
+          await _supabase.auth.signOut();
+        } catch (_) {
+          // Sigue bloqueado aunque el cierre remoto no responda.
+        }
       } else {
         if (_blockedConductorUserId != null) {
           await _meta.delete(_conductorAppBlockedUserKey);
