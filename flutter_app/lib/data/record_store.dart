@@ -1,5 +1,7 @@
 part of '../main.dart';
 
+enum ConductorAppAccessState { checking, allowed, suspended, unavailable }
+
 enum ExchangeRateDirection { up, down, same }
 
 /// Proyección pura. Las lecturas manuales son absolutas; solo los trabajos
@@ -125,6 +127,19 @@ class RecordStore extends ChangeNotifier {
     _restoreCachedProjectIdentity();
     _restoreCachedIdentityAndLicense();
     _restoreCachedExchangeRate();
+    final blockedUser = _meta.get(_conductorAppBlockedUserKey)?.toString();
+    _blockedConductorUserId =
+        blockedUser == null || blockedUser.isEmpty ? null : blockedUser;
+    if (_supabase.auth.currentUser == null) {
+      conductorAppAccessState = _blockedConductorUserId == null
+          ? ConductorAppAccessState.allowed
+          : ConductorAppAccessState.suspended;
+    }
+    _conductorAppAccessTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (initialized && _supabase.auth.currentUser != null) {
+        unawaited(refreshConductorAppAccess());
+      }
+    });
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
       final nextUser = state.session?.user;
       if (!initialized) {
@@ -174,6 +189,17 @@ class RecordStore extends ChangeNotifier {
   User? _pendingAuthUser;
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
+  Timer? _conductorAppAccessTimer;
+  bool _conductorAppAccessChecking = false;
+  static const _conductorAppBlockedUserKey = 'conductorAppBlockedUser';
+  String? _blockedConductorUserId;
+  ConductorAppAccessState conductorAppAccessState =
+      ConductorAppAccessState.checking;
+  String? conductorAppSuspensionReason;
+  bool get conductorAppAccessGateVisible =>
+      _blockedConductorUserId != null ||
+      (_supabase.auth.currentUser != null &&
+          conductorAppAccessState != ConductorAppAccessState.allowed);
   Timer? _syncDebounceTimer;
   Timer? _retrySyncTimer;
   int _consecutiveSyncFailures = 0;
@@ -382,6 +408,10 @@ class RecordStore extends ChangeNotifier {
   }
 
   void handleAppResumed() {
+    if (_supabase.auth.currentUser != null) {
+      unawaited(refreshConductorAppAccess());
+    }
+    if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
     unawaited(_resumeReferralAttribution());
     final now = DateTime.now().toUtc();
     final lastRefresh = _lastBackgroundRefreshAt;
@@ -1997,6 +2027,9 @@ class RecordStore extends ChangeNotifier {
       await MarketplacePromoArtworkCache(_meta).clear(currentUser.id);
     }
     user = null;
+    conductorAppAccessState = _blockedConductorUserId == null
+        ? ConductorAppAccessState.allowed
+        : ConductorAppAccessState.suspended;
     _load();
     await refreshLicense();
     syncMessage = 'Sesion cerrada. La base local sigue en este dispositivo';
@@ -2008,8 +2041,10 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> syncNow() async {
+    if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
     await _withSync(() async {
-      if (user == null) return;
+      if (user == null ||
+          conductorAppAccessState != ConductorAppAccessState.allowed) return;
       await _refreshLicenseIfNeeded();
       if (activeVehicle == null) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
@@ -2027,7 +2062,8 @@ class RecordStore extends ChangeNotifier {
   }
 
   void unawaitedSync() {
-    if (user == null) return;
+    if (user == null ||
+        conductorAppAccessState != ConductorAppAccessState.allowed) return;
     if (syncing) {
       _syncRequestedWhileRunning = true;
       return;
@@ -2074,10 +2110,68 @@ class RecordStore extends ChangeNotifier {
     }
   }
 
+  /// Comprobación por cuenta y proyecto (no suspende la identidad Google global).
+  /// Sin verificación remota no se permite usar TukTuk Conductor.
+  Future<bool> _checkConductorAppAccess(User target) async {
+    if (_conductorAppAccessChecking || _disposed) return false;
+    _conductorAppAccessChecking = true;
+    try {
+      final response = await _supabase.rpc('get_my_tuktuk_conductor_app_access');
+      if (response is! Map) throw StateError('ACCESS_RESPONSE_INVALID');
+      if (_disposed || _supabase.auth.currentUser?.id != target.id) return false;
+
+      final suspended = response['suspended'] == true;
+      if (suspended) {
+        _blockedConductorUserId = target.id;
+        conductorAppSuspensionReason =
+            response['reason']?.toString().trim().isNotEmpty == true
+                ? response['reason'].toString().trim()
+                : null;
+        await _meta.put(_conductorAppBlockedUserKey, target.id);
+        conductorAppAccessState = ConductorAppAccessState.suspended;
+        _stopAutomaticSync();
+      } else {
+        if (_blockedConductorUserId != null) {
+          await _meta.delete(_conductorAppBlockedUserKey);
+          _blockedConductorUserId = null;
+        }
+        conductorAppSuspensionReason = null;
+        conductorAppAccessState = ConductorAppAccessState.allowed;
+      }
+      notifyListeners();
+      return !suspended;
+    } catch (_) {
+      if (_disposed || _supabase.auth.currentUser?.id != target.id) return false;
+      conductorAppAccessState = ConductorAppAccessState.unavailable;
+      _stopAutomaticSync();
+      notifyListeners();
+      return false;
+    } finally {
+      _conductorAppAccessChecking = false;
+    }
+  }
+
+  Future<void> refreshConductorAppAccess() async {
+    final account = _supabase.auth.currentUser;
+    if (account == null || _conductorAppAccessChecking || _disposed) return;
+    final previous = conductorAppAccessState;
+    final allowed = await _checkConductorAppAccess(account);
+    if (allowed &&
+        previous != ConductorAppAccessState.allowed &&
+        initialized &&
+        !_disposed) {
+      // Al reactivar o volver la conexión, restaurar sincronización normal.
+      unawaited(_handleAuthState(account));
+    }
+  }
+
   Future<void> _handleAuthState(User? authenticatedUser) async {
     if (_disposed) return;
     if (authenticatedUser == null) {
       user = null;
+      conductorAppAccessState = _blockedConductorUserId == null
+          ? ConductorAppAccessState.allowed
+          : ConductorAppAccessState.suspended;
       referralProgram = null;
       referrals = const [];
       referralLoadState = ReferralLoadState.idle;
@@ -2093,6 +2187,10 @@ class RecordStore extends ChangeNotifier {
       }
       return;
     }
+    _stopAutomaticSync();
+    conductorAppAccessState = ConductorAppAccessState.checking;
+    notifyListeners();
+    if (!await _checkConductorAppAccess(authenticatedUser)) return;
     if (user?.id != authenticatedUser.id) {
       referralProgram = null;
       referrals = const [];
@@ -3114,6 +3212,7 @@ class RecordStore extends ChangeNotifier {
     _referralRetryTimer?.cancel();
     _installReferrerRetryTimer?.cancel();
     _stopAutomaticSync();
+    _conductorAppAccessTimer?.cancel();
     unawaited(_authSubscription?.cancel());
     unawaited(_pushTokenCoordinator?.dispose());
     unawaited(_referralLinkListener?.dispose());
