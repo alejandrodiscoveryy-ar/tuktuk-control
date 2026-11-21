@@ -15,6 +15,7 @@ void main() {
     expect(store, contains('ConductorAppAccessState.suspended'));
     expect(store, contains('ConductorAppAccessState.unavailable'));
     expect(store, contains('_conductorAppBlockedUserKey'));
+    expect(store, contains('await _supabase.auth.signOut();'));
     expect(store, contains('Timer.periodic(const Duration(seconds: 45)'));
     expect(store, contains('refreshConductorAppAccess()'));
     expect(store, contains('if (!await _checkConductorAppAccess(authenticatedUser)) return;'));
