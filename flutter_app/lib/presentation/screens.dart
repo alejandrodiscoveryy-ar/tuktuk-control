@@ -112,13 +112,13 @@ class ConductorAppAccessGate extends StatelessWidget {
                               const Center(child: CircularProgressIndicator())
                             else
                               FilledButton.icon(
-                                onPressed: store.user == null
-                                    ? () => store.signIn()
-                                    : () => store.refreshConductorAppAccess(),
+                                onPressed: store.conductorAppAuthenticated
+                                    ? () => store.refreshConductorAppAccess()
+                                    : () => store.signIn(),
                                 icon: const Icon(Icons.refresh_rounded),
-                                label: Text(store.user == null
-                                    ? 'Entrar con Google'
-                                    : 'Comprobar acceso nuevamente'),
+                                label: Text(store.conductorAppAuthenticated
+                                    ? 'Comprobar acceso nuevamente'
+                                    : 'Entrar con Google'),
                               ),
                             const SizedBox(height: 10),
                             const Text(
