@@ -2046,7 +2046,9 @@ class RecordStore extends ChangeNotifier {
     if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
     await _withSync(() async {
       if (user == null ||
-          conductorAppAccessState != ConductorAppAccessState.allowed) return;
+          conductorAppAccessState != ConductorAppAccessState.allowed) {
+        return;
+      }
       await _refreshLicenseIfNeeded();
       if (activeVehicle == null) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
@@ -2065,7 +2067,9 @@ class RecordStore extends ChangeNotifier {
 
   void unawaitedSync() {
     if (user == null ||
-        conductorAppAccessState != ConductorAppAccessState.allowed) return;
+        conductorAppAccessState != ConductorAppAccessState.allowed) {
+      return;
+    }
     if (syncing) {
       _syncRequestedWhileRunning = true;
       return;
