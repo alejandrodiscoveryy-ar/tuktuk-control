@@ -196,9 +196,11 @@ class RecordStore extends ChangeNotifier {
   ConductorAppAccessState conductorAppAccessState =
       ConductorAppAccessState.checking;
   String? conductorAppSuspensionReason;
+  bool get conductorAppAuthenticated =>
+      _supabase.auth.currentUser != null;
   bool get conductorAppAccessGateVisible =>
       _blockedConductorUserId != null ||
-      (_supabase.auth.currentUser != null &&
+      (conductorAppAuthenticated &&
           conductorAppAccessState != ConductorAppAccessState.allowed);
   Timer? _syncDebounceTimer;
   Timer? _retrySyncTimer;
