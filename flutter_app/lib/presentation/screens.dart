@@ -37,6 +37,110 @@ Future<bool> _runLicensedWrite(
   }
 }
 
+class ConductorAppAccessGate extends StatelessWidget {
+  const ConductorAppAccessGate({
+    required this.store,
+    required this.child,
+    super.key,
+  });
+
+  final RecordStore store;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: store,
+      builder: (context, _) {
+        if (!store.initialized || !store.conductorAppAccessGateVisible) {
+          return child;
+        }
+        final status = store.conductorAppAccessState;
+        final suspended = status == ConductorAppAccessState.suspended;
+        final checking = status == ConductorAppAccessState.checking;
+        final title = checking
+            ? 'Verificando acceso'
+            : suspended
+                ? 'Acceso a TukTuk Conductor suspendido'
+                : 'No se pudo verificar el acceso';
+        final explanation = checking
+            ? 'Comprobando tu autorización con Agencia TukTuk.'
+            : suspended
+                ? 'Tu cuenta de conductor está suspendida. No puedes usar la aplicación ni comenzar una nueva sesión de trabajo.'
+                : 'Por seguridad, TukTuk Conductor requiere conexión para comprobar tu autorización. Inténtalo nuevamente.';
+        return Scaffold(
+          body: AppBackground(
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: GlassCard(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Icon(
+                              suspended ? Icons.block_rounded : Icons.shield_outlined,
+                              size: 54,
+                              color: suspended ? kDanger : kTertiary,
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(explanation, textAlign: TextAlign.center),
+                            if (suspended &&
+                                store.conductorAppSuspensionReason != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                'Motivo: ${store.conductorAppSuspensionReason}',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: kDanger),
+                              ),
+                            ],
+                            const SizedBox(height: 20),
+                            if (checking)
+                              const Center(child: CircularProgressIndicator())
+                            else
+                              FilledButton.icon(
+                                onPressed: store.conductorAppAuthenticated
+                                    ? () => store.refreshConductorAppAccess()
+                                    : () => store.signIn(),
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: Text(store.conductorAppAuthenticated
+                                    ? 'Comprobar acceso nuevamente'
+                                    : 'Entrar con Google'),
+                              ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Si necesitas una aclaración, contacta a Agencia TukTuk.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: kMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({required this.store, super.key});
 

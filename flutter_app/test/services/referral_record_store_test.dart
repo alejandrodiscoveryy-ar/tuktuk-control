@@ -40,7 +40,10 @@ void main() {
       await utf8.decoder.bind(request).join();
       dynamic payload = [];
       final path = request.uri.path;
-      if (path.endsWith('/claim_referral_code')) {
+      if (path.endsWith('/get_my_tuktuk_conductor_app_access')) {
+        // La licencia de prueba no equivale a una suspensión del conductor.
+        payload = {'suspended': false, 'reason': null};
+      } else if (path.endsWith('/claim_referral_code')) {
         claims++;
         if (claims == 1) {
           request.response.statusCode = 503;

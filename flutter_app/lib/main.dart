@@ -261,7 +261,12 @@ class _ControlTukTukAppState extends State<ControlTukTukApp>
           themeMode: themeMode,
           theme: buildAppTheme(Brightness.light),
           darkTheme: buildAppTheme(Brightness.dark),
-          home: AppUpdateGate(child: AppShell(store: store)),
+          home: AppUpdateGate(
+            child: ConductorAppAccessGate(
+              store: store,
+              child: AppShell(store: store),
+            ),
+          ),
         );
       },
     );
