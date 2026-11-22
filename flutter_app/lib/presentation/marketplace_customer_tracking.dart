@@ -1,5 +1,18 @@
 part of '../main.dart';
 
+String _driverTrackingExactCupAmount(num value) {
+  final parts = value.toStringAsFixed(2).split('.');
+  final digits = parts.first;
+  final grouped = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) grouped.write('.');
+    grouped.write(digits[i]);
+  }
+  return parts.last == '00'
+      ? grouped.toString()
+      : '${grouped.toString()},${parts.last}';
+}
+
 class MarketplaceCustomerTrackingScreen extends StatefulWidget {
   const MarketplaceCustomerTrackingScreen({
     required this.service,
@@ -331,7 +344,7 @@ class _MarketplaceCustomerTrackingScreenState
             ),
             const SizedBox(height: 16),
             Text(
-              '${job.finalPrice.toStringAsFixed(0)} ${job.currency}',
+              '${_driverTrackingExactCupAmount(job.finalPrice)} ${job.currency}',
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ],
