@@ -52,22 +52,29 @@ class ConductorAppAccessGate extends StatelessWidget {
     return AnimatedBuilder(
       animation: store,
       builder: (context, _) {
-        if (!store.initialized || !store.conductorAppAccessGateVisible) {
+        final initializing = !store.initialized;
+        if (!initializing && !store.conductorAppAccessGateVisible) {
           return child;
         }
         final status = store.conductorAppAccessState;
-        final suspended = status == ConductorAppAccessState.suspended;
-        final checking = status == ConductorAppAccessState.checking;
-        final title = checking
-            ? 'Verificando acceso'
-            : suspended
-                ? 'Acceso a TukTuk Conductor suspendido'
-                : 'No se pudo verificar el acceso';
-        final explanation = checking
-            ? 'Comprobando tu autorización con Agencia TukTuk.'
-            : suspended
-                ? 'Tu cuenta de conductor está suspendida. No puedes usar la aplicación ni comenzar una nueva sesión de trabajo.'
-                : 'Por seguridad, TukTuk Conductor requiere conexión para comprobar tu autorización. Inténtalo nuevamente.';
+        final suspended =
+            !initializing && status == ConductorAppAccessState.suspended;
+        final checking =
+            initializing || status == ConductorAppAccessState.checking;
+        final title = initializing
+            ? 'Iniciando TukTuk'
+            : checking
+                ? 'Verificando acceso'
+                : suspended
+                    ? 'Acceso a TukTuk Conductor suspendido'
+                    : 'No se pudo verificar la conexión';
+        final explanation = initializing
+            ? 'Preparando tus datos guardados en el dispositivo.'
+            : checking
+                ? 'Comprobando tu autorización con Agencia TukTuk.'
+                : suspended
+                    ? 'Tu cuenta de conductor está suspendida. No puedes usar la aplicación ni comenzar una nueva sesión de trabajo.'
+                    : 'No pudimos comprobar tu acceso por Internet. Tus datos locales se conservan; vuelve a intentarlo cuando mejore la conexión.';
         return Scaffold(
           body: AppBackground(
             child: SafeArea(
@@ -83,9 +90,17 @@ class ConductorAppAccessGate extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Icon(
-                              suspended ? Icons.block_rounded : Icons.shield_outlined,
+                              suspended
+                                  ? Icons.block_rounded
+                                  : checking
+                                      ? Icons.shield_outlined
+                                      : Icons.wifi_off_rounded,
                               size: 54,
-                              color: suspended ? kDanger : kTertiary,
+                              color: suspended
+                                  ? kDanger
+                                  : checking
+                                      ? kTertiary
+                                      : kAccentPink,
                             ),
                             const SizedBox(height: 14),
                             Text(
@@ -120,6 +135,25 @@ class ConductorAppAccessGate extends StatelessWidget {
                                     ? 'Comprobar acceso nuevamente'
                                     : 'Entrar con Google'),
                               ),
+                            if (!checking &&
+                                !suspended &&
+                                store.conductorAppAuthenticated) ...[
+                              const SizedBox(height: 14),
+                              Text(
+                                'En este dispositivo: ${store.records.length} registros locales y ${store.pendingSyncCount} cambios pendientes de sincronizar.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: kMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Por seguridad, no puedes recibir ni aceptar carreras hasta verificar el acceso.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: kMuted, fontSize: 12),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             const Text(
                               'Si necesitas una aclaración, contacta a Agencia TukTuk.',
