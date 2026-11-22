@@ -1824,7 +1824,32 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (vehicleId == null || _acceptingJobId != null) return;
     if (job.canAccept == false) {
-      toast(context, 'No puedes aceptar esta carrera hasta regularizar tu saldo o deuda en Billetera.');
+      final commissionText = (job.commissionAmount ?? 0) > 0
+          ? ' Comisión prevista: ${_marketplaceMoneyLabel(job.commissionAmount!, job.currency)}.'
+          : '';
+      final openWallet = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          key: const ValueKey('marketplace-accept-wallet-warning'),
+          title: const Text('No puedes aceptar esta carrera'),
+          content: Text(
+            'Esta carrera aparece en Trabajos, pero tu saldo o una deuda '
+            'pendiente no permite aceptarla ahora.$commissionText '
+            'Consulta tu Billetera para regularizarlo.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Volver'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Ir a Billetera'),
+            ),
+          ],
+        ),
+      );
+      if (openWallet == true && mounted) _openWorkPanel(4);
       return;
     }
 
@@ -5287,22 +5312,6 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
                 style: const TextStyle(fontSize: 12, color: Color(0xFFADC8D2)),
               ),
             ),
-          if (job.usesInitialCredit)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Crédito inicial disponible · falta ${_marketplaceMoneyLabel(job.missingBalance!, job.currency)}',
-                style: const TextStyle(fontSize: 12, color: Colors.amber),
-              ),
-            ),
-          if (job.canAccept == false)
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text(
-                'No puedes aceptar: revisa el saldo o deuda en Billetera.',
-                style: TextStyle(fontSize: 12, color: Colors.amber),
-              ),
-            ),
           const Divider(height: 16),
           Flexible(
             fit: FlexFit.loose,
@@ -5355,9 +5364,9 @@ class _AvailableJobCardState extends State<_AvailableJobCard> {
             height: 48,
             child: FilledButton.icon(
               key: ValueKey('work-map-offer-accept-${job.id}'),
-              onPressed: job.canAccept == false || (widget.acceptanceLocked && !widget.accepting)
-                  ? null
-                  : widget.onAccept,
+              onPressed: widget.acceptanceLocked && !widget.accepting
+                   ? null
+                   : widget.onAccept,
               icon: widget.accepting
                   ? const SizedBox(
                       width: 18,
