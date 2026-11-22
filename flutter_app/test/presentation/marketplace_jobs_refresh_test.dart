@@ -524,6 +524,43 @@ void main() {
     expect(store.signInCalls, 0);
   });
 
+  testWidgets('carrera sin saldo visible; aviso solo al tocar Aceptar', (tester) async {
+    service.availableJobs = [
+      const MarketplaceAvailableJob(
+        id: '12345678-1234-4123-8123-123456789012',
+        serviceCode: 'passenger',
+        finalPrice: 7500,
+        currency: 'CUP',
+        commissionAmount: 1125,
+        missingBalance: 1125,
+        canAccept: false,
+      ),
+    ];
+    await open(tester);
+    final accept = find.byKey(
+      const ValueKey('work-map-offer-accept-12345678-1234-4123-8123-123456789012'),
+    );
+    expect(accept, findsOneWidget);
+    expect(tester.widget<FilledButton>(accept).onPressed, isNotNull);
+    expect(find.byKey(const ValueKey('marketplace-accept-wallet-warning')),
+        findsNothing);
+
+    await tester.tap(accept);
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('marketplace-accept-wallet-warning')),
+        findsOneWidget);
+    expect(find.text('No puedes aceptar esta carrera'), findsOneWidget);
+    expect(find.text('Ir a Billetera'), findsOneWidget);
+    expect(service.atomicAcceptCalls, 0);
+    expect(service.legacyAcceptCalls, 0);
+
+    await tester.tap(find.text('Volver'));
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('marketplace-accept-wallet-warning')),
+        findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('la oferta muestra transferencia antes de aceptar y la carrera conserva el método', (tester) async {
     service.availableJobs = [
       const MarketplaceAvailableJob(
