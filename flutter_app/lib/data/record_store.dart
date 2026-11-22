@@ -2122,7 +2122,11 @@ class RecordStore extends ChangeNotifier {
     if (_conductorAppAccessChecking || _disposed) return false;
     _conductorAppAccessChecking = true;
     try {
-      final response = await _supabase.rpc('get_my_tuktuk_conductor_app_access');
+      // Evitar esperas indefinidas en redes móviles inestables.
+      // Un timeout NO autoriza: conserva la puerta cerrada hasta verificar.
+      final response = await _supabase
+          .rpc('get_my_tuktuk_conductor_app_access')
+          .timeout(const Duration(seconds: 10));
       if (response is! Map) throw StateError('ACCESS_RESPONSE_INVALID');
       if (_disposed || _supabase.auth.currentUser?.id != target.id) return false;
 

@@ -23,7 +23,7 @@ void main() {
 
     expect(entry, contains('ConductorAppAccessGate('));
     expect(ui, contains('Acceso a TukTuk Conductor suspendido'));
-    expect(ui, contains('No se pudo verificar el acceso'));
+    expect(ui, contains('No se pudo verificar la conexión'));
     expect(ui, contains('Comprobar acceso nuevamente'));
     expect(ui, contains('conductorAppAuthenticated'));
 
@@ -32,5 +32,36 @@ void main() {
     expect(db, contains('REVOKE ALL ON FUNCTION'));
     expect(db, contains('TO authenticated;'));
     expect(db, isNot(contains('UPDATE auth.users')));
+  });
+
+  test('arranque rápido: splash oscuro, acceso limitado y push después del primer frame', () {
+    final entry = File('lib/main.dart').readAsStringSync();
+    final store = File('lib/data/record_store.dart').readAsStringSync();
+    final ui = File('lib/presentation/screens.dart').readAsStringSync();
+    final nativeTheme = File(
+      'android/app/src/main/res/values/styles.xml',
+    ).readAsStringSync();
+    final nativeSplash = File(
+      'android/app/src/main/res/values-v31/styles.xml',
+    ).readAsStringSync();
+
+    expect(entry, contains('WidgetsBinding.instance.addPostFrameCallback'));
+    expect(entry, contains('retryForAuthenticatedUser('));
+    expect(
+      entry.indexOf('runApp(ControlTukTukApp(store: store));'),
+      lessThan(entry.indexOf('await pushNotifications.initialize(')),
+    );
+
+    expect(store, contains('.timeout(const Duration(seconds: 10))'));
+    expect(store, contains('ConductorAppAccessState.unavailable'));
+    expect(store, contains('ConductorAppAccessState.suspended'));
+    expect(ui, contains('Iniciando TukTuk'));
+    expect(ui, contains('No se pudo verificar la conexión'));
+    expect(ui, contains('registros locales'));
+    expect(ui, contains('Por seguridad, no puedes recibir ni aceptar carreras'));
+    expect(nativeTheme, contains('@color/brand_background'));
+    expect(nativeTheme, isNot(contains('?android:colorBackground')));
+    expect(nativeSplash, contains('android:windowSplashScreenBackground'));
+    expect(nativeSplash, contains('@color/brand_background'));
   });
 }

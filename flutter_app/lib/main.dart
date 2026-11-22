@@ -168,13 +168,6 @@ void main() async {
   }
 
   final pushNotifications = PushNotificationService();
-  await pushNotifications.initialize(
-    onMessageOpened: (data) async {
-      final jobId = marketplaceJobIdFromPush(data);
-      if (jobId != null) _marketplacePushJobId.value = jobId;
-      await openPushMessageAction(data);
-    },
-  );
   final webPushJobId = kIsWeb ? marketplaceJobIdFromUrl(Uri.base) : null;
   if (webPushJobId != null) _marketplacePushJobId.value = webPushJobId;
   final pushTokenCoordinator = PushTokenRegistrationCoordinator.supabase(
@@ -183,14 +176,34 @@ void main() async {
     tokenProvider: pushNotifications.getToken,
   );
   pushTokenCoordinator.listenToTokenRefreshes(pushNotifications.tokenRefreshes);
-  runApp(
-    ControlTukTukApp(
-      store: RecordStore(
-        pushTokenCoordinator: pushTokenCoordinator,
-        referralAppLinks: referralAppLinks,
-      ),
-    ),
+  final store = RecordStore(
+    pushTokenCoordinator: pushTokenCoordinator,
+    referralAppLinks: referralAppLinks,
   );
+  runApp(ControlTukTukApp(store: store));
+
+  // No retrasar la primera pantalla por Firebase, permisos o canales push.
+  // Tras inicializar las alertas, registrar el token aunque la sesión Google
+  // se haya recuperado antes de que Firebase estuviera preparado.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(() async {
+      await pushNotifications.initialize(
+        onMessageOpened: (data) async {
+          final jobId = marketplaceJobIdFromPush(data);
+          if (jobId != null) _marketplacePushJobId.value = jobId;
+          await openPushMessageAction(data);
+        },
+      );
+      if (!pushNotifications.isInitialized) return;
+      final authenticatedUser = store.user;
+      if (authenticatedUser != null &&
+          store.conductorAppAccessState == ConductorAppAccessState.allowed) {
+        await pushTokenCoordinator.retryForAuthenticatedUser(
+          authenticatedUser.id,
+        );
+      }
+    }());
+  });
 }
 
 bool get _marketplaceCustomerEntry {
