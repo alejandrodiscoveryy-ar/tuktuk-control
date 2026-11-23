@@ -22,6 +22,24 @@ void main() {
     test('una publicación reciente confirmada es válida', () {
       expect(needs(true, now.subtract(const Duration(minutes: 2))), isFalse);
     });
+    test('en carrera avisa tras 75 segundos sin GPS confirmado', () {
+      final recent = now.subtract(const Duration(seconds: 50));
+      final stale = now.subtract(const Duration(seconds: 90));
+      expect(marketplaceGpsNeedsAttention(
+        locationExpected: true, lastConfirmedAt: recent,
+        nowUtc: now, hasFailure: false, activeService: true,
+      ), isFalse);
+      expect(marketplaceGpsNeedsAttention(
+        locationExpected: true, lastConfirmedAt: stale,
+        nowUtc: now, hasFailure: false, activeService: true,
+      ), isTrue);
+      // Fuera de carrera, mantiene la politica existente de cinco minutos.
+      expect(marketplaceGpsNeedsAttention(
+        locationExpected: true, lastConfirmedAt: stale,
+        nowUtc: now, hasFailure: false,
+      ), isFalse);
+    });
+
     test('posición atrasada, futura o error activo requieren atención', () {
       expect(needs(true, now.subtract(const Duration(minutes: 6))), isTrue);
       expect(needs(true, now.add(const Duration(minutes: 1))), isTrue);
