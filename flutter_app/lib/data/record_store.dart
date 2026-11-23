@@ -158,6 +158,13 @@ class RecordStore extends ChangeNotifier {
 
       unawaited(_handleAuthState(nextUser));
     }, onError: _handleAuthStreamError);
+    // Adelantar la verificación mientras se terminan de preparar los datos
+    // locales; no permite usar carreras hasta obtener autorización remota.
+    final restoredUser = _supabase.auth.currentUser;
+    if (restoredUser != null) {
+      _startupAccessUserId = restoredUser.id;
+      _startupAccessFuture = _checkConductorAppAccess(restoredUser);
+    }
     _load();
     unawaited(_initialize());
   }
@@ -191,6 +198,8 @@ class RecordStore extends ChangeNotifier {
   Timer? _automaticSyncTimer;
   Timer? _conductorAppAccessTimer;
   bool _conductorAppAccessChecking = false;
+  Future<bool>? _startupAccessFuture;
+  String? _startupAccessUserId;
   static const _conductorAppBlockedUserKey = 'conductorAppBlockedUser';
   String? _blockedConductorUserId;
   ConductorAppAccessState conductorAppAccessState =
@@ -1011,10 +1020,14 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
-    unawaited(refreshProjectIdentity());
+    // Priorizar autorización: las consultas públicas opcionales compiten por
+    // la misma conexión móvil y ya tienen respaldo en la caché local.
+    if (_supabase.auth.currentUser == null) {
+      unawaited(refreshProjectIdentity());
+      unawaited(refreshWhatsAppSettings());
+    }
     await _initialReferralCapture;
     unawaited(_captureInstallReferrer());
-    unawaited(refreshWhatsAppSettings());
     try {
       await _migrateLegacyMaintenance();
       await _migrateSyncMetadata();
@@ -2206,9 +2219,29 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     _stopAutomaticSync();
-    conductorAppAccessState = ConductorAppAccessState.checking;
-    notifyListeners();
-    if (!await _checkConductorAppAccess(authenticatedUser)) return;
+    final inFlightStartupCheck = _startupAccessFuture;
+    final reuseStartupCheck = inFlightStartupCheck != null &&
+        _startupAccessUserId == authenticatedUser.id;
+    _startupAccessFuture = null;
+    _startupAccessUserId = null;
+    if (inFlightStartupCheck != null && !reuseStartupCheck) {
+      // No solapar comprobaciones para identidades distintas.
+      await inFlightStartupCheck;
+    }
+    if (!reuseStartupCheck) {
+      conductorAppAccessState = ConductorAppAccessState.checking;
+      notifyListeners();
+    }
+    final allowed = reuseStartupCheck
+        ? await inFlightStartupCheck
+        : await _checkConductorAppAccess(authenticatedUser);
+    if (!allowed ||
+        _disposed ||
+        _supabase.auth.currentUser?.id != authenticatedUser.id) {
+      return;
+    }
+    unawaited(refreshProjectIdentity());
+    unawaited(refreshWhatsAppSettings());
     if (user?.id != authenticatedUser.id) {
       referralProgram = null;
       referrals = const [];

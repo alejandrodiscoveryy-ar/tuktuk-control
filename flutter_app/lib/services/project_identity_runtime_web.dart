@@ -20,3 +20,16 @@ void applyProjectIdentityToPlatform({
     // La identidad web dinámica nunca debe impedir el inicio de la WebApp.
   }
 }
+
+@JS('tuktukFinishStartup')
+external void _tuktukFinishStartup();
+
+/// Muestra Flutter solamente cuando la autorización inicial ya se resolvió.
+/// La función JS es idempotente y no altera autenticación ni notificaciones.
+void finishTuktukWebStartup() {
+  try {
+    _tuktukFinishStartup();
+  } catch (_) {
+    // La integración de inicio no debe bloquear Flutter si no existe el shell.
+  }
+}

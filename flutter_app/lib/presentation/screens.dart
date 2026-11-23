@@ -37,6 +37,15 @@ Future<bool> _runLicensedWrite(
   }
 }
 
+@visibleForTesting
+bool shouldRevealTuktukWebStartup({
+  required bool initialized,
+  required bool accessGateVisible,
+  required ConductorAppAccessState accessState,
+}) =>
+    initialized &&
+    (!accessGateVisible || accessState != ConductorAppAccessState.checking);
+
 class ConductorAppAccessGate extends StatelessWidget {
   const ConductorAppAccessGate({
     required this.store,
@@ -53,6 +62,18 @@ class ConductorAppAccessGate extends StatelessWidget {
       animation: store,
       builder: (context, _) {
         final initializing = !store.initialized;
+        // La web mantiene una sola pantalla de arranque hasta conocer el
+        // estado de acceso; Android conserva su inicio nativo independiente.
+        if (kIsWeb &&
+            shouldRevealTuktukWebStartup(
+              initialized: store.initialized,
+              accessGateVisible: store.conductorAppAccessGateVisible,
+              accessState: store.conductorAppAccessState,
+            )) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            finishTuktukWebStartup();
+          });
+        }
         if (!initializing && !store.conductorAppAccessGateVisible) {
           return child;
         }

@@ -128,15 +128,34 @@ void main() async {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
   final referralAppLinks = kIsWeb ? null : AppLinks();
-  for (final locale in ['es', 'en', 'pt', 'fr']) {
-    await initializeDateFormatting(locale);
-  }
-  Intl.defaultLocale = 'es';
-  await Hive.initFlutter();
-  await Hive.openBox(_recordsBox);
-  await Hive.openBox(_maintenanceRecordsBox);
-  await Hive.openBox(_metaBox);
-  await Hive.openBox(_syncQueueBox);
+
+  // En WebApp, el almacenamiento, la sesión y los formatos no dependen entre
+  // sí. Ejecutarlos en paralelo reduce la ruta crítica del arranque en red
+  // lenta, conservando todas las cajas y la restauración de sesión.
+  await Future.wait<void>([
+    () async {
+      for (final locale in ['es', 'en', 'pt', 'fr']) {
+        await initializeDateFormatting(locale);
+      }
+      Intl.defaultLocale = 'es';
+    }(),
+    () async {
+      await Hive.initFlutter();
+      await Future.wait([
+        Hive.openBox(_recordsBox),
+        Hive.openBox(_maintenanceRecordsBox),
+        Hive.openBox(_metaBox),
+        Hive.openBox(_syncQueueBox),
+      ]);
+    }(),
+    () async {
+      await Supabase.initialize(
+        url: _supabaseUrl,
+        publishableKey: _supabasePublishableKey,
+      );
+    }(),
+  ]);
+
   // Persist a cold-start invitation before Supabase restores authentication.
   final pendingReferral = PendingReferralClaimController(
     HivePendingReferralCodeStore(Hive.box(_metaBox)),
@@ -151,19 +170,20 @@ void main() async {
       // RecordStore also listens for subsequent platform deliveries.
     }
   }
-  await Supabase.initialize(
-    url: _supabaseUrl,
-    publishableKey: _supabasePublishableKey,
-  );
-
   final adminPromoCode = kIsWeb ? Uri.base.queryParameters['promo_card'] : null;
   if (adminPromoCode != null && RegExp(r'^[0-9a-f]{32}$').hasMatch(adminPromoCode)) {
     runApp(MaterialApp(debugShowCheckedModeBanner: false,
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF06B6D4), brightness: Brightness.dark), scaffoldBackgroundColor: const Color(0xFF101619)), home: MarketplaceSharedPromoCards(code: adminPromoCode)));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      finishTuktukWebStartup();
+    });
     return;
   }
   if (_marketplaceCustomerEntry) {
     runApp(MarketplaceCustomerApp(client: Supabase.instance.client));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      finishTuktukWebStartup();
+    });
     return;
   }
 

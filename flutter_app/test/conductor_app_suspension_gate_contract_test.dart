@@ -18,7 +18,11 @@ void main() {
     expect(store, contains('await _supabase.auth.signOut();'));
     expect(store, contains('Timer.periodic(const Duration(seconds: 45)'));
     expect(store, contains('refreshConductorAppAccess()'));
-    expect(store, contains('if (!await _checkConductorAppAccess(authenticatedUser)) return;'));
+    expect(store, contains('final allowed = reuseStartupCheck'));
+    expect(store, contains(': await _checkConductorAppAccess(authenticatedUser);'));
+    expect(store, contains('if (!allowed ||'));
+    expect(store, contains('_supabase.auth.currentUser?.id != authenticatedUser.id'));
+    expect(store, contains('_startupAccessFuture = _checkConductorAppAccess(restoredUser);'));
     expect(store, contains('if (conductorAppAccessState != ConductorAppAccessState.allowed) return;'));
 
     expect(entry, contains('ConductorAppAccessGate('));
