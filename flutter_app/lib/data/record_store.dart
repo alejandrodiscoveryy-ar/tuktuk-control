@@ -2233,7 +2233,7 @@ class RecordStore extends ChangeNotifier {
       notifyListeners();
     }
     final allowed = reuseStartupCheck
-        ? await inFlightStartupCheck!
+        ? await inFlightStartupCheck
         : await _checkConductorAppAccess(authenticatedUser);
     if (!allowed ||
         _disposed ||
