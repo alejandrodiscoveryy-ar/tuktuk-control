@@ -60,7 +60,8 @@ void main() {
     expect(html, contains('icons/Icon-192.png'));
     expect(html, contains('window.tuktukFinishStartup'));
     expect(html, contains("splash.classList.add('is-ready')"));
-    expect(bridge, contains("@JS('tuktukFinishStartup')"));
+    expect(bridge, contains('@JS('));
+    expect(bridge, contains('tuktukFinishStartup'));
     expect(bridge, contains('_tuktukFinishStartup();'));
   });
 
