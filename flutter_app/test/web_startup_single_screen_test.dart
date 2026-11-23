@@ -77,7 +77,7 @@ void main() {
     expect(store, contains('if (!allowed ||'));
     expect(store, contains('ConductorAppAccessState.unavailable'));
     expect(store, contains('ConductorAppAccessState.suspended'));
-    expect(store, contains(".timeout(const Duration(seconds: 10))"));
+    expect(store, contains('.timeout(const Duration(seconds: 10))'));
     expect(store, contains('_supabase.auth.currentUser?.id != authenticatedUser.id'));
   });
 }
