@@ -9,11 +9,17 @@ bool marketplaceGpsNeedsAttention({
   required DateTime? lastConfirmedAt,
   required DateTime nowUtc,
   required bool hasFailure,
+  bool activeService = false,
 }) {
   if (!locationExpected) return false;
   if (hasFailure || lastConfirmedAt == null) return true;
   final age = nowUtc.toUtc().difference(lastConfirmedAt.toUtc());
-  return age.isNegative || age > const Duration(minutes: 5);
+  // En una carrera, el pasajero deja de tener posicion GPS en vivo al
+  // minuto. Avisar al conductor antes de los 5 minutos de la jornada idle.
+  final maxAge = activeService
+      ? const Duration(seconds: 75)
+      : const Duration(minutes: 5);
+  return age.isNegative || age > maxAge;
 }
 
 class MarketplaceOperationalLocationPolicy {
