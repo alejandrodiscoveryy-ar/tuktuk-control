@@ -666,6 +666,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       lastConfirmedAt: _lastOperationalSentAt,
       nowUtc: nowUtc,
       hasFailure: _operationalGpsIssue != null,
+      activeService: _operationalActiveJob() != null,
     );
     _lastOperationalPosition = position;
     _lastOperationalSentAt = nowUtc;
@@ -673,7 +674,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _operationalGpsReadinessTimer?.cancel();
     // Si cesan los envíos, advertir aunque el stream siga abierto.
     _operationalGpsReadinessTimer = Timer(
-      const Duration(minutes: 5, seconds: 1),
+      _operationalActiveJob() != null
+          ? const Duration(seconds: 76)
+          : const Duration(minutes: 5, seconds: 1),
       () {
         if (mounted && _canPublishOperationalLocation()) setState(() {});
       },
@@ -4097,6 +4100,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       lastConfirmedAt: _lastOperationalSentAt,
       nowUtc: DateTime.now().toUtc(),
       hasFailure: _operationalGpsIssue != null,
+      activeService: onRide,
     );
     final gpsWarningText = marketplaceGpsWarningMessage(_operationalGpsIssue);
     final bottomNavInset = MediaQuery.paddingOf(context).bottom;
