@@ -53,6 +53,18 @@ class ConductorAppAccessGate extends StatelessWidget {
       animation: store,
       builder: (context, _) {
         final initializing = !store.initialized;
+        final accessResolved =
+            store.conductorAppAccessState != ConductorAppAccessState.checking;
+        // El splash HTML permanece hasta que termine la verificación inicial:
+        // evita mostrar sucesivamente logo, blanco y tarjeta de autorización.
+        // En error/suspensión se revela la pantalla correspondiente.
+        if (kIsWeb &&
+            !initializing &&
+            (!store.conductorAppAccessGateVisible || accessResolved)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            finishTuktukWebStartup();
+          });
+        }
         if (!initializing && !store.conductorAppAccessGateVisible) {
           return child;
         }
