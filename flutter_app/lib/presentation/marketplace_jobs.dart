@@ -317,6 +317,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   DateTime? _lastArrivalStateSyncAt;
   MarketplaceGpsIssue? _operationalGpsIssue;
   Timer? _operationalGpsReadinessTimer;
+  Timer? _operationalGpsRecoveryWatchdog;
+  DateTime? _lastOperationalRecoveryAttemptAt;
 
   final Map<String, String> _acceptKeys = {};
   final Map<String, String> _operationKeys = {};
@@ -343,6 +345,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       ),
     );
     unawaited(_prepareWorkMap());
+    // Supervisor suave: solo en primer plano y con intervalo amplio.
+    _operationalGpsRecoveryWatchdog = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => _recoverStalledOperationalGpsForeground(),
+    );
     _operationalLifecycleState =
         WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
     WidgetsBinding.instance.addObserver(this);
@@ -382,6 +389,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   void dispose() {
     _stopOperationalLocationSampling();
     _operationalGpsReadinessTimer?.cancel();
+    _operationalGpsRecoveryWatchdog?.cancel();
     _presenceHeartbeatTimer?.cancel();
     _availableRecoveryTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -682,6 +690,33 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       },
     );
     if (needsRefresh) setState(() {});
+  }
+
+  void _recoverStalledOperationalGpsForeground() {
+    if (!_androidOperationalLocation ||
+        _operationalLocationStreamStarting ||
+        _activeOperationalLocationPublishInFlight ||
+        _operationalLocationInFlight ||
+        !_canPublishOperationalLocation()) {
+      return;
+    }
+    final issue = _operationalGpsIssue;
+    final now = DateTime.now().toUtc();
+    if (!marketplaceGpsForegroundRecoveryDue(
+      foreground: _operationalLifecycleState == AppLifecycleState.resumed,
+      locationExpected: true,
+      activeService: _operationalActiveJob() != null,
+      permissionOrSensorBlocked: issue == MarketplaceGpsIssue.locationDisabled ||
+          issue == MarketplaceGpsIssue.permissionDenied,
+      lastConfirmedAt: _lastOperationalSentAt,
+      lastAttemptAt: _lastOperationalRecoveryAttemptAt,
+      nowUtc: now,
+    )) return;
+    _lastOperationalRecoveryAttemptAt = now;
+    // No reiniciar el servicio desde el segundo plano: Android 12+ lo bloquea.
+    // Conservamos ultima posicion y no publicamos coordenadas sinteticas.
+    _stopOperationalLocationSampling();
+    _syncOperationalLocationSampling(immediate: true);
   }
 
   void _retryOperationalGpsCheck() {
@@ -1034,6 +1069,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _operationalGpsReadinessTimer?.cancel();
     _lastOperationalPosition = null;
     _lastOperationalSentAt = null;
+    _lastOperationalRecoveryAttemptAt = null;
     _operationalGpsIssue = null;
 
     try {
