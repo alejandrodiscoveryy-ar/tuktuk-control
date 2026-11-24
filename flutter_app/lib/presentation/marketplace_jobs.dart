@@ -711,7 +711,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       lastConfirmedAt: _lastOperationalSentAt,
       lastAttemptAt: _lastOperationalRecoveryAttemptAt,
       nowUtc: now,
-    )) return;
+    )) {
+      return;
+    }
     _lastOperationalRecoveryAttemptAt = now;
     // No reiniciar el servicio desde el segundo plano: Android 12+ lo bloquea.
     // Conservamos ultima posicion y no publicamos coordenadas sinteticas.
