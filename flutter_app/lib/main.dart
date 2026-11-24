@@ -211,6 +211,15 @@ void main() async {
         onMessageOpened: (data) async {
           final jobId = marketplaceJobIdFromPush(data);
           if (jobId != null) _marketplacePushJobId.value = jobId;
+          // La confirmación significa ABRIÓ la notificación, nunca que FCM
+          // garantizó recepción. Usa el RPC existente con control de dueño.
+          unawaited(markMarketplaceOpenedOffer(data, markRead: (id) async {
+            if (Supabase.instance.client.auth.currentUser == null) return;
+            await Supabase.instance.client.rpc(
+              'mark_my_notification_read',
+              params: {'target_notification_id': id},
+            ).timeout(const Duration(seconds: 5));
+          }));
           await openPushMessageAction(data);
         },
       );

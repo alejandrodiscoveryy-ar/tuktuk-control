@@ -87,6 +87,39 @@ String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
       : null;
 }
 
+// Una apertura real (tap), no recepción garantizada por FCM.
+@visibleForTesting
+int? marketplaceOpenedOfferNotificationId(Map<String, dynamic> data) {
+  if (marketplaceJobIdFromPush(data) == null) {
+    return null;
+  }
+  final raw = data['notification_id']?.toString();
+  if (raw == null) {
+    return null;
+  }
+  final id = int.tryParse(raw);
+  if (id == null || id <= 0 || id > 9007199254740991 ||
+      raw != id.toString()) {
+    return null;
+  }
+  return id;
+}
+
+Future<void> markMarketplaceOpenedOffer(
+  Map<String, dynamic> data, {
+  required Future<void> Function(int notificationId) markRead,
+}) async {
+  final id = marketplaceOpenedOfferNotificationId(data);
+  if (id == null) {
+    return;
+  }
+  try {
+    await markRead(id).timeout(const Duration(seconds: 5));
+  } catch (_) {
+    // No bloquear navegación ni aceptación ante una caída de internet.
+  }
+}
+
 @visibleForTesting
 String notificationChannelForPush(Map<String, dynamic> data) =>
     marketplaceJobIdFromPush(data) == null
