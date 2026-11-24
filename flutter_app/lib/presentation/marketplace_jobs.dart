@@ -707,7 +707,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       locationExpected: true,
       activeService: _operationalActiveJob() != null,
       permissionOrSensorBlocked: issue == MarketplaceGpsIssue.locationDisabled ||
-          issue == MarketplaceGpsIssue.permissionDenied,
+          issue == MarketplaceGpsIssue.permissionDenied ||
+          issue == MarketplaceGpsIssue.permissionDeniedForever,
       lastConfirmedAt: _lastOperationalSentAt,
       lastAttemptAt: _lastOperationalRecoveryAttemptAt,
       nowUtc: now,
@@ -719,6 +720,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     // Conservamos ultima posicion y no publicamos coordenadas sinteticas.
     _stopOperationalLocationSampling();
     _syncOperationalLocationSampling(immediate: true);
+  }
+
+  void _openOperationalGpsHelp() {
+    if (_androidOperationalLocation &&
+        _operationalGpsIssue == MarketplaceGpsIssue.permissionDeniedForever) {
+      unawaited(Geolocator.openAppSettings());
+      return;
+    }
+    if (_androidOperationalLocation &&
+        _operationalGpsIssue == MarketplaceGpsIssue.locationDisabled) {
+      unawaited(Geolocator.openLocationSettings());
+      return;
+    }
+    _retryOperationalGpsCheck();
   }
 
   void _retryOperationalGpsCheck() {
@@ -4219,7 +4234,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
               child: InkWell(
                 key: const ValueKey('work-gps-readiness-warning'),
                 borderRadius: BorderRadius.circular(14),
-                onTap: _retryOperationalGpsCheck,
+                onTap: _openOperationalGpsHelp,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(
