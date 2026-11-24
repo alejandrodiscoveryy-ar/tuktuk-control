@@ -3,6 +3,39 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('marca abierto solo una alerta pulsada con id validado', () async {
+    const data = {
+      'kind': 'marketplace_job_available',
+      'job_id': '12345678-1234-4123-8123-123456789012',
+      'notification_id': '182',
+    };
+    final sent = <int>[];
+    expect(marketplaceOpenedOfferNotificationId(data), 182);
+    await markMarketplaceOpenedOffer(data, markRead: (id) async {
+      sent.add(id);
+    });
+    expect(sent, [182]);
+    for (final rejected in [
+      {...data, 'kind': 'daily_exchange_rate'},
+      {...data, 'job_id': 'invalid'},
+      {...data, 'notification_id': '0'},
+      {...data, 'notification_id': '-2'},
+      {...data, 'notification_id': 'not-an-id'},
+      {...data, 'notification_id': '9007199254740992'},
+    ]) {
+      expect(marketplaceOpenedOfferNotificationId(rejected), isNull);
+      await markMarketplaceOpenedOffer(rejected, markRead: (id) async {
+        fail('No puede marcar otra notificación: $id');
+      });
+    }
+    await expectLater(
+      markMarketplaceOpenedOffer(data, markRead: (_) async {
+        throw StateError('Sin red');
+      }),
+      completes,
+    );
+  });
+
   test('foreground job push requests refresh even without notification text',
       () {
     marketplaceJobPushPending.value = false;
