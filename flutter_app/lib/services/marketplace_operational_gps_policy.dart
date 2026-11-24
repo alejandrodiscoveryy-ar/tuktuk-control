@@ -22,6 +22,39 @@ bool marketplaceGpsNeedsAttention({
   return age.isNegative || age > maxAge;
 }
 
+/// Reiniciar solamente un flujo GPS bloqueado, sin bucles ni reinicios
+/// repetidos. Esta funcion NO autoriza servicios desde segundo plano.
+bool marketplaceGpsForegroundRecoveryDue({
+  required bool foreground,
+  required bool locationExpected,
+  required bool activeService,
+  required bool permissionOrSensorBlocked,
+  required DateTime? lastConfirmedAt,
+  required DateTime? lastAttemptAt,
+  required DateTime nowUtc,
+}) {
+  if (!foreground || !locationExpected || permissionOrSensorBlocked) {
+    return false;
+  }
+  final now = nowUtc.toUtc();
+  final maxAge = activeService
+      ? const Duration(seconds: 90)
+      : const Duration(minutes: 6);
+  if (lastConfirmedAt != null) {
+    final age = now.difference(lastConfirmedAt.toUtc());
+    if (age < maxAge) return false;
+  }
+  if (lastAttemptAt != null) {
+    final elapsed = now.difference(lastAttemptAt.toUtc());
+    if (elapsed < (activeService
+        ? const Duration(minutes: 2)
+        : const Duration(minutes: 6))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 class MarketplaceOperationalLocationPolicy {
   static const availableSampleInterval = Duration(minutes: 2);
   static const availableHeartbeatInterval = Duration(seconds: 120);
