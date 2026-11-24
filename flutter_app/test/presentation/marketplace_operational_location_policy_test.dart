@@ -162,6 +162,13 @@ void main() {
       expect(MarketplaceOperationalLocationPolicy.safeMetric(5001, min: 0, max: 5000), isNull);
     });
 
+    test('un rechazo permanente informa cómo abrir ajustes Android', () {
+      expect(
+        marketplaceGpsWarningMessage(MarketplaceGpsIssue.permissionDeniedForever),
+        contains('ajustes del teléfono'),
+      );
+    });
+
     test('cada incidencia GPS conserva el mensaje original', () {
       expect(marketplaceGpsWarningMessage(null),
           'GPS sin confirmar. Toca para comprobar la ubicación.');
