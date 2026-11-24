@@ -125,7 +125,7 @@ void main() {
     device.permission = LocationPermission.deniedForever;
     expect(
       await io.checkAccess(requestPermission: true),
-      MarketplaceGpsIssue.permissionDenied,
+      MarketplaceGpsIssue.permissionDeniedForever,
     );
     expect(device.permissionRequests, 0);
   });
