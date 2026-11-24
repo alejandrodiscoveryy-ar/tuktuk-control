@@ -2,7 +2,7 @@ import 'package:geolocator/geolocator.dart' show LocationAccuracy, Position;
 
 // Contrato GPS independiente de widgets, servicios y datos del conductor.
 // Mantiene los umbrales existentes; no cambia frecuencia, permisos o llamadas.
-enum MarketplaceGpsIssue { locationDisabled, permissionDenied, deliveryFailed }
+enum MarketplaceGpsIssue { locationDisabled, permissionDenied, permissionDeniedForever, deliveryFailed }
 
 bool marketplaceGpsNeedsAttention({
   required bool locationExpected,
@@ -144,6 +144,8 @@ String marketplaceGpsWarningMessage(MarketplaceGpsIssue? issue) => switch (issue
     'GPS desactivado. Activa la ubicación y toca para comprobar.',
   MarketplaceGpsIssue.permissionDenied =>
     'TUKTUK no tiene permiso GPS. Autorízalo para compartir tu ubicación.',
+  MarketplaceGpsIssue.permissionDeniedForever =>
+    'Permiso GPS bloqueado. Toca para abrir los ajustes del teléfono.',
   MarketplaceGpsIssue.deliveryFailed =>
     'Ubicación sin confirmar. Comprueba tu conexión y toca para reintentar.',
   null => 'GPS sin confirmar. Toca para comprobar la ubicación.',
