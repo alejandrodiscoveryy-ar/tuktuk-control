@@ -4,6 +4,53 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final now = DateTime.utc(2026, 11, 10, 15);
 
+  group('Recuperación automática del flujo GPS bloqueado', () {
+    bool due({
+      bool foreground = true,
+      bool expected = true,
+      bool ride = true,
+      bool blocked = false,
+      DateTime? confirmed,
+      DateTime? attempted,
+    }) => marketplaceGpsForegroundRecoveryDue(
+      foreground: foreground,
+      locationExpected: expected,
+      activeService: ride,
+      permissionOrSensorBlocked: blocked,
+      lastConfirmedAt: confirmed,
+      lastAttemptAt: attempted,
+      nowUtc: now,
+    );
+
+    test('sin carrera no reinicia por un GPS normal de cuatro minutos', () {
+      expect(due(ride: false,
+        confirmed: now.subtract(const Duration(minutes: 4))), isFalse);
+      expect(due(ride: false,
+        confirmed: now.subtract(const Duration(minutes: 7))), isTrue);
+    });
+    test('durante carrera recupera un flujo atrasado pero no uno reciente', () {
+      expect(due(confirmed: now.subtract(const Duration(seconds: 45))), isFalse);
+      expect(due(confirmed: now.subtract(const Duration(seconds: 100))), isTrue);
+    });
+    test('nunca intenta iniciar servicios Android en segundo plano', () {
+      expect(due(foreground: false,
+        confirmed: now.subtract(const Duration(minutes: 5))), isFalse);
+      expect(due(blocked: true,
+        confirmed: now.subtract(const Duration(minutes: 5))), isFalse);
+      expect(due(expected: false,
+        confirmed: now.subtract(const Duration(minutes: 5))), isFalse);
+    });
+    test('limita reintentos para evitar bucles y desgaste de batería', () {
+      final stale = now.subtract(const Duration(minutes: 8));
+      expect(due(confirmed: stale, attempted:
+        now.subtract(const Duration(seconds: 50))), isFalse);
+      expect(due(confirmed: stale, attempted:
+        now.subtract(const Duration(minutes: 3))), isTrue);
+      expect(due(ride: false, confirmed: stale, attempted:
+        now.subtract(const Duration(minutes: 3))), isFalse);
+    });
+  });
+
   group('GPS: Trabajando no equivale a ubicación confirmada', () {
     bool needs(bool expected, DateTime? confirmed, {bool failed = false}) =>
         marketplaceGpsNeedsAttention(
