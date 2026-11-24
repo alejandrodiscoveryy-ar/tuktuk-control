@@ -78,8 +78,10 @@ class MarketplaceOperationalGpsIo {
     if (permission == LocationPermission.denied && requestPermission) {
       permission = await _device.requestPermission();
     }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.deniedForever) {
+      return MarketplaceGpsIssue.permissionDeniedForever;
+    }
+    if (permission == LocationPermission.denied) {
       return MarketplaceGpsIssue.permissionDenied;
     }
     return null;

@@ -96,6 +96,13 @@ void main() {
 
   tearDown(() async => device.close());
 
+  test('permiso GPS bloqueado para siempre pide ajustes, no repite dialogos', () async {
+    device.permission = LocationPermission.deniedForever;
+    expect(await io.checkAccess(requestPermission: true),
+        MarketplaceGpsIssue.permissionDeniedForever);
+    expect(device.permissionRequests, 0);
+  });
+
   test('GPS apagado o sin permiso no se confunde con señal disponible', () async {
     device.enabled = false;
     expect(
@@ -118,7 +125,7 @@ void main() {
     device.permission = LocationPermission.deniedForever;
     expect(
       await io.checkAccess(requestPermission: true),
-      MarketplaceGpsIssue.permissionDenied,
+      MarketplaceGpsIssue.permissionDeniedForever,
     );
     expect(device.permissionRequests, 0);
   });
