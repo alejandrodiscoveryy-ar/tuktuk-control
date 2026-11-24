@@ -87,13 +87,33 @@ String? marketplaceJobIdFromPush(Map<String, dynamic> data) {
       : null;
 }
 
-// Solo una pulsación REAL sobre la notificación se puede registrar como
-// «abierta». Recibir un FCM en segundo plano no demuestra lectura.
+// Una apertura real de la alerta (tap), no recepción garantizada por FCM.
 @visibleForTesting
 int? marketplaceOpenedOfferNotificationId(Map<String, dynamic> data) {
   if (marketplaceJobIdFromPush(data) == null) return null;
   final raw = data['notification_id']?.toString();
-  if (raw == null || !RegExp(r'^[1-9][0-9]*
+  if (raw == null) return null;
+  final id = int.tryParse(raw);
+  if (id == null || id <= 0 || id > 9007199254740991 ||
+      raw != id.toString()) return null;
+  return id;
+}
+
+Future<void> markMarketplaceOpenedOffer(
+  Map<String, dynamic> data, {
+  required Future<void> Function(int notificationId) markRead,
+}) async {
+  final id = marketplaceOpenedOfferNotificationId(data);
+  if (id == null) return;
+  try {
+    await markRead(id).timeout(const Duration(seconds: 5));
+  } catch (_) {
+    // No bloquear navegación ni aceptación por caída de internet.
+  }
+}
+
+@visibleForTesting
+String notificationChannelForPush(Map<String, dynamic> data) =>
     marketplaceJobIdFromPush(data) == null
         ? tuktukNotificationChannelId
         : tuktukJobNotificationChannelV2Id;
