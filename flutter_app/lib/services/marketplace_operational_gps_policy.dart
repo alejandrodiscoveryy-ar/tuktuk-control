@@ -89,7 +89,7 @@ class MarketplaceOperationalLocationPolicy {
       activeService ? activeHeartbeatInterval : availableHeartbeatInterval;
 
   static Duration failureRetryDelay({required bool activeService}) =>
-      activeService ? const Duration(seconds: 30) : const Duration(minutes: 5);
+      activeService ? const Duration(seconds: 30) : const Duration(minutes: 1);
 
   static double distanceThresholdMeters({required bool activeService}) =>
       activeService ? activeDistanceMeters : availableDistanceMeters;
