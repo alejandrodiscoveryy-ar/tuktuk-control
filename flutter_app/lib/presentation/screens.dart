@@ -1560,9 +1560,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 .abs() <=
             0.01;
 
+    String walletAmount(double value, String currency) {
+      final formatted = _marketplaceMoneyLabel(value, currency);
+      return formatted.substring(0, formatted.length - currency.length - 1);
+    }
+
     final mainValue = wallet == null
         ? (_walletLoading ? 'Cargando...' : '—')
-        : _marketplaceMoneyLabel(wallet.availableBalance, wallet.currency);
+        : walletAmount(wallet.availableBalance, wallet.currency);
 
     String breakdownValue(double? value) {
       if (_walletLoading) return '—';
@@ -1571,7 +1576,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return 'Sin desglose fiable';
       }
 
-      return _marketplaceMoneyLabel(value, wallet.currency);
+      return walletAmount(value, wallet.currency);
     }
 
     Widget detailRow(String label, String value) {
@@ -1607,12 +1612,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return GlassCard(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(child: Label('Saldo disponible')),
+              Expanded(child: _OverviewMetricLabel(
+                wallet != null && wallet.currency != activeCurrency
+                    ? 'Saldo disponible (${wallet.currency})'
+                    : 'Saldo disponible',
+              )),
               Container(
                 width: 34,
                 height: 34,
@@ -1629,7 +1639,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
+          _OverviewMetricValue(
             mainValue,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
@@ -1659,11 +1669,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const _OverviewCurrencyHeader(),
+        const SizedBox(height: 10),
         MetricHero(
           label: tr('Ingreso de hoy'),
-          value: money(metrics.todayEarnings),
+          value: numFmt(metrics.todayEarnings),
           sublabel:
-              '${tr('Mes actual')}: ${money(metrics.currentCycleEarnings)}',
+              '${tr('Mes actual')}: ${numFmt(metrics.currentCycleEarnings)}',
           icon: Icons.payments_outlined,
           trailing: AppLogoMark(
             identity: widget.store.projectIdentity,
@@ -1697,7 +1709,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: MetricCard(
                   label: tr('Ingresos históricos'),
-                  value: money(metrics.totalEarnings),
+                  value: numFmt(metrics.totalEarnings),
                   icon: Icons.account_balance_wallet_outlined,
                 ),
               ),
@@ -1705,7 +1717,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: MetricCard(
                   label: tr('Eficiencia'),
-                  value: '${numFmt(metrics.efficiency)} $activeCurrency/km',
+                  value: numFmt(metrics.efficiency),
+                  note: '$activeCurrency/km',
                   icon: Icons.bolt_outlined,
                 ),
               ),
@@ -1720,7 +1733,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: MetricCard(
                   label: tr('Gastos del mes'),
-                  value: money(metrics.currentCycleExpenses),
+                  value: numFmt(metrics.currentCycleExpenses),
                   icon: Icons.receipt_long_outlined,
                   color: kDanger,
                 ),
@@ -1729,7 +1742,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: MetricCard(
                   label: tr('Ganancia neta del mes'),
-                  value: money(metrics.currentCycleNet),
+                  value: numFmt(metrics.currentCycleNet),
                   icon: Icons.account_balance_outlined,
                   color: metrics.currentCycleNet >= 0
                       ? appPrimaryColor(context)
@@ -2372,6 +2385,8 @@ class StatsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const _OverviewCurrencyHeader(),
+        const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth >= 700
@@ -2384,20 +2399,20 @@ class StatsScreen extends StatelessWidget {
                 StatOverviewCard(
                   width: width,
                   label: tr('Ingresos totales'),
-                  value: money(metrics.totalEarnings),
+                  value: numFmt(metrics.totalEarnings),
                   icon: Icons.account_balance_wallet_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Gastos totales'),
-                  value: money(metrics.totalExpenses),
+                  value: numFmt(metrics.totalExpenses),
                   color: kDanger,
                   icon: Icons.receipt_long_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Ganancia neta'),
-                  value: money(metrics.netEarnings),
+                  value: numFmt(metrics.netEarnings),
                   color: metrics.netEarnings >= 0
                       ? appPrimaryColor(context)
                       : kDanger,
@@ -2405,14 +2420,15 @@ class StatsScreen extends StatelessWidget {
                 ),
                 StatOverviewCard(
                   width: width,
-                  label: tr('Ingreso promedio por día trabajado'),
-                  value: money(metrics.averageDailyEarnings),
+                  label: tr('Promedio por día trabajado'),
+                  value: numFmt(metrics.averageDailyEarnings),
                   icon: Icons.calendar_today_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Eficiencia'),
-                  value: '${numFmt(metrics.efficiency)} $activeCurrency/km',
+                  value: numFmt(metrics.efficiency),
+                  note: '$activeCurrency/km',
                   icon: Icons.speed_outlined,
                 ),
                 StatOverviewCard(
@@ -2421,7 +2437,7 @@ class StatsScreen extends StatelessWidget {
                   icon: Icons.emoji_events_outlined,
                   value: earningRecords.isEmpty
                       ? '-'
-                      : money(earningRecords.first.earnings),
+                      : numFmt(earningRecords.first.earnings),
                   note: earningRecords.isEmpty
                       ? tr('Sin datos')
                       : DateFormat(
@@ -2433,14 +2449,15 @@ class StatsScreen extends StatelessWidget {
                   width: width,
                   label: tr('Mejor mes'),
                   icon: Icons.calendar_month_outlined,
-                  value: bestCycle == null ? '-' : money(bestCycle.earnings),
+                  value: bestCycle == null ? '-' : numFmt(bestCycle.earnings),
                   note: bestCycle?.label ?? tr('Sin datos mensuales'),
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Mantenimiento'),
                   icon: Icons.build_outlined,
-                  value: tr(maintenance.status),
+                  value: maintenance.status == 'Estado normal'
+                      ? tr('Normal') : tr(maintenance.status),
                   note: maintenance.remainingKm < 0
                       ? '${tr('Vencido por')} ${numFmt(maintenance.remainingKm.abs())} km'
                       : '${tr('Próximo en')} ${numFmt(maintenance.remainingKm)} km',
