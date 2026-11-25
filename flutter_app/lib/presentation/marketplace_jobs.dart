@@ -357,8 +357,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _presenceHeartbeatTimer = Timer.periodic(const Duration(minutes: 2), (_) {
       unawaited(_sendPresenceHeartbeat());
     });
-    // Web fallback: recover published offers even if FCM or GPS refresh was missed.
-    if (kIsWeb) {
+    // Recover published offers in foreground if FCM was missed on Web or Android.
+    if (kIsWeb || _androidOperationalLocation) {
       _availableRecoveryTimer = Timer.periodic(
         const Duration(seconds: 30),
         (_) => _recoverAvailableWhileWorking(),
@@ -499,6 +499,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     if (state == AppLifecycleState.resumed) {
       _refreshAvailability();
+      unawaited(_sendPresenceHeartbeat());
+      _recoverStalledOperationalGpsForeground();
       _syncOperationalLocationSampling(
         immediate: true,
         requestPermission: widget.isVisible,
