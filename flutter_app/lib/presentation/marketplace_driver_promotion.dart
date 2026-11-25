@@ -653,44 +653,68 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = appMutedColor(context);
+    const accent = Color(0xFFA9C7FF);
+    const muted = Color(0xFFC1CDE4);
+    const ink = Color(0xFFF2F5FC);
+    final theme = Theme.of(context).copyWith(
+      colorScheme: Theme.of(context).colorScheme.copyWith(
+        brightness: Brightness.dark,
+        primary: accent,
+        onSurface: ink,
+        onSurfaceVariant: muted,
+      ),
+      dividerColor: const Color(0xFF52668A),
+    );
     final d = earnings;
 
     Widget metric(String label, String value) => Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
+        color: const Color(0xFF243653),
         border: Border.all(color: theme.dividerColor),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: muted, fontSize: 12)),
+        Text(label, style: const TextStyle(color: muted, fontSize: 12)),
         const SizedBox(height: 4),
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
       ]),
     );
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(padding: const EdgeInsets.all(14), child: Column(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF344C73), Color(0xFF263650), Color(0xFF343B60)],
+        ),
+        border: Border.all(color: accent.withValues(alpha: .45)),
+      ),
+      child: Theme(
+        data: theme,
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: ink),
+          child: Padding(padding: const EdgeInsets.all(14), child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Icon(Icons.insights_outlined, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             const Expanded(child: Text('Resultados de Impulsa',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+              style: TextStyle(color: accent, fontSize: 17, fontWeight: FontWeight.w800))),
             IconButton(tooltip: 'Actualizar resultados',
               onPressed: loading ? null : refresh,
-              icon: const Icon(Icons.refresh)),
+              icon: const Icon(Icons.refresh, color: accent)),
           ]),
           if (loading) const LinearProgressIndicator(),
           const SizedBox(height: 8),
-          Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
+          const Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
           const SizedBox(height: 4),
           Text(_cup(d.credited),
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
               color: theme.colorScheme.primary)),
-          Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
+          const Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
             style: TextStyle(color: muted, fontSize: 11)),
           const SizedBox(height: 12),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -701,7 +725,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           if (d.pending > 0) ...[
             const SizedBox(height: 10),
             Text('Ganancias por acreditar: ${_cup(d.pending)}',
-              style: TextStyle(color: muted, fontSize: 12)),
+              style: const TextStyle(color: muted, fontSize: 12)),
           ],
           ExpansionTile(
             key: const ValueKey('impulsa-more-results'),
@@ -717,11 +741,11 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
               if (d.fundingRequired > 0)
                 Padding(padding: const EdgeInsets.only(top: 8),
                   child: Text('Pendientes de financiación: ${_cup(d.fundingRequired)}',
-                    style: TextStyle(color: muted, fontSize: 12))),
+                    style: const TextStyle(color: muted, fontSize: 12))),
               if (d.reversalPending > 0)
                 Padding(padding: const EdgeInsets.only(top: 8),
                   child: Text('Ajustes pendientes: ${_cup(d.reversalPending)}',
-                    style: TextStyle(color: muted, fontSize: 12))),
+                    style: const TextStyle(color: muted, fontSize: 12))),
               if (d.recent.isNotEmpty) ExpansionTile(
                 title: const Text('Historial comercial'),
                 tilePadding: EdgeInsets.zero, childrenPadding: EdgeInsets.zero,
@@ -756,6 +780,8 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           ),
         ],
       )),
+        ),
+      ),
     );
   }
 }
