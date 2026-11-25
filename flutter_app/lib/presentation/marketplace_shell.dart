@@ -159,32 +159,6 @@ class MarketplaceMoreScreen extends StatelessWidget {
         GlassCard(
           child: ListTile(
             leading: const _MoreSectionIcon(
-              icon: Icons.support_agent_rounded,
-              color: Color(0xFFFFB547),
-            ),
-            title: Text(tr('Soporte')),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => _openPage(
-              context,
-              title: tr('Soporte'),
-              child: Builder(
-                builder: (pageContext) => ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _SupportCard(
-                      supportAction: store.supportWhatsAppAction(),
-                      onTap: (action) => _launchWhatsApp(pageContext, action),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        GlassCard(
-          child: ListTile(
-            leading: const _MoreSectionIcon(
               icon: Icons.campaign_outlined,
               color: Color(0xFFFB923C),
             ),
@@ -226,6 +200,26 @@ class MarketplaceMoreScreen extends StatelessWidget {
                   ),
                 ),
               );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        GlassCard(
+          child: ListTile(
+            key: const ValueKey('more-direct-support'),
+            leading: const _MoreSectionIcon(
+              icon: Icons.support_agent_rounded,
+              color: Color(0xFFFFB547),
+            ),
+            title: Text(tr('Soporte')),
+            trailing: const Icon(Icons.open_in_new_rounded),
+            onTap: () {
+              final action = store.supportWhatsAppAction();
+              if (action == null) {
+                toast(context, tr('El contacto de soporte no está disponible en este momento.'));
+                return;
+              }
+              unawaited(_launchWhatsApp(context, action));
             },
           ),
         ),

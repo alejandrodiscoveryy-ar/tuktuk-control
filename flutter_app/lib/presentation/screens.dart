@@ -2986,61 +2986,6 @@ class LoginScreen extends StatelessWidget {
   }
 }
 
-class _SupportCard extends StatelessWidget {
-  const _SupportCard({
-    required this.supportAction,
-    required this.onTap,
-  });
-
-  final WhatsAppContactAction? supportAction;
-  final ValueChanged<WhatsAppContactAction> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.support_agent_rounded,
-                color: appPrimaryColor(context),
-                size: 34,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  tr('Soporte'),
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (supportAction != null) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => onTap(supportAction!),
-                icon: const Icon(Icons.support_agent_rounded, size: 19),
-                label: Text(supportAction!.buttonText),
-              ),
-            ),
-          ],
-          if (supportAction == null) ...[
-            const SizedBox(height: 14),
-            Text(tr('El contacto de soporte no está disponible en este momento.')),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 Future<void> _launchWhatsApp(
   BuildContext context,
   WhatsAppContactAction action,
