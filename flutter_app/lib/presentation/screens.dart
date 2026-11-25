@@ -2986,22 +2986,17 @@ class LoginScreen extends StatelessWidget {
   }
 }
 
-class _SupportAndPaymentsCard extends StatelessWidget {
-  const _SupportAndPaymentsCard({
+class _SupportCard extends StatelessWidget {
+  const _SupportCard({
     required this.supportAction,
-    required this.paymentAction,
     required this.onTap,
   });
 
   final WhatsAppContactAction? supportAction;
-  final WhatsAppContactAction? paymentAction;
   final ValueChanged<WhatsAppContactAction> onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (supportAction == null && paymentAction == null) {
-      return const SizedBox.shrink();
-    }
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3016,7 +3011,7 @@ class _SupportAndPaymentsCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  tr('Soporte y pagos'),
+                  tr('Soporte'),
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
@@ -3036,19 +3031,9 @@ class _SupportAndPaymentsCard extends StatelessWidget {
               ),
             ),
           ],
-          if (paymentAction != null) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => onTap(paymentAction!),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF25D366),
-                ),
-                icon: const Icon(Icons.payments_outlined, size: 19),
-                label: Text(paymentAction!.buttonText),
-              ),
-            ),
+          if (supportAction == null) ...[
+            const SizedBox(height: 14),
+            Text(tr('El contacto de soporte no está disponible en este momento.')),
           ],
         ],
       ),
