@@ -675,7 +675,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: muted, fontSize: 12)),
+        Text(label, style: const TextStyle(color: muted, fontSize: 12)),
         const SizedBox(height: 4),
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
       ]),
@@ -709,12 +709,12 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           ]),
           if (loading) const LinearProgressIndicator(),
           const SizedBox(height: 8),
-          Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
+          const Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
           const SizedBox(height: 4),
           Text(_cup(d.credited),
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
               color: theme.colorScheme.primary)),
-          Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
+          const Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
             style: TextStyle(color: muted, fontSize: 11)),
           const SizedBox(height: 12),
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -725,7 +725,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           if (d.pending > 0) ...[
             const SizedBox(height: 10),
             Text('Ganancias por acreditar: ${_cup(d.pending)}',
-              style: TextStyle(color: muted, fontSize: 12)),
+              style: const TextStyle(color: muted, fontSize: 12)),
           ],
           ExpansionTile(
             key: const ValueKey('impulsa-more-results'),
@@ -741,11 +741,11 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
               if (d.fundingRequired > 0)
                 Padding(padding: const EdgeInsets.only(top: 8),
                   child: Text('Pendientes de financiación: ${_cup(d.fundingRequired)}',
-                    style: TextStyle(color: muted, fontSize: 12))),
+                    style: const TextStyle(color: muted, fontSize: 12))),
               if (d.reversalPending > 0)
                 Padding(padding: const EdgeInsets.only(top: 8),
                   child: Text('Ajustes pendientes: ${_cup(d.reversalPending)}',
-                    style: TextStyle(color: muted, fontSize: 12))),
+                    style: const TextStyle(color: muted, fontSize: 12))),
               if (d.recent.isNotEmpty) ExpansionTile(
                 title: const Text('Historial comercial'),
                 tilePadding: EdgeInsets.zero, childrenPadding: EdgeInsets.zero,
