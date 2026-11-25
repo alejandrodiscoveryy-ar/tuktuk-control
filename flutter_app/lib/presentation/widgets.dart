@@ -1,5 +1,55 @@
 part of '../main.dart';
 
+// Local to the financial overviews; other monetary surfaces keep their units.
+class _OverviewCurrencyHeader extends StatelessWidget {
+  const _OverviewCurrencyHeader();
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: Text(
+      '${tr('Moneda de trabajo')}: $activeCurrency',
+      style: TextStyle(
+        color: appMutedColor(context),
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+class _OverviewMetricLabel extends StatelessWidget {
+  const _OverviewMetricLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    label,
+    style: TextStyle(
+      color: appMutedColor(context),
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+    ),
+  );
+}
+
+class _OverviewMetricValue extends StatelessWidget {
+  const _OverviewMetricValue(this.value, {required this.style});
+  final String value;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: FittedBox(
+      alignment: Alignment.centerLeft,
+      fit: BoxFit.scaleDown,
+      child: Text(value, style: style, maxLines: 1, softWrap: false),
+    ),
+  );
+}
+
 class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,
@@ -348,6 +398,7 @@ class MetricCard extends StatelessWidget {
     required this.value,
     required this.icon,
     this.color,
+    this.note,
     super.key,
   });
 
@@ -355,17 +406,19 @@ class MetricCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color? color;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
     final effectiveColor = color ?? appPrimaryColor(context);
     return GlassCard(
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: Label(label)),
+              Expanded(child: _OverviewMetricLabel(label)),
               Container(
                 width: 34,
                 height: 34,
@@ -378,10 +431,14 @@ class MetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
+          _OverviewMetricValue(
             value,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
+          if (note != null) ...[
+            const SizedBox(height: 4),
+            Text(note!, style: TextStyle(color: appMutedColor(context), fontSize: 11)),
+          ],
         ],
       ),
     );
@@ -412,8 +469,9 @@ class StatOverviewCard extends StatelessWidget {
 
     return SizedBox(
       width: width,
-      height: 126,
+      height: 126 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0),
       child: GlassCard(
+        padding: const EdgeInsets.all(13),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -421,13 +479,13 @@ class StatOverviewCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Label(label),
+                  child: _OverviewMetricLabel(label),
                 ),
                 if (icon != null) ...[
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Container(
-                    width: 30,
-                    height: 30,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
                       color: effectiveColor.withValues(alpha: .12),
                       borderRadius: BorderRadius.circular(9),
@@ -443,10 +501,8 @@ class StatOverviewCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Text(
+            _OverviewMetricValue(
               value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: effectiveColor,
                 fontSize: 19,
@@ -457,8 +513,7 @@ class StatOverviewCard extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 note!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
                 style: TextStyle(
                   color: appMutedColor(context),
                   fontSize: 11,
