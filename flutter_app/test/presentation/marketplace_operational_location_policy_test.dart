@@ -128,7 +128,7 @@ void main() {
         MarketplaceOperationalLocationPolicy.failureRetryDelay(
           activeService: false,
         ),
-        const Duration(minutes: 5),
+        const Duration(minutes: 1),
       );
       expect(
         MarketplaceOperationalLocationPolicy.failureRetryDelay(
