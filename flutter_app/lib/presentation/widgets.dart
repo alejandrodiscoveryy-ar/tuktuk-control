@@ -467,12 +467,15 @@ class StatOverviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveColor = color ?? appPrimaryColor(context);
 
-    return SizedBox(
+    return Container(
       width: width,
-      height: 126 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0),
+      constraints: BoxConstraints(
+        minHeight: 132 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0),
+      ),
       child: GlassCard(
         padding: const EdgeInsets.all(13),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
