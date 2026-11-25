@@ -1181,19 +1181,46 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
       ? (values!['withdrawals'] as List).whereType<Map>().take(8).toList()
       : <Map>[];
 
-    return Card(child: Padding(
+    const gold = Color(0xFFF2D18B);
+    const mint = Color(0xFF63D9C5);
+    const ink = Color(0xFFF0F7FA);
+    final walletTheme = Theme.of(context).copyWith(
+      colorScheme: Theme.of(context).colorScheme.copyWith(
+        brightness: Brightness.dark,
+        primary: mint,
+        onPrimary: const Color(0xFF12343D),
+        onSurface: ink,
+        onSurfaceVariant: const Color(0xFFB9D2D8),
+      ),
+    );
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF23545A), Color(0xFF163744), Color(0xFF254A53)],
+        ),
+        border: Border.all(color: gold.withValues(alpha: .48)),
+      ),
+      child: Theme(
+        data: walletTheme,
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: ink),
+          child: Padding(
       padding: const EdgeInsets.all(14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Icon(Icons.account_balance_wallet_outlined),
+          const Icon(Icons.account_balance_wallet_outlined, color: gold),
           const SizedBox(width: 10),
           const Expanded(child: Text('Billetera Impulsa',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+            style: TextStyle(color: gold, fontSize: 17, fontWeight: FontWeight.w800))),
           IconButton(
             tooltip: 'Actualizar saldo Impulsa',
             onPressed: _withdrawalLoading || _withdrawalRequestBusy
               ? null : _loadWithdrawalAccount,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: mint),
           ),
         ]),
         const SizedBox(height: 10),
@@ -1201,14 +1228,18 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         if (values != null && available != null && minimum != null) ...[
           const Text('Disponible para retirar', style: TextStyle(fontSize: 12)),
           Text(_moneyCup(available),
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+            style: const TextStyle(color: gold, fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 7),
           Text('Mínimo para solicitar retiro: ${_moneyCup(minimum)}',
             style: const TextStyle(fontSize: 12)),
           if (minimum > 0) ...[
             const SizedBox(height: 6),
             LinearProgressIndicator(
-              value: (available / minimum).clamp(0.0, 1.0).toDouble()),
+              value: (available / minimum).clamp(0.0, 1.0).toDouble(),
+              color: mint,
+              backgroundColor: const Color(0xFF41616A),
+              borderRadius: BorderRadius.circular(8),
+            ),
           ],
           if (held != null && held > 0) ...[
             const SizedBox(height: 7),
@@ -1229,6 +1260,12 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           const SizedBox(height: 10),
           FilledButton.icon(
             key: const ValueKey('impulsa-request-withdrawal'),
+            style: FilledButton.styleFrom(
+              backgroundColor: gold,
+              foregroundColor: const Color(0xFF18343D),
+              disabledBackgroundColor: const Color(0xFF39535B),
+              disabledForegroundColor: const Color(0xFFB0C1C6),
+            ),
             onPressed: canWithdraw ? _requestImpulsaWithdrawal : null,
             icon: const Icon(Icons.payments_outlined),
             label: Text(_withdrawalRequestBusy ? 'Registrando solicitud…' : 'Solicitar retiro'),
@@ -1265,7 +1302,10 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           Text(_withdrawalError!, style: const TextStyle(color: kDanger, fontSize: 12)),
         ],
       ]),
-    ));
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadEarnings() async {
