@@ -653,13 +653,24 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = appMutedColor(context);
+    const accent = Color(0xFFA9C7FF);
+    const muted = Color(0xFFC1CDE4);
+    const ink = Color(0xFFF2F5FC);
+    final theme = Theme.of(context).copyWith(
+      colorScheme: Theme.of(context).colorScheme.copyWith(
+        brightness: Brightness.dark,
+        primary: accent,
+        onSurface: ink,
+        onSurfaceVariant: muted,
+      ),
+      dividerColor: const Color(0xFF52668A),
+    );
     final d = earnings;
 
     Widget metric(String label, String value) => Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
+        color: const Color(0xFF243653),
         border: Border.all(color: theme.dividerColor),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -670,18 +681,31 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
       ]),
     );
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(padding: const EdgeInsets.all(14), child: Column(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF344C73), Color(0xFF263650), Color(0xFF343B60)],
+        ),
+        border: Border.all(color: accent.withValues(alpha: .45)),
+      ),
+      child: Theme(
+        data: theme,
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(color: ink),
+          child: Padding(padding: const EdgeInsets.all(14), child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Icon(Icons.insights_outlined, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             const Expanded(child: Text('Resultados de Impulsa',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800))),
+              style: TextStyle(color: accent, fontSize: 17, fontWeight: FontWeight.w800))),
             IconButton(tooltip: 'Actualizar resultados',
               onPressed: loading ? null : refresh,
-              icon: const Icon(Icons.refresh)),
+              icon: const Icon(Icons.refresh, color: accent)),
           ]),
           if (loading) const LinearProgressIndicator(),
           const SizedBox(height: 8),
@@ -756,6 +780,8 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           ),
         ],
       )),
+        ),
+      ),
     );
   }
 }
