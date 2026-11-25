@@ -162,18 +162,17 @@ class MarketplaceMoreScreen extends StatelessWidget {
               icon: Icons.support_agent_rounded,
               color: Color(0xFFFFB547),
             ),
-            title: Text(tr('Soporte y pagos')),
+            title: Text(tr('Soporte')),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => _openPage(
               context,
-              title: tr('Soporte y pagos'),
+              title: tr('Soporte'),
               child: Builder(
                 builder: (pageContext) => ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    _SupportAndPaymentsCard(
+                    _SupportCard(
                       supportAction: store.supportWhatsAppAction(),
-                      paymentAction: store.paymentWhatsAppAction(),
                       onTap: (action) => _launchWhatsApp(pageContext, action),
                     ),
                   ],
