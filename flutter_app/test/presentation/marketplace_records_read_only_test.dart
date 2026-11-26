@@ -565,4 +565,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('history filters fit a compact mobile width and preserve selection',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 740));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData.dark(useMaterial3: true),
+      home: Scaffold(body: HistoryScreen(store: store)),
+    ));
+    await tester.pumpAndSettle();
+    final keys = ['earnings', 'expense', 'marketplace', 'maintenance'];
+    final positions = keys.map((key) => tester.getTopLeft(
+      find.byKey(ValueKey('history-filter-$key'))).dy).toList();
+    expect(positions.toSet(), hasLength(1));
+    for (final key in keys) {
+      await tester.tap(find.byKey(ValueKey('history-filter-$key')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('history row displays voltage once and remains readable at large text',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final record = DailyRecord(
+      id: 'history-visual', date: DateTime(2026, 11, 26),
+      earnings: 3500, odometer: 8592, batteryVoltage: 76, note: 'Prueba',
+    );
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData.dark(useMaterial3: true),
+      home: Scaffold(body: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+        child: ListView(children: [RecordTile(record: record)]),
+      )),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('76 V'), findsOneWidget);
+    expect(find.textContaining('km'), findsOneWidget);
+    expect(find.text('Prueba'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
