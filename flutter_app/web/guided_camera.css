@@ -126,3 +126,22 @@
   right: 14%;
   border-top: 2px dashed rgb(255 255 255 / 85%);
 }
+
+/* Native modal top layer: not obscured by Flutter's canvas or platform views. */
+dialog.tuktuk-camera-selfie-dialog[open] {
+  box-sizing: border-box;
+  display: block;
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  overscroll-behavior: contain;
+}
+dialog.tuktuk-camera-selfie-dialog::backdrop {
+  background: #101d29;
+}
