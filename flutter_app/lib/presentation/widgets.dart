@@ -395,38 +395,57 @@ class DataHealthCard extends StatelessWidget {
 
 // Equal-width and equal-height cards across the dashboard. The header
 // allowance grows for narrow screens and accessibility text sizes.
-double _dashboardMetricHeaderHeight(BuildContext context, double cardWidth) {
-  final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
-  final labelWidth = cardWidth - 20 - 28 - 5;
-  final lines = labelWidth < 100 * scale ? 3 : 2;
-  final textHeight = lines * 15.0 * scale;
-  return textHeight > 28 ? textHeight : 28;
+double _dashboardMetricHeaderHeight(BuildContext context, double cardWidth,
+    Iterable<String> labels) {
+  final labelWidth = max(1.0, cardWidth - 18 - 26 - 5);
+  var height = 26.0;
+  for (final label in labels) {
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: const TextStyle(
+        fontSize: 12, fontWeight: FontWeight.w700, height: 1.2)),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 3,
+      ellipsis: '…',
+    )..layout(maxWidth: labelWidth);
+    height = max(height, painter.height.ceilToDouble());
+    painter.dispose();
+  }
+  return height;
 }
 
 class DashboardMetricGrid extends StatelessWidget {
-  const DashboardMetricGrid({required this.cards, super.key});
+  const DashboardMetricGrid({required this.cards, this.columns = 2, super.key});
 
   final List<MetricCard> cards;
+  final int columns;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final cardWidth = (constraints.maxWidth - 10) / 2;
+      final cardWidth = (constraints.maxWidth - (columns - 1) * 10) / columns;
       final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
-      final header = _dashboardMetricHeaderHeight(context, cardWidth);
-      // Reserve two wallet detail lines and a small safety margin at all
-      // accessibility scales without giving any card a different height.
-      final height = 34 + header + 64 * scale;
+      final header = _dashboardMetricHeaderHeight(
+        context, cardWidth, cards.map((card) => card.label));
+      final details = cards.any((card) => card.details != null);
+      final notes = cards.any((card) => card.note != null);
+      final height = 25 + header + (details ? 49 : notes ? 50 : 25) * scale;
       return GridView.count(
         padding: EdgeInsets.zero,
         primary: false,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
+        crossAxisCount: columns,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
         mainAxisExtent: height,
-        children: cards,
+        children: [
+          for (final card in cards)
+            MetricCard(label: card.label, value: card.value,
+              currency: card.currency, icon: card.icon, color: card.color,
+              note: card.note, details: card.details, headerHeight: header,
+              tintedValue: card.tintedValue),
+        ],
       );
     },
   );
@@ -441,6 +460,8 @@ class MetricCard extends StatelessWidget {
     this.color,
     this.note,
     this.details,
+    this.headerHeight,
+    this.tintedValue = false,
     super.key,
   });
 
@@ -451,14 +472,16 @@ class MetricCard extends StatelessWidget {
   final Color? color;
   final String? note;
   final Widget? details;
+  final double? headerHeight;
+  final bool tintedValue;
 
   @override
   Widget build(BuildContext context) {
     final effectiveColor = color ?? appPrimaryColor(context);
     return LayoutBuilder(builder: (context, constraints) {
-      final header = _dashboardMetricHeaderHeight(context, constraints.maxWidth);
+      final header = headerHeight ?? _dashboardMetricHeaderHeight(context, constraints.maxWidth, [label]);
       return GlassCard(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -476,8 +499,8 @@ class MetricCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Container(
-                    width: 28,
-                    height: 28,
+                    width: 26,
+                    height: 26,
                     decoration: BoxDecoration(
                       color: effectiveColor.withValues(alpha: .14),
                       borderRadius: BorderRadius.circular(9),
@@ -487,15 +510,16 @@ class MetricCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 3),
             _OverviewMetricValue(
               value,
               currency: currency,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
+                color: tintedValue ? effectiveColor : null),
             ),
             if (note != null) ...[
               const SizedBox(height: 3),
-              Text(note!, style: TextStyle(color: appMutedColor(context), fontSize: 11)),
+              Text(note!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: appMutedColor(context), fontSize: 11)),
             ],
             if (details != null) ...[
               const SizedBox(height: 3),
