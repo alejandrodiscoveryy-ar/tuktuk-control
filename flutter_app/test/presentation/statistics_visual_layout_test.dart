@@ -4,8 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
-  testWidgets('Statistics cards have matching dimensions and colorful icons',
+  testWidgets('Statistics cards align per row without reserving unrelated note space',
       (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     const cards = [
       MetricCard(label: 'Ingresos totales', value: '125.000', currency: 'CUP',
         icon: Icons.account_balance_wallet_outlined, color: Color(0xFF56D2A1)),
@@ -26,17 +27,35 @@ void main() {
             home: Scaffold(body: MediaQuery(
               data: MediaQueryData(size: Size(width, 900),
                 textScaler: TextScaler.linear(scale)),
-              child: const SingleChildScrollView(
-                child: Padding(padding: EdgeInsets.all(16),
-                  child: StatisticsMetricGrid(cards: cards)),
+              child: SingleChildScrollView(
+                child: Padding(padding: const EdgeInsets.all(16),
+                  child: StatisticsMetricGrid(cards: cards,
+                    columns: width >= 700 ? 3 : 2)),
               ),
             )),
           ));
-          final first = find.byKey(ValueKey(
-            'statistics-card-${cards.first.icon.codePoint}'));
-          final last = find.byKey(ValueKey(
-            'statistics-card-${cards.last.icon.codePoint}'));
-          expect(tester.getSize(first), tester.getSize(last));
+          Finder cardAt(int index) => find.byKey(ValueKey(
+            'statistics-card-${cards[index].icon.codePoint}'));
+          final first = cardAt(0);
+          final last = cardAt(3);
+          final firstSize = tester.getSize(first);
+          final lastSize = tester.getSize(last);
+          expect(firstSize.width, lastSize.width);
+          expect(lastSize.height, greaterThan(firstSize.height));
+          if (scale < 2) {
+            expect(tester.getSize(cardAt(1)), firstSize);
+            expect(tester.getTopLeft(cardAt(1)).dy, tester.getTopLeft(first).dy);
+            if (width >= 700) {
+              expect(tester.getSize(cardAt(2)), firstSize);
+              expect(tester.getTopLeft(cardAt(2)).dy, tester.getTopLeft(first).dy);
+            } else {
+              expect(tester.getSize(cardAt(2)), lastSize);
+              expect(tester.getTopLeft(cardAt(2)).dy, tester.getTopLeft(last).dy);
+            }
+          } else {
+            expect(tester.getTopLeft(cardAt(1)).dy,
+              greaterThan(tester.getTopLeft(first).dy));
+          }
           final income = tester.widget<Icon>(
             find.byIcon(Icons.account_balance_wallet_outlined));
           final expenses = tester.widget<Icon>(
@@ -46,7 +65,7 @@ void main() {
           expect(find.text('125.000'), findsOneWidget);
           expect(tester.widget<Text>(find.text('125.000')).style!.fontSize, 26);
           if (width == 720 && scale == 1) {
-            expect(tester.getSize(first).height, lessThan(145));
+            expect(firstSize.height, lessThan(125));
           }
           expect(find.text('Próximo en 2.688 km'), findsOneWidget);
           expect(tester.takeException(), isNull);
