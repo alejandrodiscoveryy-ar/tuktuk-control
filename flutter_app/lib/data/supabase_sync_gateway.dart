@@ -52,7 +52,11 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         'entity_type': operation.entityType.name,
         'entity_id': operation.entityId,
         'device_id': '${payload['deviceId'] ?? ''}',
-        'payload': payload,
+        // VehicleProfile uses id as the vehicle identity, but the CAS RPC
+        // requires vehicleId on every wire payload. Ownership was checked above.
+        'payload': operation.entityType == SyncEntityType.vehicle
+            ? {...payload, 'vehicleId': operation.vehicleId}
+            : payload,
         'updated_at': updatedAt.toUtc().toIso8601String(),
         'deleted_at': payload['deletedAt'],
         'previous_payload': operation.previousPayload ??
