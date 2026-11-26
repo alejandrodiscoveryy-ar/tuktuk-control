@@ -2385,6 +2385,7 @@ class StatsScreen extends StatelessWidget {
         .where((record) => record.earnings > 0)
         .toList()
       ..sort((a, b) => b.earnings.compareTo(a.earnings));
+    final bestDay = metrics.bestEarningDay;
     final cycles = metrics.cycleSummaries;
     final bestCycle = cycles.isEmpty
         ? null
@@ -2399,30 +2400,26 @@ class StatsScreen extends StatelessWidget {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final width = constraints.maxWidth >= 700
-                ? (constraints.maxWidth - 24) / 3
-                : (constraints.maxWidth - 12) / 2;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                StatOverviewCard(
-                  width: width,
+            return DashboardMetricGrid(
+              columns: constraints.maxWidth >= 700 ? 3 : 2,
+              cards: [
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Ingresos totales'),
                   value: numFmt(metrics.totalEarnings),
                   currency: activeCurrency,
                   icon: Icons.account_balance_wallet_outlined,
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Gastos totales'),
                   value: numFmt(metrics.totalExpenses),
                   currency: activeCurrency,
                   color: kDanger,
                   icon: Icons.receipt_long_outlined,
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Ganancia neta'),
                   value: numFmt(metrics.netEarnings),
                   currency: activeCurrency,
@@ -2431,45 +2428,43 @@ class StatsScreen extends StatelessWidget {
                       : kDanger,
                   icon: Icons.trending_up_rounded,
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Promedio por día trabajado'),
                   value: numFmt(metrics.averageDailyEarnings),
                   currency: activeCurrency,
                   icon: Icons.calendar_today_outlined,
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Eficiencia'),
                   value: numFmt(metrics.efficiency),
                   note: '$activeCurrency/km',
                   icon: Icons.speed_outlined,
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Mejor día'),
                   icon: Icons.emoji_events_outlined,
-                  value: earningRecords.isEmpty
-                      ? '-'
-                      : numFmt(earningRecords.first.earnings),
-                  currency: earningRecords.isEmpty ? null : activeCurrency,
-                  note: earningRecords.isEmpty
+                  value: bestDay == null ? '-' : numFmt(bestDay.value),
+                  currency: bestDay == null ? null : activeCurrency,
+                  note: bestDay == null
                       ? tr('Sin datos')
                       : DateFormat(
                           'd MMM yyyy',
                           activeLanguage,
-                        ).format(earningRecords.first.date),
+                        ).format(bestDay.key),
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Mejor mes'),
                   icon: Icons.calendar_month_outlined,
                   value: bestCycle == null ? '-' : numFmt(bestCycle.earnings),
                   currency: bestCycle == null ? null : activeCurrency,
                   note: bestCycle?.label ?? tr('Sin datos mensuales'),
                 ),
-                StatOverviewCard(
-                  width: width,
+                MetricCard(
+                  tintedValue: true,
                   label: tr('Mantenimiento'),
                   icon: Icons.build_outlined,
                   value: maintenance.status == 'Estado normal'
@@ -2575,7 +2570,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 textInputAction: TextInputAction.search,
                 onSubmitted: openSearch,
                 decoration: InputDecoration(
-                  hintText: tr('¿Qué necesitas para tu vehículo?'),
+                  hintText: tr('Buscar repuestos'),
                   prefixIcon: const Icon(Icons.search),
                 ),
               ),
@@ -2667,33 +2662,31 @@ class _StoreCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 126,
+      height: 76 + 20 * (MediaQuery.textScalerOf(context).scale(12) / 12 - 1).clamp(0.0, 2.0),
       child: GlassCard(
         padding: EdgeInsets.zero,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(22),
           child: Padding(
-            padding: const EdgeInsets.all(15),
+            padding: const EdgeInsets.all(10),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(category.icon, color: appPrimaryColor(context), size: 25),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 Text(
                   tr(category.label),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
+                    fontSize: 13,
                     height: 1.15,
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  tr('Abrir búsqueda'),
-                  style: TextStyle(color: appMutedColor(context), fontSize: 11),
-                ),
+
               ],
             ),
           ),
