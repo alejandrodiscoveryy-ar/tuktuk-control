@@ -19,6 +19,8 @@ on:
       - 'flutter_app/test/domain/marketplace_models_test.dart'
       - 'flutter_app/lib/presentation/marketplace_jobs.dart'
       - 'flutter_app/lib/presentation/screens.dart'
+      - 'flutter_app/lib/presentation/widgets.dart'
+      - 'flutter_app/test/presentation/marketplace_records_read_only_test.dart'
       - 'flutter_app/lib/services/push_notification_service.dart'
       - 'flutter_app/test/presentation/marketplace_jobs_refresh_test.dart'
       - 'flutter_app/test/presentation/marketplace_map_offer_price_pins_contract_test.dart'

@@ -2338,46 +2338,82 @@ class _HistoryScreenState extends State<HistoryScreen> {
           }).toList()
         : <MaintenanceRecord>[];
     final filterOptions = [
-      (_HistoryFilter.earnings, Icons.payments_outlined, tr('Ingreso')),
-      (_HistoryFilter.expense, Icons.receipt_long_outlined, tr('Gasto')),
-      (_HistoryFilter.marketplace, Icons.route_outlined, tr('Trabajo')),
-      (_HistoryFilter.maintenance, Icons.build_outlined, tr('Mant.')),
+      (_HistoryFilter.earnings, Icons.payments_outlined, tr('Ingreso'), 'income'),
+      (_HistoryFilter.expense, Icons.receipt_long_outlined, tr('Gasto'), 'expense'),
+      (_HistoryFilter.marketplace, Icons.route_outlined, tr('Trabajo'), 'work'),
+      (_HistoryFilter.maintenance, Icons.build_outlined, tr('Mant.'), 'maintenance'),
     ];
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return LayoutBuilder(builder: (context, constraints) {
+      final horizontal = constraints.maxWidth > 600
+          ? (constraints.maxWidth - 560) / 2
+          : 14.0;
+      return ListView(
+      padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal,
+        24 + MediaQuery.paddingOf(context).bottom),
       children: [
-        Text(
-          tr('Cada cambio recalcula el inicio y las estadísticas.'),
-          style: TextStyle(color: appMutedColor(context)),
+        GlassCard(
+          padding: const EdgeInsets.all(7),
+          child: LayoutBuilder(builder: (context, constraints) {
+            final columns = constraints.maxWidth < 280 ||
+                    MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 2 : 4;
+            const spacing = 6.0;
+            final width = (constraints.maxWidth - (columns - 1) * spacing) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final option in filterOptions)
+                  SizedBox(
+                    width: width,
+                    child: Semantics(
+                      selected: filter == option.$1,
+                      child: TextButton(
+                        key: ValueKey('history-filter-${option.$1.name}'),
+                        onPressed: () => setState(() => filter = option.$1),
+                        style: TextButton.styleFrom(
+                          foregroundColor: filter == option.$1
+                              ? _historyAccent(context, option.$4) : appTextColor(context),
+                          backgroundColor: _historyAccent(context, option.$4)
+                              .withValues(alpha: filter == option.$1 ? .18 : .035),
+                          minimumSize: const Size(0, 60),
+                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: _historyAccent(context, option.$4)
+                                .withValues(alpha: filter == option.$1 ? .6 : .15)),
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(option.$2, size: 24, color: _historyAccent(context, option.$4)),
+                            const SizedBox(height: 4),
+                            Text(option.$3, textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }),
         ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: filterOptions
-              .map(
-                (option) => ChoiceChip(
-                  avatar: Icon(option.$2, size: 17),
-                  label: Text(option.$3),
-                  selected: filter == option.$1,
-                  showCheckmark: false,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onSelected: (_) => setState(() => filter = option.$1),
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         TextField(
           controller: search,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: tr('Buscar por fecha, nota o km'),
             prefixIcon: const Icon(Icons.search),
+            suffixIcon: search.text.isEmpty ? null : IconButton(
+              tooltip: MaterialLocalizations.of(context).deleteButtonTooltip,
+              onPressed: () => setState(search.clear),
+              icon: const Icon(Icons.close_rounded),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         if (records.isEmpty && maintenances.isEmpty)
           EmptyState(tr('Cuando guardes registros, apareceran aqui.'))
         else ...[
@@ -2422,12 +2458,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           ...maintenances.map(
             (record) => GlassCard(
-              margin: const EdgeInsets.only(bottom: 10),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              accent: _historyAccent(context, 'maintenance'),
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
+                dense: true,
                 leading: Icon(
                   Icons.build_outlined,
-                  color: appPrimaryColor(context),
+                  color: _historyAccent(context, 'maintenance'),
                 ),
                 title: Text(record.type),
                 subtitle: Text(
@@ -2473,7 +2512,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ],
       ],
-    );
+      );
+    });
   }
 
   Future<void> _deleteMaintenance(MaintenanceRecord record) async {

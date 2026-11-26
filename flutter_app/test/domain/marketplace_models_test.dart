@@ -439,10 +439,10 @@ void main() {
       final source = File('lib/presentation/screens.dart').readAsStringSync();
 
       final workIndex = source.indexOf(
-        "(_HistoryFilter.marketplace, Icons.route_outlined, tr('Trabajo'))",
+        "(_HistoryFilter.marketplace, Icons.route_outlined, tr('Trabajo'), 'work')",
       );
       final maintenanceIndex = source.indexOf(
-        "(_HistoryFilter.maintenance, Icons.build_outlined, tr('Mant.'))",
+        "(_HistoryFilter.maintenance, Icons.build_outlined, tr('Mant.'), 'maintenance')",
       );
 
       expect(workIndex, greaterThanOrEqualTo(0));
