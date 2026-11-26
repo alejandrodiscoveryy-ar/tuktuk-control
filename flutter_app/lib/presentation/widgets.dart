@@ -17,16 +17,17 @@ class _OverviewMetricLabel extends StatelessWidget {
 }
 
 class _OverviewMetricValue extends StatelessWidget {
-  const _OverviewMetricValue(this.value, {required this.style, this.currency});
+  const _OverviewMetricValue(this.value, {required this.style, this.currency, this.alignment = Alignment.centerLeft});
   final String value;
   final TextStyle style;
   final String? currency;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
     child: FittedBox(
-      alignment: Alignment.centerLeft,
+      alignment: alignment,
       fit: BoxFit.scaleDown,
       child: Row(
         mainAxisSize: MainAxisSize.min,
