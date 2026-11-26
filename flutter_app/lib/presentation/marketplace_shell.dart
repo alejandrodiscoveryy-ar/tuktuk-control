@@ -10,6 +10,11 @@ class MarketplaceRecordsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final active = dark
+        ? (isBlueAccentTheme(context) ? const Color(0xFFA8D0FF) : const Color(0xFF80E5C3))
+        : const Color(0xFF174C75);
+    final inactive = dark ? const Color(0xFFD0DCE9) : const Color(0xFF40566B);
     return DefaultTabController(
       length: 2,
       initialIndex: initialTabIndexFor(isReadOnly: store.isReadOnly),
@@ -25,30 +30,42 @@ class MarketplaceRecordsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(tr('Registros'), style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.w900)),
+                      Row(children: [
+                        Container(
+                          width: 34, height: 34,
+                          decoration: BoxDecoration(
+                            color: active.withValues(alpha: .14),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.receipt_long_rounded, size: 22, color: active),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(child: Text(tr('Registros'), style: TextStyle(
+                          color: appTextColor(context), fontSize: 21,
+                          fontWeight: FontWeight.w800, letterSpacing: -.35))),
+                      ]),
                       const SizedBox(height: 6),
                       TabBar(
                         dividerColor: Colors.transparent,
                         indicatorSize: TabBarIndicatorSize.tab,
                         indicator: BoxDecoration(
-                          color: appPrimaryColor(context).withValues(alpha: .14),
+                          color: active.withValues(alpha: .12),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: appPrimaryColor(context).withValues(alpha: .35)),
+                            color: active.withValues(alpha: .6)),
                         ),
-                        labelColor: appPrimaryColor(context),
-                        unselectedLabelColor: appMutedColor(context),
-                        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                        labelColor: active,
+                        unselectedLabelColor: inactive,
+                        labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                         tabs: [
                           Tab(
                             height: 48,
-                            icon: const Icon(Icons.add_circle_outline, size: 20),
+                            icon: const Icon(Icons.add_circle_rounded, size: 23),
                             text: tr('Nuevo'),
                           ),
                           Tab(
                             height: 48,
-                            icon: const Icon(Icons.history_outlined, size: 20),
+                            icon: const Icon(Icons.history_rounded, size: 23),
                             text: tr('Historial'),
                           ),
                         ],
