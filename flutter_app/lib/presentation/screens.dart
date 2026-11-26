@@ -964,7 +964,7 @@ class _AppShellState extends State<AppShell> {
                                     Expanded(child: Text(
                                       store.conductorAppAccessState == ConductorAppAccessState.checking
                                         ? 'Verificando conexión · Control local disponible'
-                                        : 'Modo sin conexión · ${store.pendingSyncCount} cambios pendientes',
+                                        : 'Modo sin conexión · ${store.pendingSyncCount} ${store.pendingSyncCount == 1 ? 'cambio pendiente' : 'cambios pendientes'}',
                                       style: TextStyle(fontSize: 11, color: appMutedColor(context)),
                                     )),
                                   ],
@@ -1621,7 +1621,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Widget _dashboardWalletCard(BuildContext context) {
+  MetricCard _dashboardWalletCard(BuildContext context) {
     final wallet = widget.store.conductorAgencyAccessAllowed ? _wallet : null;
 
     final reliableBreakdown = wallet != null &&
@@ -1645,82 +1645,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_walletLoading) return '—';
 
       if (!reliableBreakdown || value == null) {
-        return 'Sin desglose fiable';
+        return '—';
       }
 
       return walletAmount(value, wallet.currency);
     }
 
     Widget detailRow(String label, String value) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: appMutedColor(context),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
+      return Row(
+        children: [
+          Expanded(
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: appMutedColor(context), fontSize: 10,
+                fontWeight: FontWeight.w700, height: 1.2)),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Tooltip(
+              message: value == '—' ? 'Desglose no disponible' : value,
+              child: FittedBox(
+                alignment: Alignment.centerRight,
+                fit: BoxFit.scaleDown,
+                child: Text(value, maxLines: 1,
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
+                    height: 1.2)),
               ),
             ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                value,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
+    return MetricCard(
+      label: wallet != null && wallet.currency != activeCurrency
+          ? 'Saldo disponible (${wallet.currency})'
+          : 'Saldo disponible',
+      value: mainValue,
+      currency: wallet?.currency,
+      icon: Icons.account_balance_wallet_outlined,
+      color: kTertiary,
+      details: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(child: _OverviewMetricLabel(
-                wallet != null && wallet.currency != activeCurrency
-                    ? 'Saldo disponible (${wallet.currency})'
-                    : 'Saldo disponible',
-              )),
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: kTertiary.withValues(alpha: .14),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  color: kTertiary,
-                  size: 19,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _OverviewMetricValue(
-            mainValue,
-            currency: wallet?.currency,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
           detailRow('Recargado', breakdownValue(wallet?.realAvailableBalance)),
-          detailRow(
-            'Referido',
-            breakdownValue(wallet?.promotionalAvailableBalance),
-          ),
+          const SizedBox(height: 3),
+          detailRow('Referido', breakdownValue(wallet?.promotionalAvailableBalance)),
         ],
       ),
     );
@@ -1755,77 +1724,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
             transparent: true,
           ),
         ),
-        const SizedBox(height: 12),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _dashboardWalletCard(context)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: MetricCard(
-                  label: tr('Distancia del mes'),
-                  value: '${numFmt(metrics.currentCycleDistance)} km',
-                  icon: Icons.route_outlined,
-                  color: appSecondaryColor(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: MetricCard(
-                  label: tr('Ingresos históricos'),
-                  value: numFmt(metrics.totalEarnings),
-                  currency: activeCurrency,
-                  icon: Icons.account_balance_wallet_outlined,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: MetricCard(
-                  label: tr('Eficiencia'),
-                  value: numFmt(metrics.efficiency),
-                  note: '$activeCurrency/km',
-                  icon: Icons.bolt_outlined,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: MetricCard(
-                  label: tr('Gastos del mes'),
-                  value: numFmt(metrics.currentCycleExpenses),
-                  currency: activeCurrency,
-                  icon: Icons.receipt_long_outlined,
-                  color: kDanger,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: MetricCard(
-                  label: tr('Ganancia neta del mes'),
-                  value: numFmt(metrics.currentCycleNet),
-                  currency: activeCurrency,
-                  icon: Icons.account_balance_outlined,
-                  color: metrics.currentCycleNet >= 0
-                      ? appPrimaryColor(context)
-                      : kDanger,
-                ),
-              ),
-            ],
-          ),
+        const SizedBox(height: 10),
+        DashboardMetricGrid(
+          cards: [
+            _dashboardWalletCard(context),
+            MetricCard(
+              label: tr('Distancia del mes'),
+              value: '${numFmt(metrics.currentCycleDistance)} km',
+              icon: Icons.route_outlined,
+              color: appSecondaryColor(context),
+            ),
+            MetricCard(
+              label: tr('Ingresos históricos'),
+              value: numFmt(metrics.totalEarnings),
+              currency: activeCurrency,
+              icon: Icons.account_balance_wallet_outlined,
+            ),
+            MetricCard(
+              label: tr('Eficiencia'),
+              value: numFmt(metrics.efficiency),
+              note: '$activeCurrency/km',
+              icon: Icons.bolt_outlined,
+            ),
+            MetricCard(
+              label: tr('Gastos del mes'),
+              value: numFmt(metrics.currentCycleExpenses),
+              currency: activeCurrency,
+              icon: Icons.receipt_long_outlined,
+              color: kDanger,
+            ),
+            MetricCard(
+              label: tr('Ganancia neta del mes'),
+              value: numFmt(metrics.currentCycleNet),
+              currency: activeCurrency,
+              icon: Icons.account_balance_outlined,
+              color: metrics.currentCycleNet >= 0
+                  ? appPrimaryColor(context)
+                  : kDanger,
+            ),
+          ],
         ),
         const SizedBox(height: 14),
         MonthlyComparisonGauge(
