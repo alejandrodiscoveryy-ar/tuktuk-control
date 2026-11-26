@@ -92,37 +92,56 @@
   }
 
   // A mere ideal preference can return the last-used rear camera.
-  async function requestDriverCamera(media, stillOpen) {
-    const dimensions = { width: { ideal: 1280 }, height: { ideal: 1280 } };
-    async function request(constraint, requireKnownFront) {
+  async function requestDriverCamera(media, stillOpen, desired = 'user') {
+    // Some mobile browsers cannot satisfy exact facingMode or do not expose
+    // facingMode in getSettings. Keep a working guided preview in that case.
+    const dimensions = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    const opposite = desired === 'user' ? 'environment' : 'user';
+    async function request(constraint, rejectOpposite) {
+      if (!stillOpen()) throw new Error('CAMERA_CLOSED');
       const result = await media.getUserMedia({ audio: false, video: { ...dimensions, ...constraint } });
       const track = result.getVideoTracks()[0];
-      const facing = track ? cameraFacing(track) : 'unknown';
-      if (!stillOpen() || !track || facing === 'environment' ||
-          (requireKnownFront && facing !== 'user')) {
+      if (!stillOpen() || !track || (rejectOpposite && cameraFacing(track) === opposite)) {
         stopCamera(result);
-        throw new Error('SELFIE_CAMERA_NOT_CONFIRMED');
+        throw new Error('CAMERA_LENS_UNAVAILABLE');
       }
       return result;
     }
+    function fatal(error) {
+      return !stillOpen() || error.name === 'NotAllowedError' || error.name === 'SecurityError';
+    }
     try {
-      return await request({ facingMode: { exact: 'user' } }, false);
+      return await request({ facingMode: { exact: desired } }, true);
     } catch (error) {
-      if (!stillOpen() || error.name === 'NotAllowedError' || error.name === 'SecurityError') throw error;
+      if (fatal(error)) throw error;
     }
     const cameras = typeof media.enumerateDevices === 'function'
       ? await media.enumerateDevices().catch(() => []) : [];
-    if (!stillOpen()) throw new Error('CAMERA_CLOSED');
-    const front = cameras.find(device => device.kind === 'videoinput' &&
-      device.deviceId && /front|selfie|frontal|delantera|facetime/i.test(device.label || ''));
-    if (front) {
+    const pattern = desired === 'user' ? /front|selfie|frontal|delantera|facetime/i
+      : /back|rear|environment|trasera|posterior/i;
+    const matching = cameras.find(device => device.kind === 'videoinput' &&
+      device.deviceId && pattern.test(device.label || ''));
+    if (matching) {
       try {
-        return await request({ deviceId: { exact: front.deviceId } }, false);
+        return await request({ deviceId: { exact: matching.deviceId } }, true);
       } catch (error) {
-        if (!stillOpen() || error.name === 'NotAllowedError' || error.name === 'SecurityError') throw error;
+        if (fatal(error)) throw error;
       }
     }
-    return request({ facingMode: { ideal: 'user' } }, true);
+    // An ideal request may return an unknown or alternate lens. The user
+    // can switch within the live guide instead of losing the camera entirely.
+    try {
+      return await request({ facingMode: { ideal: desired } }, false);
+    } catch (error) {
+      if (fatal(error)) throw error;
+    }
+    if (!stillOpen()) throw new Error('CAMERA_CLOSED');
+    const result = await media.getUserMedia({ audio: false, video: true });
+    if (!stillOpen() || !result.getVideoTracks().length) {
+      stopCamera(result);
+      throw new Error('CAMERA_CLOSED');
+    }
+    return result;
   }
 
   let active = false;
@@ -140,6 +159,9 @@
       let captured = null;
       let ready = false;
       let usingNative = false;
+      let requestedFacing = guide.facing;
+      let openingCamera = false;
+      let openedFacing = 'unknown';
       const previousOverflow = document.body.style.overflow;
       const dialog = make('div', 'tuktuk-camera-dialog');
       dialog.setAttribute('role', 'dialog');
@@ -197,6 +219,11 @@
       actions.appendChild(primary);
 const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 'Cámara del teléfono');
       fallback.type = 'button';
+      const switchLens = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 'Cambiar cámara');
+      switchLens.type = 'button';
+      switchLens.hidden = kind !== 'driver' || !canPreview;
+      switchLens.disabled = true;
+      actions.appendChild(switchLens);
       if (kind === 'driver') {
         fallback.textContent = 'Selfie con cámara del teléfono';
         fallback.hidden = true;
@@ -232,6 +259,7 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
             return;
           }
           captured = result.slice(result.indexOf(',') + 1);
+          switchLens.hidden = true;
           image.src = result;
           image.hidden = false;
           video.hidden = true;
@@ -282,7 +310,8 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
         retake.hidden = true;
         primary.textContent = 'Tomar foto';
         primary.disabled = !ready;
-        status.textContent = ready ? guide.prompt + ' Pulsa Tomar foto.' : 'Pulsa Cámara del teléfono para repetir.';
+        if (kind === 'driver' && canPreview) switchLens.hidden = false;
+        status.textContent = ready ? guide.prompt + ' Pulsa Tomar foto.' : 'Reintenta la cámara o usa la opción del teléfono.';
       });
       primary.addEventListener('click', function () {
         if (settled || primary.disabled) return;
@@ -312,6 +341,7 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
           video.hidden = true;
           frame.hidden = true;
           retake.hidden = false;
+          switchLens.hidden = true;
           primary.textContent = 'Usar esta foto';
           status.textContent = 'Revisa que se vea todo y que la fotografía sea nítida.';
         } catch (_) {
@@ -329,39 +359,72 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
         status.textContent = kind === 'driver' ? 'Este navegador no permite el visor guiado. Usa la opción de selfie del teléfono.' : 'El visor no esta disponible. Pulsa Cámara del teléfono.';
         return;
       }
-      const cameraRequest = kind === 'driver'
-        ? requestDriverCamera(navigator.mediaDevices, () => !settled)
-        : navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: guide.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-        });
-      cameraRequest.then(async function (cameraStream) {
-        if (settled) {
-          cameraStream.getTracks().forEach(function (track) { track.stop(); });
-          return;
-        }
-        stream = cameraStream;
-        video.srcObject = cameraStream;
-        await video.play();
-        if (settled) return;
-        ready = true;
-        primary.disabled = false;
-        if (captured === null) status.textContent = guide.prompt + ' Pulsa Tomar foto.';
-      }).catch(function () {
-        if (settled) return;
-        if (stream) {
-          stream.getTracks().forEach(function (track) { track.stop(); });
+      async function openCamera(desired) {
+        if (settled || openingCamera) return;
+        openingCamera = true;
+        requestedFacing = desired;
+        ready = false;
+        primary.disabled = true;
+        switchLens.disabled = true;
+        status.textContent = 'Abriendo la cámara…';
+        stopCamera(stream);
+        stream = null;
+        video.srcObject = null;
+        try {
+          const cameraStream = kind === 'driver'
+            ? await requestDriverCamera(navigator.mediaDevices, () => !settled, desired)
+            : await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { facingMode: { ideal: guide.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+            });
+          if (settled) {
+            stopCamera(cameraStream);
+            return;
+          }
+          stream = cameraStream;
+          openedFacing = cameraFacing(cameraStream.getVideoTracks()[0]);
+          video.srcObject = cameraStream;
+          await video.play();
+          if (settled) return;
+          ready = true;
+          primary.disabled = false;
+          if (captured === null) {
+            status.textContent = kind === 'driver' && openedFacing === 'environment'
+              ? 'Cámara trasera activa. Pulsa Cambiar cámara para intentar la frontal.'
+              : guide.prompt + ' Pulsa Tomar foto.';
+          }
+          if (kind === 'driver') {
+            switchLens.hidden = captured !== null;
+            switchLens.textContent = 'Cambiar cámara';
+            fallback.hidden = true;
+          }
+        } catch (_) {
+          if (settled) return;
+          stopCamera(stream);
           stream = null;
           video.srcObject = null;
+          if (captured === null) {
+            fallback.hidden = false;
+            status.textContent = kind === 'driver'
+              ? 'No se pudo abrir la cámara. Pulsa Reintentar cámara o usa la selfie del teléfono.'
+              : 'El visor no se inició. Pulsa Cámara del teléfono o usa la galería.';
+            primary.disabled = true;
+            switchLens.textContent = 'Reintentar cámara';
+          }
+        } finally {
+          openingCamera = false;
+          if (!settled && kind === 'driver') switchLens.disabled = false;
         }
-        if (captured === null) {
-          fallback.hidden = false;
-          status.textContent = kind === 'driver'
-            ? 'No se pudo confirmar la cámara delantera. Usa la opción de selfie del teléfono o vuelve a intentarlo.'
-            : 'El visor no se inició. Pulsa Cámara del teléfono o usa la galería.';
-          primary.disabled = true;
-        }
+      }
+      switchLens.addEventListener('click', function () {
+        if (settled || openingCamera || captured !== null) return;
+        const next = !ready ? 'user'
+          : openedFacing === 'environment' ? 'user'
+          : openedFacing === 'user' ? 'environment'
+          : requestedFacing === 'user' ? 'environment' : 'user';
+        openCamera(next);
       });
+      openCamera(guide.facing);
     });
   };
 })();
