@@ -3,6 +3,20 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('native recovery uses the same stable job notification id and no read receipt', () {
+    const jobId = '12345678-1234-4123-8123-123456789012';
+    final id = marketplaceNativeOfferNotificationId(jobId);
+    expect(id, greaterThanOrEqualTo(0x40000000));
+    expect(id, lessThanOrEqualTo(0x7fffffff));
+    expect(marketplaceNativeOfferNotificationId(jobId.toUpperCase()), id);
+    expect(marketplaceNativeOfferNotificationId(
+      '12345678-1234-4123-8123-123456789013'), isNot(id));
+    expect(marketplaceOpenedOfferNotificationId({
+      'kind': 'marketplace_job_available',
+      'job_id': jobId,
+    }), isNull);
+  });
+
   test('marca abierto solo una alerta pulsada con id validado', () async {
     const data = {
       'kind': 'marketplace_job_available',
