@@ -337,6 +337,7 @@ class PushNotificationService {
   final StreamController<String> _tokenRefreshController =
       StreamController<String>.broadcast();
   final List<StreamSubscription<dynamic>> _subscriptions = [];
+  final Set<String> _nativeForegroundOfferIds = <String>{};
   bool _initialized = false;
 
   bool get isInitialized => _initialized;
@@ -447,7 +448,9 @@ class PushNotificationService {
   }
 
   Future<void> _showRecoveredOffer(String jobId) async {
-    if (!_initialized) return;
+    if (!_initialized || _nativeForegroundOfferIds.contains(jobId.toLowerCase())) {
+      return;
+    }
     await _localNotifications.show(
       id: marketplaceNativeOfferNotificationId(jobId),
       title: 'Nueva solicitud disponible',
@@ -461,10 +464,20 @@ class PushNotificationService {
   }
 
   Future<void> _showForegroundMessage(RemoteMessage message) async {
+    final jobId = marketplaceJobIdFromPush(message.data);
+    if (!kIsWeb && jobId != null) {
+      // Mark before refresh so a recovered offer cannot overwrite the real
+      // FCM payload (including its notification_id) during the race.
+      _nativeForegroundOfferIds.add(jobId.toLowerCase());
+      if (_nativeForegroundOfferIds.length > 256) {
+        _nativeForegroundOfferIds.remove(_nativeForegroundOfferIds.first);
+      }
+    }
     handleForegroundPushData(message.data);
-    final title =
-        message.notification?.title ?? message.data['title']?.toString();
-    final body = message.notification?.body ?? message.data['body']?.toString();
+    final title = message.notification?.title ?? message.data['title']?.toString()
+        ?? (jobId == null ? null : 'Nueva solicitud disponible');
+    final body = message.notification?.body ?? message.data['body']?.toString()
+        ?? (jobId == null ? null : 'Abre Trabajos para ver una solicitud disponible.');
     if ((title == null || title.isEmpty) && (body == null || body.isEmpty)) {
       return;
     }
@@ -476,7 +489,6 @@ class PushNotificationService {
       );
       return;
     }
-    final jobId = marketplaceJobIdFromPush(message.data);
     await _localNotifications.show(
       id: jobId == null
           ? (message.messageId?.hashCode ?? message.hashCode) & 0x3fffffff
