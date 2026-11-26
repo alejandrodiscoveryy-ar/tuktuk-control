@@ -28,6 +28,8 @@ on:
       - '.github/workflows/deploy-web-production.yml'
       - '.github/workflows/verify-web-auto-deploy-pr.yml'
       - '.github/ci/check-web-auto-deploy.mjs'
+      - '.github/ci/web-branding-release.mjs'
+      - '.github/ci/web-branding-release.test.mjs'
 permissions:
   contents: read
 jobs:
@@ -45,9 +47,17 @@ jobs:
       - name: Install packages
         working-directory: flutter_app
         run: flutter pub get
+      - name: Test release branding protections
+        run: node --test .github/ci/web-branding-release.test.mjs
       - name: Prepare web branding
         working-directory: flutter_app
+        env:
+          TUKTUK_REQUIRE_FRESH_BRANDING: "1"
         run: dart run tool/sync_project_branding.dart --web
+      - name: Validate and fingerprint generated branding
+        run: |
+          git restore --worktree -- flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java || true
+          node .github/ci/web-branding-release.mjs prepare "$RUNNER_TEMP/web-branding.json"
       - name: Analyze
         working-directory: flutter_app
         run: flutter analyze --no-fatal-infos
@@ -72,6 +82,27 @@ jobs:
       - name: Compile web, without publishing it
         working-directory: flutter_app
         run: flutter build web --release --base-href /tuktuk/app/ --no-tree-shake-icons
+      - name: Verify compiled branding before review
+        run: |
+          git restore --worktree -- flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java || true
+          node .github/ci/web-branding-release.mjs verify "$RUNNER_TEMP/web-branding.json"
+          node - "$RUNNER_TEMP/web-branding.json" <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const expected = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          for (const [path, hash] of Object.entries(expected)) {
+            const relative = path.replace(/^flutter_app\/web\//, '');
+            const built = fs.readFileSync('flutter_app/build/web/' + relative);
+            if (relative === 'index.html') {
+              if (!built.toString('utf8').includes('src="icons/Icon-192.png?v=' + expected['flutter_app/web/icons/Icon-192.png'].slice(0, 16) + '"')) {
+                throw new Error('Compiled startup icon version mismatch');
+              }
+            } else if (crypto.createHash('sha256').update(built).digest('hex') !== hash) {
+              throw new Error('Compiled branding mismatch: ' + relative);
+            }
+          }
+          console.log('COMPILED_BRANDING_INTEGRITY=OK');
+          NODE
       - name: Preserve web build for review
         uses: actions/upload-artifact@v4
         with:
