@@ -2600,32 +2600,47 @@ class StatisticsMetricGrid extends StatelessWidget {
       const labelStyle = TextStyle(
         fontSize: 13, fontWeight: FontWeight.w700, height: 1.2);
       const noteStyle = TextStyle(fontSize: 11, height: 1.2);
-      final labelHeight = cards.fold<double>(0,
-        (height, card) => max(height, textHeight(card.label, labelStyle, labelWidth)));
-      final noteHeight = cards.fold<double>(0, (height, card) => max(height,
-        card.note == null ? 0.0 : textHeight(card.note!, noteStyle, textWidth)));
       final valueHeight = scale.scale(26) * 1.25;
-      final headerHeight = horizontalHeader ? max(44.0, labelHeight)
-          : 44 + 6 + labelHeight;
-      final height = 26 + headerHeight + 7 + valueHeight
-          + (noteHeight > 0 ? 3 + noteHeight : 0) + 3;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [
-          for (final card in cards)
-            SizedBox(
-              key: ValueKey('statistics-card-${card.icon.codePoint}'),
-              width: width,
-              height: height,
-              child: _StatisticsVisualCard(
-                card: card,
-                labelHeight: labelHeight,
-                horizontalHeader: horizontalHeader,
-                valueHeight: valueHeight,
-                labelStyle: labelStyle,
-                noteStyle: noteStyle,
+      Widget buildRow(List<MetricCard> row) {
+        final labelHeight = row.fold<double>(0, (height, card) =>
+          max(height, textHeight(card.label, labelStyle, labelWidth)));
+        final noteHeight = row.fold<double>(0, (height, card) => max(height,
+          card.note == null ? 0.0 : textHeight(card.note!, noteStyle, textWidth)));
+        final headerHeight = horizontalHeader ? max(44.0, labelHeight)
+            : 44 + 4 + labelHeight;
+        final height = 26 + headerHeight + 5 + valueHeight
+            + (noteHeight > 0 ? 3 + noteHeight : 0) + 3;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var index = 0; index < row.length; index++) ...[
+              if (index > 0) const SizedBox(width: gap),
+              SizedBox(
+                key: ValueKey('statistics-card-${row[index].icon.codePoint}'),
+                width: width,
+                height: height,
+                child: _StatisticsVisualCard(
+                  card: row[index],
+                  labelHeight: labelHeight,
+                  headerHeight: headerHeight,
+                  horizontalHeader: horizontalHeader,
+                  valueHeight: valueHeight,
+                  labelStyle: labelStyle,
+                  noteStyle: noteStyle,
+                ),
               ),
+            ],
+          ],
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var offset = 0; offset < cards.length; offset += count)
+            Padding(
+              padding: EdgeInsets.only(top: offset == 0 ? 0 : gap),
+              child: buildRow(cards.sublist(offset, min(offset + count, cards.length))),
             ),
         ],
       );
@@ -2637,6 +2652,7 @@ class _StatisticsVisualCard extends StatelessWidget {
   const _StatisticsVisualCard({
     required this.card,
     required this.labelHeight,
+    required this.headerHeight,
     required this.horizontalHeader,
     required this.valueHeight,
     required this.labelStyle,
@@ -2645,6 +2661,7 @@ class _StatisticsVisualCard extends StatelessWidget {
 
   final MetricCard card;
   final double labelHeight;
+  final double headerHeight;
   final bool horizontalHeader;
   final double valueHeight;
   final TextStyle labelStyle;
@@ -2689,20 +2706,23 @@ class _StatisticsVisualCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (horizontalHeader)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  iconTile,
-                  const SizedBox(width: 9),
-                  Expanded(child: label),
-                ],
+              SizedBox(
+                height: headerHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    iconTile,
+                    const SizedBox(width: 9),
+                    Expanded(child: label),
+                  ],
+                ),
               )
             else ...[
               iconTile,
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               SizedBox(height: labelHeight, child: label),
             ],
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             SizedBox(
               height: valueHeight,
               child: Align(
