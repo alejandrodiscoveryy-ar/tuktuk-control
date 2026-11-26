@@ -16,18 +16,47 @@ class MarketplaceRecordsScreen extends StatelessWidget {
       child: Builder(
         builder: (tabContext) => Column(
           children: [
-            const SizedBox(height: 8),
-            TabBar(
-              tabs: [
-                Tab(
-                  icon: const Icon(Icons.add_circle_outline),
-                  text: tr('Nuevo'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: GlassCard(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(tr('Registros'), style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 6),
+                      TabBar(
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        indicator: BoxDecoration(
+                          color: appPrimaryColor(context).withValues(alpha: .14),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: appPrimaryColor(context).withValues(alpha: .35)),
+                        ),
+                        labelColor: appPrimaryColor(context),
+                        unselectedLabelColor: appMutedColor(context),
+                        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                        tabs: [
+                          Tab(
+                            height: 48,
+                            icon: const Icon(Icons.add_circle_outline, size: 20),
+                            text: tr('Nuevo'),
+                          ),
+                          Tab(
+                            height: 48,
+                            icon: const Icon(Icons.history_outlined, size: 20),
+                            text: tr('Historial'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                Tab(
-                  icon: const Icon(Icons.history_outlined),
-                  text: tr('Historial'),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 4),
             Expanded(

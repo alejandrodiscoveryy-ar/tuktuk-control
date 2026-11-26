@@ -1938,63 +1938,149 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  Color _recordAccent(BuildContext context, _NewRecordType type) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return switch (type) {
+      _NewRecordType.earnings =>
+        dark ? const Color(0xFF56D2A1) : const Color(0xFF187653),
+      _NewRecordType.expense =>
+        dark ? kDanger : const Color(0xFFAC3152),
+      _NewRecordType.maintenance =>
+        dark ? const Color(0xFF55C9EF) : const Color(0xFF176C91),
+    };
+  }
+
+  InputDecoration _fieldDecoration(BuildContext context, String label,
+      IconData icon, Color color, {String? suffix}) {
+    return InputDecoration(
+      labelText: tr(label),
+      suffixText: suffix,
+      prefixIcon: Padding(
+        padding: const EdgeInsets.all(8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: SizedBox(width: 34, height: 34,
+            child: Icon(icon, size: 21, color: color)),
+        ),
+      ),
+      filled: true,
+      fillColor: appSurfaceHighColor(context).withValues(alpha: .42),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: appOutlineColor(context).withValues(alpha: .45)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: color, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _typeSelector(BuildContext context) {
+    final choices = [
+      (_NewRecordType.earnings, Icons.payments_outlined, tr('Ingreso')),
+      (_NewRecordType.expense, Icons.receipt_long_outlined, tr('Gasto')),
+      (_NewRecordType.maintenance, Icons.build_outlined, tr('Mant.')),
+    ];
+    return GlassCard(
+      padding: const EdgeInsets.all(7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final choice in choices)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Semantics(
+                  selected: recordType == choice.$1,
+                  child: TextButton(
+                    key: ValueKey('record-type-${choice.$1.name}'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: recordType == choice.$1
+                          ? _recordAccent(context, choice.$1)
+                          : appTextColor(context),
+                      backgroundColor: _recordAccent(context, choice.$1)
+                          .withValues(alpha: recordType == choice.$1 ? .17 : .035),
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
+                      minimumSize: const Size(0, 64),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: _recordAccent(context, choice.$1)
+                              .withValues(alpha: recordType == choice.$1 ? .65 : .14),
+                        ),
+                      ),
+                    ),
+                    onPressed: () => setState(() => recordType = choice.$1),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(choice.$2, color: _recordAccent(context, choice.$1), size: 25),
+                        const SizedBox(height: 5),
+                        Text(choice.$3, textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final editing = widget.record != null;
     final editingExpense = editing && widget.record!.expense > 0;
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (editing) SectionTitle(title: tr('Editar registro')),
-        if (!editing) ...[
-          const SizedBox(height: 8),
-          Text(
-            tr('Selecciona qué dato vas a guardar.'),
-            style: TextStyle(color: appMutedColor(context)),
-          ),
-          const SizedBox(height: 14),
-          SegmentedButton<_NewRecordType>(
-            segments: [
-              ButtonSegment(
-                value: _NewRecordType.earnings,
-                icon: const Icon(Icons.payments_outlined),
-                label: Text(tr('Ingreso')),
-              ),
-              ButtonSegment(
-                value: _NewRecordType.expense,
-                icon: const Icon(Icons.receipt_long_outlined),
-                label: Text(tr('Gasto')),
-              ),
-              ButtonSegment(
-                value: _NewRecordType.maintenance,
-                icon: const Icon(Icons.build_outlined),
-                label: Text(tr('Mant.')),
-              ),
-            ],
-            selected: {recordType},
-            showSelectedIcon: false,
-            onSelectionChanged: (selection) =>
-                setState(() => recordType = selection.first),
-          ),
-          const SizedBox(height: 18),
-        ],
-        if (!editing && recordType == _NewRecordType.maintenance) ...[
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Label(tr('Registrar mantenimiento')),
-                const SizedBox(height: 8),
-                Text(
-                  tr(
-                    'Guarda kilometraje, trabajo realizado, fecha, hora y costo.',
-                  ),
-                  style: TextStyle(color: appMutedColor(context)),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
+    final accent = _recordAccent(context, recordType);
+    final foreground = ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+        ? Colors.white : const Color(0xFF10251F);
+    final blue = _recordAccent(context, _NewRecordType.maintenance);
+    final maintenanceSelected = !editing && recordType == _NewRecordType.maintenance;
+    final buttonStyle = FilledButton.styleFrom(
+      backgroundColor: accent,
+      foregroundColor: foreground,
+      minimumSize: const Size.fromHeight(50),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final horizontal = constraints.maxWidth > 600
+          ? (constraints.maxWidth - 560) / 2
+          : 14.0;
+      return ListView(
+        padding: EdgeInsets.fromLTRB(horizontal, 12, horizontal,
+          24 + MediaQuery.paddingOf(context).bottom),
+        children: [
+          if (editing) SectionTitle(title: tr('Editar registro')),
+          if (!editing) ...[
+            _typeSelector(context),
+            const SizedBox(height: 12),
+          ],
+          if (maintenanceSelected)
+            GlassCard(
+              accent: accent,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(children: [
+                    Icon(Icons.build_circle_outlined, size: 34, color: accent),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(tr('Registrar mantenimiento'),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                  ]),
+                  const SizedBox(height: 10),
+                  Text(tr('Guarda kilometraje, trabajo realizado, fecha, hora y costo.'),
+                    style: TextStyle(color: appMutedColor(context))),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    style: buttonStyle,
                     onPressed: widget.store.canWrite
                         ? () => Navigator.push(
                               context,
@@ -2014,99 +2100,117 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     icon: const Icon(Icons.add_task_outlined),
                     label: Text(tr('Completar mantenimiento')),
                   ),
+                ],
+              ),
+            )
+          else ...[
+            GlassCard(
+              padding: EdgeInsets.zero,
+              child: TextButton(
+                onPressed: pickDate,
+                style: TextButton.styleFrom(
+                  foregroundColor: appTextColor(context),
+                  padding: const EdgeInsets.all(12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                 ),
-              ],
-            ),
-          ),
-        ] else ...[
-          const SizedBox(height: 8),
-          FilledButton.tonalIcon(
-            onPressed: pickDate,
-            icon: const Icon(Icons.calendar_month_outlined),
-            label: Text(
-              DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date),
-            ),
-          ),
-          const SizedBox(height: 14),
-          if ((editing && !editingExpense) ||
-              recordType == _NewRecordType.earnings) ...[
-            TextField(
-              controller: earnings,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: tr('Ingreso del día'),
-                suffixText: activeCurrency,
-                prefixIcon: const Icon(Icons.payments_outlined),
+                child: Row(children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: .15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.calendar_month_outlined, color: accent, size: 23),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Label(tr('Fecha')),
+                      const SizedBox(height: 3),
+                      Text(DateFormat('EEEE d MMMM yyyy', activeLanguage).format(date),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    ],
+                  )),
+                  Icon(Icons.chevron_right_rounded, color: appMutedColor(context)),
+                ]),
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: odometer,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: tr('Odómetro final (km, opcional)'),
-                prefixIcon: const Icon(Icons.speed),
+            GlassCard(
+              accent: accent,
+              padding: const EdgeInsets.all(13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if ((editing && !editingExpense) ||
+                      recordType == _NewRecordType.earnings) ...[
+                    TextField(
+                      controller: earnings,
+                      keyboardType: TextInputType.number,
+                      decoration: _fieldDecoration(context, 'Ingreso del día',
+                        Icons.payments_outlined, accent, suffix: activeCurrency),
+                    ),
+                    const SizedBox(height: 11),
+                    TextField(
+                      controller: odometer,
+                      keyboardType: TextInputType.number,
+                      decoration: _fieldDecoration(context, 'Odómetro final (km, opcional)',
+                        Icons.speed, blue),
+                    ),
+                  ],
+                  if (editingExpense ||
+                      (!editing && recordType == _NewRecordType.expense)) ...[
+                    TextField(
+                      controller: expense,
+                      keyboardType: TextInputType.number,
+                      decoration: _fieldDecoration(context, 'Importe del gasto',
+                        Icons.receipt_long_outlined, accent, suffix: activeCurrency),
+                    ),
+                    const SizedBox(height: 11),
+                    TextField(
+                      controller: expenseCategory,
+                      decoration: _fieldDecoration(context, 'Categoría del gasto',
+                        Icons.sell_outlined, accent),
+                    ),
+                  ],
+                  if ((editing && !editingExpense) ||
+                      recordType == _NewRecordType.earnings) ...[
+                    const SizedBox(height: 11),
+                    TextField(
+                      controller: battery,
+                      keyboardType: TextInputType.number,
+                      decoration: _fieldDecoration(context, 'Voltaje de batería',
+                        Icons.battery_charging_full_outlined, blue, suffix: 'V'),
+                    ),
+                  ],
+                  const SizedBox(height: 11),
+                  TextField(
+                    controller: note,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: _fieldDecoration(context, 'Nota opcional',
+                      Icons.notes_outlined, appMutedColor(context)),
+                  ),
+                ],
               ),
             ),
-          ],
-          if (editingExpense ||
-              (!editing && recordType == _NewRecordType.expense)) ...[
-            TextField(
-              controller: expense,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: tr('Importe del gasto'),
-                suffixText: activeCurrency,
-                prefixIcon: const Icon(Icons.receipt_long_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: expenseCategory,
-              decoration: InputDecoration(
-                labelText: tr('Categoría del gasto'),
-                prefixIcon: const Icon(Icons.sell_outlined),
-              ),
-            ),
-          ],
-          if ((editing && !editingExpense) ||
-              recordType == _NewRecordType.earnings) ...[
-            const SizedBox(height: 12),
-            TextField(
-              controller: battery,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: tr('Voltaje de batería'),
-                suffixText: 'V',
-                prefixIcon: const Icon(Icons.battery_charging_full_outlined),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: note,
-            minLines: 2,
-            maxLines: 4,
-            decoration: InputDecoration(
-              labelText: tr('Nota opcional'),
-              prefixIcon: const Icon(Icons.notes_outlined),
-            ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: widget.store.canWrite ? save : null,
-            icon: const Icon(Icons.save_outlined),
-            label: Text(
-              editing
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              style: buttonStyle,
+              onPressed: widget.store.canWrite ? save : null,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(editing
                   ? tr('Guardar cambios')
                   : recordType == _NewRecordType.expense
                       ? tr('Guardar gasto')
                       : tr('Guardar ingreso'),
+                style: const TextStyle(fontWeight: FontWeight.w800)),
             ),
-          ),
+          ],
         ],
-      ],
-    );
+      );
+    });
   }
 
   Future<void> pickDate() async {
