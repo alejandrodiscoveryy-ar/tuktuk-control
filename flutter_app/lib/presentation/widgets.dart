@@ -919,6 +919,17 @@ class InfoLine extends StatelessWidget {
   }
 }
 
+Color _historyAccent(BuildContext context, String kind) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return switch (kind) {
+    'income' => dark ? const Color(0xFF56D2A1) : const Color(0xFF187653),
+    'expense' => dark ? kDanger : const Color(0xFFAC3152),
+    'work' => dark ? const Color(0xFF72A7FF) : const Color(0xFF245BA7),
+    'maintenance' => dark ? const Color(0xFF55C9EF) : const Color(0xFF176C91),
+    _ => appMutedColor(context),
+  };
+}
+
 class RecordTile extends StatelessWidget {
   const RecordTile({required this.record, this.onTap, super.key});
 
@@ -927,111 +938,125 @@ class RecordTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = [
-      if (record.odometer > 0) '${numFmt(record.odometer)} km',
-      if (record.expenseCategory.isNotEmpty) record.expenseCategory,
-      if (record.batteryVoltage != null) '${trimNum(record.batteryVoltage!)} V',
-      if (record.note.isNotEmpty) record.note,
+    final kind = record.isMarketplaceJobIncome ? 'work'
+        : record.earnings > 0 ? 'income'
+        : record.expense > 0 ? 'expense' : 'neutral';
+    final accent = _historyAccent(context, kind);
+    final icon = switch (kind) {
+      'work' => Icons.route_outlined,
+      'income' => Icons.payments_outlined,
+      'expense' => Icons.receipt_long_outlined,
+      _ => Icons.notes_outlined,
+    };
+    final amount = record.earnings > 0
+        ? '+${money(record.earnings)}'
+        : record.expense > 0
+            ? '-${money(record.expense)}'
+            : record.batteryVoltage != null
+                ? '${trimNum(record.batteryVoltage!)} V'
+                : '0 $activeCurrency';
+    final hasMoney = record.earnings > 0 || record.expense > 0;
+    final details = <(IconData, String)>[
+      if (record.odometer > 0)
+        (Icons.speed_rounded, '${numFmt(record.odometer)} km'),
+      if (record.batteryVoltage != null && hasMoney)
+        (Icons.battery_charging_full_outlined, '${trimNum(record.batteryVoltage!)} V'),
+      if (record.expenseCategory.isNotEmpty)
+        (Icons.sell_outlined, record.expenseCategory),
     ];
     return GlassCard(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: EdgeInsets.zero,
-        leading: SizedBox(
-          width: 50,
-          child: Wrap(
-            spacing: 3,
-            runSpacing: 3,
-            children: [
-              if (record.earnings > 0)
-                _HistoryTypeIcon(
-                  icon: Icons.payments_outlined,
-                  color: appPrimaryColor(context),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.zero,
+      accent: accent,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: accent.withValues(alpha: .27)),
+                  ),
+                  child: Icon(icon, color: accent, size: 25),
                 ),
-              if (record.expense > 0)
-                const _HistoryTypeIcon(
-                  icon: Icons.receipt_long_outlined,
-                  color: kDanger,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LayoutBuilder(builder: (context, constraints) {
+                        final date = Text(
+                          DateFormat('d MMM yyyy', activeLanguage).format(record.date),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                        );
+                        final value = Text(amount,
+                          style: TextStyle(fontSize: 16, color: accent,
+                            fontWeight: FontWeight.w900),
+                        );
+                        if (constraints.maxWidth < 225 ||
+                            MediaQuery.textScalerOf(context).scale(1) > 1.25) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [date, const SizedBox(height: 3), value],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: date),
+                            const SizedBox(width: 6),
+                            Flexible(child: Align(alignment: Alignment.centerRight,
+                              child: value)),
+                          ],
+                        );
+                      }),
+                      if (details.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 4,
+                          children: [
+                            for (final detail in details)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(detail.$1, size: 15,
+                                    color: appMutedColor(context)),
+                                  const SizedBox(width: 4),
+                                  Flexible(child: Text(detail.$2,
+                                    style: TextStyle(fontSize: 12,
+                                      color: appMutedColor(context)))),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ],
+                      if (record.note.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(record.note, style: TextStyle(fontSize: 12,
+                          color: appMutedColor(context))),
+                      ],
+                    ],
+                  ),
                 ),
-              if (record.odometer > 0)
-                _HistoryTypeIcon(
-                  icon: Icons.speed_rounded,
-                  color: appSecondaryColor(context),
-                ),
-              if (record.batteryVoltage != null)
-                const _HistoryTypeIcon(
-                  icon: Icons.ev_station_outlined,
-                  color: kTertiary,
-                ),
-              if (record.earnings <= 0 &&
-                  record.expense <= 0 &&
-                  record.odometer <= 0 &&
-                  record.batteryVoltage == null)
-                _HistoryTypeIcon(
-                  icon: Icons.notes_outlined,
-                  color: appMutedColor(context),
-                ),
-            ],
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, size: 18,
+                    color: appMutedColor(context)),
+                ],
+              ],
+            ),
           ),
         ),
-        title: Text(
-          DateFormat('d MMMM yyyy', activeLanguage).format(record.date),
-        ),
-        subtitle: Text(
-          details.isEmpty ? tr('Sin detalles') : details.join(' - '),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              record.earnings > 0
-                  ? '+${money(record.earnings)}'
-                  : record.expense > 0
-                      ? '-${money(record.expense)}'
-                      : record.batteryVoltage != null
-                          ? '${trimNum(record.batteryVoltage!)} V'
-                          : '0 $activeCurrency',
-              style: TextStyle(
-                color: record.earnings > 0
-                    ? appPrimaryColor(context)
-                    : record.expense > 0
-                        ? kDanger
-                        : appSecondaryColor(context),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            if (record.batteryVoltage != null &&
-                (record.earnings > 0 || record.expense > 0))
-              Text(
-                '${trimNum(record.batteryVoltage!)} V',
-                style: const TextStyle(fontSize: 11),
-              ),
-          ],
-        ),
       ),
-    );
-  }
-}
-
-class _HistoryTypeIcon extends StatelessWidget {
-  const _HistoryTypeIcon({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 23,
-      height: 23,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .13),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: color.withValues(alpha: .25)),
-      ),
-      child: Icon(icon, color: color, size: 14),
     );
   }
 }
