@@ -414,7 +414,9 @@ class DashboardMetricGrid extends StatelessWidget {
       final cardWidth = (constraints.maxWidth - 10) / 2;
       final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
       final header = _dashboardMetricHeaderHeight(context, cardWidth);
-      final height = 34 + header + 52 * scale;
+      // Reserve two wallet detail lines and a small safety margin at all
+      // accessibility scales without giving any card a different height.
+      final height = 34 + header + 64 * scale;
       return GridView.count(
         padding: EdgeInsets.zero,
         primary: false,
