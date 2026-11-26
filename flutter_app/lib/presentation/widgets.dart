@@ -393,6 +393,45 @@ class DataHealthCard extends StatelessWidget {
   }
 }
 
+// Equal-width and equal-height cards across the dashboard. The header
+// allowance grows for narrow screens and accessibility text sizes.
+double _dashboardMetricHeaderHeight(BuildContext context, double cardWidth) {
+  final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
+  final labelWidth = cardWidth - 20 - 28 - 5;
+  final lines = labelWidth < 100 * scale ? 3 : 2;
+  final textHeight = lines * 15.0 * scale;
+  return textHeight > 28 ? textHeight : 28;
+}
+
+class DashboardMetricGrid extends StatelessWidget {
+  const DashboardMetricGrid({required this.cards, super.key});
+
+  final List<MetricCard> cards;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final cardWidth = (constraints.maxWidth - 10) / 2;
+      final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
+      final header = _dashboardMetricHeaderHeight(context, cardWidth);
+      // Reserve two wallet detail lines and a small safety margin at all
+      // accessibility scales without giving any card a different height.
+      final height = 34 + header + 64 * scale;
+      return GridView.count(
+        padding: EdgeInsets.zero,
+        primary: false,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        mainAxisExtent: height,
+        children: cards,
+      );
+    },
+  );
+}
+
 class MetricCard extends StatelessWidget {
   const MetricCard({
     required this.label,
@@ -401,6 +440,7 @@ class MetricCard extends StatelessWidget {
     required this.icon,
     this.color,
     this.note,
+    this.details,
     super.key,
   });
 
@@ -410,42 +450,61 @@ class MetricCard extends StatelessWidget {
   final IconData icon;
   final Color? color;
   final String? note;
+  final Widget? details;
 
   @override
   Widget build(BuildContext context) {
     final effectiveColor = color ?? appPrimaryColor(context);
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: _OverviewMetricLabel(label)),
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: effectiveColor.withValues(alpha: .14),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: effectiveColor, size: 19),
+    return LayoutBuilder(builder: (context, constraints) {
+      final header = _dashboardMetricHeaderHeight(context, constraints.maxWidth);
+      return GlassCard(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: header,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Tooltip(
+                      message: label,
+                      child: Text(label, maxLines: 3, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: appMutedColor(context),
+                          fontSize: 12, fontWeight: FontWeight.w700, height: 1.2)),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: effectiveColor.withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(icon, color: effectiveColor, size: 17),
+                  ),
+                ],
               ),
+            ),
+            const SizedBox(height: 5),
+            _OverviewMetricValue(
+              value,
+              currency: currency,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            if (note != null) ...[
+              const SizedBox(height: 3),
+              Text(note!, style: TextStyle(color: appMutedColor(context), fontSize: 11)),
             ],
-          ),
-          const SizedBox(height: 10),
-          _OverviewMetricValue(
-            value,
-            currency: currency,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
-          if (note != null) ...[
-            const SizedBox(height: 4),
-            Text(note!, style: TextStyle(color: appMutedColor(context), fontSize: 11)),
+            if (details != null) ...[
+              const SizedBox(height: 3),
+              details!,
+            ],
           ],
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 }
 
