@@ -38,7 +38,12 @@ void main() {
       ),
     ));
     final workshop = find.byKey(const ValueKey('store-category-Talleres y reparación'));
-    await tester.scrollUntilVisible(workshop, 200);
+    final scrollable = find.descendant(
+      of: find.byType(ListView),
+      matching: find.byType(Scrollable),
+    ).first;
+    await tester.scrollUntilVisible(workshop, 200, scrollable: scrollable);
+    await tester.pumpAndSettle();
     expect(workshop, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
