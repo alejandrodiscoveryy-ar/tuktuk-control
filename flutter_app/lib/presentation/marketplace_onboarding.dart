@@ -2970,7 +2970,7 @@ class _MarketplaceOnboardingScreenState
                 ),
                 const SizedBox(height: 12),
                 const Text('Tipo de documento',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                    style: TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -3727,7 +3727,7 @@ class _MarketplaceOnboardingScreenState
                             : _registrationOutcome == MarketplaceRegistrationOutcome.incomplete
                               ? 'Inscripción guardada, activación pendiente.'
                               : 'Datos guardados. Estado por confirmar.',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
                     ],
