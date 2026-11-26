@@ -874,10 +874,7 @@ class _AppShellState extends State<AppShell> {
             store: store,
             registrationReceipt: store.conductorAgencyAccessAllowed ? _registrationReceipt : null,
             onDismissRegistration: () => setState(() => _registrationReceipt = null),
-            onResumeRegistration: () {
-              _setMarketplaceJobsVisible(false);
-              setState(() => index = 5);
-            },
+            onResumeRegistration: () => _openMarketplaceRegistration(context, store, _registrationFinished),
           ),
           MarketplaceRecordsScreen(store: store),
           if (localOnly)
