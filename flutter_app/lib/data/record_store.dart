@@ -2110,7 +2110,7 @@ class RecordStore extends ChangeNotifier {
     if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
     if (!conductorAgencyAccessAllowed || activeVehicle == null) return;
     await _withSync(() async {
-      if (user == null ||
+      if (!conductorAgencyAccessAllowed ||
           conductorAppAccessState != ConductorAppAccessState.allowed) {
         return;
       }
@@ -2131,7 +2131,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   void unawaitedSync() {
-    if (user == null ||
+    if (!conductorAgencyAccessAllowed ||
         conductorAppAccessState != ConductorAppAccessState.allowed) {
       return;
     }
@@ -2261,6 +2261,7 @@ class RecordStore extends ChangeNotifier {
   }) async {
     if (_disposed) return;
     if (authenticatedUser == null) {
+      _syncFailed = false;
       user = null;
       conductorAppAccessState = _blockedConductorUserId == null
           ? ConductorAppAccessState.allowed
@@ -2281,6 +2282,18 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     _stopAutomaticSync();
+    if (user?.id != authenticatedUser.id) {
+      // Restore the correct account's local scope immediately; never show the previous account.
+      conductorAppAccessState = ConductorAppAccessState.checking;
+      user = authenticatedUser;
+      license = _licenseService.cachedLicense(authenticatedUser.id);
+      referralProgram = null;
+      referrals = const [];
+      referralLoadState = ReferralLoadState.idle;
+      referralError = null;
+      referralClaimNeedsRetry = false;
+      _load();
+    }
     final inFlightStartupCheck = _startupAccessFuture;
     final reuseStartupCheck = inFlightStartupCheck != null &&
         _startupAccessUserId == authenticatedUser.id;
