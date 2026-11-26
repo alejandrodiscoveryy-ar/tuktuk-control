@@ -6,7 +6,7 @@ const source = readFileSync(new URL('../../web/guided_camera.js', import.meta.ur
 const marker = '  window.tuktukGuidedCapturePhoto = async function (kind) {';
 assert.ok(source.includes(marker));
 const sandbox = {window:{}};
-vm.runInNewContext(source.replace(marker, '  window.__crop = guideCropRect;\n' + marker), sandbox);
+vm.runInNewContext(source.replace(marker, '  window.__crop = guideCropRect; window.__guides = guides;\n' + marker), sandbox);
 const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
 const crop=(w,h,a,b)=>sandbox.window.__crop({videoWidth:w,videoHeight:h,getBoundingClientRect:()=>a},{getBoundingClientRect:()=>b});
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<0.01, `${expected} != ${actual}`);
@@ -20,4 +20,18 @@ test('sensor horizontal en móvil vertical',()=>{
 });
 test('nunca acepta un marco fuera del visor',()=>{
   assert.throws(()=>crop(1080,1920,rect(0,0,360,600),rect(500,700,100,100)));
+});
+test('each guide uses correct lens and preserves output aspect',()=>{
+  const guides=sandbox.window.__guides;
+  assert.equal(guides.driver.facing,'user');
+  assert.equal(guides.driver.aspect,1);
+  for(const [kind,ratio] of [['identity-front',1.59],['identity-back',1.59],['vehicle',4/3]]){
+    assert.equal(guides[kind].facing,'environment');
+    near(guides[kind].aspect,ratio);
+  }
+  for(const guide of Object.values(guides)){
+    const w=240,h=w/guide.aspect;
+    const p=crop(1080,1920,rect(0,0,360,600),rect(60,(600-h)/2,w,h));
+    near(p.width/p.height,guide.aspect);
+  }
 });
