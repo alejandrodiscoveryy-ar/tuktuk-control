@@ -7,7 +7,7 @@ import 'package:image/image.dart' as img;
 
 import 'marketplace_identity_geometry.dart';
 
-/// Visor propio solo para el carné en Android. La foto no se envía ni guarda
+/// Visor guiado de inscripción para rostro, vehículo y documentos en Android. La foto no se envía ni guarda
 /// de forma permanente aquí; vuelve al flujo de subida existente únicamente
 /// cuando el conductor pulsa «Usar esta foto».
 Future<Uint8List?> captureGuidedMarketplaceIdentityPhoto(
@@ -54,10 +54,11 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
       final cameras = await availableCameras();
       if (!mounted || generation != _generation) return;
       if (cameras.isEmpty) throw StateError('No hay cámara disponible');
-      final back = cameras.where(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
+      final preferred = cameras.where(
+        (camera) => camera.lensDirection == (widget.side == 'driver'
+            ? CameraLensDirection.front : CameraLensDirection.back),
       );
-      final selected = back.isNotEmpty ? back.first : cameras.first;
+      final selected = preferred.isNotEmpty ? preferred.first : cameras.first;
       final controller = CameraController(
         selected,
         ResolutionPreset.veryHigh,
@@ -147,7 +148,7 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
       final crop = cropMarketplaceIdentityToFrame(
         orientedPhoto: oriented,
         viewport: viewport,
-        frame: marketplaceIdentityFrame(viewport),
+        frame: marketplaceCaptureFrame(viewport, widget.side),
       );
       final result = Uint8List.fromList(img.encodeJpg(crop, quality: 94));
       if (!mounted) return;
@@ -165,9 +166,17 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.side == 'back'
-        ? 'Carné · Parte trasera'
-        : 'Carné · Parte delantera';
+    final title = switch (widget.side) {
+      'driver' => 'Fotografía del conductor',
+      'vehicle' => 'Fotografía del vehículo',
+      'identity-back' || 'back' => 'Documento · Parte trasera',
+      _ => 'Documento · Parte delantera',
+    };
+    final help = switch (widget.side) {
+      'driver' => 'Centra el rostro en el óvalo y mira de frente. Deja espacio sobre la cabeza.',
+      'vehicle' => 'Encuadra todo el vehículo, incluidas las ruedas. Deja margen alrededor.',
+      _ => 'Coloca las cuatro esquinas del documento dentro del marco. Evita reflejos.',
+    };
     final controller = _controller;
     final ready = controller != null && controller.value.isInitialized;
     return Scaffold(
@@ -182,10 +191,9 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
           padding: const EdgeInsets.all(14),
           child: Column(
             children: [
-              const Text(
-                'Coloca las cuatro esquinas del carné dentro del marco verde. '
-                'Evita los reflejos y comprueba que los datos se lean.',
-                style: TextStyle(color: Colors.white, fontSize: 14),
+              Text(
+                help,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
               ),
               const SizedBox(height: 14),
               Expanded(
@@ -225,7 +233,8 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
                           if (_captured == null && ready)
                             CustomPaint(
                               painter: _IdentityFramePainter(
-                                frame: marketplaceIdentityFrame(size),
+                                frame: marketplaceCaptureFrame(size, widget.side),
+                                face: widget.side == 'driver',
                               ),
                             ),
                         ],
@@ -241,8 +250,8 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
               const SizedBox(height: 12),
               Text(
                 _captured == null
-                    ? 'Alinea el documento y pulsa Tomar foto.'
-                    : 'Revisa que se vean las cuatro esquinas y todo sea legible.',
+                    ? 'Alinea la imagen y pulsa Tomar foto.'
+                    : 'Revisa que la fotografía esté completa y nítida.',
                 style: const TextStyle(color: Colors.white70),
                 textAlign: TextAlign.center,
               ),
@@ -292,9 +301,10 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
 }
 
 class _IdentityFramePainter extends CustomPainter {
-  const _IdentityFramePainter({required this.frame});
+  const _IdentityFramePainter({required this.frame, required this.face});
 
   final Rect frame;
+  final bool face;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -311,12 +321,24 @@ class _IdentityFramePainter extends CustomPainter {
         ..strokeWidth = 3
         ..color = const Color(0xFF50EDBE),
     );
+    final inner = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = Colors.white70;
+    if (face) {
+      canvas.drawOval(Rect.fromLTWH(
+        frame.left + frame.width * .22, frame.top + frame.height * .08,
+        frame.width * .56, frame.height * .70), inner);
+    } else {
+      canvas.drawRRect(RRect.fromRectAndRadius(
+        frame.deflate(frame.shortestSide * .06), const Radius.circular(6)), inner);
+    }
     final cornerPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round
       ..color = Colors.white;
-    const c = 24.0;
+    final c = (frame.shortestSide * .14).clamp(8.0, 24.0).toDouble();
     for (final p in [
       (
         Offset(frame.left, frame.top + c),
@@ -349,5 +371,5 @@ class _IdentityFramePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _IdentityFramePainter oldDelegate) =>
-      oldDelegate.frame != frame;
+      oldDelegate.frame != frame || oldDelegate.face != face;
 }
