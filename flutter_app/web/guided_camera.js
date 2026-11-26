@@ -144,6 +144,19 @@
     return result;
   }
 
+  // A Flutter Web surface can sit above a regular DOM overlay. The browser
+  // top layer is independent of those stacking contexts. Only the selfie
+  // uses it; the verified document and vehicle overlays stay unchanged.
+  function showSelfieDialog(dialog) {
+    if (typeof dialog.showModal !== 'function') return false;
+    try {
+      dialog.showModal();
+      return dialog.open === true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   let active = false;
 
   window.tuktukGuidedCapturePhoto = async function (kind) {
@@ -163,7 +176,8 @@
       let openingCamera = false;
       let openedFacing = 'unknown';
       const previousOverflow = document.body.style.overflow;
-      const dialog = make('div', 'tuktuk-camera-dialog');
+      const dialog = make(kind === 'driver' ? 'dialog' : 'div', 'tuktuk-camera-dialog');
+      if (kind === 'driver') dialog.classList.add('tuktuk-camera-selfie-dialog');
       dialog.setAttribute('role', 'dialog');
       dialog.setAttribute('aria-modal', 'true');
       dialog.setAttribute('aria-label', guide.title);
@@ -175,6 +189,11 @@
       const stage = make('div', 'tuktuk-camera-stage');
       stage.dataset.kind = kind;
       const video = make('video', 'tuktuk-camera-video');
+      if (kind === 'driver') {
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.setAttribute('muted', '');
+      }
       video.autoplay = true;
       video.muted = true;
       video.playsInline = true;
@@ -294,6 +313,7 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
         video.srcObject = null;
         document.removeEventListener('keydown', onKey);
         document.body.style.overflow = previousOverflow;
+        if (kind === 'driver' && dialog.open && typeof dialog.close === 'function') dialog.close();
         dialog.remove();
         if (error) reject(error);
         else resolve(result);
@@ -352,7 +372,21 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
       document.addEventListener('keydown', onKey);
       document.body.style.overflow = 'hidden';
       document.body.appendChild(dialog);
-      dialog.focus();
+      if (kind === 'driver') {
+        dialog.addEventListener('cancel', function (event) {
+          event.preventDefault();
+          if (!usingNative) finish(null);
+        });
+        dialog.addEventListener('close', function () {
+          if (!settled) finish(null);
+        });
+        if (!showSelfieDialog(dialog)) {
+          // Legacy browser: render as a regular open overlay rather than a
+          // closed <dialog>, which is hidden by default.
+          dialog.setAttribute('open', '');
+        }
+      }
+      dialog.focus({ preventScroll: true });
 
       if (!canPreview) {
         fallback.hidden = false;
@@ -424,7 +458,15 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
           : requestedFacing === 'user' ? 'environment' : 'user';
         openCamera(next);
       });
-      openCamera(guide.facing);
+      if (kind === 'driver') {
+        // Paint the top-layer UI before opening the camera. Even if lens
+        // acquisition fails, the user sees the controls and error state.
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+          if (!settled) openCamera(guide.facing);
+        }));
+      } else {
+        openCamera(guide.facing);
+      }
     });
   };
 })();
