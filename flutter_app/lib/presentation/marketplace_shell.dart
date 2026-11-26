@@ -58,15 +58,15 @@ class _MoreSectionIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 42,
-      height: 42,
+      width: 64,
+      height: 64,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color.withValues(alpha: .14),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(color: color.withValues(alpha: .34)),
       ),
-      child: Icon(icon, size: 24, color: color),
+      child: Icon(icon, size: 34, color: color),
     );
   }
 }
@@ -132,43 +132,45 @@ class MarketplaceMoreScreen extends StatelessWidget {
     final profilePhoto = _googleProfilePhotoUrl(store.user);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 20, 16, 110 + MediaQuery.paddingOf(context).bottom),
       children: [
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-            minVerticalPadding: 6,
-            minTileHeight: 56,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 9),
+            horizontalTitleGap: 18,
+            minVerticalPadding: 8,
+            minTileHeight: 82,
             leading: const _MoreSectionIcon(
               icon: Icons.work_outline_rounded,
               color: Color(0xFF2DD4A3),
             ),
             title: const Text('Conviértete en conductor'),
 
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
             onTap: () => _openMarketplaceRegistration(context, store, onRegistrationFinished),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-            minVerticalPadding: 6,
-            minTileHeight: 56,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 9),
+            horizontalTitleGap: 18,
+            minVerticalPadding: 8,
+            minTileHeight: 82,
             leading: profilePhoto == null
                 ? const _MoreSectionIcon(
                     icon: Icons.account_circle_outlined,
                     color: Color(0xFF55A7FF),
                   )
                 : Container(
-                    width: 42,
-                    height: 42,
+                    width: 64,
+                    height: 64,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: const Color(0xFF55A7FF).withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(17),
                       border: Border.all(
                         color: const Color(0xFF55A7FF).withValues(alpha: .34),
                       ),
@@ -176,11 +178,12 @@ class MarketplaceMoreScreen extends StatelessWidget {
                     child: _UserNavigationAvatar(
                       photoUrl: profilePhoto,
                       selected: false,
+                      size: 44,
                     ),
                   ),
             title: Text(tr('Cuenta y sincronización')),
 
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
             onTap: () {
               _openPage(
                 context,
@@ -190,19 +193,20 @@ class MarketplaceMoreScreen extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-            minVerticalPadding: 6,
-            minTileHeight: 56,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 9),
+            horizontalTitleGap: 18,
+            minVerticalPadding: 8,
+            minTileHeight: 82,
             leading: const _MoreSectionIcon(
               icon: Icons.campaign_outlined,
               color: Color(0xFFFB923C),
             ),
             title: const Text('Impulsa'),
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
             onTap: () => _openPage(
               context,
               title: 'Impulsa',
@@ -211,20 +215,21 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-            minVerticalPadding: 6,
-            minTileHeight: 56,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 9),
+            horizontalTitleGap: 18,
+            minVerticalPadding: 8,
+            minTileHeight: 82,
             leading: const _MoreSectionIcon(
               icon: Icons.redeem_outlined,
               color: Color(0xFF9A7BFF),
             ),
             title: Text(tr('Referidos')),
 
-            trailing: const Icon(Icons.chevron_right_rounded),
+            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
             onTap: () {
               if (store.conductorAgencyAccessAllowed) {
                 unawaited(store.loadReferrals());
@@ -248,20 +253,21 @@ class MarketplaceMoreScreen extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-            minVerticalPadding: 6,
-            minTileHeight: 56,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 9),
+            horizontalTitleGap: 18,
+            minVerticalPadding: 8,
+            minTileHeight: 82,
             key: const ValueKey('more-direct-support'),
             leading: const _MoreSectionIcon(
               icon: Icons.support_agent_rounded,
               color: Color(0xFFFFB547),
             ),
             title: Text(tr('Soporte')),
-            trailing: const Icon(Icons.open_in_new_rounded),
+            trailing: const Icon(Icons.open_in_new_rounded, size: 26),
             onTap: () {
               final action = store.supportWhatsAppAction();
               if (action == null) {
