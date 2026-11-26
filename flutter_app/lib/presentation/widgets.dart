@@ -260,7 +260,7 @@ class _SeasonalHeroArt extends CustomPainter {
     canvas.drawArc(ring, pi * .13, pi * .70, false, stroke);
 
     void sparkle(double x, double y, double radius) {
-      final path = Path()
+      final path = ui.Path()
         ..moveTo(x, y - radius)
         ..quadraticBezierTo(x + 1, y - 1, x + radius, y)
         ..quadraticBezierTo(x + 1, y + 1, x, y + radius)
@@ -282,7 +282,7 @@ class _SeasonalHeroArt extends CustomPainter {
       for (final side in [-1.0, 1.0]) {
         canvas.save();
         canvas.scale(side, 1);
-        final stem = Path()..moveTo(19, 36)..quadraticBezierTo(38, 28, 46, 8);
+        final stem = ui.Path()..moveTo(19, 36)..quadraticBezierTo(38, 28, 46, 8);
         canvas.drawPath(stem, pine);
         for (var i = 0; i < 4; i++) {
           final x = 23.0 + i * 6;
