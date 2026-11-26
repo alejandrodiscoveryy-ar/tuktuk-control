@@ -49,6 +49,120 @@ class _OverviewMetricValue extends StatelessWidget {
   );
 }
 
+/// Presentation-only seasonal campaigns. Dates use the device's local calendar.
+class SeasonalCampaign {
+  const SeasonalCampaign({
+    required this.id,
+    required this.startMonth,
+    required this.startDay,
+    required this.endMonth,
+    required this.endDay,
+    required this.messages,
+    required this.icon,
+    required this.accent,
+    required this.highlight,
+  });
+
+  final String id;
+  final int startMonth;
+  final int startDay;
+  final int endMonth;
+  final int endDay;
+  final Map<String, String> messages;
+  final IconData icon;
+  final Color accent;
+  final Color highlight;
+
+  bool includes(DateTime date) {
+    final day = date.month * 100 + date.day;
+    final start = startMonth * 100 + startDay;
+    final end = endMonth * 100 + endDay;
+    return start <= end ? day >= start && day <= end
+        : day >= start || day <= end;
+  }
+}
+
+// Add future campaigns here, in priority order. No financial colors,
+// network requests, authentication or persisted records are involved.
+const _seasonalCampaigns = <SeasonalCampaign>[
+  SeasonalCampaign(
+    id: 'christmas',
+    startMonth: 11,
+    startDay: 26,
+    endMonth: 12,
+    endDay: 25,
+    messages: {
+      'es': 'Felices fiestas',
+      'en': 'Happy holidays',
+      'pt': 'Boas festas',
+      'fr': 'Joyeuses fêtes',
+    },
+    icon: Icons.park_outlined,
+    accent: Color(0xFF318568),
+    highlight: Color(0xFFEBCB86),
+  ),
+];
+
+SeasonalCampaign? seasonalCampaignFor(DateTime date, {
+  bool enabled = const bool.fromEnvironment('TUKTUK_SEASONAL_ENABLED', defaultValue: true),
+}) {
+  if (!enabled) return null;
+  for (final campaign in _seasonalCampaigns) {
+    if (campaign.includes(date)) return campaign;
+  }
+  return null;
+}
+
+/// A compact, decorative accent that disappears entirely out of season.
+class SeasonalAccent extends StatelessWidget {
+  const SeasonalAccent({this.date, this.language, super.key});
+
+  final DateTime? date;
+  final String? language;
+
+  @override
+  Widget build(BuildContext context) {
+    final campaign = seasonalCampaignFor(date ?? DateTime.now());
+    if (campaign == null) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final locale = (language ?? activeLanguage).split(RegExp(r'[-_]')).first;
+    final message = campaign.messages[locale] ?? campaign.messages['es']!;
+    final background = dark ? const Color(0xFF142C2C) : const Color(0xFFF1F8F2);
+    final gold = dark ? campaign.highlight : const Color(0xFF765519);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DecoratedBox(
+        key: ValueKey('seasonal-accent-${campaign.id}'),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: campaign.accent.withValues(alpha: .48)),
+          gradient: LinearGradient(
+            colors: [
+              background,
+              Color.alphaBlend(campaign.accent.withValues(alpha: .12), background),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(children: [
+            Icon(campaign.icon, size: 22,
+              color: dark ? const Color(0xFF84D7AA) : campaign.accent),
+            const SizedBox(width: 9),
+            Expanded(child: Text(message,
+              style: TextStyle(color: gold, fontSize: 12,
+                fontWeight: FontWeight.w700, height: 1.2))),
+            const SizedBox(width: 8),
+            Icon(Icons.auto_awesome_rounded, size: 16, color: gold),
+            const SizedBox(width: 5),
+            const Icon(Icons.circle, size: 6, color: Color(0xFFCC646A)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
 class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,
