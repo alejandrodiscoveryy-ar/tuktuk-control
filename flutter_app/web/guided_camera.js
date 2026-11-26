@@ -77,6 +77,54 @@
     return { x, y, width, height };
   }
 
+  function cameraFacing(track) {
+    const facing = typeof track.getSettings === 'function'
+      ? track.getSettings().facingMode : undefined;
+    if (facing === 'user' || facing === 'environment') return facing;
+    const label = track.label || '';
+    if (/front|selfie|frontal|delantera|facetime/i.test(label)) return 'user';
+    if (/back|rear|environment|trasera|posterior/i.test(label)) return 'environment';
+    return 'unknown';
+  }
+
+  function stopCamera(cameraStream) {
+    if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+  }
+
+  // A mere ideal preference can return the last-used rear camera.
+  async function requestDriverCamera(media, stillOpen) {
+    const dimensions = { width: { ideal: 1280 }, height: { ideal: 1280 } };
+    async function request(constraint, requireKnownFront) {
+      const result = await media.getUserMedia({ audio: false, video: { ...dimensions, ...constraint } });
+      const track = result.getVideoTracks()[0];
+      const facing = track ? cameraFacing(track) : 'unknown';
+      if (!stillOpen() || !track || facing === 'environment' ||
+          (requireKnownFront && facing !== 'user')) {
+        stopCamera(result);
+        throw new Error('SELFIE_CAMERA_NOT_CONFIRMED');
+      }
+      return result;
+    }
+    try {
+      return await request({ facingMode: { exact: 'user' } }, false);
+    } catch (error) {
+      if (!stillOpen() || error.name === 'NotAllowedError' || error.name === 'SecurityError') throw error;
+    }
+    const cameras = typeof media.enumerateDevices === 'function'
+      ? await media.enumerateDevices().catch(() => []) : [];
+    if (!stillOpen()) throw new Error('CAMERA_CLOSED');
+    const front = cameras.find(device => device.kind === 'videoinput' &&
+      device.deviceId && /front|selfie|frontal|delantera|facetime/i.test(device.label || ''));
+    if (front) {
+      try {
+        return await request({ deviceId: { exact: front.deviceId } }, false);
+      } catch (error) {
+        if (!stillOpen() || error.name === 'NotAllowedError' || error.name === 'SecurityError') throw error;
+      }
+    }
+    return request({ facingMode: { ideal: 'user' } }, true);
+  }
+
   let active = false;
 
   window.tuktukGuidedCapturePhoto = async function (kind) {
@@ -103,6 +151,7 @@
       const heading = make('h2', 'tuktuk-camera-heading', guide.title);
       const instructions = make('p', 'tuktuk-camera-help', guide.help);
       const stage = make('div', 'tuktuk-camera-stage');
+      stage.dataset.kind = kind;
       const video = make('video', 'tuktuk-camera-video');
       video.autoplay = true;
       video.muted = true;
@@ -117,7 +166,11 @@
       for (const position of ['tl', 'tr', 'bl', 'br']) {
         frame.appendChild(make('span', 'tuktuk-camera-corner ' + position));
       }
-      if (kind === 'driver') frame.appendChild(make('span', 'tuktuk-camera-face-guide'));
+      if (kind === 'driver') {
+        const face = make('span', 'tuktuk-camera-face-guide');
+        face.appendChild(make('span', 'tuktuk-camera-eyeline'));
+        frame.appendChild(face);
+      }
       else frame.appendChild(make('span', 'tuktuk-camera-inner-guide'));
       frame.setAttribute('role', 'img');
       frame.setAttribute('aria-label', guide.label);
@@ -144,6 +197,10 @@
       actions.appendChild(primary);
 const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 'Cámara del teléfono');
       fallback.type = 'button';
+      if (kind === 'driver') {
+        fallback.textContent = 'Selfie con cámara del teléfono';
+        fallback.hidden = true;
+      }
       const picker = make('input', '');
       picker.type = 'file';
       picker.accept = 'image/*';
@@ -268,13 +325,17 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
       dialog.focus();
 
       if (!canPreview) {
-        status.textContent = 'El visor no esta disponible. Pulsa Cámara del teléfono.';
+        fallback.hidden = false;
+        status.textContent = kind === 'driver' ? 'Este navegador no permite el visor guiado. Usa la opción de selfie del teléfono.' : 'El visor no esta disponible. Pulsa Cámara del teléfono.';
         return;
       }
-      navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { ideal: guide.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-      }).then(async function (cameraStream) {
+      const cameraRequest = kind === 'driver'
+        ? requestDriverCamera(navigator.mediaDevices, () => !settled)
+        : navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: guide.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+      cameraRequest.then(async function (cameraStream) {
         if (settled) {
           cameraStream.getTracks().forEach(function (track) { track.stop(); });
           return;
@@ -294,7 +355,10 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
           video.srcObject = null;
         }
         if (captured === null) {
-          status.textContent = 'El visor no se inició. Pulsa Cámara del teléfono o usa la galería.';
+          fallback.hidden = false;
+          status.textContent = kind === 'driver'
+            ? 'No se pudo confirmar la cámara delantera. Usa la opción de selfie del teléfono o vuelve a intentarlo.'
+            : 'El visor no se inició. Pulsa Cámara del teléfono o usa la galería.';
           primary.disabled = true;
         }
       });

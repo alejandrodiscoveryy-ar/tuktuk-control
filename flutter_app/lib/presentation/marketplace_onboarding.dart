@@ -1498,6 +1498,9 @@ class _MarketplaceOnboardingScreenState
     }
     final picked = await _imagePicker.pickImage(
       source: source,
+      preferredCameraDevice: assetKind == 'driver_photo'
+          ? CameraDevice.front
+          : CameraDevice.rear,
       maxWidth: assetKind == 'identity_document' ? 2400 : 2048,
       maxHeight: assetKind == 'identity_document' ? 2400 : 2048,
       imageQuality: assetKind == 'identity_document' ? 95 : 92,

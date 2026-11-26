@@ -108,3 +108,21 @@
   .tuktuk-camera-panel { justify-content: flex-start; }
   .tuktuk-camera-stage { height: 48dvh; min-height: 180px; }
 }
+
+/* Selfie only: same green frame as documents, with a clearer face guide. */
+.tuktuk-camera-frame[data-kind="driver"] .tuktuk-camera-face-guide {
+  box-sizing: border-box;
+  left: 20%;
+  top: 7%;
+  width: 60%;
+  height: 76%;
+  border: 3px solid #50edbe;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 55%);
+}
+.tuktuk-camera-eyeline {
+  position: absolute;
+  top: 42%;
+  left: 14%;
+  right: 14%;
+  border-top: 2px dashed rgb(255 255 255 / 85%);
+}
