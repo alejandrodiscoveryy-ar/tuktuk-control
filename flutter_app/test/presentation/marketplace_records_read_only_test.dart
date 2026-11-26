@@ -538,4 +538,31 @@ void main() {
       expect(saveButton.onPressed, isNotNull);
     },
   );
+  testWidgets('premium register selector preserves income, expense and maintenance flows',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 740));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData.dark(useMaterial3: true),
+      home: Scaffold(body: RegisterScreen(store: store)),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Ingreso del día'), findsOneWidget);
+    expect(find.text('Voltaje de batería'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Ingreso del día'), '125');
+    await tester.tap(find.byKey(const ValueKey('record-type-expense')));
+    await tester.pumpAndSettle();
+    expect(find.text('Importe del gasto'), findsOneWidget);
+    expect(find.text('Categoría del gasto'), findsOneWidget);
+    expect(find.text('Ingreso del día'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('record-type-maintenance')));
+    await tester.pumpAndSettle();
+    expect(find.text('Completar mantenimiento'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('record-type-earnings')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '125'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
