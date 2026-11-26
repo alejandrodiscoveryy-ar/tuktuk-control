@@ -2488,8 +2488,6 @@ class StatsScreen extends StatelessWidget {
                   currency: activeCurrency,
                   color: const Color(0xFF56D2A1),
                   icon: Icons.account_balance_wallet_outlined,
-                  details: seasonalCampaignFor(DateTime.now()) == null
-                      ? null : const SeasonalAccent(compact: true),
                 ),
                 MetricCard(
                   tintedValue: true,
