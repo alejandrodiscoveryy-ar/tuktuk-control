@@ -22,7 +22,7 @@ void main() {
     expect(html, contains('guided_camera.css'));
     expect(html, contains('guided_camera.js'));
     expect(script, contains('navigator.mediaDevices.getUserMedia'));
-    expect(script, contains("facingMode: { ideal: guide.facing }"));
+    expect(script, contains('facingMode: { ideal: guide.facing }'));
     expect(script, contains("canvas.toDataURL('image/jpeg', 0.92)"));
     expect(script, contains('stream.getTracks()'));
     expect(script, contains('Repetir foto'));
