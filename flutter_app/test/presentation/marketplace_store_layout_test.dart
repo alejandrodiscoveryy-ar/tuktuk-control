@@ -30,11 +30,11 @@ void main() {
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 540));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(const MaterialApp(
       home: MediaQuery(
-        data: const MediaQueryData(size: Size(320, 540),
+        data: MediaQueryData(size: Size(320, 540),
           textScaler: TextScaler.linear(1.5)),
-        child: const Scaffold(body: StoreScreen()),
+        child: Scaffold(body: StoreScreen()),
       ),
     ));
     final workshop = find.byKey(const ValueKey('store-category-Talleres y reparación'));
