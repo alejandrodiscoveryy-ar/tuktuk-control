@@ -1048,7 +1048,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
       if (!mounted || widget.store.user?.id != ownerId ||
           _operationalLocationVehicle()?.id != vehicle.id ||
-          !_canPublishOperationalLocation()) return;
+          !_canPublishOperationalLocation()) {
+          return;
+        }
 
       if (!_operationalGpsIo.validCoordinates(position)) return;
 
@@ -1066,7 +1068,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         );
         if (!mounted || widget.store.user?.id != ownerId ||
             _operationalLocationVehicle()?.id != vehicle.id ||
-            !_canPublishOperationalLocation()) return;
+            !_canPublishOperationalLocation()) {
+          return;
+        }
         _markOperationalGpsPublished(position, nowUtc);
         if (mounted && kIsWeb) setState(() {});
 
