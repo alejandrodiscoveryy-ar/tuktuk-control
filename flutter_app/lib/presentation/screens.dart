@@ -2466,11 +2466,12 @@ class StatsScreen extends StatelessWidget {
       currentOdometer: metrics.latestOdometer,
     );
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16,
+          100 + MediaQuery.paddingOf(context).bottom),
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            return DashboardMetricGrid(
+            return StatisticsMetricGrid(
               columns: constraints.maxWidth >= 700 ? 3 : 2,
               cards: [
                 MetricCard(
@@ -2478,6 +2479,7 @@ class StatsScreen extends StatelessWidget {
                   label: tr('Ingresos totales'),
                   value: numFmt(metrics.totalEarnings),
                   currency: activeCurrency,
+                  color: const Color(0xFF56D2A1),
                   icon: Icons.account_balance_wallet_outlined,
                 ),
                 MetricCard(
@@ -2503,6 +2505,7 @@ class StatsScreen extends StatelessWidget {
                   label: tr('Promedio por día trabajado'),
                   value: numFmt(metrics.averageDailyEarnings),
                   currency: activeCurrency,
+                  color: const Color(0xFF72A7FF),
                   icon: Icons.calendar_today_outlined,
                 ),
                 MetricCard(
@@ -2510,11 +2513,13 @@ class StatsScreen extends StatelessWidget {
                   label: tr('Eficiencia'),
                   value: numFmt(metrics.efficiency),
                   note: '$activeCurrency/km',
+                  color: const Color(0xFF55C9EF),
                   icon: Icons.speed_outlined,
                 ),
                 MetricCard(
                   tintedValue: true,
                   label: tr('Mejor día'),
+                  color: const Color(0xFFF4D677),
                   icon: Icons.emoji_events_outlined,
                   value: bestDay == null ? '-' : numFmt(bestDay.value),
                   currency: bestDay == null ? null : activeCurrency,
@@ -2528,6 +2533,7 @@ class StatsScreen extends StatelessWidget {
                 MetricCard(
                   tintedValue: true,
                   label: tr('Mejor mes'),
+                  color: const Color(0xFFB59AF5),
                   icon: Icons.calendar_month_outlined,
                   value: bestCycle == null ? '-' : numFmt(bestCycle.earnings),
                   currency: bestCycle == null ? null : activeCurrency,
@@ -2558,6 +2564,147 @@ class StatsScreen extends StatelessWidget {
         SectionTitle(title: tr('Información relevante')),
         DataHealthCard(metrics: metrics),
       ],
+    );
+  }
+}
+
+/// Statistics-only visual grid. Keeps shared dashboard cards unchanged.
+class StatisticsMetricGrid extends StatelessWidget {
+  const StatisticsMetricGrid({required this.cards, this.columns = 2, super.key});
+
+  final List<MetricCard> cards;
+  final int columns;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = MediaQuery.textScalerOf(context);
+      final count = constraints.maxWidth < 260 || scale.scale(13) > 24
+          ? 1 : columns;
+      const gap = 10.0;
+      final width = (constraints.maxWidth - (count - 1) * gap) / count;
+      final textWidth = max(1.0, width - 26);
+      double textHeight(String text, TextStyle style) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: scale,
+        )..layout(maxWidth: textWidth);
+        final height = painter.height.ceilToDouble();
+        painter.dispose();
+        return height;
+      }
+      const labelStyle = TextStyle(
+        fontSize: 13, fontWeight: FontWeight.w700, height: 1.2);
+      const noteStyle = TextStyle(fontSize: 11, height: 1.2);
+      final labelHeight = cards.fold<double>(0,
+        (height, card) => max(height, textHeight(card.label, labelStyle)));
+      final noteHeight = cards.fold<double>(0, (height, card) => max(height,
+        card.note == null ? 0.0 : textHeight(card.note!, noteStyle)));
+      final valueHeight = scale.scale(22) * 1.5;
+      final height = 26 + 44 + 9 + labelHeight + 6 + valueHeight
+          + (noteHeight > 0 ? 5 + noteHeight : 0) + 4;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final card in cards)
+            SizedBox(
+              key: ValueKey('statistics-card-${card.icon.codePoint}'),
+              width: width,
+              height: height,
+              child: _StatisticsVisualCard(
+                card: card,
+                labelHeight: labelHeight,
+                valueHeight: valueHeight,
+                labelStyle: labelStyle,
+                noteStyle: noteStyle,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+class _StatisticsVisualCard extends StatelessWidget {
+  const _StatisticsVisualCard({
+    required this.card,
+    required this.labelHeight,
+    required this.valueHeight,
+    required this.labelStyle,
+    required this.noteStyle,
+  });
+
+  final MetricCard card;
+  final double labelHeight;
+  final double valueHeight;
+  final TextStyle labelStyle;
+  final TextStyle noteStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final rawAccent = card.color ?? appPrimaryColor(context);
+    final accent = dark ? rawAccent :
+        Color.lerp(rawAccent, const Color(0xFF172B40), .55)!;
+    final surface = dark ? const Color(0xFF142233) : const Color(0xFFF7FAFE);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.alphaBlend(accent.withValues(alpha: dark ? .13 : .09), surface),
+            Color.alphaBlend(accent.withValues(alpha: dark ? .035 : .025), surface),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: dark ? .38 : .42)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: dark ? .15 : .12),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: accent.withValues(alpha: .30)),
+              ),
+              child: Icon(card.icon, size: 31, color: accent),
+            ),
+            const SizedBox(height: 9),
+            SizedBox(
+              height: labelHeight,
+              child: Text(card.label, style: labelStyle.copyWith(
+                color: appMutedColor(context))),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: valueHeight,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _OverviewMetricValue(
+                  card.value,
+                  currency: card.currency,
+                  style: TextStyle(color: accent, fontSize: 22,
+                    fontWeight: FontWeight.w900, height: 1.15),
+                ),
+              ),
+            ),
+            if (card.note != null) ...[
+              const SizedBox(height: 5),
+              Text(card.note!, style: noteStyle.copyWith(
+                color: appMutedColor(context))),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
