@@ -7,15 +7,22 @@ import 'package:image/image.dart' as img;
 /// las cuatro esquinas del carné, incluso en pantallas estrechas.
 const double marketplaceIdentityAspectRatio = 1.59;
 
-Rect marketplaceIdentityFrame(Size viewport) {
+Rect marketplaceIdentityFrame(Size viewport) => marketplaceCaptureFrame(viewport, 'identity-front');
+
+Rect marketplaceCaptureFrame(Size viewport, String kind) {
+  final aspect = switch (kind) {
+    'driver' => 1.0,
+    'vehicle' => 4 / 3,
+    _ => marketplaceIdentityAspectRatio,
+  };
   if (viewport.width <= 0 || viewport.height <= 0) {
     throw ArgumentError.value(viewport, 'viewport', 'Visor no válido');
   }
   final width = math.min(
     viewport.width * 0.86,
-    viewport.height * 0.72 * marketplaceIdentityAspectRatio,
+    viewport.height * 0.72 * aspect,
   );
-  final height = width / marketplaceIdentityAspectRatio;
+  final height = width / aspect;
   return Rect.fromLTWH(
     (viewport.width - width) / 2,
     (viewport.height - height) / 2,
