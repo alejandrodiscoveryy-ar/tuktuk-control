@@ -248,6 +248,19 @@ abstract final class SyncPayloadOwnership {
       operation.vehicleId.isNotEmpty;
 }
 
+/// Converts an owned local entity to the CAS wire format without changing Hive.
+Map<String, dynamic> syncCasWirePayload(
+  SyncOperation operation,
+  Map<String, dynamic> payload,
+) {
+  if (!SyncPayloadOwnership.matches(operation, payload)) {
+    throw StateError('SYNC_PAYLOAD_OWNERSHIP_MISMATCH');
+  }
+  return operation.entityType == SyncEntityType.vehicle
+      ? {...payload, 'vehicleId': operation.vehicleId}
+      : Map<String, dynamic>.from(payload);
+}
+
 abstract final class SyncReceiptPolicy {
   /// Un acuse antiguo no debe cambiar el estado de una edición nueva.
   static bool canMarkSynced({
