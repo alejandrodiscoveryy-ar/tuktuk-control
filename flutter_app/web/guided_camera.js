@@ -7,8 +7,8 @@
     driver: {
       title: 'Fotografía del conductor',
       help: 'Centra el rostro en el óvalo, mira de frente y deja espacio sobre la cabeza. Usa buena iluminación.',
-      ratio: '3 / 4',
-      aspect: 0.75,
+      ratio: '1 / 1',
+      aspect: 1,
       label: 'Guía de rostro y hombros',
       prompt: 'Centra tu rostro dentro del óvalo.',
       facing: 'user'
@@ -285,7 +285,7 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
         if (settled) return;
         ready = true;
         primary.disabled = false;
-        status.textContent = guide.prompt + ' Pulsa Tomar foto.';
+        if (captured === null) status.textContent = guide.prompt + ' Pulsa Tomar foto.';
       }).catch(function () {
         if (settled) return;
         if (stream) {
@@ -293,8 +293,10 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
           stream = null;
           video.srcObject = null;
         }
-        status.textContent = 'El visor no se inicio. Pulsa Cámara del teléfono o usa la galería.';
-        primary.disabled = true;
+        if (captured === null) {
+          status.textContent = 'El visor no se inició. Pulsa Cámara del teléfono o usa la galería.';
+          primary.disabled = true;
+        }
       });
     });
   };
