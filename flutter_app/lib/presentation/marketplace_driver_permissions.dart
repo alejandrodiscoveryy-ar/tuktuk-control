@@ -50,6 +50,9 @@ class _MarketplaceDriverPermissionsScreenState
   bool? _gpsEnabled;
   LocationPermission? _locationPermission;
   AuthorizationStatus? _notifications;
+  AndroidDriverAlertStatus? _androidAlerts;
+  String? _installedVersionLabel;
+  bool get _android => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
   void initState() {
@@ -76,28 +79,53 @@ class _MarketplaceDriverPermissionsScreenState
   Future<void> _refreshPermissions() async {
     if (!mounted) return;
     setState(() => _checking = true);
+    AndroidDriverAlertStatus? androidAlerts;
+    String? installedVersionLabel;
     bool? gpsEnabled;
     LocationPermission? location;
     AuthorizationStatus? notifications;
     try {
-      gpsEnabled = await Geolocator.isLocationServiceEnabled();
+      gpsEnabled = await Geolocator.isLocationServiceEnabled()
+          .timeout(const Duration(seconds: 5));
     } catch (_) {
       // La plataforma puede no exponer el interruptor GPS.
     }
     try {
-      location = await Geolocator.checkPermission();
+      location = await Geolocator.checkPermission()
+          .timeout(const Duration(seconds: 5));
     } catch (_) {
       // Se mantiene el estado indeterminado; no afirmar que está concedido.
     }
     try {
       notifications =
-          (await FirebaseMessaging.instance.getNotificationSettings())
+          (await FirebaseMessaging.instance.getNotificationSettings()
+              .timeout(const Duration(seconds: 5)))
               .authorizationStatus;
     } catch (_) {
       // En navegadores sin mensajería no bloquea otros permisos.
     }
+    if (_android) {
+      try {
+        androidAlerts = await AndroidDriverAlertBridge.inspect()
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // The installed native build may not support all diagnostics.
+      }
+      try {
+        final version = await _appUpdateNativeChannel
+            .invokeMapMethod<String, dynamic>('getInstalledVersion')
+            .timeout(const Duration(seconds: 5));
+        if (version != null && version['name'] is String && version['build'] is num) {
+          installedVersionLabel = '${version['name']} · build ${version['build']}';
+        }
+      } catch (_) {
+        // Version unknown; never substitute the repository's version.
+      }
+    }
     if (!mounted) return;
     setState(() {
+      _androidAlerts = androidAlerts;
+      _installedVersionLabel = installedVersionLabel;
       _gpsEnabled = gpsEnabled;
       _locationPermission = location;
       _notifications = notifications;
@@ -231,6 +259,9 @@ class _MarketplaceDriverPermissionsScreenState
         _locationPermission == LocationPermission.always ||
         _locationPermission == LocationPermission.whileInUse;
     final notificationsOk = _notifications == AuthorizationStatus.authorized;
+    final alerts = _androidAlerts;
+    final batterySaver = alerts?.batterySaver;
+    final batteryOptimizationIgnored = alerts?.batteryOptimizationIgnored;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -276,6 +307,25 @@ class _MarketplaceDriverPermissionsScreenState
           enabled: notificationsOk,
           onEnable: () => unawaited(_requestNotifications()),
         ),
+        if (_android) ...[
+          const SizedBox(height: 12),
+          _permissionItem(
+            key: const ValueKey('driver-permission-native-sound'),
+            icon: Icons.volume_up_outlined,
+            title: 'Sonido de nuevas carreras',
+            description: 'Canal de carreras, volumen y No molestar.',
+            status: alerts?.problem ?? 'No se pudo comprobar',
+            enabled: alerts?.ready == true,
+            onEnable: () => unawaited(AndroidDriverAlertBridge
+                .openSettings(alerts?.settingsAction ?? 'openAppNotifications')
+                .then((_) => _refreshPermissions())),
+          ),
+          if (_installedVersionLabel != null) ...[
+            const SizedBox(height: 12),
+            Text('APK instalada: $_installedVersionLabel',
+                style: TextStyle(color: appMutedColor(context), fontSize: 12)),
+          ],
+        ],
         const SizedBox(height: 12),
         GlassCard(
           child: ListTile(
@@ -284,7 +334,11 @@ class _MarketplaceDriverPermissionsScreenState
               'Funcionamiento en segundo plano',
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
-            subtitle: const Text(
+            subtitle: Text(
+              (_android
+                  ? 'Ahorro de batería: ${batterySaver == null ? 'sin comprobar' : batterySaver ? 'activo' : 'desactivado'}. '
+                    'Optimización Android: ${batteryOptimizationIgnored == null ? 'sin comprobar' : batteryOptimizationIgnored ? 'exenta' : 'aplicada'}.\n'
+                  : '') +
               'Revisa las restricciones de batería desde los ajustes del teléfono si las notificaciones llegan tarde. '
               'Esta versión no solicita acceso permanente a la ubicación: no se muestra como permiso concedido.',
             ),
