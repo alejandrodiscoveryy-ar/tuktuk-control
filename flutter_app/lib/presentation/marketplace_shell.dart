@@ -80,12 +80,24 @@ class MarketplaceMoreScreen extends StatelessWidget {
     BuildContext context, {
     required String title,
     required Widget child,
+    bool agency = false,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(title)),
-          body: AppBackground(child: SafeArea(child: child)),
+          body: AppBackground(
+            child: SafeArea(
+              child: AnimatedBuilder(
+                animation: store,
+                builder: (context, _) => store.conductorAppAccessGateVisible
+                    ? ConductorAppAccessGate(store: store, child: child)
+                    : agency && store.conductorLocalOnly
+                        ? _AgencyAccessUnavailable(store: store)
+                        : child,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -115,6 +127,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
             onTap: () => _openPage(
               context,
               title: 'Conviértete en conductor',
+              agency: true,
               child: MarketplaceOnboardingScreen(store: store),
             ),
           ),
@@ -167,6 +180,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
             onTap: () => _openPage(
               context,
               title: 'Impulsa',
+              agency: true,
               child: MarketplaceDriverPromotionScreen(store: store),
             ),
           ),
@@ -182,12 +196,13 @@ class MarketplaceMoreScreen extends StatelessWidget {
 
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () {
-              if (store.user != null) {
+              if (store.conductorAgencyAccessAllowed) {
                 unawaited(store.loadReferrals());
               }
               _openPage(
                 context,
                 title: tr('Referidos'),
+                agency: true,
                 // A pushed MaterialPageRoute does not rebuild when the shell
                 // behind it receives a ChangeNotifier notification. Listen on
                 // this route as well, otherwise loading never leaves the
