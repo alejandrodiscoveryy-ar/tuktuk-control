@@ -461,7 +461,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!working && mounted && widget.store.user?.id == userId &&
           _selectedVehicleId == vehicleId && !_updatingAvailability) {
         // Reload authoritative state rather than writing accepting_jobs=true.
-        await _load();
+        await _load(refreshHistory: false);
       }
     } catch (_) {
       // Offline or older backend: preserve local state; retry on next contact.
@@ -470,7 +470,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
-  void _refreshAvailability() {
+  void _refreshAvailability({bool refreshHistory = true}) {
     if (marketplaceJobPushPending.value) {
       if (!_marketplaceJobsVisible.value) {
         _marketplaceJobsNeedAttention.value = true;
@@ -482,8 +482,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         });
       }
     }
-    // Push and resume only need operational state, not the full history.
-    unawaited(_load(refreshHistory: false));
+    unawaited(_load(refreshHistory: refreshHistory));
   }
 
   @override
@@ -500,7 +499,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     if (state == AppLifecycleState.resumed) {
-      _refreshAvailability();
+      _refreshAvailability(refreshHistory: false);
       unawaited(_sendPresenceHeartbeat());
       _recoverStalledOperationalGpsForeground();
       _syncOperationalLocationSampling(
@@ -770,6 +769,14 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     final vehicle = _operationalLocationVehicle();
     if (vehicle == null) return;
+    final ownerId = widget.store.user?.id;
+    final generation = _operationalLocationStreamGeneration;
+
+    bool stillCurrent() => mounted &&
+        widget.store.user?.id == ownerId &&
+        _operationalLocationStreamGeneration == generation &&
+        _operationalLocationVehicle()?.id == vehicle.id &&
+        _canPublishOperationalLocation();
 
     if (!_operationalGpsIo.validCoordinates(position)) return;
     final latitude = position.latitude;
@@ -796,7 +803,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           vehicleId: vehicle.id,
           position: position,
         );
-        _markOperationalGpsPublished(position, nowUtc);
+        if (!stillCurrent()) return;
+        _markOperationalGpsPublished(position, DateTime.now().toUtc());
 
         final approaching = _active.where((job) =>
           job.status == 'en_route' &&
@@ -820,7 +828,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
-      _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
+      if (stillCurrent()) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
+      }
       // Sin cobertura no se inventa ubicacion; reintentar con la siguiente muestra.
     } finally {
       _activeOperationalLocationPublishInFlight = false;
@@ -1016,6 +1026,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (vehicle == null) return;
 
     final activeService = _operationalActiveJob() != null;
+    final ownerId = widget.store.user?.id;
+    bool stillCurrent() => mounted &&
+        widget.store.user?.id == ownerId &&
+        _operationalLocationVehicle()?.id == vehicle.id &&
+        (_operationalActiveJob() != null) == activeService &&
+        _canPublishOperationalLocation();
     var shouldReschedule = true;
     Duration? retryDelay;
 
@@ -1026,7 +1042,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         requestPermission: requestPermission && widget.isVisible,
       );
       if (accessIssue != null) {
-        _setOperationalGpsIssue(accessIssue);
+        if (stillCurrent()) _setOperationalGpsIssue(accessIssue);
         shouldReschedule = false;
         return;
       }
@@ -1035,7 +1051,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         isWeb: kIsWeb,
       );
 
-      if (!mounted || !_canPublishOperationalLocation()) return;
+      if (!stillCurrent()) return;
 
       if (!_operationalGpsIo.validCoordinates(position)) return;
 
@@ -1051,7 +1067,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           vehicleId: vehicle.id,
           position: position,
         );
-        _markOperationalGpsPublished(position, nowUtc);
+        if (!stillCurrent()) return;
+        _markOperationalGpsPublished(position, DateTime.now().toUtc());
         if (mounted && kIsWeb) setState(() {});
 
         // Una consulta iniciada antes del nuevo GPS puede devolver cero
@@ -1070,7 +1087,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
-      _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
+      if (stillCurrent()) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
+      }
       // Un fallo transitorio de GPS/red no debe detener el seguimiento.
       // Reintentamos con backoff para no castigar batería ni datos móviles.
       retryDelay = MarketplaceOperationalLocationPolicy.failureRetryDelay(
@@ -1350,6 +1369,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     final vehicleId = _selectedVehicleId;
+    final requestUserId = widget.store.user?.id;
 
     if (vehicleId == null) {
       if (!mounted) return;
@@ -1380,7 +1400,6 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     try {
-      final requestUserId = widget.store.user?.id;
       final jobs = await _service.available(vehicleId)
           .timeout(const Duration(seconds: 20));
 
@@ -1398,7 +1417,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _setMarketplaceAvailableJobCount(jobs.length);
       _alertRecoveredOffers(jobs, requestUserId);
     } catch (_) {
-      if (!mounted || vehicleId != _selectedVehicleId) return;
+      if (!mounted || vehicleId != _selectedVehicleId ||
+          widget.store.user?.id != requestUserId) return;
 
       setState(() {
         _available = const [];
