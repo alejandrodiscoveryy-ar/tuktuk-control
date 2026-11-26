@@ -1950,11 +1950,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     };
   }
 
+  TextStyle _entryTextStyle(BuildContext context) => TextStyle(
+    color: Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+  );
+
   InputDecoration _fieldDecoration(BuildContext context, String label,
       IconData icon, Color color, {String? suffix}) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final labelColor = dark ? const Color(0xFFDCE8F4) : const Color(0xFF31475E);
+    final edge = dark ? const Color(0xFF8296AA) : const Color(0xFF657B91);
     return InputDecoration(
       labelText: tr(label),
+      labelStyle: TextStyle(color: labelColor, fontSize: 16,
+        fontWeight: FontWeight.w600),
+      floatingLabelStyle: TextStyle(color: labelColor,
+        fontSize: 16, fontWeight: FontWeight.w700),
       suffixText: suffix,
+      suffixStyle: TextStyle(color: labelColor, fontSize: 15,
+        fontWeight: FontWeight.w700),
       prefixIcon: Padding(
         padding: const EdgeInsets.all(8),
         child: DecoratedBox(
@@ -1967,15 +1983,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
       filled: true,
-      fillColor: appSurfaceHighColor(context).withValues(alpha: .42),
+      fillColor: dark ? const Color(0xFF26394D) : const Color(0xFFFFFFFF),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: appOutlineColor(context).withValues(alpha: .45)),
+        borderSide: BorderSide(color: edge, width: 1.2),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: color, width: 1.5),
+        borderSide: BorderSide(color: color, width: 2),
       ),
     );
   }
@@ -2039,15 +2055,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final editing = widget.record != null;
     final editingExpense = editing && widget.record!.expense > 0;
     final accent = _recordAccent(context, recordType);
-    final foreground = ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
-        ? Colors.white : const Color(0xFF10251F);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final foreground = dark ? const Color(0xFF10251F) : Colors.white;
     final blue = _recordAccent(context, _NewRecordType.maintenance);
     final maintenanceSelected = !editing && recordType == _NewRecordType.maintenance;
     final buttonStyle = FilledButton.styleFrom(
       backgroundColor: accent,
       foregroundColor: foreground,
-      minimumSize: const Size.fromHeight(50),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      minimumSize: const Size.fromHeight(52),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      elevation: 2,
+      shadowColor: accent.withValues(alpha: .35),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     );
     return LayoutBuilder(builder: (context, constraints) {
       final horizontal = constraints.maxWidth > 600
@@ -2147,6 +2166,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       recordType == _NewRecordType.earnings) ...[
                     TextField(
                       controller: earnings,
+                      style: _entryTextStyle(context),
+                      cursorColor: dark ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
                       keyboardType: TextInputType.number,
                       decoration: _fieldDecoration(context, 'Ingreso del día',
                         Icons.payments_outlined, accent, suffix: activeCurrency),
@@ -2154,6 +2175,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 11),
                     TextField(
                       controller: odometer,
+                      style: _entryTextStyle(context),
+                      cursorColor: dark ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
                       keyboardType: TextInputType.number,
                       decoration: _fieldDecoration(context, 'Odómetro final (km, opcional)',
                         Icons.speed, blue),
@@ -2163,6 +2186,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       (!editing && recordType == _NewRecordType.expense)) ...[
                     TextField(
                       controller: expense,
+                      style: _entryTextStyle(context),
+                      cursorColor: dark ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
                       keyboardType: TextInputType.number,
                       decoration: _fieldDecoration(context, 'Importe del gasto',
                         Icons.receipt_long_outlined, accent, suffix: activeCurrency),
@@ -2170,6 +2195,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 11),
                     TextField(
                       controller: expenseCategory,
+                      style: _entryTextStyle(context),
+                      cursorColor: dark ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
                       decoration: _fieldDecoration(context, 'Categoría del gasto',
                         Icons.sell_outlined, accent),
                     ),
@@ -2179,6 +2206,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 11),
                     TextField(
                       controller: battery,
+                      style: _entryTextStyle(context),
+                      cursorColor: dark ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
                       keyboardType: TextInputType.number,
                       decoration: _fieldDecoration(context, 'Voltaje de batería',
                         Icons.battery_charging_full_outlined, blue, suffix: 'V'),
@@ -2187,6 +2216,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 11),
                   TextField(
                     controller: note,
+                      style: _entryTextStyle(context),
+                      cursorColor: dark ? const Color(0xFFF7FAFF) : const Color(0xFF152638),
                     minLines: 2,
                     maxLines: 4,
                     decoration: _fieldDecoration(context, 'Nota opcional',
@@ -2199,13 +2230,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             FilledButton.icon(
               style: buttonStyle,
               onPressed: widget.store.canWrite ? save : null,
-              icon: const Icon(Icons.save_outlined),
+              key: const ValueKey('register-save'),
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 25),
               label: Text(editing
                   ? tr('Guardar cambios')
                   : recordType == _NewRecordType.expense
                       ? tr('Guardar gasto')
                       : tr('Guardar ingreso'),
-                style: const TextStyle(fontWeight: FontWeight.w800)),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             ),
           ],
         ],
