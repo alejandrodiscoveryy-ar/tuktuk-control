@@ -103,7 +103,13 @@
           showIcon(fallbackIcon);
           return;
         }
-        if (cached && cached.url === url && validSnapshot(cached.snapshot)) return;
+        if (cached && cached.url === url && validSnapshot(cached.snapshot)) {
+          if (requested !== null && requested !== url) {
+            requested = url;
+            showIcon(cached.snapshot);
+          }
+          return;
+        }
         if (requested === url) return;
         requested = url;
 
