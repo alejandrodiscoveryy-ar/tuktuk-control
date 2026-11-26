@@ -643,7 +643,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
   final VoidCallback refresh;
   final bool loading;
 
-  String _cup(num value) => '${value.toStringAsFixed(value % 1 == 0 ? 0 : 2)} CUP';
+  String _cup(num value) => '${numFmt(value)} CUP';
   String _label(Object? state) => switch(state) {
     'pending' => 'Por acreditar', 'funding_required' => 'Pendiente de financiación',
     'credited' => 'Acreditada', 'cancelled' => 'Cancelada',
@@ -711,17 +711,17 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
           const SizedBox(height: 4),
-          Text(_cup(d.credited),
+          _OverviewMetricValue(numFmt(d.credited), currency: 'CUP',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
               color: theme.colorScheme.primary)),
           const Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
             style: TextStyle(color: muted, fontSize: 11)),
           const SizedBox(height: 12),
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(child: metric('Solicitudes generadas', '${d.generated}')),
             const SizedBox(width: 8),
             Expanded(child: metric('Viajes de la flota acreditados', '${d.creditedTrips}')),
-          ]),
+          ])),
           if (d.pending > 0) ...[
             const SizedBox(height: 10),
             Text('Ganancias por acreditar: ${_cup(d.pending)}',
@@ -733,11 +733,11 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
             childrenPadding: EdgeInsets.zero,
             title: const Text('Ver más resultados', style: TextStyle(fontSize: 13)),
             children: [
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(child: metric('Viajes propios liquidados', '${d.ownTrips}')),
                 const SizedBox(width: 8),
                 Expanded(child: metric('Ahorro en comisión', _cup(d.ownSavings))),
-              ]),
+              ])),
               if (d.fundingRequired > 0)
                 Padding(padding: const EdgeInsets.only(top: 8),
                   child: Text('Pendientes de financiación: ${_cup(d.fundingRequired)}',
@@ -1103,7 +1103,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     return value != null && value.isFinite && value >= 0 ? value : null;
   }
 
-  String _moneyCup(num value) => '${value.toStringAsFixed(2)} CUP';
+  String _moneyCup(num value) => '${numFmt(value)} CUP';
 
   Future<void> _loadWithdrawalAccount() async {
     if (!mounted || !_sameUser) return;
@@ -1253,7 +1253,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         if (_withdrawalLoading) const LinearProgressIndicator(),
         if (values != null && available != null && minimum != null) ...[
           const Text('Disponible para retirar', style: TextStyle(fontSize: 12)),
-          Text(_moneyCup(available),
+          _OverviewMetricValue(numFmt(available), currency: 'CUP',
             style: const TextStyle(color: gold, fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 7),
           Text('Mínimo para solicitar retiro: ${_moneyCup(minimum)}',
