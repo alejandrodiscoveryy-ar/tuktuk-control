@@ -179,6 +179,132 @@ class SeasonalAccent extends StatelessWidget {
   }
 }
 
+/// A lightweight, static campaign illustration confined to the hero's logo area.
+class _SeasonalHeroEmblem extends StatelessWidget {
+  const _SeasonalHeroEmblem({required this.campaign, required this.logo});
+
+  final SeasonalCampaign campaign;
+  final Widget logo;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final gold = dark ? campaign.highlight : const Color(0xFF765519);
+    final locale = activeLanguage.split(RegExp(r'[-_]')).first;
+    final message = campaign.messages[locale] ?? campaign.messages['es']!;
+    return Column(
+      key: ValueKey('seasonal-hero-${campaign.id}'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 88,
+          width: double.infinity,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _SeasonalHeroArt(
+                    christmas: campaign.id == 'christmas',
+                    gold: gold, accent: campaign.accent, dark: dark),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 8),
+                child: FittedBox(fit: BoxFit.contain, child: logo),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: gold, fontSize: 13, fontWeight: FontWeight.w800,
+            letterSpacing: .15, height: 1.12,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SeasonalHeroArt extends CustomPainter {
+  const _SeasonalHeroArt({required this.christmas, required this.gold,
+    required this.accent, required this.dark});
+
+  final bool christmas;
+  final Color gold;
+  final Color accent;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final glow = Paint()..shader = ui.Gradient.radial(
+      center, size.width * .48,
+      [accent.withValues(alpha: .24), accent.withValues(alpha: 0)]);
+    canvas.drawRect(Offset.zero & size, glow);
+    final scale = min(size.width / 110, size.height / 88);
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.scale(scale);
+    final ring = Rect.fromCenter(center: Offset.zero, width: 78, height: 74);
+    final stroke = Paint()
+      ..color = gold.withValues(alpha: .45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = .9
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(ring, -pi * .87, pi * .70, false, stroke);
+    canvas.drawArc(ring, pi * .13, pi * .70, false, stroke);
+
+    void sparkle(double x, double y, double radius) {
+      final path = ui.Path()
+        ..moveTo(x, y - radius)
+        ..quadraticBezierTo(x + 1, y - 1, x + radius, y)
+        ..quadraticBezierTo(x + 1, y + 1, x, y + radius)
+        ..quadraticBezierTo(x - 1, y + 1, x - radius, y)
+        ..quadraticBezierTo(x - 1, y - 1, x, y - radius)
+        ..close();
+      canvas.drawPath(path, Paint()..color = gold.withValues(alpha: .90));
+    }
+
+    sparkle(-42, -24, 4);
+    sparkle(42, -16, 6);
+    sparkle(34, 29, 3);
+    if (christmas) {
+      final pine = Paint()
+        ..color = dark ? const Color(0xFF74C9A1) : accent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.round;
+      for (final side in [-1.0, 1.0]) {
+        canvas.save();
+        canvas.scale(side, 1);
+        final stem = ui.Path()..moveTo(19, 36)..quadraticBezierTo(38, 28, 46, 8);
+        canvas.drawPath(stem, pine);
+        for (var i = 0; i < 4; i++) {
+          final x = 23.0 + i * 6;
+          final y = 33.0 - i * 6;
+          canvas.drawLine(Offset(x, y), Offset(x - 3, y - 9), pine);
+          canvas.drawLine(Offset(x, y), Offset(x + 8, y - 2), pine);
+        }
+        final berry = Paint()..color = const Color(0xFFD9757D);
+        canvas.drawCircle(const Offset(39, 28), 2.5, berry);
+        canvas.drawCircle(const Offset(44, 24), 2, berry);
+        canvas.restore();
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _SeasonalHeroArt oldDelegate) =>
+      christmas != oldDelegate.christmas || gold != oldDelegate.gold ||
+      accent != oldDelegate.accent || dark != oldDelegate.dark;
+}
+
 class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,
@@ -230,27 +356,24 @@ class MetricHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: headline),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 100,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(height: campaign == null ? 86 : 66,
-                      child: FittedBox(fit: BoxFit.contain, child: logo)),
-                    if (campaign != null) ...[
-                      const SizedBox(height: 3),
-                      SeasonalAccent(date: date, compact: true),
-                    ],
-                  ],
+          LayoutBuilder(builder: (context, constraints) {
+            final width = campaign == null ? 100.0
+                : (constraints.maxWidth * .39).clamp(96.0, 172.0).toDouble();
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: headline),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: width,
+                  child: campaign == null
+                      ? SizedBox(height: 86,
+                          child: FittedBox(fit: BoxFit.contain, child: logo))
+                      : _SeasonalHeroEmblem(campaign: campaign, logo: logo),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
           const SizedBox(height: 8),
           Divider(color: appOutlineColor(context)),
           Row(
