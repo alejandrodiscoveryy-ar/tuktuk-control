@@ -733,7 +733,7 @@ class _StatisticsMonthlyChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final income = appPrimaryColor(context);
-    final expense = kDanger;
+    const expense = kDanger;
     final maximum = cycles.fold<double>(0.0, (value, cycle) =>
       max(value, max(cycle.earnings, cycle.expenses).toDouble()));
     return GlassCard(
