@@ -1479,21 +1479,22 @@ class _MarketplaceOnboardingScreenState
     required String assetKind,
     String? identitySide,
   }) async {
-    if (kIsWeb &&
-        source == ImageSource.camera &&
-        (assetKind == 'vehicle_photo' || assetKind == 'identity_document')) {
-      return guided_capture.captureGuidedMarketplacePhoto(
-        assetKind == 'vehicle_photo' ? 'vehicle' : 'identity-$identitySide',
-      );
-    }
-    if (!kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        source == ImageSource.camera &&
-        assetKind == 'identity_document') {
-      return identity_capture.captureGuidedMarketplaceIdentityPhoto(
-        context,
-        identitySide ?? 'front',
-      );
+    final guidedKind = switch (assetKind) {
+      'driver_photo' => 'driver',
+      'vehicle_photo' => 'vehicle',
+      'identity_document' => 'identity-${identitySide ?? 'front'}',
+      _ => null,
+    };
+    if (source == ImageSource.camera && guidedKind != null) {
+      if (kIsWeb) {
+        return guided_capture.captureGuidedMarketplacePhoto(guidedKind);
+      }
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        return identity_capture.captureGuidedMarketplaceIdentityPhoto(
+          context,
+          guidedKind,
+        );
+      }
     }
     final picked = await _imagePicker.pickImage(
       source: source,
