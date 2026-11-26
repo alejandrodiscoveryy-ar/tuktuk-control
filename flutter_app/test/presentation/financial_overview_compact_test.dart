@@ -195,11 +195,21 @@ void main() {
           expect(find.text('Referido'), findsOneWidget);
           expect(find.text(offline ? 'Sin conexión' : '1.250'), findsOneWidget);
           expect(find.text('CUP/km'), findsOneWidget);
-          expect(tester.getSize(wallet).height, greaterThan(tester.getSize(expenses).height));
+          // At standard mobile size, the wallet's two detail rows need
+          // extra room; other rows must not inherit that height.
+          if (width == 390 && scale == 1) {
+            expect(tester.getSize(wallet).height,
+              greaterThan(tester.getSize(expenses).height));
+          }
           if (scale < 2) {
             expect(tester.getSize(wallet), tester.getSize(distance));
             expect(tester.getSize(expenses), tester.getSize(net));
             expect(tester.getTopLeft(wallet).dy, tester.getTopLeft(distance).dy);
+            expect(tester.getTopLeft(expenses).dy, tester.getTopLeft(net).dy);
+          } else {
+            expect(tester.getTopLeft(distance).dy,
+              greaterThan(tester.getTopLeft(wallet).dy));
+            expect(tester.getSize(wallet).width, tester.getSize(expenses).width);
           }
           expect(tester.takeException(), isNull);
         }
