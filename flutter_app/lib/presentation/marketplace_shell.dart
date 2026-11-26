@@ -71,10 +71,34 @@ class _MoreSectionIcon extends StatelessWidget {
   }
 }
 
+// The home receipt and More menu share the same guarded registration route.
+void _openMarketplaceRegistration(BuildContext context, RecordStore store,
+    ValueChanged<MarketplaceRegistrationReceipt>? finished) {
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (routeContext) => Scaffold(
+      appBar: AppBar(title: const Text('Conviértete en conductor')),
+      body: AppBackground(child: SafeArea(child: AnimatedBuilder(
+        animation: store,
+        builder: (context, _) => store.conductorAppAccessGateVisible
+          ? ConductorAppAccessGate(store: store, child: const SizedBox.shrink())
+          : store.conductorLocalOnly
+            ? _AgencyAccessUnavailable(store: store)
+            : MarketplaceOnboardingScreen(store: store,
+                onRegistrationFinished: finished == null ? null : (receipt) {
+                  if (!routeContext.mounted || store.user?.id != receipt.userId) return;
+                  Navigator.of(routeContext).pop();
+                  finished(receipt);
+                }),
+      ))),
+    ),
+  ));
+}
+
 class MarketplaceMoreScreen extends StatelessWidget {
-  const MarketplaceMoreScreen({required this.store, super.key});
+  const MarketplaceMoreScreen({required this.store, this.onRegistrationFinished, super.key});
 
   final RecordStore store;
+  final ValueChanged<MarketplaceRegistrationReceipt>? onRegistrationFinished;
 
   void _openPage(
     BuildContext context, {
@@ -123,12 +147,7 @@ class MarketplaceMoreScreen extends StatelessWidget {
             title: const Text('Conviértete en conductor'),
 
             trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => _openPage(
-              context,
-              title: 'Conviértete en conductor',
-              agency: true,
-              child: MarketplaceOnboardingScreen(store: store),
-            ),
+            onTap: () => _openMarketplaceRegistration(context, store, onRegistrationFinished),
           ),
         ),
         const SizedBox(height: 10),

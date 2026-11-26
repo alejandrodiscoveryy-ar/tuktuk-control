@@ -741,6 +741,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 class _AppShellState extends State<AppShell> {
   int index = _marketplacePushJobId.value == null ? 0 : 2;
   String? _lastAuthenticatedUserId;
+  MarketplaceRegistrationReceipt? _registrationReceipt;
+
+  void _registrationFinished(MarketplaceRegistrationReceipt receipt) {
+    if (!mounted || store.user?.id != receipt.userId) return;
+    _setMarketplaceJobsVisible(false);
+    setState(() { _registrationReceipt = receipt; index = 0; });
+  }
 
   RecordStore get store => widget.store;
 
@@ -835,6 +842,7 @@ class _AppShellState extends State<AppShell> {
             if (mounted) _setMarketplaceJobsVisible(index == 2);
           });
         }
+        if (_registrationReceipt?.userId != authenticatedUserId) _registrationReceipt = null;
         _lastAuthenticatedUserId = authenticatedUserId;
 
         final localOnly = store.conductorLocalOnly;
@@ -862,7 +870,12 @@ class _AppShellState extends State<AppShell> {
         };
         final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
-          DashboardScreen(store: store),
+          DashboardScreen(
+            store: store,
+            registrationReceipt: store.conductorAgencyAccessAllowed ? _registrationReceipt : null,
+            onDismissRegistration: () => setState(() => _registrationReceipt = null),
+            onResumeRegistration: () => _openMarketplaceRegistration(context, store, _registrationFinished),
+          ),
           MarketplaceRecordsScreen(store: store),
           if (localOnly)
             _AgencyAccessUnavailable(store: store)
@@ -874,7 +887,7 @@ class _AppShellState extends State<AppShell> {
             ),
           StatsScreen(store: store),
           const StoreScreen(),
-          MarketplaceMoreScreen(store: store),
+          MarketplaceMoreScreen(store: store, onRegistrationFinished: _registrationFinished),
         ];
         return Scaffold(
           extendBody: true,
@@ -1549,10 +1562,58 @@ class _UserNavigationAvatar extends StatelessWidget {
   }
 }
 
+class MarketplaceRegistrationStatusCard extends StatelessWidget {
+  const MarketplaceRegistrationStatusCard({required this.receipt, this.onDismiss,
+    this.onResume, super.key});
+
+  final MarketplaceRegistrationReceipt receipt;
+  final VoidCallback? onDismiss;
+  final VoidCallback? onResume;
+
+  @override
+  Widget build(BuildContext context) {
+    final approved = receipt.outcome == MarketplaceRegistrationOutcome.approved;
+    final pending = receipt.outcome == MarketplaceRegistrationOutcome.incomplete;
+    final accent = approved ? const Color(0xFF58CFA1) : kTertiary;
+    return _RegistrationBlock(
+      accent: accent,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(approved ? Icons.verified_rounded : Icons.info_outline, color: accent),
+          const SizedBox(width: 8),
+          Expanded(child: Text(
+            approved ? 'Inscripción aprobada' : pending
+              ? 'Inscripción pendiente de completar' : 'Inscripción guardada · estado por confirmar',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          )),
+          if (onDismiss != null)
+            IconButton(tooltip: 'Cerrar aviso', onPressed: onDismiss, icon: const Icon(Icons.close, size: 18)),
+        ]),
+        Text(approved
+          ? 'Tu perfil cumple los requisitos. Consulta Trabajos para comenzar.'
+          : pending
+            ? 'Revisa los requisitos pendientes para completar tu inscripción.'
+            : 'Tus datos fueron guardados. Consulta el estado al recuperar la conexión.',
+          style: const TextStyle(fontSize: 12)),
+        for (final issue in receipt.issues)
+          Padding(padding: const EdgeInsets.only(top: 4),
+            child: Text('• $issue', style: const TextStyle(fontSize: 12))),
+        if (!approved && onResume != null)
+          TextButton.icon(onPressed: onResume, icon: const Icon(Icons.edit_outlined),
+            label: const Text('Revisar inscripción')),
+      ]),
+    );
+  }
+}
+
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({required this.store, super.key});
+  const DashboardScreen({required this.store, this.registrationReceipt,
+    this.onDismissRegistration, this.onResumeRegistration, super.key});
 
   final RecordStore store;
+  final MarketplaceRegistrationReceipt? registrationReceipt;
+  final VoidCallback? onDismissRegistration;
+  final VoidCallback? onResumeRegistration;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -1711,6 +1772,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (widget.registrationReceipt != null) ...[
+          MarketplaceRegistrationStatusCard(
+            receipt: widget.registrationReceipt!,
+            onDismiss: widget.onDismissRegistration,
+            onResume: widget.onResumeRegistration,
+          ),
+          const SizedBox(height: 10),
+        ],
         MetricHero(
           label: tr('Ingreso de hoy'),
           value: numFmt(metrics.todayEarnings),

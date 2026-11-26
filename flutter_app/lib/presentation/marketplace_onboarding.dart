@@ -289,6 +289,51 @@ class _MarketplaceTopupFormState extends State<MarketplaceTopupForm> {
       );
 }
 
+enum MarketplaceRegistrationOutcome { approved, incomplete, unconfirmed }
+
+class MarketplaceRegistrationReceipt {
+  const MarketplaceRegistrationReceipt({
+    required this.userId, required this.outcome, this.issues = const [],
+  });
+
+  final String userId;
+  final MarketplaceRegistrationOutcome outcome;
+  final List<String> issues;
+}
+
+MarketplaceRegistrationOutcome marketplaceRegistrationOutcome({
+  required MarketplaceOnboarding? profile,
+  required MarketplaceVehicle? vehicle,
+  required MarketplaceWorkAccess? access,
+}) {
+  if (profile?.driverSuspended == true) return MarketplaceRegistrationOutcome.incomplete;
+  if (profile == null || access == null) {
+    return MarketplaceRegistrationOutcome.unconfirmed;
+  }
+  return !profile.driverSuspended && profile.driverStatus == 'active' &&
+      vehicle?.marketplaceStatus == 'active' &&
+      access.onboardingComplete && access.driverActive
+      ? MarketplaceRegistrationOutcome.approved
+      : MarketplaceRegistrationOutcome.incomplete;
+}
+
+class _RegistrationBlock extends StatelessWidget {
+  const _RegistrationBlock({required this.accent, required this.child});
+  final Color accent;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Color.alphaBlend(accent.withValues(alpha: .08),
+        appSurfaceHighColor(context)),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: accent.withValues(alpha: .35)),
+    ),
+    child: child,
+  );
+}
+
 class MarketplaceOnboardingScreen extends StatefulWidget {
   const MarketplaceOnboardingScreen({
     required this.store,
@@ -296,6 +341,7 @@ class MarketplaceOnboardingScreen extends StatefulWidget {
     this.managementSection,
     this.initialVehicleId,
     this.onManagementChanged,
+    this.onRegistrationFinished,
     super.key,
   });
 
@@ -304,6 +350,7 @@ class MarketplaceOnboardingScreen extends StatefulWidget {
   final MarketplaceManagementSection? managementSection;
   final String? initialVehicleId;
   final VoidCallback? onManagementChanged;
+  final ValueChanged<MarketplaceRegistrationReceipt>? onRegistrationFinished;
 
   @override
   State<MarketplaceOnboardingScreen> createState() =>
@@ -404,6 +451,8 @@ class _MarketplaceOnboardingScreenState
   bool _showFieldErrors = false;
   bool _registrationSubmitting = false;
   bool _registrationSaved = false;
+  MarketplaceRegistrationOutcome? _registrationOutcome;
+  List<String> _registrationResultIssues = const [];
   bool _driverSaveSucceeded = false;
   bool _vehicleSaveSucceeded = false;
 
@@ -604,6 +653,9 @@ class _MarketplaceOnboardingScreenState
     final savedType = _identityDocs['document_type']?.toString();
     final changingType = savedType != null &&
         _identityDocumentType != null && savedType != _identityDocumentType;
+    if (!_identityLoaded) {
+      issues['identityLoad'] = 'No se pudo consultar la documentación. Actualiza antes de enviar.';
+    }
     if (_identityRequired || changingType) {
       if (_identityTypeRequired && _identityDocumentType == null) {
         issues['identityType'] = 'Selecciona carné de identidad o licencia de conducción.';
@@ -752,8 +804,40 @@ class _MarketplaceOnboardingScreenState
     _scrollRegistrationToTop();
   }
 
+  // Drafts never activate a driver. Do not navigate away while any photo
+  // remains only in memory or while a server write has not been acknowledged.
+  Future<void> _saveIncompleteAndReturn() async {
+    if (!_canEdit || _registrationSubmitting || _draftBusy) return;
+    final userId = widget.store.user?.id;
+    if (userId == null) return;
+    if (_identityPending.isNotEmpty || _driverPhotoBytes != null ||
+        _vehiclePhotoBytes != null) {
+      toast(context, 'Hay fotografías sin guardar. Reintenta su subida antes de salir.');
+      return;
+    }
+    setState(() => _registrationSubmitting = true);
+    try {
+      await _flushDraftFields();
+      if (!mounted || widget.store.user?.id != userId) return;
+      if (_draftBusy || _draftPending.isNotEmpty || _draftError != null) {
+        toast(context, 'No se guardaron todos los datos. Revisa la conexión y reintenta.');
+        return;
+      }
+      final issues = _registrationErrors().values.toList();
+      if (issues.isEmpty) return;
+      widget.onRegistrationFinished?.call(MarketplaceRegistrationReceipt(
+        userId: userId, outcome: MarketplaceRegistrationOutcome.incomplete,
+        issues: List.unmodifiable(issues),
+      ));
+    } finally {
+      if (mounted) setState(() => _registrationSubmitting = false);
+    }
+  }
+
   Future<void> _saveRegistration() async {
     if (_registrationSubmitting || !_canEdit) return;
+    final registrationUserId = widget.store.user?.id;
+    if (registrationUserId == null) return;
     // No borrar el borrador si queda un envío anterior en vuelo.
     for (var i = 0; i < 100 && _draftBusy; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 60));
@@ -848,7 +932,45 @@ class _MarketplaceOnboardingScreenState
         _registrationSaved = true;
         _showFieldErrors = false;
       });
-      toast(context, 'Inscripción guardada correctamente.');
+      // A successful save is not the same as approval. Read the definitive
+      // server eligibility, not the existence of local image previews.
+      if (widget.driverOnly) {
+        return;
+      }
+      MarketplaceRegistrationOutcome outcome = MarketplaceRegistrationOutcome.unconfirmed;
+      List<String> resultIssues = const [];
+      try {
+        final confirmed = await _service.onboarding();
+        MarketplaceVehicle? selected;
+        for (final candidate in confirmed.vehicles) {
+          if (candidate.id == vehicleId) { selected = candidate; break; }
+        }
+        final access = selected == null ? null : await _service.access(selected.id);
+        if (!mounted || widget.store.user?.id != registrationUserId) return;
+        outcome = marketplaceRegistrationOutcome(profile: confirmed, vehicle: selected, access: access);
+        if (outcome == MarketplaceRegistrationOutcome.incomplete) {
+          resultIssues = [
+            if (confirmed.driverSuspended) 'El perfil está suspendido. Contacta con soporte.',
+            if (confirmed.driverPhotoAssetId == null) 'Falta la foto del conductor.',
+            if (selected?.mainPhotoAssetId == null) 'Falta la foto del vehículo.',
+            if (selected == null) 'No se encontró el vehículo registrado.',
+          ];
+          if (resultIssues.isEmpty) {
+            resultIssues = ['El servidor aún no confirma la activación. Revisa tu perfil o contacta con soporte.'];
+          }
+        }
+      } catch (_) {
+        // Saved remotely; do not falsely claim approval or retry the mutation.
+        resultIssues = const ['No se pudo consultar el estado. Revisa tu conexión.'];
+      }
+      if (!mounted || widget.store.user?.id != registrationUserId) return;
+      setState(() {
+        _registrationOutcome = outcome;
+        _registrationResultIssues = resultIssues;
+      });
+      widget.onRegistrationFinished?.call(MarketplaceRegistrationReceipt(
+        userId: registrationUserId, outcome: outcome, issues: List.unmodifiable(resultIssues),
+      ));
     } catch (_) {
       if (mounted) {
         toast(
@@ -1516,9 +1638,9 @@ class _MarketplaceOnboardingScreenState
           borderRadius: BorderRadius.circular(18),
           child: vehicle
               ? SizedBox(
-                  height: 255,
+                  height: 164,
                   width: double.infinity,
-                  child: Image.memory(bytes, fit: BoxFit.contain),
+                  child: _registrationPhoto(bytes, height: 164),
                 )
               : Image.memory(bytes, width: 120, height: 120, fit: BoxFit.cover),
         );
@@ -1708,6 +1830,28 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
+  Widget _registrationPhoto(Uint8List bytes, {required double height}) =>
+      Semantics(
+        button: true,
+        label: 'Ampliar fotografía',
+        child: GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (dialogContext) => Dialog(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Align(alignment: Alignment.centerRight,
+                  child: IconButton(tooltip: 'Cerrar', icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(dialogContext).pop())),
+                Flexible(child: InteractiveViewer(
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                )),
+              ]),
+            ),
+          ),
+          child: Image.memory(bytes, height: height, width: double.infinity, fit: BoxFit.contain),
+        ),
+      );
+
   Widget _identityDocumentTile(String side, String title) {
     final pending = _identityPending[side];
     final saved = _identityDocs[side];
@@ -1720,8 +1864,7 @@ class _MarketplaceOnboardingScreenState
         path != null;
     Widget preview;
     if (pending != null) {
-      preview = Image.memory(pending,
-          height: 152, width: double.infinity, fit: BoxFit.contain);
+      preview = _registrationPhoto(pending, height: 112);
     } else if (stored) {
       final future = _savedPhotoFutures.putIfAbsent(
         'identity-$id',
@@ -1733,8 +1876,7 @@ class _MarketplaceOnboardingScreenState
         future: future,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            return Image.memory(snapshot.data!,
-                height: 152, width: double.infinity, fit: BoxFit.contain);
+            return _registrationPhoto(snapshot.data!, height: 112);
           }
           if (snapshot.hasError) {
             return const Text('No se pudo mostrar la fotografia privada.');
@@ -1751,7 +1893,7 @@ class _MarketplaceOnboardingScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('$title${_identityRequired ? ' *' : ''}',
+        Text(title,
             style: const TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         Container(
@@ -2565,17 +2707,13 @@ class _MarketplaceOnboardingScreenState
       controller: _registrationScroll,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 120),
       children: [
-        GlassCard(
+        _RegistrationBlock(
+          accent: const Color(0xFF55A7FF),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Conviértete en conductor',
-                style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 7),
               Text(
-                'Completa tus datos y los del vehículo. Los campos con * son obligatorios.',
+                'Completa los requisitos indicados. Tu inscripción se aprueba automáticamente si todo está correcto.',
                 style: TextStyle(color: appMutedColor(context), height: 1.4),
               ),
               const SizedBox(height: 8),
@@ -2650,7 +2788,7 @@ class _MarketplaceOnboardingScreenState
         ],
         const SizedBox(height: 16),
         if (_registrationStep == 0)
-          GlassCard(
+          _RegistrationBlock(accent: const Color(0xFF55A7FF),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2690,7 +2828,7 @@ class _MarketplaceOnboardingScreenState
                           enabled: _canEdit,
                           textCapitalization: TextCapitalization.words,
                           decoration: InputDecoration(
-                            labelText: 'Nombre y apellidos *',
+                            labelText: 'Nombre y apellidos',
                             errorText: _registrationError('name'),
                             isDense: true,
                             prefixIcon: const Icon(
@@ -2705,7 +2843,7 @@ class _MarketplaceOnboardingScreenState
                           enabled: _canEdit,
                           keyboardType: TextInputType.phone,
                           decoration: InputDecoration(
-                            labelText: 'WhatsApp / teléfono *',
+                            labelText: 'WhatsApp / teléfono',
                             errorText: _registrationError('phone'),
                             hintText: '+5355555555',
                             isDense: true,
@@ -2816,7 +2954,7 @@ class _MarketplaceOnboardingScreenState
           ),
         if (_registrationStep == 0) ...[
           const SizedBox(height: 12),
-          GlassCard(
+          _RegistrationBlock(accent: const Color(0xFFA995EF),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -2831,8 +2969,8 @@ class _MarketplaceOnboardingScreenState
                   style: TextStyle(fontSize: 12, color: appMutedColor(context)),
                 ),
                 const SizedBox(height: 12),
-                Text('Tipo de documento${_identityTypeRequired ? ' *' : ''}',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const Text('Tipo de documento',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -2890,7 +3028,7 @@ class _MarketplaceOnboardingScreenState
         if (_registrationStep == 1 && !widget.driverOnly)
           const SizedBox(height: 16),
         if (_registrationStep == 1 && !widget.driverOnly)
-          GlassCard(
+          _RegistrationBlock(accent: const Color(0xFF60D3CB),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2958,28 +3096,7 @@ class _MarketplaceOnboardingScreenState
                         IconData icon,
                       ) {
                         return InputDecoration(
-                          labelText: _vehicleFieldError(label) != null ||
-                                  [
-                                    'Vehículo',
-                                    'Categoría',
-                                    'Marca',
-                                    'Modelo',
-                                    'Propulsión',
-                                  ].contains(label) ||
-                                  (label == 'Chapa' && _requiresRegistration(vehicle)) ||
-                                  (label == 'Pasajeros' &&
-                                      (_selectedServices.contains(
-                                            'passenger',
-                                          ) ||
-                                          _selectedServices.contains(
-                                            'tourism',
-                                          ))) ||
-                                  (label == 'Carga (kg)' &&
-                                      _selectedServices.contains('cargo')) ||
-                                  (label == 'Describe el tipo de vehículo' &&
-                                      _selectedCategory == 'other')
-                              ? '$label *'
-                              : label,
+                          labelText: label,
                           errorText: _vehicleFieldError(label),
                           isDense: true,
                           contentPadding: const EdgeInsets.symmetric(
@@ -3099,8 +3216,9 @@ class _MarketplaceOnboardingScreenState
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.outline,
+                            color: const Color(0xFFF0BB62).withValues(alpha: .45),
                           ),
+                          color: const Color(0xFFF0BB62).withValues(alpha: .07),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
@@ -3551,7 +3669,7 @@ class _MarketplaceOnboardingScreenState
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
-                            'Este vehículo ya cumple los requisitos de onboarding.',
+                            'Este vehículo ya cumple los requisitos de inscripción.',
                             style: TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
@@ -3563,8 +3681,7 @@ class _MarketplaceOnboardingScreenState
             ),
           ),
         if (_registrationStep == 2) ...[
-          const SizedBox(height: 14),
-          GlassCard(
+          _RegistrationBlock(accent: const Color(0xFF58CFA1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3587,6 +3704,12 @@ class _MarketplaceOnboardingScreenState
                   'Al guardar se enviarán tus datos y fotografías. No se crearán vehículos adicionales.',
                   style: TextStyle(color: appMutedColor(context), height: 1.4),
                 ),
+                if (!_registrationSaved && _registrationErrors().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  const Text('Requisitos pendientes', style: TextStyle(color: kTertiary, fontWeight: FontWeight.w800)),
+                  for (final issue in _registrationErrors().values)
+                    Padding(padding: const EdgeInsets.only(top: 4), child: Text('• $issue', style: const TextStyle(color: kTertiary, fontSize: 12))),
+                ],
                 if (_registrationSaved) ...[
                   const SizedBox(height: 12),
                   Row(
@@ -3596,20 +3719,27 @@ class _MarketplaceOnboardingScreenState
                         color: appPrimaryColor(context),
                       ),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Inscripción guardada correctamente.',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                          widget.driverOnly ? 'Datos del conductor guardados.' :
+                          _registrationOutcome == MarketplaceRegistrationOutcome.approved
+                            ? 'Inscripción aprobada.'
+                            : _registrationOutcome == MarketplaceRegistrationOutcome.incomplete
+                              ? 'Inscripción guardada, activación pendiente.'
+                              : 'Datos guardados. Estado por confirmar.',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
                     ],
                   ),
+                  for (final issue in _registrationResultIssues)
+                    Text(issue, style: const TextStyle(color: kTertiary, fontSize: 12)),
                 ],
               ],
             ),
           ),
         ],
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3641,9 +3771,21 @@ class _MarketplaceOnboardingScreenState
                         ? 'Guardando inscripción...'
                         : _registrationSaved
                             ? 'Inscripción guardada'
-                            : 'Guardar mi inscripción',
+                            : _registrationErrors().isNotEmpty
+                              ? 'Completar requisitos'
+                              : 'Guardar mi inscripción',
                   ),
                 ),
+              if (_registrationStep == 2 && !_registrationSaved &&
+                  _registrationErrors().isNotEmpty && widget.onRegistrationFinished != null) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _canEdit && !_registrationSubmitting && !_draftBusy
+                      ? _saveIncompleteAndReturn : null,
+                  icon: const Icon(Icons.home_outlined),
+                  label: const Text('Guardar borrador e ir a Inicio'),
+                ),
+              ],
               if (_registrationStep > 0) ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
