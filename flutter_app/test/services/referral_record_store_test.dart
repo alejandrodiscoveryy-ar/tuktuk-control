@@ -154,6 +154,89 @@ void main() {
     expect(store.referralProgram?.appliedDays, 15);
     expect(store.license.expiresAt, DateTime.utc(2030, 1, 16));
   });
+  test('cold startup without access verification preserves account and saves locally', () async {
+    final dir = await Directory.systemTemp.createTemp('conductor-offline-');
+    Hive.init(dir.path);
+    for (final name in ['daily_records', 'maintenance_records', 'meta', 'sync_queue']) {
+      await Hive.openBox<dynamic>(name);
+    }
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final checkReceived = Completer<void>();
+    final finishCheck = Completer<void>();
+    server.listen((request) async {
+      await request.drain<void>();
+      if (request.uri.path.endsWith('/get_my_tuktuk_conductor_app_access')) {
+        if (!checkReceived.isCompleted) checkReceived.complete();
+        await finishCheck.future;
+      }
+      request.response.statusCode = 503;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({'message': 'offline', 'code': '503'}));
+      await request.response.close();
+    });
+    await Supabase.initialize(
+      url: 'http://127.0.0.1:${server.port}',
+      publishableKey: 'test-only',
+      authOptions: const FlutterAuthClientOptions(
+        autoRefreshToken: false, detectSessionInUri: false, localStorage: EmptyLocalStorage(),
+      ),
+    );
+    const owner = '44444444-4444-4444-8444-444444444444';
+    final expiry = DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000;
+    String encode(Object value) => base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
+    final token = '${encode({'alg': 'none'})}.${encode({'exp': expiry, 'sub': owner})}.test';
+    await Supabase.instance.client.auth.recoverSession(jsonEncode({
+      'access_token': token, 'refresh_token': 'test', 'token_type': 'bearer',
+      'expires_in': 3600, 'expires_at': expiry,
+      'user': {'id': owner, 'app_metadata': {}, 'user_metadata': {},
+        'aud': 'authenticated', 'created_at': '2026-01-01T00:00:00Z'},
+    }));
+    final vehicle = VehicleProfile(
+      id: 'vehicle-$owner-primary', userId: owner, name: 'Offline',
+      createdAt: DateTime(2026), updatedAt: DateTime(2026),
+    );
+    await Hive.box('meta').put('vehicle:${vehicle.id}', vehicle.toMap());
+    await Hive.box('meta').put('activeVehicleId:$owner', vehicle.id);
+    final store = RecordStore();
+    addTearDown(() async {
+      if (!finishCheck.isCompleted) finishCheck.complete();
+      store.dispose();
+      await Supabase.instance.dispose();
+      await server.close(force: true);
+      await Hive.close();
+      await dir.delete(recursive: true);
+    });
+    await checkReceived.future.timeout(const Duration(seconds: 5));
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (!store.initialized && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(store.initialized, isTrue);
+    expect(store.conductorAppAccessGateVisible, isFalse);
+    expect(store.conductorAgencyAccessAllowed, isFalse);
+    expect(store.conductorLocalOnly, isTrue);
+    expect(store.activeUserId, owner);
+    expect(store.canWrite, isTrue);
+    await store.save(DailyRecord(
+      id: 'offline-record', date: DateTime(2026, 11, 25),
+      earnings: 200, odometer: 150,
+    ));
+    expect(store.records.any((record) => record.id == 'offline-record'), isTrue);
+    expect(store.pendingSyncCount, greaterThan(0));
+    finishCheck.complete();
+    final failureDeadline = DateTime.now().add(const Duration(seconds: 10));
+    while (store.conductorAppAccessState == ConductorAppAccessState.checking &&
+        DateTime.now().isBefore(failureDeadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(store.conductorAppAccessState, ConductorAppAccessState.unavailable);
+    expect(store.conductorAppAccessGateVisible, isFalse);
+    expect(store.conductorAgencyAccessAllowed, isFalse);
+    expect(store.syncIndicator, ConductorSyncIndicator.offline);
+    expect(store.activeUserId, owner);
+    expect(store.records.any((record) => record.id == 'offline-record'), isTrue);
+  });
+
   test('RPC conserva la autorización original durante un cambio de cuenta',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
