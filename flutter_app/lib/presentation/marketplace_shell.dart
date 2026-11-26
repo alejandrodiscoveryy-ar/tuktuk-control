@@ -72,9 +72,10 @@ class _MoreSectionIcon extends StatelessWidget {
 }
 
 class MarketplaceMoreScreen extends StatelessWidget {
-  const MarketplaceMoreScreen({required this.store, super.key});
+  const MarketplaceMoreScreen({required this.store, this.onRegistrationFinished, super.key});
 
   final RecordStore store;
+  final ValueChanged<MarketplaceRegistrationReceipt>? onRegistrationFinished;
 
   void _openPage(
     BuildContext context, {
@@ -127,7 +128,14 @@ class MarketplaceMoreScreen extends StatelessWidget {
               context,
               title: 'Conviértete en conductor',
               agency: true,
-              child: MarketplaceOnboardingScreen(store: store),
+              child: MarketplaceOnboardingScreen(
+                store: store,
+                onRegistrationFinished: onRegistrationFinished == null ? null : (receipt) {
+                  if (!context.mounted || store.user?.id != receipt.userId) return;
+                  Navigator.of(context).pop();
+                  onRegistrationFinished!(receipt);
+                },
+              ),
             ),
           ),
         ),
