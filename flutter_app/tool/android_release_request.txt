@@ -1,2 +1,2 @@
-26
-# AAB-only offline-first release
+25
+# AAB-only consolidated release
