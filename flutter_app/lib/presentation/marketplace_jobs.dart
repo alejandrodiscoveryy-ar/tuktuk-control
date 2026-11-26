@@ -1327,7 +1327,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     List<MarketplaceAvailableJob> jobs,
     String? userId,
   ) {
-    if (!kIsWeb || userId == null) return;
+    if ((!kIsWeb && !_androidOperationalLocation) || userId == null) return;
     if (_recoveredOffersOwnerId != userId) {
       _recoveredOffersOwnerId = userId;
       _recoveredOfferIds.clear();
@@ -1342,7 +1342,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
     for (final job in jobs) {
       if (_recoveredOfferIds.add(job.id)) {
-        notifyMarketplaceRecoveredWebJob(job.id);
+        if (kIsWeb) {
+          notifyMarketplaceRecoveredWebJob(job.id);
+        } else if (!notifyMarketplaceRecoveredAndroidJob(job.id)) {
+          // Native initialization may still be in progress; retry next poll.
+          _recoveredOfferIds.remove(job.id);
+        }
       }
     }
   }
@@ -2382,6 +2387,64 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         setState(() => _busyJobId = null);
       }
     }
+  }
+
+  Future<void> _contactAgencyForRide(MarketplaceJob job) async {
+    final action = widget.store.supportWhatsAppAction();
+    if (action == null) {
+      toast(context, 'El contacto de soporte no está disponible en este momento.');
+      return;
+    }
+    final position = _lastOperationalPosition;
+    final now = DateTime.now().toUtc();
+    final capturedAt = position?.timestamp.toUtc();
+    final age = capturedAt == null ? null : now.difference(capturedAt);
+    final canShare = position != null && age != null &&
+        !age.isNegative && age <= const Duration(minutes: 2) &&
+        _operationalLocationVehicle()?.id == job.vehicleId &&
+        _operationalGpsIo.validCoordinates(position);
+    final shareLocation = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Asistencia de la agencia'),
+        content: Text(
+          canShare
+              ? 'Se abrirá WhatsApp con el identificador de esta carrera. Puedes incluir tu última ubicación reciente. Si existe peligro inmediato, llama a los servicios de emergencia locales.'
+              : 'Se abrirá WhatsApp con el identificador de esta carrera. No hay una ubicación reciente confirmada. Si existe peligro inmediato, llama a los servicios de emergencia locales.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Sin ubicación'),
+          ),
+          if (canShare)
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Incluir ubicación'),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || shareLocation == null) return;
+    final message = StringBuffer(
+      action.uri.queryParameters['text'] ?? 'Necesito asistencia de TukTuk.',
+    )..write('\nAsistencia durante carrera: ${job.id}');
+    if (shareLocation && canShare) {
+      message.write('\nÚltima ubicación: https://maps.google.com/?q=${position.latitude},${position.longitude}');
+      message.write('\nCapturada: ${capturedAt!.toIso8601String()}');
+    }
+    final uri = action.uri.replace(queryParameters: {
+      ...action.uri.queryParameters,
+      'text': message.toString(),
+    });
+    await _launchWhatsApp(
+      context,
+      WhatsAppContactAction(buttonText: action.buttonText, uri: uri),
+    );
   }
 
   Future<void> _cancelJob(MarketplaceJob job) async {
@@ -4432,6 +4495,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                               _RidePaymentLabel(
                                 key: const ValueKey('work-active-payment'),
                                 method: active.ridePaymentMethod,
+                              ),
+                              TextButton.icon(
+                                key: const ValueKey('work-map-ride-support'),
+                                onPressed: () => unawaited(_contactAgencyForRide(active)),
+                                icon: const Icon(Icons.support_agent_rounded, size: 18),
+                                label: const Text('Asistencia de la agencia'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFFFFC47B),
+                                  alignment: Alignment.centerLeft,
+                                  visualDensity: VisualDensity.compact,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
                               ),
                               const Divider(height: 16),
                               Flexible(
