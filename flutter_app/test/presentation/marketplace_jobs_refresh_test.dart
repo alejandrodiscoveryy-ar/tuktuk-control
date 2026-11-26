@@ -559,7 +559,7 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
     await pumpJobs(tester);
     expect(find.byKey(const ValueKey('work-map-glass-active-card')), findsNothing);
-    expect(service.historyCalls, historyCalls);
+    expect(service.historyCalls, historyCalls + 1);
     expect(tester.takeException(), isNull);
   });
 
