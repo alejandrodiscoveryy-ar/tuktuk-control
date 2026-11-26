@@ -36,6 +36,18 @@ void notifyMarketplaceRecoveredWebJob(String jobId) {
   );
 }
 
+// Android foreground fallback uses the initialized service, not another plugin.
+Future<void> Function(String)? _androidRecoveredOfferAlert;
+
+Future<void> notifyMarketplaceRecoveredAndroidJob(String jobId) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    await _androidRecoveredOfferAlert?.call(jobId);
+  } catch (_) {
+    // The visible offer remains available even if notifications are denied.
+  }
+}
+
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukJobNotificationChannelId = 'tuktuk_nuevas_carreras_v1';
@@ -297,6 +309,7 @@ class PushNotificationService {
       StreamController<String>.broadcast();
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   bool _initialized = false;
+  final Map<String, DateTime> _recentAndroidOffers = {};
 
   bool get isInitialized => _initialized;
   Stream<String> get tokenRefreshes => _tokenRefreshController.stream;
@@ -373,6 +386,9 @@ class PushNotificationService {
         await _handleOpenedMessage(initialMessage, onMessageOpened);
       }
       _initialized = true;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        _androidRecoveredOfferAlert = _showRecoveredAndroidOffer;
+      }
     } catch (_) {
       // Firebase delivery is optional infrastructure; local app startup wins.
       _initialized = false;
@@ -390,11 +406,62 @@ class PushNotificationService {
     );
   }
 
+  Future<void> _showRecoveredAndroidOffer(String jobId) async {
+    if (!_initialized || _recentAndroidOffers.containsKey(jobId)) return;
+    await _showAndroidOffer(
+      {'kind': 'marketplace_job_available', 'job_id': jobId},
+      'Nueva solicitud disponible',
+      'Abre Trabajos para ver una solicitud disponible.',
+    );
+  }
+
+  Future<void> _showAndroidOffer(
+    Map<String, dynamic> data, String? title, String? body,
+  ) async {
+    final jobId = marketplaceJobIdFromPush(data);
+    if (jobId == null) return;
+    final now = DateTime.now();
+    _recentAndroidOffers.removeWhere(
+      (_, at) => now.difference(at) > const Duration(minutes: 10),
+    );
+    final alreadyShown = _recentAndroidOffers.containsKey(jobId);
+    _recentAndroidOffers[jobId] = now;
+    try {
+      await _localNotifications.show(
+        id: jobId.hashCode & 0x7fffffff,
+        title: title ?? 'Nueva solicitud disponible',
+        body: body ?? 'Abre Trabajos para ver la solicitud.',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            tuktukJobNotificationChannelV2Id,
+            tuktukJobNotificationChannelV2Name,
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: 'ic_stat_tuktuk',
+            sound: const RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
+            playSound: true,
+            enableVibration: true,
+            onlyAlertOnce: alreadyShown,
+          ),
+        ),
+        payload: encodePushMessageData(data),
+      );
+    } catch (_) {
+      _recentAndroidOffers.remove(jobId);
+      rethrow;
+    }
+  }
+
   Future<void> _showForegroundMessage(RemoteMessage message) async {
     handleForegroundPushData(message.data);
     final title =
         message.notification?.title ?? message.data['title']?.toString();
     final body = message.notification?.body ?? message.data['body']?.toString();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android &&
+        marketplaceJobIdFromPush(message.data) != null) {
+      await _showAndroidOffer(message.data, title, body);
+      return;
+    }
     if ((title == null || title.isEmpty) && (body == null || body.isEmpty)) {
       return;
     }
@@ -449,6 +516,9 @@ class PushNotificationService {
   }
 
   Future<void> dispose() async {
+    if (_androidRecoveredOfferAlert == _showRecoveredAndroidOffer) {
+      _androidRecoveredOfferAlert = null;
+    }
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }

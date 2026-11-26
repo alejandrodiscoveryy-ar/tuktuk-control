@@ -304,6 +304,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _recoveredOffersOwnerId;
   final Set<String> _recoveredOfferIds = <String>{};
   bool _presenceHeartbeatInFlight = false;
+  DateTime? _lastOperationalRecoverySync;
   StreamSubscription<Position>? _activeOperationalLocationSubscription;
   bool? _operationalLocationStreamActiveService;
   bool _operationalLocationStreamStarting = false;
@@ -374,7 +375,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     super.didUpdateWidget(oldWidget);
 
     if (!oldWidget.isVisible && widget.isVisible) {
-      if (kIsWeb) unawaited(_load(refreshHistory: false));
+      unawaited(_load(refreshHistory: false));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_showDebtNoticeOnEntry());
       });
@@ -772,6 +773,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (!_operationalGpsIo.validCoordinates(position)) return;
     final latitude = position.latitude;
     final longitude = position.longitude;
+    final ownerId = widget.store.user?.id;
+    final generation = _operationalLocationStreamGeneration;
 
     _activeOperationalLocationPublishInFlight = true;
     try {
@@ -794,6 +797,12 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           vehicleId: vehicle.id,
           position: position,
         );
+        if (!mounted || widget.store.user?.id != ownerId ||
+            generation != _operationalLocationStreamGeneration ||
+            _operationalLocationVehicle()?.id != vehicle.id ||
+            !_canPublishOperationalLocation()) {
+          return;
+        }
         _markOperationalGpsPublished(position, nowUtc);
 
         final approaching = _active.where((job) =>
@@ -818,7 +827,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
-      _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
+      if (mounted && widget.store.user?.id == ownerId &&
+          generation == _operationalLocationStreamGeneration) {
+        _setOperationalGpsIssue(MarketplaceGpsIssue.deliveryFailed);
+      }
       // Sin cobertura no se inventa ubicacion; reintentar con la siguiente muestra.
     } finally {
       _activeOperationalLocationPublishInFlight = false;
@@ -1014,6 +1026,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (vehicle == null) return;
 
     final activeService = _operationalActiveJob() != null;
+    final ownerId = widget.store.user?.id;
     var shouldReschedule = true;
     Duration? retryDelay;
 
@@ -1033,7 +1046,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         isWeb: kIsWeb,
       );
 
-      if (!mounted || !_canPublishOperationalLocation()) return;
+      if (!mounted || widget.store.user?.id != ownerId ||
+          _operationalLocationVehicle()?.id != vehicle.id ||
+          !_canPublishOperationalLocation()) {
+          return;
+        }
 
       if (!_operationalGpsIo.validCoordinates(position)) return;
 
@@ -1049,6 +1066,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           vehicleId: vehicle.id,
           position: position,
         );
+        if (!mounted || widget.store.user?.id != ownerId ||
+            _operationalLocationVehicle()?.id != vehicle.id ||
+            !_canPublishOperationalLocation()) {
+          return;
+        }
         _markOperationalGpsPublished(position, nowUtc);
         if (mounted && kIsWeb) setState(() {});
 
@@ -1107,7 +1129,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     try {
-      final access = await _service.access(vehicleId);
+      final access = await _service.access(vehicleId).timeout(const Duration(seconds: 15));
 
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
@@ -1176,7 +1198,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       final userId = widget.store.user?.id;
-      final onboarding = await _service.onboarding();
+      final onboarding = await _service.onboarding().timeout(const Duration(seconds: 15));
       if (!mounted || widget.store.user?.id != userId) return;
       _updateMarketplaceDriverProfileNeedsSetup(onboarding);
 
@@ -1255,15 +1277,37 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _updatingAvailability ||
         _loadRequest != null ||
         _availableRequest != null ||
-        _active.isNotEmpty ||
-        _scheduled.isNotEmpty ||
-        _scopeErrors.containsKey('active') ||
-        _scopeErrors.containsKey('scheduled') ||
-        widget.store.user?.id == null ||
-        _workOnboardingUserId != widget.store.user?.id) {
+        _busyJobId != null ||
+        _acceptingJobId != null ||
+        widget.store.user?.id == null) {
       return;
     }
     final vehicle = _vehicleById(_selectedVehicleId);
+    final working = vehicle?.acceptingJobs == true;
+    final hasService = _active.isNotEmpty || _scheduled.isNotEmpty;
+    final failed = _error != null ||
+        _scopeErrors.containsKey('active') ||
+        _scopeErrors.containsKey('scheduled') ||
+        _workAccess == null;
+    final now = DateTime.now().toUtc();
+    if ((working || hasService || widget.isVisible) &&
+        (failed || hasService || _onboarding == null) &&
+        (_lastOperationalRecoverySync == null ||
+            now.difference(_lastOperationalRecoverySync!) >=
+                const Duration(seconds: 60))) {
+      _lastOperationalRecoverySync = now;
+      // Never retry mutations automatically. Reload the authoritative service
+      // without history or changing the driver's availability.
+      unawaited(_load(refreshHistory: false));
+      return;
+    }
+    if (_active.isNotEmpty ||
+        _scheduled.isNotEmpty ||
+        _scopeErrors.containsKey('active') ||
+        _scopeErrors.containsKey('scheduled') ||
+        _workOnboardingUserId != widget.store.user?.id) {
+      return;
+    }
     if (_vehicleReadyForWork(vehicle) &&
         vehicle?.isAvailable == true &&
         vehicle?.acceptingJobs == true) {
@@ -1275,7 +1319,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     List<MarketplaceAvailableJob> jobs,
     String? userId,
   ) {
-    if (!kIsWeb || userId == null) return;
+    if ((!kIsWeb && !_androidOperationalLocation) || userId == null) return;
     if (_recoveredOffersOwnerId != userId) {
       _recoveredOffersOwnerId = userId;
       _recoveredOfferIds.clear();
@@ -1290,7 +1334,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
     for (final job in jobs) {
       if (_recoveredOfferIds.add(job.id)) {
-        notifyMarketplaceRecoveredWebJob(job.id);
+        if (kIsWeb) {
+          notifyMarketplaceRecoveredWebJob(job.id);
+        } else {
+          unawaited(notifyMarketplaceRecoveredAndroidJob(job.id));
+        }
       }
     }
   }
@@ -1348,7 +1396,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       final requestUserId = widget.store.user?.id;
-      final jobs = await _service.available(vehicleId);
+      final jobs = await _service.available(vehicleId).timeout(const Duration(seconds: 15));
 
       if (!mounted ||
           vehicleId != _selectedVehicleId ||
@@ -1392,7 +1440,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     });
 
     try {
-      final jobs = await _service.jobs(scope);
+      final jobs = await _service.jobs(scope).timeout(const Duration(seconds: 15));
       if (widget.store.user?.id != requestUserId) return;
 
       List<MarketplaceJobCancellationDetail> cancellationDetails = const [];
@@ -3898,7 +3946,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     required bool valid,
     required bool onRide,
   }) {
-    final accent = onRide
+    final operationalUnconfirmed = (available || onRide) &&
+        (_error != null ||
+            _scopeErrors.containsKey('active') ||
+            _scopeErrors.containsKey('scheduled') ||
+            marketplaceGpsNeedsAttention(
+              locationExpected: true,
+              lastConfirmedAt: _lastOperationalSentAt,
+              nowUtc: DateTime.now().toUtc(),
+              hasFailure: _operationalGpsIssue != null,
+              activeService: onRide,
+            ));
+    final accent = operationalUnconfirmed
+        ? const Color(0xFFE6BD81)
+        : onRide
         ? const Color(0xFF8CB9FF)
         : !valid || !available
             ? const Color(0xFFE6BD81)
@@ -3912,6 +3973,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 : 'DESCANSANDO';
     final subtitle = _updatingAvailability
         ? 'Actualizando estado...'
+        : operationalUnconfirmed
+            ? 'Conexión o GPS sin confirmar'
         : onRide
             ? 'Servicio en curso'
             : !valid
@@ -4131,6 +4194,45 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _contactAgencyForRide(MarketplaceJob job) async {
+    final action = widget.store.supportWhatsAppAction();
+    if (action == null) {
+      toast(context, 'El contacto de soporte no está disponible.');
+      return;
+    }
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Asistencia de la agencia'),
+        content: const Text(
+          'Abre WhatsApp para informar una incidencia de esta carrera. '
+          'Se incluirá su identificador. No es un servicio de emergencias; '
+          'si existe peligro inmediato, contacta a los servicios de emergencia.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Abrir WhatsApp'),
+          ),
+        ],
+      ),
+    );
+    if (send != true || !mounted || !_active.any((ride) => ride.id == job.id)) return;
+    final message = action.uri.queryParameters['text'] ?? '';
+    final uri = action.uri.replace(queryParameters: {
+      ...action.uri.queryParameters,
+      'text': '$message\nAsistencia durante el servicio. Carrera: ${job.id}',
+    });
+    await _launchWhatsApp(
+      context,
+      WhatsAppContactAction(buttonText: action.buttonText, uri: uri),
     );
   }
 
@@ -4450,6 +4552,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                           ),
                                         ),
                                     ],
+                                  ),
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  key: const ValueKey('work-map-ride-assistance'),
+                                  onPressed: () => unawaited(_contactAgencyForRide(active)),
+                                  icon: const Icon(Icons.support_agent_rounded, size: 18),
+                                  label: const Text('Asistencia'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF98F7DE),
+                                    visualDensity: VisualDensity.compact,
                                   ),
                                 ),
                               ),

@@ -1,12 +1,15 @@
 name: Build signed Android release
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'flutter_app/tool/android_release_request.txt'
   workflow_dispatch:
     inputs:
       expected_version_code:
         description: "versionCode que ya debe estar definido en pubspec.yaml"
         required: true
-        default: "3"
         type: string
 
 permissions:
@@ -52,6 +55,8 @@ jobs:
       - name: Validate release metadata
         id: metadata
         shell: bash
+        env:
+          EXPECTED_VERSION_CODE: ${{ inputs.expected_version_code }}
         run: |
           set -euo pipefail
           VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
@@ -60,7 +65,11 @@ jobs:
           FLUTTER_ROOT="$(cd "$(dirname "$(command -v flutter)")/.." && pwd)"
           FLUTTER_ANDROID_DEFAULTS="$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
 
-          test "$VERSION_CODE" = "${{ inputs.expected_version_code }}"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            EXPECTED_VERSION_CODE="$(cat tool/android_release_request.txt)"
+          fi
+          [[ "$EXPECTED_VERSION_CODE" =~ ^[0-9]+$ ]]
+          test "$VERSION_CODE" = "$EXPECTED_VERSION_CODE"
           grep -Fq 'android:label="@string/app_name"' android/app/src/main/AndroidManifest.xml
           grep -Fq '<string name="app_name">TukTuk Conductor</string>' android/app/src/main/res/values/strings.xml
           grep -Fq 'applicationId = "com.alejandrocruz.tuktukcontrol"' android/app/build.gradle.kts
