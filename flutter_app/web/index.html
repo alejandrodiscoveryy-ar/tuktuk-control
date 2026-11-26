@@ -59,6 +59,96 @@
     (function () {
       var splash = document.getElementById('tuktuk-web-startup');
       var completed = false;
+      // Cache only the project's public image. Never store auth or user data.
+      var logo = splash.querySelector('img');
+      var fallbackIcon = logo.getAttribute('src');
+      var cacheKey = 'tuktuk-conductor:startup-icon:v1:' + location.pathname;
+      var cached = null;
+      var requested = null;
+
+      function validIconUrl(value) {
+        try {
+          var url = new URL(value);
+          return url.protocol === 'https:' && !url.username && !url.password
+            ? url.href : null;
+        } catch (_) { return null; }
+      }
+      function validSnapshot(value) {
+        return typeof value === 'string' && value.length <= 700000 &&
+          /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(value);
+      }
+      function showIcon(src) {
+        if (completed) return;
+        logo.onerror = function () {
+          logo.onerror = null;
+          logo.src = fallbackIcon;
+        };
+        logo.src = src;
+      }
+      try {
+        var stored = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+        if (stored && validIconUrl(stored.url)) {
+          cached = {url: validIconUrl(stored.url), snapshot: stored.snapshot};
+          if (validSnapshot(cached.snapshot)) showIcon(cached.snapshot);
+        }
+      } catch (_) {}
+
+      // Called by Flutter's existing public identity refresh; no extra RPC.
+      window.tuktukApplyStartupIcon = function (value) {
+        var url = validIconUrl(value);
+        if (!url) {
+          requested = null;
+          cached = null;
+          try { localStorage.removeItem(cacheKey); } catch (_) {}
+          showIcon(fallbackIcon);
+          return;
+        }
+        if (cached && cached.url === url && validSnapshot(cached.snapshot)) {
+          if (requested !== null && requested !== url) {
+            requested = url;
+            showIcon(cached.snapshot);
+          }
+          return;
+        }
+        if (requested === url) return;
+        requested = url;
+
+        function loadIcon(withCors) {
+          var image = new Image();
+          if (withCors) image.crossOrigin = 'anonymous';
+          image.onload = function () {
+            if (requested !== url) return;
+            showIcon(url);
+            // Resize only for the small startup image, after loading.
+            setTimeout(function () {
+              if (requested !== url) return;
+              var snapshot = null;
+              try {
+                var canvas = document.createElement('canvas');
+                var scale = Math.min(1, 352 / Math.max(image.naturalWidth, image.naturalHeight));
+                canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                var data = canvas.toDataURL('image/png');
+                if (validSnapshot(data)) snapshot = data;
+              } catch (_) {}
+              cached = {url: url, snapshot: snapshot};
+              try { localStorage.setItem(cacheKey, JSON.stringify(cached)); } catch (_) {}
+            }, 0);
+          };
+          image.onerror = function () {
+            if (requested !== url) return;
+            if (withCors) loadIcon(false);
+            else requested = null; // Preserve the last good icon on failure.
+          };
+          image.src = url;
+        }
+        loadIcon(true);
+      };
+      if (cached && !validSnapshot(cached.snapshot)) {
+        window.tuktukApplyStartupIcon(cached.url);
+      }
+
       window.tuktukFinishStartup = function () {
         if (completed || !splash) return;
         completed = true;

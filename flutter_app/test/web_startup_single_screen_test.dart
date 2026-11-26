@@ -65,6 +65,27 @@ void main() {
     expect(bridge, contains('_tuktukFinishStartup();'));
   });
 
+  test('startup icon follows the public project identity without delaying Flutter', () {
+    final html = File('web/index.html').readAsStringSync();
+    final bridge = File('lib/services/project_identity_runtime_web.dart')
+        .readAsStringSync();
+    final store = File('lib/data/record_store.dart').readAsStringSync();
+    expect(html, contains('tuktuk-conductor:startup-icon:v1:'));
+    expect(html, contains('localStorage.getItem(cacheKey)'));
+    expect(html, contains('localStorage.setItem(cacheKey, JSON.stringify(cached))'));
+    expect(html, contains('localStorage.removeItem(cacheKey)'));
+    expect(html, contains('window.tuktukApplyStartupIcon'));
+    expect(html, contains('if (requested !== url) return;'));
+    expect(html, contains('if (completed) return;'));
+    expect(html, contains('showIcon(fallbackIcon)'));
+    expect(html, contains('<script src="flutter_bootstrap.js" async>'));
+    expect(bridge, contains('_tuktukApplyStartupIcon((iconUrl ?? \'\').toJS)'));
+    expect(store, contains('_applyProjectIdentityToPlatform(clearMissingIcon: true)'));
+    expect(store, contains('clearMissingIcon: clearMissingIcon'));
+    // The shell does not make an additional public identity RPC.
+    expect(html, isNot(contains('get_public_project_identity')));
+  });
+
   test('inicialización paralela y autorización prioritaria, sin bypass', () {
     final entry = File('lib/main.dart').readAsStringSync();
     final store = File('lib/data/record_store.dart').readAsStringSync();

@@ -338,17 +338,18 @@ class RecordStore extends ChangeNotifier {
       if (refreshed == null || refreshed.projectId != _projectId) return;
       await _meta.putAll(refreshed.toCacheMap());
       projectIdentity = refreshed;
-      _applyProjectIdentityToPlatform();
+      _applyProjectIdentityToPlatform(clearMissingIcon: true);
       notifyListeners();
     } catch (_) {
       // La identidad cacheada/local permanece activa sin conexión.
     }
   }
 
-  void _applyProjectIdentityToPlatform() {
+  void _applyProjectIdentityToPlatform({bool clearMissingIcon = false}) {
     applyProjectIdentityToPlatform(
       name: projectIdentity.name == 'TukTuk Control' ? 'TukTuk Conductor' : projectIdentity.name,
       iconUrl: projectIdentity.iconUrl,
+      clearMissingIcon: clearMissingIcon,
     );
   }
 
