@@ -4,12 +4,19 @@ import 'dart:js_interop_unsafe';
 @JS('document')
 external JSObject get _document;
 
+@JS('tuktukApplyStartupIcon')
+external void _tuktukApplyStartupIcon(JSString iconUrl);
+
 void applyProjectIdentityToPlatform({
   required String name,
   String? iconUrl,
+  bool clearMissingIcon = false,
 }) {
   try {
     _document.setProperty('title'.toJS, name.toJS);
+    if (iconUrl != null && iconUrl.isNotEmpty || clearMissingIcon) {
+      _tuktukApplyStartupIcon((iconUrl ?? '').toJS);
+    }
     if (iconUrl == null || iconUrl.isEmpty) return;
     final favicon = _document.callMethod<JSObject?>(
       'querySelector'.toJS,
