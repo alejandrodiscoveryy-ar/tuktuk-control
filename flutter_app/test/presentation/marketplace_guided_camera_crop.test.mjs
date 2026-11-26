@@ -6,7 +6,7 @@ const source = readFileSync(new URL('../../web/guided_camera.js', import.meta.ur
 const marker = '  window.tuktukGuidedCapturePhoto = async function (kind) {';
 assert.ok(source.includes(marker));
 const sandbox = {window:{}};
-vm.runInNewContext(source.replace(marker, '  window.__crop = guideCropRect; window.__guides = guides;\n' + marker), sandbox);
+vm.runInNewContext(source.replace(marker, '  window.__crop = guideCropRect; window.__guides = guides; window.__driverCamera = requestDriverCamera;\n' + marker), sandbox);
 const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
 const crop=(w,h,a,b)=>sandbox.window.__crop({videoWidth:w,videoHeight:h,getBoundingClientRect:()=>a},{getBoundingClientRect:()=>b});
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<0.01, `${expected} != ${actual}`);
@@ -34,4 +34,42 @@ test('each guide uses correct lens and preserves output aspect',()=>{
     const p=crop(1080,1920,rect(0,0,360,600),rect(60,(600-h)/2,w,h));
     near(p.width/p.height,guide.aspect);
   }
+});
+
+function fakeCamera(facing, label = '') {
+  const track = { label, stopped: false, getSettings: () => ({ facingMode: facing }),
+    stop() { this.stopped = true; } };
+  return { track, getTracks: () => [track], getVideoTracks: () => [track] };
+}
+test('selfie first requests exact front camera', async () => {
+  const front = fakeCamera('user');
+  const requests = [];
+  const media = { getUserMedia: async c => { requests.push(c); return front; } };
+  assert.equal(await sandbox.window.__driverCamera(media, () => true), front);
+  assert.equal(requests[0].video.facingMode.exact, 'user');
+  assert.equal(requests.length, 1);
+});
+test('selfie rejects rear and selects identified front device', async () => {
+  const rear = fakeCamera('environment');
+  const front = fakeCamera('user');
+  const requests = [];
+  const media = {
+    getUserMedia: async c => { requests.push(c); return requests.length === 1 ? rear : front; },
+    enumerateDevices: async () => [{ kind: 'videoinput', deviceId: 'front1', label: 'Front camera' }]
+  };
+  assert.equal(await sandbox.window.__driverCamera(media, () => true), front);
+  assert.equal(rear.track.stopped, true);
+  assert.equal(requests[1].video.deviceId.exact, 'front1');
+});
+test('selfie does not silently accept rear fallback', async () => {
+  const rear = fakeCamera('environment');
+  const media = {getUserMedia: async () => rear, enumerateDevices: async () => []};
+  await assert.rejects(sandbox.window.__driverCamera(media, () => true));
+  assert.equal(rear.track.stopped, true);
+});
+test('late camera stream is stopped after dialog closes', async () => {
+  const front = fakeCamera('user');
+  const media = {getUserMedia: async () => front};
+  await assert.rejects(sandbox.window.__driverCamera(media, () => false));
+  assert.equal(front.track.stopped, true);
 });
