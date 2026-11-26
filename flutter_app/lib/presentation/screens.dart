@@ -1783,7 +1783,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 10),
         ],
         MetricHero(
-          seasonal: true,
           label: tr('Ingreso de hoy'),
           value: numFmt(metrics.todayEarnings),
                   currency: activeCurrency,

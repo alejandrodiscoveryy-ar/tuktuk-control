@@ -24,54 +24,35 @@ void main() {
     expect(campaign.includes(DateTime(2027, 1, 3)), isFalse);
   });
 
-  testWidgets('Only the logo hat changes during Christmas, with unchanged card geometry',
+  testWidgets('Home hero displays only the original logo and metrics',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    const hatKey = ValueKey('seasonal-logo-hat');
     for (final width in [320.0, 390.0, 720.0]) {
       await tester.binding.setSurfaceSize(Size(width, 900));
       for (final brightness in Brightness.values) {
         for (final scale in [1.0, 2.0]) {
-          Widget screen(DateTime date, {bool seasonal = true}) => MaterialApp(
+          await tester.pumpWidget(MaterialApp(
             theme: ThemeData(brightness: brightness),
             home: Scaffold(body: MediaQuery(
               data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-              child: SingleChildScrollView(child: Padding(
-                padding: const EdgeInsets.all(16),
+              child: const SingleChildScrollView(child: Padding(
+                padding: EdgeInsets.all(16),
                 child: MetricHero(label: 'Ingreso de hoy', value: '125.000',
                   currency: 'CUP', sublabel: 'Mes actual: 125.000 CUP',
-                  icon: Icons.payments_outlined, seasonal: seasonal, seasonalDate: date,
-                  trailing: const Icon(Icons.directions_car, size: 90)),
+                  icon: Icons.payments_outlined,
+                  trailing: Icon(Icons.directions_car, size: 90)),
               )),
             )),
-          );
-          await tester.pumpWidget(screen(DateTime(2026, 12, 26)));
-          final hero = find.byType(GradientMetricCard);
+          ));
           final amount = find.text('125.000');
           final logo = find.byIcon(Icons.directions_car);
-          final heroRect = tester.getRect(hero);
-          final amountRect = tester.getRect(amount);
-          final logoRect = tester.getRect(logo);
-          expect(find.byKey(hatKey), findsNothing);
-          expect(tester.takeException(), isNull);
-
-          await tester.pumpWidget(screen(DateTime(2026, 12, 1)));
-          final hat = find.byKey(hatKey);
-          expect(hat, findsOneWidget);
+          expect(find.byKey(const ValueKey('seasonal-logo-hat')), findsNothing);
           expect(find.text('Felices fiestas'), findsNothing);
-          expect(find.text('125.000'), findsOneWidget);
-          expect(tester.getRect(hero), heroRect);
-          expect(tester.getRect(amount), amountRect);
-          expect(tester.getRect(logo), logoRect);
-          expect(amountRect.right, lessThanOrEqualTo(logoRect.left));
-          expect(tester.getSize(hat), const Size(39, 24));
-          expect(heroRect.contains(tester.getRect(hat).center), isTrue);
-          expect(tester.getRect(hat).overlaps(logoRect), isTrue);
-          expect(tester.takeException(), isNull);
-
-          await tester.pumpWidget(screen(DateTime(2026, 12, 1), seasonal: false));
-          expect(hat, findsNothing);
-          expect(tester.getRect(hero), heroRect);
+          expect(amount, findsOneWidget);
+          expect(logo, findsOneWidget);
+          expect(find.text('Mes actual: 125.000 CUP'), findsOneWidget);
+          expect(tester.getRect(amount).right,
+            lessThanOrEqualTo(tester.getRect(logo).left));
           expect(tester.takeException(), isNull);
         }
       }

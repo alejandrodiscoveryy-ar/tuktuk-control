@@ -113,51 +113,6 @@ SeasonalCampaign? seasonalCampaignFor(DateTime date, {
   return null;
 }
 
-/// The only seasonal decoration: a small Santa hat over the existing logo.
-class _SantaLogoHat extends StatelessWidget {
-  const _SantaLogoHat();
-
-  @override
-  Widget build(BuildContext context) => const ExcludeSemantics(
-    child: IgnorePointer(
-      child: CustomPaint(
-        key: ValueKey('seasonal-logo-hat'),
-        size: Size(39, 24),
-        painter: _SantaLogoHatPainter(),
-      ),
-    ),
-  );
-}
-
-class _SantaLogoHatPainter extends CustomPainter {
-  const _SantaLogoHatPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.scale(size.width / 39, size.height / 24);
-    final body = ui.Path()
-      ..moveTo(8, 18)
-      ..cubicTo(10, 11, 11, 4, 21, 3)
-      ..cubicTo(28, 1, 32, 6, 35, 12)
-      ..cubicTo(29, 9, 26, 12, 27, 17)
-      ..lineTo(29, 19)
-      ..close();
-    canvas.drawPath(body, Paint()..shader = ui.Gradient.linear(
-      const Offset(13, 4), const Offset(28, 20),
-      const [Color(0xFFFF575E), Color(0xFFC51E35)]));
-    final fur = Paint()..color = const Color(0xFFF8F5EF);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(6, 16, 25, 6),
-        const Radius.circular(3)), fur);
-    canvas.drawCircle(const Offset(35, 12), 3.7, fur);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _SantaLogoHatPainter oldDelegate) => false;
-}
-
 class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,
@@ -166,8 +121,6 @@ class MetricHero extends StatelessWidget {
     required this.sublabel,
     required this.icon,
     this.trailing,
-    this.seasonal = false,
-    this.seasonalDate,
     super.key,
   });
 
@@ -177,13 +130,9 @@ class MetricHero extends StatelessWidget {
   final String sublabel;
   final IconData icon;
   final Widget? trailing;
-  final bool seasonal;
-  final DateTime? seasonalDate;
 
   @override
   Widget build(BuildContext context) {
-    final date = seasonalDate ?? DateTime.now();
-    final campaign = seasonal ? seasonalCampaignFor(date) : null;
     final headline = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -216,18 +165,7 @@ class MetricHero extends StatelessWidget {
               SizedBox(
                 width: 100,
                 height: 86,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Positioned.fill(
-                      child: FittedBox(fit: BoxFit.contain, child: logo)),
-                    if (campaign?.id == 'christmas')
-                      const Positioned(
-                        top: 0, left: 28, width: 39, height: 24,
-                        child: _SantaLogoHat(),
-                      ),
-                  ],
-                ),
+                child: FittedBox(fit: BoxFit.contain, child: logo),
               ),
             ],
           ),
