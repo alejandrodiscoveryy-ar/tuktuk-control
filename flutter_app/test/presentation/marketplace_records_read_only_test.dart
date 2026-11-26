@@ -120,6 +120,28 @@ void main() {
 
   tearDown(() => store.dispose());
 
+  test('offline access permits saving personal records and queues changes', () async {
+    store.conductorAppAccessState = ConductorAppAccessState.unavailable;
+    expect(store.conductorAppAccessGateVisible, isFalse);
+    expect(store.conductorAgencyAccessAllowed, isFalse);
+    expect(store.canWrite, isTrue);
+    await store.save(DailyRecord(
+      id: 'offline-personal-record',
+      date: DateTime.utc(2026, 11, 25),
+      earnings: 125,
+      odometer: 20,
+    ));
+    expect(store.records.any((r) => r.id == 'offline-personal-record'), isTrue);
+    expect(store.pendingSyncCount, greaterThan(0));
+    store.conductorAppAccessState = ConductorAppAccessState.suspended;
+    expect(store.conductorAppAccessGateVisible, isTrue);
+    expect(store.canWrite, isFalse);
+    await expectLater(store.save(DailyRecord(
+      id: 'blocked-record', date: DateTime.utc(2026, 11, 25),
+      earnings: 50, odometer: 21,
+    )), throwsStateError);
+  });
+
   test('legacy local income is hidden pending settlement and restored after it',
       () async {
     const jobId = '33333333-3333-4333-8333-333333333333';

@@ -73,7 +73,7 @@ void main() {
     expect(entry, contains('Hive.openBox(_recordsBox),'));
     expect(entry, contains('await Supabase.initialize('));
     expect(store, contains('_startupAccessFuture = _checkConductorAppAccess(restoredUser);'));
-    expect(store, contains('final allowed = reuseStartupCheck'));
+    expect(store, contains('final allowed = accessAlreadyVerified'));
     expect(store, contains('if (!allowed ||'));
     expect(store, contains('ConductorAppAccessState.unavailable'));
     expect(store, contains('ConductorAppAccessState.suspended'));

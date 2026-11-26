@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('suspensión de conductor bloquea la aplicación completa', () {
+  test('suspensión confirmada bloquea la aplicación completa, fallos de red no', () {
     final store = File('lib/data/record_store.dart').readAsStringSync();
     final ui = File('lib/presentation/screens.dart').readAsStringSync();
     final entry = File('lib/main.dart').readAsStringSync();
@@ -14,11 +14,14 @@ void main() {
     expect(store, contains('get_my_tuktuk_conductor_app_access'));
     expect(store, contains('ConductorAppAccessState.suspended'));
     expect(store, contains('ConductorAppAccessState.unavailable'));
+    expect(store, contains('conductorLocalAccessBlocked('));
+    expect(ui, contains('if (localOnly)'));
+    expect(ui, contains('Modo sin conexión'));
     expect(store, contains('_conductorAppBlockedUserKey'));
     expect(store, contains('await _supabase.auth.signOut();'));
     expect(store, contains('Timer.periodic(const Duration(seconds: 45)'));
     expect(store, contains('refreshConductorAppAccess()'));
-    expect(store, contains('final allowed = reuseStartupCheck'));
+    expect(store, contains('final allowed = accessAlreadyVerified'));
     expect(store, contains(': await _checkConductorAppAccess(authenticatedUser);'));
     expect(store, contains('if (!allowed ||'));
     expect(store, contains('_supabase.auth.currentUser?.id != authenticatedUser.id'));

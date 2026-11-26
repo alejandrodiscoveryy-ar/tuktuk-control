@@ -1,23 +1,5 @@
 part of '../main.dart';
 
-// Local to the financial overviews; other monetary surfaces keep their units.
-class _OverviewCurrencyHeader extends StatelessWidget {
-  const _OverviewCurrencyHeader();
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: Text(
-      '${tr('Moneda de trabajo')}: $activeCurrency',
-      style: TextStyle(
-        color: appMutedColor(context),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
-}
-
 class _OverviewMetricLabel extends StatelessWidget {
   const _OverviewMetricLabel(this.label);
   final String label;
@@ -35,9 +17,10 @@ class _OverviewMetricLabel extends StatelessWidget {
 }
 
 class _OverviewMetricValue extends StatelessWidget {
-  const _OverviewMetricValue(this.value, {required this.style});
+  const _OverviewMetricValue(this.value, {required this.style, this.currency});
   final String value;
   final TextStyle style;
+  final String? currency;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -45,7 +28,22 @@ class _OverviewMetricValue extends StatelessWidget {
     child: FittedBox(
       alignment: Alignment.centerLeft,
       fit: BoxFit.scaleDown,
-      child: Text(value, style: style, maxLines: 1, softWrap: false),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(value, style: style, maxLines: 1, softWrap: false),
+          if (currency != null) ...[
+            const SizedBox(width: 5),
+            Text(currency!, style: TextStyle(
+              color: appMutedColor(context),
+              fontSize: (style.fontSize ?? 18) * .58,
+              fontWeight: FontWeight.w600,
+            )),
+          ],
+        ],
+      ),
     ),
   );
 }
@@ -54,6 +52,7 @@ class MetricHero extends StatelessWidget {
   const MetricHero({
     required this.label,
     required this.value,
+    this.currency,
     required this.sublabel,
     required this.icon,
     this.trailing,
@@ -62,6 +61,7 @@ class MetricHero extends StatelessWidget {
 
   final String label;
   final String value;
+  final String? currency;
   final String sublabel;
   final IconData icon;
   final Widget? trailing;
@@ -104,8 +104,9 @@ class MetricHero extends StatelessWidget {
             children: [
               Label(label),
               const SizedBox(height: 6),
-              Text(
+              _OverviewMetricValue(
                 value,
+                currency: currency,
                 style: TextStyle(
                   color: appPrimaryColor(context),
                   fontSize: 36,
@@ -396,6 +397,7 @@ class MetricCard extends StatelessWidget {
   const MetricCard({
     required this.label,
     required this.value,
+    this.currency,
     required this.icon,
     this.color,
     this.note,
@@ -404,6 +406,7 @@ class MetricCard extends StatelessWidget {
 
   final String label;
   final String value;
+  final String? currency;
   final IconData icon;
   final Color? color;
   final String? note;
@@ -433,6 +436,7 @@ class MetricCard extends StatelessWidget {
           const SizedBox(height: 10),
           _OverviewMetricValue(
             value,
+            currency: currency,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           if (note != null) ...[
@@ -450,6 +454,7 @@ class StatOverviewCard extends StatelessWidget {
     required this.width,
     required this.label,
     required this.value,
+    this.currency,
     this.note,
     this.color,
     this.icon,
@@ -459,6 +464,7 @@ class StatOverviewCard extends StatelessWidget {
   final double width;
   final String label;
   final String value;
+  final String? currency;
   final String? note;
   final Color? color;
   final IconData? icon;
@@ -506,6 +512,7 @@ class StatOverviewCard extends StatelessWidget {
             const SizedBox(height: 10),
             _OverviewMetricValue(
               value,
+              currency: currency,
               style: TextStyle(
                 color: effectiveColor,
                 fontSize: 19,
