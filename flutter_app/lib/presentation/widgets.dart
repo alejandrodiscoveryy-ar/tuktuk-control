@@ -324,9 +324,10 @@ class _DriverMessageRow extends StatelessWidget {
 }
 
 class DataHealthCard extends StatelessWidget {
-  const DataHealthCard({required this.metrics, super.key});
+  const DataHealthCard({required this.metrics, this.statisticsStyle = false, super.key});
 
   final Metrics metrics;
+  final bool statisticsStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -335,6 +336,7 @@ class DataHealthCard extends StatelessWidget {
     final statusColor =
         missing == 0 && drops.isEmpty ? appPrimaryColor(context) : kTertiary;
     return GlassCard(
+      accent: statisticsStyle ? statusColor : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -631,9 +633,10 @@ class StatOverviewCard extends StatelessWidget {
 }
 
 class MonthlyEarningsBars extends StatelessWidget {
-  const MonthlyEarningsBars({required this.cycles, super.key});
+  const MonthlyEarningsBars({required this.cycles, this.statisticsStyle = false, super.key});
 
   final List<CycleSummary> cycles;
+  final bool statisticsStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -642,6 +645,9 @@ class MonthlyEarningsBars extends StatelessWidget {
     }
     final visible = cycles.reversed.take(8).toList().reversed.toList();
     final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
+    if (statisticsStyle) {
+      return _StatisticsMonthlyChart(cycles: visible);
+    }
     return GlassCard(
       child: Column(
         children: [
@@ -717,6 +723,120 @@ class MonthlyEarningsBars extends StatelessWidget {
   }
 }
 
+// Use independent bars on a common scale, including months with expenses
+// but no income. The original data and cycle ordering are unchanged.
+class _StatisticsMonthlyChart extends StatelessWidget {
+  const _StatisticsMonthlyChart({required this.cycles});
+
+  final List<CycleSummary> cycles;
+
+  @override
+  Widget build(BuildContext context) {
+    final income = appPrimaryColor(context);
+    final expense = kDanger;
+    final maximum = cycles.fold<double>(0.0, (value, cycle) =>
+      max(value, max(cycle.earnings, cycle.expenses).toDouble()));
+    return GlassCard(
+      accent: income,
+      child: Column(
+        children: [
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 18,
+            runSpacing: 8,
+            children: [
+              for (final entry in [(income, tr('Ingreso')), (expense, tr('Gasto'))])
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  _ChartLegendDot(color: entry.$1),
+                  const SizedBox(width: 6),
+                  Text(entry.$2, style: const TextStyle(fontSize: 12,
+                    fontWeight: FontWeight.w700)),
+                ]),
+            ],
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(builder: (context, constraints) {
+            final width = max(constraints.maxWidth, cycles.length * 92.0);
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: width,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (final cycle in cycles)
+                      Expanded(child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Column(children: [
+                          Tooltip(
+                            message: '${tr('Ingreso')}: ${money(cycle.earnings)}\n'
+                                '${tr('Gasto')}: ${money(cycle.expenses)}',
+                            child: SizedBox(
+                              height: 150,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  _StatisticsChartBar(
+                                    color: income, value: cycle.earnings.toDouble(),
+                                    maximum: maximum),
+                                  const SizedBox(width: 6),
+                                  _StatisticsChartBar(
+                                    color: expense, value: cycle.expenses.toDouble(),
+                                    maximum: maximum),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(DateFormat('MMM', activeLanguage).format(cycle.start),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text(moneyCompact(cycle.earnings, includeCurrency: false),
+                            style: TextStyle(color: income, fontSize: 12,
+                              fontWeight: FontWeight.w800)),
+                          Text(moneyCompact(cycle.expenses, includeCurrency: false),
+                            style: const TextStyle(color: kDanger, fontSize: 12,
+                              fontWeight: FontWeight.w800)),
+                        ]),
+                      )),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatisticsChartBar extends StatelessWidget {
+  const _StatisticsChartBar({required this.color, required this.value,
+    required this.maximum});
+
+  final Color color;
+  final double value;
+  final double maximum;
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = maximum <= 0 ? 0.0 : (value / maximum).clamp(0.0, 1.0).toDouble();
+    return Container(
+      width: 23,
+      height: 150 * fraction,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(7),
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [color.withValues(alpha: .65), color],
+        ),
+      ),
+    );
+  }
+}
+
 class _IncomeExpenseBar extends StatelessWidget {
   const _IncomeExpenseBar({required this.height, required this.expenseRatio});
 
@@ -785,15 +905,44 @@ class _ChartLegendDot extends StatelessWidget {
 }
 
 class EarningsTrendCard extends StatelessWidget {
-  const EarningsTrendCard({required this.records, super.key});
+  const EarningsTrendCard({required this.records, this.statisticsStyle = false, super.key});
 
   final Iterable<DailyRecord> records;
+  final bool statisticsStyle;
 
   @override
   Widget build(BuildContext context) {
     final values = records.toList();
     if (values.isEmpty) {
       return EmptyState(tr('Todavía no hay ingresos para mostrar.'));
+    }
+    if (statisticsStyle) {
+      final accent = appPrimaryColor(context);
+      final maximum = values.fold<double>(0.0,
+        (value, record) => max(value, record.earnings.toDouble()));
+      return GlassCard(
+        accent: accent,
+        child: Column(children: [
+          for (final record in values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(children: [
+                InfoLine(label: DateFormat('d MMM', activeLanguage).format(record.date),
+                  value: money(record.earnings)),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: maximum <= 0 ? 0 : (record.earnings / maximum).clamp(0.0, 1.0).toDouble(),
+                    minHeight: 7,
+                    color: accent,
+                    backgroundColor: accent.withValues(alpha: .12),
+                  ),
+                ),
+              ]),
+            ),
+        ]),
+      );
     }
     return GlassCard(
       child: Column(
@@ -1354,17 +1503,23 @@ class GlassCard extends StatelessWidget {
     required this.child,
     this.margin,
     this.padding = const EdgeInsets.all(18),
+    this.accent,
     super.key,
   });
 
   final Widget child;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry padding;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final blueAccent = isBlueAccentTheme(context);
+    final tint = accent;
+    final surface = dark ? const Color(0xFF142233) : const Color(0xFFF7FAFE);
+    final themedTint = tint == null ? null : dark ? tint :
+        Color.lerp(tint, const Color(0xFF172B40), .55)!;
     return Container(
       margin: margin,
       padding: padding,
@@ -1372,7 +1527,10 @@ class GlassCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: blueAccent
+          colors: themedTint != null
+              ? [Color.alphaBlend(themedTint.withValues(alpha: .11), surface),
+                 Color.alphaBlend(themedTint.withValues(alpha: .025), surface)]
+              : blueAccent
               ? const [Color(0xFF101B2A), Color(0xFF0B1420)]
               : dark
                   ? const [kCardGradientTop, kCardGradientBottom]
@@ -1380,7 +1538,9 @@ class GlassCard extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: blueAccent
+          color: themedTint != null
+              ? themedTint.withValues(alpha: .38)
+              : blueAccent
               ? const Color(0xFF294766)
               : dark
                   ? const Color(0xFF304055)
