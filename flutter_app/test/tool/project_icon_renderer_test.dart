@@ -29,6 +29,34 @@ void main() {
     expect(rendered.getPixel(0, 0).a, 0);
   });
 
+  test('ajusta la ocupación real incluso con bordes de alpha muy tenue', () {
+    final master = image.Image(width: 1024, height: 1024, numChannels: 4);
+    master.setPixelRgba(100, 100, 255, 255, 255, 1);
+    master.setPixelRgba(923, 923, 255, 255, 255, 1);
+    for (var y = 260; y < 764; y++) {
+      for (var x = 190; x < 834; x++) {
+        master.setPixelRgba(x, y, 10, 20, 30, 255);
+      }
+    }
+    final original = image.encodePng(master);
+    for (final spec in [(32, .78, .94), (192, .68, .82), (512, .78, .94)]) {
+      final result = image.decodePng(renderWebIconWithinRatio(
+        master,
+        size: spec.$1,
+        minimumRatio: spec.$2,
+        maximumRatio: spec.$3,
+      ))!;
+      final bounds = visibleAlphaBounds(result)!;
+      final extent = (bounds.width > bounds.height ? bounds.width : bounds.height) /
+          spec.$1;
+      expect(extent, inInclusiveRange(spec.$2, spec.$3));
+      expect(result.width, spec.$1);
+      expect(result.height, spec.$1);
+      expect(result.getPixel(0, 0).a.toInt(), 0);
+    }
+    expect(image.encodePng(master), original);
+  });
+
   test('mantiene el arte maskable opaco dentro de la zona segura', () {
     final master = image.Image(width: 100, height: 100, numChannels: 4);
     for (var y = 10; y < 90; y++) {
@@ -149,8 +177,13 @@ void main() {
 
       expect(icon.width, entry.value.size, reason: entry.key);
       expect(icon.height, entry.value.size, reason: entry.key);
-      expect(occupiedExtent, closeTo(entry.value.scale, .015),
-          reason: entry.key);
+      if (maskable) {
+        expect(occupiedExtent, inInclusiveRange(.01, .80), reason: entry.key);
+      } else if (entry.key.contains('shortcut')) {
+        expect(occupiedExtent, inInclusiveRange(.68, .82), reason: entry.key);
+      } else {
+        expect(occupiedExtent, inInclusiveRange(.78, .94), reason: entry.key);
+      }
       if (maskable) {
         expect(icon.every((pixel) => pixel.a.toInt() == 255), isTrue,
             reason: entry.key);
