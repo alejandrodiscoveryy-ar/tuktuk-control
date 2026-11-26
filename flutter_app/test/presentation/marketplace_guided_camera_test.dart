@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('only vehicle and identity capture use the live WebApp guide', () {
+  test('all three registration photo types use the live WebApp guide', () {
     final ui = File('lib/presentation/marketplace_onboarding.dart')
         .readAsStringSync();
-    expect(ui, contains("assetKind == 'vehicle_photo' ||"));
-    expect(ui, contains("assetKind == 'identity_document'"));
-    expect(ui, contains(r"'identity-$identitySide'"));
+    expect(ui, contains("'driver_photo' => 'driver'"));
+    expect(ui, contains("'vehicle_photo' => 'vehicle'"));
+    expect(ui, contains("'identity_document' =>"));
     expect(ui, contains('captureGuidedMarketplacePhoto'));
     expect(ui, contains('normalizeMarketplaceImage('));
     expect(ui, contains('_choosePhotoSource()'));
@@ -22,13 +22,13 @@ void main() {
     expect(html, contains('guided_camera.css'));
     expect(html, contains('guided_camera.js'));
     expect(script, contains('navigator.mediaDevices.getUserMedia'));
-    expect(script, contains("facingMode: { ideal: 'environment' }"));
+    expect(script, contains("facingMode: { ideal: guide.facing }"));
     expect(script, contains("canvas.toDataURL('image/jpeg', 0.92)"));
     expect(script, contains('stream.getTracks()'));
     expect(script, contains('Repetir foto'));
     expect(stub, contains('=> null'));
     expect(script, contains("event.key === 'Escape' && ready && !usingNative"));
-    expect(script, contains("picker.setAttribute('capture', 'environment')"));
+    expect(script, contains("picker.setAttribute('capture', guide.facing)"));
     expect(script, contains("picker.addEventListener('change'"));
   });
 }
