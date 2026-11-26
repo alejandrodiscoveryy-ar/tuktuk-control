@@ -1315,7 +1315,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     List<MarketplaceAvailableJob> jobs,
     String? userId,
   ) {
-    if (!kIsWeb || userId == null) return;
+    if ((!kIsWeb && !_androidOperationalLocation) || userId == null) return;
     if (_recoveredOffersOwnerId != userId) {
       _recoveredOffersOwnerId = userId;
       _recoveredOfferIds.clear();
@@ -1330,7 +1330,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
     for (final job in jobs) {
       if (_recoveredOfferIds.add(job.id)) {
-        notifyMarketplaceRecoveredWebJob(job.id);
+        if (kIsWeb) {
+          notifyMarketplaceRecoveredWebJob(job.id);
+        } else {
+          unawaited(notifyMarketplaceRecoveredAndroidJob(job.id));
+        }
       }
     }
   }
