@@ -9,6 +9,11 @@ on:
       - 'flutter_app/lib/services/project_identity_runtime_stub.dart'
       - 'flutter_app/test/web_startup_single_screen_test.dart'
       - 'flutter_app/test/web_startup_icon.test.cjs'
+      - 'flutter_app/tool/sync_project_branding.dart'
+      - 'flutter_app/tool/project_icon_variant_loader.dart'
+      - 'flutter_app/tool/project_icon_renderer.dart'
+      - 'flutter_app/test/tool/project_icon_renderer_test.dart'
+      - 'flutter_app/test/tool/project_icon_variant_loader_test.dart'
       - 'flutter_app/lib/data/marketplace_service.dart'
       - 'flutter_app/lib/presentation/marketplace_assigned_job_card.dart'
       - 'flutter_app/test/domain/marketplace_models_test.dart'
@@ -59,6 +64,8 @@ jobs:
           flutter test test/domain/web_oauth_redirect_test.dart
           flutter test test/conductor_app_suspension_gate_contract_test.dart
           flutter test test/web_startup_single_screen_test.dart
+          flutter test test/tool/project_icon_variant_loader_test.dart
+          flutter test test/tool/project_icon_renderer_test.dart
       - name: Test startup icon cache and refresh
         working-directory: flutter_app
         run: node --test test/web_startup_icon.test.cjs

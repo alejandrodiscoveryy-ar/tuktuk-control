@@ -20,6 +20,46 @@ Uint8List renderTransparentWebIcon(
   return _renderWebIcon(master, size: size, contentScale: contentScale);
 }
 
+/// Fits the actual rendered alpha bounds into the web safe area.
+/// Faint source edges can disappear during downsampling, so the requested
+/// scale alone is not a reliable measure of the resulting occupied extent.
+Uint8List renderWebIconWithinRatio(
+  image.Image master, {
+  required int size,
+  required double minimumRatio,
+  required double maximumRatio,
+}) {
+  if (minimumRatio <= 0 || maximumRatio > 1 ||
+      minimumRatio > maximumRatio || size <= 0) {
+    throw ArgumentError('Rango de ocupación web inválido.');
+  }
+  final target = (minimumRatio + maximumRatio) / 2;
+  var scale = target;
+  for (var attempt = 0; attempt < 8; attempt++) {
+    final bytes = renderTransparentWebIcon(master, size: size, contentScale: scale);
+    final bounds = visibleAlphaBounds(image.decodePng(bytes)!);
+    if (bounds == null) break;
+    final ratio = (bounds.width > bounds.height ? bounds.width : bounds.height) / size;
+    if (ratio >= minimumRatio && ratio <= maximumRatio) return bytes;
+    final adjusted = (scale * target / ratio).clamp(1 / size, 1.0).toDouble();
+    if ((adjusted - scale).abs() < 1 / size) break;
+    scale = adjusted;
+  }
+
+  // A second pass crops away the padding remaining after downsampling.
+  // Start at full resolution so faint outer pixels cannot shrink the icon.
+  final full = image.decodePng(
+    renderTransparentWebIcon(master, size: size, contentScale: 1),
+  )!;
+  final fitted = renderTransparentWebIcon(full, size: size, contentScale: target);
+  final bounds = visibleAlphaBounds(image.decodePng(fitted)!);
+  if (bounds != null) {
+    final ratio = (bounds.width > bounds.height ? bounds.width : bounds.height) / size;
+    if (ratio >= minimumRatio && ratio <= maximumRatio) return fitted;
+  }
+  throw const FormatException('No se pudo ajustar el icono a la zona segura web.');
+}
+
 /// Uses the transparent renderer geometry and then converts the artwork to a
 /// white silhouette without changing any alpha value.
 Uint8List renderMonochromeTransparentIcon(

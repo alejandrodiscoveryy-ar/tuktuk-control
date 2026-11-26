@@ -116,8 +116,10 @@ Future<void> _addWebResources(
       client,
       name: 'favicon-32.png',
       size: 32,
+      minimumVisibleRatio: 0.78,
+      maximumVisibleRatio: 0.94,
       fallback: (source) =>
-          renderTransparentWebIcon(source, size: 32, contentScale: .92),
+          renderWebIconWithinRatio(source, size: 32, minimumRatio: .78, maximumRatio: .94),
     )
     ..[_file(root, 'web/icons/Icon-192.png')] = await _variant(
       identity,
@@ -125,8 +127,10 @@ Future<void> _addWebResources(
       client,
       name: 'pwa-192.png',
       size: 192,
+      minimumVisibleRatio: 0.78,
+      maximumVisibleRatio: 0.94,
       fallback: (source) =>
-          renderTransparentWebIcon(source, size: 192, contentScale: .92),
+          renderWebIconWithinRatio(source, size: 192, minimumRatio: .78, maximumRatio: .94),
     )
     ..[_file(root, 'web/icons/Icon-512.png')] = await _variant(
       identity,
@@ -134,8 +138,10 @@ Future<void> _addWebResources(
       client,
       name: 'pwa-512.png',
       size: 512,
+      minimumVisibleRatio: 0.78,
+      maximumVisibleRatio: 0.94,
       fallback: (source) =>
-          renderTransparentWebIcon(source, size: 512, contentScale: .92),
+          renderWebIconWithinRatio(source, size: 512, minimumRatio: .78, maximumRatio: .94),
     )
     ..[_file(root, 'web/icons/Icon-shortcut-192.png')] = await _variant(
       identity,
@@ -143,8 +149,10 @@ Future<void> _addWebResources(
       client,
       name: 'shortcut-192.png',
       size: 192,
+      minimumVisibleRatio: 0.68,
+      maximumVisibleRatio: 0.82,
       fallback: (source) =>
-          renderTransparentWebIcon(source, size: 192, contentScale: .70),
+          renderWebIconWithinRatio(source, size: 192, minimumRatio: .68, maximumRatio: .82),
     );
   await _addWebMaskableResources(root, identity, master, client, outputs);
   outputs[manifest] = _updatedManifest(manifest, identity);
@@ -363,6 +371,8 @@ Future<Uint8List> _variant(
   ProjectIconAlpha alpha = ProjectIconAlpha.transparent,
   int? maximumVisibleExtent,
   int visibleExtentTolerance = 0,
+  double? minimumVisibleRatio,
+  double? maximumVisibleRatio,
 }) =>
     loadProjectIconVariant(
       iconUrl: identity.iconUrl,
@@ -371,6 +381,8 @@ Future<Uint8List> _variant(
       alpha: alpha,
       maximumVisibleExtent: maximumVisibleExtent,
       visibleExtentTolerance: visibleExtentTolerance,
+      minimumVisibleRatio: minimumVisibleRatio,
+      maximumVisibleRatio: maximumVisibleRatio,
       client: client,
       fallback: () async => fallback(await master()),
     );
