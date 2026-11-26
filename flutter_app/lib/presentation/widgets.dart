@@ -429,7 +429,9 @@ class DashboardMetricGrid extends StatelessWidget {
         context, cardWidth, cards.map((card) => card.label));
       final details = cards.any((card) => card.details != null);
       final notes = cards.any((card) => card.note != null);
-      final height = 25 + header + (details ? 49 : notes ? 50 : 25) * scale;
+      // Include border thickness and actual font leading; avoid clipping
+      // wallet detail rows on desktop and at larger accessibility scales.
+      final height = 27 + header + (details ? 57 : notes ? 57 : 28) * scale;
       return GridView.count(
         padding: EdgeInsets.zero,
         primary: false,
