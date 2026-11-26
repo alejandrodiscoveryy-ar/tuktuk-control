@@ -461,7 +461,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!working && mounted && widget.store.user?.id == userId &&
           _selectedVehicleId == vehicleId && !_updatingAvailability) {
         // Reload authoritative state rather than writing accepting_jobs=true.
-        await _load(refreshHistory: false);
+        await _load();
       }
     } catch (_) {
       // Offline or older backend: preserve local state; retry on next contact.
@@ -470,7 +470,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
   }
 
-  void _refreshAvailability({bool refreshHistory = true}) {
+  void _refreshAvailability() => _requestOperationalRefresh();
+
+  void _requestOperationalRefresh({bool refreshHistory = true}) {
     if (marketplaceJobPushPending.value) {
       if (!_marketplaceJobsVisible.value) {
         _marketplaceJobsNeedAttention.value = true;
@@ -499,7 +501,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     if (state == AppLifecycleState.resumed) {
-      _refreshAvailability(refreshHistory: false);
+      _requestOperationalRefresh(refreshHistory: false);
       unawaited(_sendPresenceHeartbeat());
       _recoverStalledOperationalGpsForeground();
       _syncOperationalLocationSampling(
@@ -1309,7 +1311,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     if (hasTrip) {
       if (_workRecoverySlowTick) {
         if (_active.isNotEmpty) {
-          unawaited(_loadScope('active'));
+          unawaited(_reconcileActiveRide());
         } else {
           unawaited(_load(refreshHistory: false));
         }
@@ -1320,6 +1322,22 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         vehicle?.isAvailable == true &&
         vehicle?.acceptingJobs == true) {
       unawaited(_loadAvailable());
+    }
+  }
+
+  Future<void> _reconcileActiveRide() async {
+    final ownerId = widget.store.user?.id;
+    final before = _active.map((job) => job.id).toSet();
+    await _loadScope('active');
+    if (!mounted || widget.store.user?.id != ownerId ||
+        _scopeErrors.containsKey('active')) {
+      return;
+    }
+    final remaining = _active.map((job) => job.id).toSet();
+    if (before.difference(remaining).isNotEmpty) {
+      // A ride actually left the active list. Refresh history and the existing
+      // reconciliation once, without changing any financial calculations.
+      await _load();
     }
   }
 
@@ -2433,9 +2451,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final message = StringBuffer(
       action.uri.queryParameters['text'] ?? 'Necesito asistencia de TukTuk.',
     )..write('\nAsistencia durante carrera: ${job.id}');
-    if (shareLocation && canShare) {
+    if (shareLocation && position != null && capturedAt != null && canShare &&
+        DateTime.now().toUtc().difference(capturedAt) <= const Duration(minutes: 2)) {
       message.write('\nÚltima ubicación: https://maps.google.com/?q=${position.latitude},${position.longitude}');
-      message.write('\nCapturada: ${capturedAt!.toIso8601String()}');
+      message.write('\nCapturada: ${capturedAt.toIso8601String()}');
     }
     final uri = action.uri.replace(queryParameters: {
       ...action.uri.queryParameters,
