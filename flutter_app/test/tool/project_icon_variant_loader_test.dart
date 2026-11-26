@@ -150,6 +150,45 @@ void main() {
     }
   });
 
+  test('web shortcut fuera de zona segura se regenera sin afectar PWA',
+      () async {
+    var fallbackCalls = 0;
+    final corrected = _adaptivePng(size: 192, extent: 134, monochrome: false);
+    for (final extent in [100, 170]) {
+      final result = await loadProjectIconVariant(
+        iconUrl: masterUrl,
+        variantName: 'shortcut-192.png',
+        size: 192,
+        alpha: ProjectIconAlpha.transparent,
+        minimumVisibleRatio: .68,
+        maximumVisibleRatio: .82,
+        fetch: (_) async =>
+            _adaptivePng(size: 192, extent: extent, monochrome: false),
+        fallback: () async {
+          fallbackCalls++;
+          return corrected;
+        },
+      );
+      expect(result, corrected);
+    }
+    final remote = _adaptivePng(size: 192, extent: 176, monochrome: false);
+    final pwa = await loadProjectIconVariant(
+      iconUrl: masterUrl,
+      variantName: 'pwa-192.png',
+      size: 192,
+      alpha: ProjectIconAlpha.transparent,
+      minimumVisibleRatio: .78,
+      maximumVisibleRatio: .94,
+      fetch: (_) async => remote,
+      fallback: () async {
+        fallbackCalls++;
+        return remote;
+      },
+    );
+    expect(pwa, remote);
+    expect(fallbackCalls, 2);
+  });
+
   test('otras variantes no reciben un límite de ocupación', () async {
     var fallbackCalls = 0;
     final remote = _adaptivePng(
