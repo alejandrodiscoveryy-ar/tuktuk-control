@@ -153,8 +153,16 @@ jobs:
           const expected = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
           for (const [path, hash] of Object.entries(expected)) {
             const relative = path.replace(/^flutter_app\/web\//, '');
-            const actual = crypto.createHash('sha256')
-              .update(fs.readFileSync(process.argv[3] + '/' + relative)).digest('hex');
+            const built = fs.readFileSync(process.argv[3] + '/' + relative);
+            if (relative === 'index.html') {
+              // Flutter replaces its base href and other build placeholders.
+              const iconHash = expected['flutter_app/web/icons/Icon-192.png'].slice(0, 16);
+              if (!built.toString('utf8').includes('src="icons/Icon-192.png?v=' + iconHash + '"')) {
+                throw new Error('Build startup icon revision mismatch');
+              }
+              continue;
+            }
+            const actual = crypto.createHash('sha256').update(built).digest('hex');
             if (actual !== hash) throw new Error('Build branding mismatch: ' + relative);
           }
           console.log('STAGED_BRANDING_INTEGRITY=OK');
@@ -258,7 +266,7 @@ jobs:
 
               if [ "$REMOTE_HASH" = "$LOCAL_HASH" ]; then
                 branding_ok=true
-                for asset in manifest.json favicon.png icons/Icon-192.png icons/Icon-512.png icons/Icon-maskable-192.png icons/Icon-maskable-512.png icons/Icon-shortcut-192.png; do
+                for asset in index.html manifest.json favicon.png icons/Icon-192.png icons/Icon-512.png icons/Icon-maskable-192.png icons/Icon-maskable-512.png icons/Icon-shortcut-192.png; do
                   if ! curl -fsSL -H "Cache-Control: no-cache" "${PUBLIC_URL}${asset}?release=${cache_buster}" -o "$RUNNER_TEMP/branding-remote" ||
                     ! cmp -s "$STAGE/tuktuk/app/$asset" "$RUNNER_TEMP/branding-remote"; then
                     echo "BRANDING_VERIFY_PENDING=$asset"
