@@ -304,6 +304,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _recoveredOffersOwnerId;
   final Set<String> _recoveredOfferIds = <String>{};
   bool _presenceHeartbeatInFlight = false;
+  bool _workRecoverySlowTick = false;
   StreamSubscription<Position>? _activeOperationalLocationSubscription;
   bool? _operationalLocationStreamActiveService;
   bool _operationalLocationStreamStarting = false;
@@ -374,7 +375,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     super.didUpdateWidget(oldWidget);
 
     if (!oldWidget.isVisible && widget.isVisible) {
-      if (kIsWeb) unawaited(_load(refreshHistory: false));
+      unawaited(_load(refreshHistory: false));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_showDebtNoticeOnEntry());
       });
@@ -481,7 +482,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         });
       }
     }
-    unawaited(_load());
+    // Push and resume only need operational state, not the full history.
+    unawaited(_load(refreshHistory: false));
   }
 
   @override
@@ -1107,7 +1109,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     try {
-      final access = await _service.access(vehicleId);
+      final access = await _service.access(vehicleId)
+          .timeout(const Duration(seconds: 20));
 
       if (!mounted || vehicleId != _selectedVehicleId) return;
 
@@ -1176,7 +1179,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       final userId = widget.store.user?.id;
-      final onboarding = await _service.onboarding();
+      final onboarding = await _service.onboarding()
+          .timeout(const Duration(seconds: 20));
       if (!mounted || widget.store.user?.id != userId) return;
       _updateMarketplaceDriverProfileNeedsSetup(onboarding);
 
@@ -1253,17 +1257,46 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _operationalLifecycleState != AppLifecycleState.resumed ||
         _loading ||
         _updatingAvailability ||
+        _busyJobId != null ||
+        _acceptingJobId != null ||
         _loadRequest != null ||
         _availableRequest != null ||
-        _active.isNotEmpty ||
-        _scheduled.isNotEmpty ||
-        _scopeErrors.containsKey('active') ||
-        _scopeErrors.containsKey('scheduled') ||
-        widget.store.user?.id == null ||
-        _workOnboardingUserId != widget.store.user?.id) {
+        _scopeRequests.isNotEmpty ||
+        widget.store.user?.id == null) {
       return;
     }
+
+    // A failed bootstrap or active/scheduled fetch must not disable recovery.
+    // Retry only while the driver is working, has a trip, or is viewing Trabajo.
+    _workRecoverySlowTick = !_workRecoverySlowTick;
     final vehicle = _vehicleById(_selectedVehicleId);
+    final working = vehicle?.acceptingJobs == true;
+    final hasTrip = _active.isNotEmpty || _scheduled.isNotEmpty;
+    final needsStateRecovery = _error != null ||
+        _scopeErrors.containsKey('active') ||
+        _scopeErrors.containsKey('scheduled') ||
+        _workOnboardingUserId != widget.store.user?.id ||
+        (_onboarding != null && !_marketplaceDriverNeedsSetup(_onboarding!) &&
+            _workAccess == null);
+    if (needsStateRecovery) {
+      if (_workRecoverySlowTick && (widget.isVisible || working || hasTrip)) {
+        unawaited(_load(refreshHistory: false));
+      }
+      return;
+    }
+
+    // Reconcile server-side cancellations/transitions even if a push was lost.
+    // No mutations or repeated full history loads; one reconciliation per minute.
+    if (hasTrip) {
+      if (_workRecoverySlowTick) {
+        if (_active.isNotEmpty) {
+          unawaited(_loadScope('active'));
+        } else {
+          unawaited(_load(refreshHistory: false));
+        }
+      }
+      return;
+    }
     if (_vehicleReadyForWork(vehicle) &&
         vehicle?.isAvailable == true &&
         vehicle?.acceptingJobs == true) {
@@ -1348,7 +1381,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       final requestUserId = widget.store.user?.id;
-      final jobs = await _service.available(vehicleId);
+      final jobs = await _service.available(vehicleId)
+          .timeout(const Duration(seconds: 20));
 
       if (!mounted ||
           vehicleId != _selectedVehicleId ||
@@ -1392,7 +1426,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     });
 
     try {
-      final jobs = await _service.jobs(scope);
+      final jobs = await _service.jobs(scope)
+          .timeout(const Duration(seconds: 20));
       if (widget.store.user?.id != requestUserId) return;
 
       List<MarketplaceJobCancellationDetail> cancellationDetails = const [];
@@ -1418,7 +1453,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
 
-      if (!mounted) return;
+      if (!mounted || widget.store.user?.id != requestUserId) return;
 
       setState(() {
         switch (scope) {
@@ -1465,7 +1500,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || widget.store.user?.id != requestUserId) return;
 
       setState(() {
         _loadingScopes.remove(scope);
@@ -3917,7 +3952,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             : !valid
                 ? 'Completa la activación'
                 : available
-                    ? 'Toca para descansar'
+                    ? (_error != null ||
+                            _scopeErrors.containsKey('active') ||
+                            _scopeErrors.containsKey('scheduled')
+                        ? 'Conexión por confirmar'
+                        : 'Toca para descansar')
                     : 'Toca para trabajar';
     final interactive = !onRide && !_updatingAvailability;
     return Semantics(
@@ -4353,6 +4392,22 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                   ),
                                 ],
                               ),
+                              if (_error != null ||
+                                  _scopeErrors.containsKey('active') ||
+                                  _scopeErrors.containsKey('scheduled'))
+                                TextButton.icon(
+                                  key: const ValueKey('work-active-recovery'),
+                                  onPressed: _loading
+                                      ? null
+                                      : () => unawaited(_load(refreshHistory: false)),
+                                  icon: const Icon(Icons.sync_problem, size: 18),
+                                  label: const Text('Estado por confirmar · Reintentar'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFFFFC47B),
+                                    alignment: Alignment.centerLeft,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
                               const SizedBox(height: 5),
                               _RidePaymentLabel(
                                 key: const ValueKey('work-active-payment'),
