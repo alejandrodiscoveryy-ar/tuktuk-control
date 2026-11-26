@@ -17,16 +17,17 @@ class _OverviewMetricLabel extends StatelessWidget {
 }
 
 class _OverviewMetricValue extends StatelessWidget {
-  const _OverviewMetricValue(this.value, {required this.style, this.currency});
+  const _OverviewMetricValue(this.value, {required this.style, this.currency, this.alignment = Alignment.centerLeft});
   final String value;
   final TextStyle style;
   final String? currency;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
     child: FittedBox(
-      alignment: Alignment.centerLeft,
+      alignment: alignment,
       fit: BoxFit.scaleDown,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -46,6 +47,120 @@ class _OverviewMetricValue extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Presentation-only seasonal campaigns. Dates use the device's local calendar.
+class SeasonalCampaign {
+  const SeasonalCampaign({
+    required this.id,
+    required this.startMonth,
+    required this.startDay,
+    required this.endMonth,
+    required this.endDay,
+    required this.messages,
+    required this.icon,
+    required this.accent,
+    required this.highlight,
+  });
+
+  final String id;
+  final int startMonth;
+  final int startDay;
+  final int endMonth;
+  final int endDay;
+  final Map<String, String> messages;
+  final IconData icon;
+  final Color accent;
+  final Color highlight;
+
+  bool includes(DateTime date) {
+    final day = date.month * 100 + date.day;
+    final start = startMonth * 100 + startDay;
+    final end = endMonth * 100 + endDay;
+    return start <= end ? day >= start && day <= end
+        : day >= start || day <= end;
+  }
+}
+
+// Add future campaigns here, in priority order. No financial colors,
+// network requests, authentication or persisted records are involved.
+const _seasonalCampaigns = <SeasonalCampaign>[
+  SeasonalCampaign(
+    id: 'christmas',
+    startMonth: 11,
+    startDay: 26,
+    endMonth: 12,
+    endDay: 25,
+    messages: {
+      'es': 'Felices fiestas',
+      'en': 'Happy holidays',
+      'pt': 'Boas festas',
+      'fr': 'Joyeuses fêtes',
+    },
+    icon: Icons.park_outlined,
+    accent: Color(0xFF318568),
+    highlight: Color(0xFFEBCB86),
+  ),
+];
+
+SeasonalCampaign? seasonalCampaignFor(DateTime date, {
+  bool enabled = const bool.fromEnvironment('TUKTUK_SEASONAL_ENABLED', defaultValue: true),
+}) {
+  if (!enabled) return null;
+  for (final campaign in _seasonalCampaigns) {
+    if (campaign.includes(date)) return campaign;
+  }
+  return null;
+}
+
+/// A compact, decorative accent that disappears entirely out of season.
+class SeasonalAccent extends StatelessWidget {
+  const SeasonalAccent({this.date, this.language, super.key});
+
+  final DateTime? date;
+  final String? language;
+
+  @override
+  Widget build(BuildContext context) {
+    final campaign = seasonalCampaignFor(date ?? DateTime.now());
+    if (campaign == null) return const SizedBox.shrink();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final locale = (language ?? activeLanguage).split(RegExp(r'[-_]')).first;
+    final message = campaign.messages[locale] ?? campaign.messages['es']!;
+    final background = dark ? const Color(0xFF142C2C) : const Color(0xFFF1F8F2);
+    final gold = dark ? campaign.highlight : const Color(0xFF765519);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DecoratedBox(
+        key: ValueKey('seasonal-accent-${campaign.id}'),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: campaign.accent.withValues(alpha: .48)),
+          gradient: LinearGradient(
+            colors: [
+              background,
+              Color.alphaBlend(campaign.accent.withValues(alpha: .12), background),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(children: [
+            Icon(campaign.icon, size: 22,
+              color: dark ? const Color(0xFF84D7AA) : campaign.accent),
+            const SizedBox(width: 9),
+            Expanded(child: Text(message,
+              style: TextStyle(color: gold, fontSize: 12,
+                fontWeight: FontWeight.w700, height: 1.2))),
+            const SizedBox(width: 8),
+            Icon(Icons.auto_awesome_rounded, size: 16, color: gold),
+            const SizedBox(width: 5),
+            const Icon(Icons.circle, size: 6, color: Color(0xFFCC646A)),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 class MetricHero extends StatelessWidget {
@@ -647,10 +762,9 @@ class MonthlyEarningsBars extends StatelessWidget {
     }
     final visible = cycles.reversed.take(8).toList().reversed.toList();
     final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
-    if (statisticsStyle) {
-      return _StatisticsMonthlyChart(cycles: visible);
-    }
+    final scale = MediaQuery.textScalerOf(context);
     return GlassCard(
+      accent: statisticsStyle ? appPrimaryColor(context) : null,
       child: Column(
         children: [
           Row(
@@ -667,29 +781,34 @@ class MonthlyEarningsBars extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 195,
+            height: 195 + max(0.0, scale.scale(10) - 10) * 3,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 for (final cycle in visible)
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: EdgeInsets.symmetric(horizontal: statisticsStyle ? 2 : 4),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Text(
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
                             moneyCompact(
                               cycle.earnings,
                               includeCurrency: false,
                             ),
                             style: TextStyle(
-                              color: appMutedColor(context),
+                              color: statisticsStyle ? appPrimaryColor(context) : appMutedColor(context),
                               fontSize: 10,
+                              fontWeight: statisticsStyle ? FontWeight.w700 : FontWeight.normal,
+                            ),
                             ),
                           ),
                           const SizedBox(height: 5),
                           Tooltip(
+                            key: ValueKey('monthly-income-bar-${cycle.start.toIso8601String()}'),
                             message:
                                 '${tr('Ingreso')}: ${money(cycle.earnings)}\n${tr('Gasto')}: ${money(cycle.expenses)}',
                             child: _IncomeExpenseBar(
@@ -702,7 +821,9 @@ class MonthlyEarningsBars extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 7),
-                          Text(
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
                             DateFormat(
                               'MMM',
                               activeLanguage,
@@ -710,6 +831,8 @@ class MonthlyEarningsBars extends StatelessWidget {
                             style: TextStyle(
                               color: appMutedColor(context),
                               fontSize: 10,
+                              fontWeight: statisticsStyle ? FontWeight.w700 : FontWeight.normal,
+                            ),
                             ),
                           ),
                         ],
@@ -720,120 +843,6 @@ class MonthlyEarningsBars extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// Use independent bars on a common scale, including months with expenses
-// but no income. The original data and cycle ordering are unchanged.
-class _StatisticsMonthlyChart extends StatelessWidget {
-  const _StatisticsMonthlyChart({required this.cycles});
-
-  final List<CycleSummary> cycles;
-
-  @override
-  Widget build(BuildContext context) {
-    final income = appPrimaryColor(context);
-    const expense = kDanger;
-    final maximum = cycles.fold<double>(0.0, (value, cycle) =>
-      max(value, max(cycle.earnings, cycle.expenses).toDouble()));
-    return GlassCard(
-      accent: income,
-      child: Column(
-        children: [
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 18,
-            runSpacing: 8,
-            children: [
-              for (final entry in [(income, tr('Ingreso')), (expense, tr('Gasto'))])
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  _ChartLegendDot(color: entry.$1),
-                  const SizedBox(width: 6),
-                  Text(entry.$2, style: const TextStyle(fontSize: 12,
-                    fontWeight: FontWeight.w700)),
-                ]),
-            ],
-          ),
-          const SizedBox(height: 16),
-          LayoutBuilder(builder: (context, constraints) {
-            final width = max(constraints.maxWidth, cycles.length * 92.0);
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: width,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    for (final cycle in cycles)
-                      Expanded(child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        child: Column(children: [
-                          Tooltip(
-                            message: '${tr('Ingreso')}: ${money(cycle.earnings)}\n'
-                                '${tr('Gasto')}: ${money(cycle.expenses)}',
-                            child: SizedBox(
-                              height: 150,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  _StatisticsChartBar(
-                                    color: income, value: cycle.earnings.toDouble(),
-                                    maximum: maximum),
-                                  const SizedBox(width: 6),
-                                  _StatisticsChartBar(
-                                    color: expense, value: cycle.expenses.toDouble(),
-                                    maximum: maximum),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(DateFormat('MMM', activeLanguage).format(cycle.start),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 4),
-                          Text(moneyCompact(cycle.earnings, includeCurrency: false),
-                            style: TextStyle(color: income, fontSize: 12,
-                              fontWeight: FontWeight.w800)),
-                          Text(moneyCompact(cycle.expenses, includeCurrency: false),
-                            style: const TextStyle(color: kDanger, fontSize: 12,
-                              fontWeight: FontWeight.w800)),
-                        ]),
-                      )),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatisticsChartBar extends StatelessWidget {
-  const _StatisticsChartBar({required this.color, required this.value,
-    required this.maximum});
-
-  final Color color;
-  final double value;
-  final double maximum;
-
-  @override
-  Widget build(BuildContext context) {
-    final fraction = maximum <= 0 ? 0.0 : (value / maximum).clamp(0.0, 1.0).toDouble();
-    return Container(
-      width: 23,
-      height: 150 * fraction,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(7),
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [color.withValues(alpha: .65), color],
-        ),
       ),
     );
   }
@@ -918,35 +927,8 @@ class EarningsTrendCard extends StatelessWidget {
     if (values.isEmpty) {
       return EmptyState(tr('Todavía no hay ingresos para mostrar.'));
     }
-    if (statisticsStyle) {
-      final accent = appPrimaryColor(context);
-      final maximum = values.fold<double>(0.0,
-        (value, record) => max(value, record.earnings.toDouble()));
-      return GlassCard(
-        accent: accent,
-        child: Column(children: [
-          for (final record in values)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(children: [
-                InfoLine(label: DateFormat('d MMM', activeLanguage).format(record.date),
-                  value: money(record.earnings)),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(
-                    value: maximum <= 0 ? 0 : (record.earnings / maximum).clamp(0.0, 1.0).toDouble(),
-                    minHeight: 7,
-                    color: accent,
-                    backgroundColor: accent.withValues(alpha: .12),
-                  ),
-                ),
-              ]),
-            ),
-        ]),
-      );
-    }
     return GlassCard(
+      accent: statisticsStyle ? appPrimaryColor(context) : null,
       child: Column(
         children: [
           for (final record in values)
