@@ -335,10 +335,10 @@ class _MarketplaceDriverPermissionsScreenState
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
             subtitle: Text(
-              (_android
+              '${_android
                   ? 'Ahorro de batería: ${batterySaver == null ? 'sin comprobar' : batterySaver ? 'activo' : 'desactivado'}. '
                     'Optimización Android: ${batteryOptimizationIgnored == null ? 'sin comprobar' : batteryOptimizationIgnored ? 'exenta' : 'aplicada'}.\n'
-                  : '') +
+                  : ''}'
               'Revisa las restricciones de batería desde los ajustes del teléfono si las notificaciones llegan tarde. '
               'Esta versión no solicita acceso permanente a la ubicación: no se muestra como permiso concedido.',
             ),
