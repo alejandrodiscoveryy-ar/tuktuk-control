@@ -61,15 +61,46 @@ test('selfie rejects rear and selects identified front device', async () => {
   assert.equal(rear.track.stopped, true);
   assert.equal(requests[1].video.deviceId.exact, 'front1');
 });
-test('selfie does not silently accept rear fallback', async () => {
+test('selfie preserves guided preview when only rear is reported', async () => {
+  const first = fakeCamera('environment');
+  const fallback = fakeCamera('environment');
+  let calls = 0;
+  const media = {getUserMedia: async () => ++calls === 1 ? first : fallback, enumerateDevices: async () => []};
+  assert.equal(await sandbox.window.__driverCamera(media, () => true), fallback);
+  assert.equal(first.track.stopped, true);
+  assert.equal(fallback.track.stopped, false);
+});
+test('selfie accepts working camera with missing orientation metadata', async () => {
+  const front = fakeCamera(undefined);
+  let calls = 0;
+  const media = {getUserMedia: async () => {
+    if (++calls === 1) throw new Error('constraint unsupported');
+    return front;
+  }, enumerateDevices: async () => []};
+  assert.equal(await sandbox.window.__driverCamera(media, () => true), front);
+  assert.equal(front.track.stopped, false);
+});
+test('switching requests opposite lens explicitly', async () => {
   const rear = fakeCamera('environment');
-  const media = {getUserMedia: async () => rear, enumerateDevices: async () => []};
+  const media = {getUserMedia: async c => {
+    assert.equal(c.video.facingMode.exact, 'environment');
+    return rear;
+  }};
+  assert.equal(await sandbox.window.__driverCamera(media, () => true, 'environment'), rear);
+});
+test('permission denial does not repeatedly request camera', async () => {
+  let calls = 0;
+  const media = {getUserMedia: async () => {
+    calls++;
+    throw Object.assign(new Error('denied'), {name:'NotAllowedError'});
+  }};
   await assert.rejects(sandbox.window.__driverCamera(media, () => true));
-  assert.equal(rear.track.stopped, true);
+  assert.equal(calls, 1);
 });
 test('late camera stream is stopped after dialog closes', async () => {
   const front = fakeCamera('user');
-  const media = {getUserMedia: async () => front};
-  await assert.rejects(sandbox.window.__driverCamera(media, () => false));
+  let open = true;
+  const media = {getUserMedia: async () => { open = false; return front; }};
+  await assert.rejects(sandbox.window.__driverCamera(media, () => open));
   assert.equal(front.track.stopped, true);
 });
