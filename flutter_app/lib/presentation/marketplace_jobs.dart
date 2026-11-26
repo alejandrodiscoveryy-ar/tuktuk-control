@@ -461,7 +461,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       if (!working && mounted && widget.store.user?.id == userId &&
           _selectedVehicleId == vehicleId && !_updatingAvailability) {
         // Reload authoritative state rather than writing accepting_jobs=true.
-        await _load(refreshHistory: false);
+        await _load();
       }
     } catch (_) {
       // Offline or older backend: preserve local state; retry on next contact.
