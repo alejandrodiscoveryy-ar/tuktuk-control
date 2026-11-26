@@ -2636,6 +2636,7 @@ class StatisticsMetricGrid extends StatelessWidget {
                   labelHeight: labelHeight,
                   headerHeight: headerHeight,
                   horizontalHeader: horizontalHeader,
+                  alignRight: count > 1 && index == count - 1,
                   valueHeight: valueHeight,
                   labelStyle: labelStyle,
                   noteStyle: noteStyle,
@@ -2669,6 +2670,7 @@ class _StatisticsVisualCard extends StatelessWidget {
     required this.labelHeight,
     required this.headerHeight,
     required this.horizontalHeader,
+    required this.alignRight,
     required this.valueHeight,
     required this.labelStyle,
     required this.noteStyle,
@@ -2678,6 +2680,7 @@ class _StatisticsVisualCard extends StatelessWidget {
   final double labelHeight;
   final double headerHeight;
   final bool horizontalHeader;
+  final bool alignRight;
   final double valueHeight;
   final TextStyle labelStyle;
   final TextStyle noteStyle;
@@ -2700,8 +2703,10 @@ class _StatisticsVisualCard extends StatelessWidget {
               ),
               child: Icon(card.icon, size: 31, color: accent),
             );
-    final label = Text(card.label, style: labelStyle.copyWith(
-      color: appMutedColor(context)));
+    final textAlign = alignRight ? TextAlign.right : TextAlign.left;
+    final valueAlignment = alignRight ? Alignment.centerRight : Alignment.centerLeft;
+    final label = Text(card.label, textAlign: textAlign,
+      style: labelStyle.copyWith(color: appMutedColor(context)));
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
@@ -2718,7 +2723,7 @@ class _StatisticsVisualCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(13),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (horizontalHeader)
               SizedBox(
@@ -2726,9 +2731,15 @@ class _StatisticsVisualCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    iconTile,
-                    const SizedBox(width: 9),
+                    if (!alignRight) ...[
+                      iconTile,
+                      const SizedBox(width: 9),
+                    ],
                     Expanded(child: label),
+                    if (alignRight) ...[
+                      const SizedBox(width: 9),
+                      iconTile,
+                    ],
                   ],
                 ),
               )
@@ -2741,10 +2752,11 @@ class _StatisticsVisualCard extends StatelessWidget {
             SizedBox(
               height: valueHeight,
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: valueAlignment,
                 child: _OverviewMetricValue(
                   card.value,
                   currency: card.currency,
+                  alignment: valueAlignment,
                   style: TextStyle(color: accent, fontSize: 26,
                     fontWeight: FontWeight.w900, height: 1.15),
                 ),
@@ -2752,7 +2764,7 @@ class _StatisticsVisualCard extends StatelessWidget {
             ),
             if (card.note != null) ...[
               const SizedBox(height: 3),
-              Text(card.note!, style: noteStyle.copyWith(
+              Text(card.note!, textAlign: textAlign, style: noteStyle.copyWith(
                 color: appMutedColor(context))),
             ],
             if (card.details != null) ...[
