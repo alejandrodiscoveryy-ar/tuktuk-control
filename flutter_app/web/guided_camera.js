@@ -4,22 +4,40 @@
   'use strict';
 
   const guides = {
+    driver: {
+      title: 'Fotografía del conductor',
+      help: 'Centra el rostro en el óvalo, mira de frente y deja espacio sobre la cabeza. Usa buena iluminación.',
+      ratio: '3 / 4',
+      aspect: 0.75,
+      label: 'Guía de rostro y hombros',
+      prompt: 'Centra tu rostro dentro del óvalo.',
+      facing: 'user'
+    },
     'identity-front': {
-      title: 'Carné de identidad · Delantera',
-      help: 'Coloca el carné completo dentro del marco, con los cuatro bordes visibles. Evita reflejos.',
+      title: 'Documento · Parte delantera',
+      help: 'Coloca el carné o la licencia completa dentro del marco. Evita reflejos.',
       ratio: '1.59 / 1',
+      aspect: 1.59,
+      prompt: 'Deja las cuatro esquinas dentro del marco.',
+      facing: 'environment',
       label: 'Guía para la cara delantera del carné'
     },
     'identity-back': {
-      title: 'Carné de identidad · Trasera',
-      help: 'Encuadra toda la cara trasera del carné. Comprueba que los datos se puedan leer.',
+      title: 'Documento · Parte trasera',
+      help: 'Encuadra la cara trasera del documento. Comprueba que los datos se puedan leer.',
       ratio: '1.59 / 1',
+      aspect: 1.59,
+      prompt: 'Deja las cuatro esquinas dentro del marco.',
+      facing: 'environment',
       label: 'Guía para la cara trasera del carné'
     },
     vehicle: {
       title: 'Fotografía del vehículo',
       help: 'Aléjate hasta ver el vehículo completo, incluidas las ruedas. Busca buena iluminación.',
       ratio: '4 / 3',
+      aspect: 4 / 3,
+      prompt: 'Deja margen alrededor del vehículo y las ruedas.',
+      facing: 'environment',
       label: 'Guía para encuadrar el vehículo completo'
     }
   };
@@ -94,10 +112,17 @@
       image.hidden = true;
       const frame = make('div', 'tuktuk-camera-frame');
       frame.style.aspectRatio = guide.ratio;
+      frame.style.setProperty('--guide-ratio', String(guide.aspect));
+      frame.dataset.kind = kind;
+      for (const position of ['tl', 'tr', 'bl', 'br']) {
+        frame.appendChild(make('span', 'tuktuk-camera-corner ' + position));
+      }
+      if (kind === 'driver') frame.appendChild(make('span', 'tuktuk-camera-face-guide'));
+      else frame.appendChild(make('span', 'tuktuk-camera-inner-guide'));
       frame.setAttribute('role', 'img');
       frame.setAttribute('aria-label', guide.label);
       const frameText = make('span', 'tuktuk-camera-frame-label',
-        'Alinea los bordes dentro de esta guía');
+        guide.prompt);
       frame.appendChild(frameText);
       stage.appendChild(video);
       stage.appendChild(image);
@@ -117,12 +142,12 @@
       actions.appendChild(cancel);
       actions.appendChild(retake);
       actions.appendChild(primary);
-const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 'Camara del telefono');
+const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 'Cámara del teléfono');
       fallback.type = 'button';
       const picker = make('input', '');
       picker.type = 'file';
       picker.accept = 'image/*';
-      picker.setAttribute('capture', 'environment');
+      picker.setAttribute('capture', guide.facing);
       picker.hidden = true;
       actions.appendChild(fallback);
       actions.appendChild(picker);
@@ -149,7 +174,15 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
             status.textContent = 'No se pudo leer la foto.';
             return;
           }
-          finish(result.slice(result.indexOf(',') + 1));
+          captured = result.slice(result.indexOf(',') + 1);
+          image.src = result;
+          image.hidden = false;
+          video.hidden = true;
+          frame.hidden = true;
+          retake.hidden = false;
+          primary.disabled = false;
+          primary.textContent = 'Usar esta foto';
+          status.textContent = 'Revisa que la fotografía sea nítida y completa.';
         };
         reader.onerror = function () {
           if (!settled) status.textContent = 'No se pudo leer la foto.';
@@ -191,7 +224,8 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
         frame.hidden = false;
         retake.hidden = true;
         primary.textContent = 'Tomar foto';
-        status.textContent = 'Alinea el documento o vehículo y pulsa Tomar foto.';
+        primary.disabled = !ready;
+        status.textContent = ready ? guide.prompt + ' Pulsa Tomar foto.' : 'Pulsa Cámara del teléfono para repetir.';
       });
       primary.addEventListener('click', function () {
         if (settled || primary.disabled) return;
@@ -234,12 +268,12 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
       dialog.focus();
 
       if (!canPreview) {
-        status.textContent = 'El visor no esta disponible. Pulsa Camara del telefono.';
+        status.textContent = 'El visor no esta disponible. Pulsa Cámara del teléfono.';
         return;
       }
       navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        video: { facingMode: { ideal: guide.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }
       }).then(async function (cameraStream) {
         if (settled) {
           cameraStream.getTracks().forEach(function (track) { track.stop(); });
@@ -251,7 +285,7 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
         if (settled) return;
         ready = true;
         primary.disabled = false;
-        status.textContent = 'Alinea el documento o vehículo y pulsa Tomar foto.';
+        status.textContent = guide.prompt + ' Pulsa Tomar foto.';
       }).catch(function () {
         if (settled) return;
         if (stream) {
@@ -259,7 +293,7 @@ const fallback = make('button', 'tuktuk-camera-button tuktuk-camera-secondary', 
           stream = null;
           video.srcObject = null;
         }
-        status.textContent = 'El visor no se inicio. Pulsa Camara del telefono o usa la galeria.';
+        status.textContent = 'El visor no se inicio. Pulsa Cámara del teléfono o usa la galería.';
         primary.disabled = true;
       });
     });
