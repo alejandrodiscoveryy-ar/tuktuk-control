@@ -271,7 +271,10 @@ class _IdentityCameraScreenState extends State<_IdentityCameraScreen>
                       child: OutlinedButton(
                         onPressed: _busy
                             ? null
-                            : () => setState(() => _captured = null),
+                            : () {
+                                setState(() => _captured = null);
+                                if (_controller == null) _openCamera();
+                              },
                         child: const Text('Repetir foto'),
                       ),
                     ),
