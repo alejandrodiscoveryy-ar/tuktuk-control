@@ -126,4 +126,94 @@ void main() {
     }
   });
 
+
+  testWidgets('Home visual cards preserve wallet breakdown and align only within each row',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final width in [320.0, 390.0, 720.0]) {
+      for (final scale in [1.0, 1.5, 2.0]) {
+        for (final offline in [false, true]) {
+          await tester.binding.setSurfaceSize(Size(width, 900));
+          await tester.pumpWidget(MaterialApp(
+            home: Scaffold(body: MediaQuery(
+              data: MediaQueryData(size: Size(width, 900),
+                textScaler: TextScaler.linear(scale)),
+              child: SingleChildScrollView(child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: StatisticsMetricGrid(
+                  keyPrefix: 'home-card',
+                  columns: width >= 700 ? 3 : 2,
+                  cards: [
+                    MetricCard(
+                      label: 'Saldo disponible',
+                      value: offline ? 'Sin conexión' : '1.250',
+                      currency: offline ? null : 'CUP',
+                      icon: Icons.account_balance_wallet_outlined,
+                      color: kTertiary,
+                      details: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final detail in [
+                            ('Recargado', offline ? '—' : '1.000'),
+                            ('Referido', offline ? '—' : '250'),
+                          ]) ...[
+                            Row(children: [
+                              Expanded(child: Text(detail.$1, maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 10, height: 1.2))),
+                              const SizedBox(width: 4),
+                              Flexible(child: FittedBox(fit: BoxFit.scaleDown,
+                                child: Text(detail.$2, maxLines: 1,
+                                  style: const TextStyle(fontSize: 10, height: 1.2)))),
+                            ]),
+                            if (detail.$1 == 'Recargado') const SizedBox(height: 3),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const MetricCard(label: 'Distancia del mes', value: '0 km',
+                      icon: Icons.route_outlined),
+                    const MetricCard(label: 'Ingresos históricos', value: '402.500',
+                      currency: 'CUP', icon: Icons.payments_outlined),
+                    const MetricCard(label: 'Eficiencia', value: '0', note: 'CUP/km',
+                      icon: Icons.bolt_outlined),
+                    const MetricCard(label: 'Gastos del mes', value: '0',
+                      currency: 'CUP', icon: Icons.receipt_long_outlined),
+                    const MetricCard(label: 'Ganancia neta del mes', value: '399.000',
+                      currency: 'CUP', icon: Icons.account_balance_outlined),
+                  ],
+                ),
+              )),
+            )),
+          ));
+          Finder card(IconData icon) => find.byKey(ValueKey('home-card-${icon.codePoint}'));
+          final wallet = card(Icons.account_balance_wallet_outlined);
+          final distance = card(Icons.route_outlined);
+          final expenses = card(Icons.receipt_long_outlined);
+          final net = card(Icons.account_balance_outlined);
+          expect(find.text('Recargado'), findsOneWidget);
+          expect(find.text('Referido'), findsOneWidget);
+          expect(find.text(offline ? 'Sin conexión' : '1.250'), findsOneWidget);
+          expect(find.text('CUP/km'), findsOneWidget);
+          // At standard mobile size, the wallet's two detail rows need
+          // extra room; other rows must not inherit that height.
+          if (width == 390 && scale == 1) {
+            expect(tester.getSize(wallet).height,
+              greaterThan(tester.getSize(expenses).height));
+          }
+          if (scale < 2) {
+            expect(tester.getSize(wallet), tester.getSize(distance));
+            expect(tester.getSize(expenses), tester.getSize(net));
+            expect(tester.getTopLeft(wallet).dy, tester.getTopLeft(distance).dy);
+            expect(tester.getTopLeft(expenses).dy, tester.getTopLeft(net).dy);
+          } else {
+            expect(tester.getTopLeft(distance).dy,
+              greaterThan(tester.getTopLeft(wallet).dy));
+            expect(tester.getSize(wallet).width, tester.getSize(expenses).width);
+          }
+          expect(tester.takeException(), isNull);
+        }
+      }
+    }
+  });
 }

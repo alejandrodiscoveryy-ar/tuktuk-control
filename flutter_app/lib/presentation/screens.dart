@@ -1771,7 +1771,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final comparison = metrics.comparisonFor(selectedMonth);
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16,
+          100 + MediaQuery.paddingOf(context).bottom),
       children: [
         if (widget.registrationReceipt != null) ...[
           MarketplaceRegistrationStatusCard(
@@ -1795,26 +1796,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        DashboardMetricGrid(
+        LayoutBuilder(builder: (context, constraints) => StatisticsMetricGrid(
+          columns: constraints.maxWidth >= 700 ? 3 : 2,
+          keyPrefix: 'home-card',
           cards: [
             _dashboardWalletCard(context),
             MetricCard(
               label: tr('Distancia del mes'),
               value: '${numFmt(metrics.currentCycleDistance)} km',
               icon: Icons.route_outlined,
-              color: appSecondaryColor(context),
+              color: const Color(0xFF72A7FF),
             ),
             MetricCard(
               label: tr('Ingresos históricos'),
               value: numFmt(metrics.totalEarnings),
               currency: activeCurrency,
-              icon: Icons.account_balance_wallet_outlined,
+              icon: Icons.payments_outlined,
+              color: const Color(0xFF56D2A1),
             ),
             MetricCard(
               label: tr('Eficiencia'),
               value: numFmt(metrics.efficiency),
               note: '$activeCurrency/km',
               icon: Icons.bolt_outlined,
+              color: const Color(0xFF55C9EF),
             ),
             MetricCard(
               label: tr('Gastos del mes'),
@@ -1833,9 +1838,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : kDanger,
             ),
           ],
-        ),
+        )),
         const SizedBox(height: 14),
         MonthlyComparisonGauge(
+          visualStyle: true,
           comparison: comparison,
           onPreviousMonth: () => setState(
             () => selectedMonth = DateTime(
@@ -1854,7 +1860,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        MaintenanceDashboardCard(snapshot: maintenance),
+        MaintenanceDashboardCard(snapshot: maintenance, visualStyle: true),
         const SizedBox(height: 20),
         SectionTitle(title: tr('Hitos y mensajes')),
         DriverSystemMessages(
@@ -2569,12 +2575,14 @@ class StatsScreen extends StatelessWidget {
   }
 }
 
-/// Statistics-only visual grid. Keeps shared dashboard cards unchanged.
+/// Shared visual metrics for Home and Statistics, with independent row heights.
 class StatisticsMetricGrid extends StatelessWidget {
-  const StatisticsMetricGrid({required this.cards, this.columns = 2, super.key});
+  const StatisticsMetricGrid({required this.cards, this.columns = 2,
+    this.keyPrefix = 'statistics-card', super.key});
 
   final List<MetricCard> cards;
   final int columns;
+  final String keyPrefix;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -2610,16 +2618,20 @@ class StatisticsMetricGrid extends StatelessWidget {
             : 44 + 4 + labelHeight;
         final height = 26 + headerHeight + 5 + valueHeight
             + (noteHeight > 0 ? 3 + noteHeight : 0) + 3;
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        final hasDetails = row.any((card) => card.details != null);
+        final rowWidget = Row(
+          crossAxisAlignment: hasDetails ? CrossAxisAlignment.stretch
+              : CrossAxisAlignment.start,
           children: [
             for (var index = 0; index < row.length; index++) ...[
               if (index > 0) const SizedBox(width: gap),
               SizedBox(
-                key: ValueKey('statistics-card-${row[index].icon.codePoint}'),
+                key: ValueKey('$keyPrefix-${row[index].icon.codePoint}'),
                 width: width,
-                height: height,
-                child: _StatisticsVisualCard(
+                height: hasDetails ? null : height,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: height),
+                  child: _StatisticsVisualCard(
                   card: row[index],
                   labelHeight: labelHeight,
                   headerHeight: headerHeight,
@@ -2627,11 +2639,14 @@ class StatisticsMetricGrid extends StatelessWidget {
                   valueHeight: valueHeight,
                   labelStyle: labelStyle,
                   noteStyle: noteStyle,
+                  ),
                 ),
               ),
             ],
           ],
         );
+        // Only the row containing extra detail widgets needs intrinsic sizing.
+        return hasDetails ? IntrinsicHeight(child: rowWidget) : rowWidget;
       }
 
       return Column(
@@ -2739,6 +2754,10 @@ class _StatisticsVisualCard extends StatelessWidget {
               const SizedBox(height: 3),
               Text(card.note!, style: noteStyle.copyWith(
                 color: appMutedColor(context))),
+            ],
+            if (card.details != null) ...[
+              const SizedBox(height: 5),
+              card.details!,
             ],
           ],
         ),

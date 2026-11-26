@@ -125,14 +125,16 @@ class MetricHero extends StatelessWidget {
 }
 
 class MaintenanceDashboardCard extends StatelessWidget {
-  const MaintenanceDashboardCard({required this.snapshot, super.key});
+  const MaintenanceDashboardCard({required this.snapshot, this.visualStyle = false, super.key});
 
   final MaintenanceSnapshot snapshot;
+  final bool visualStyle;
 
   @override
   Widget build(BuildContext context) {
     final last = snapshot.lastMaintenance;
     return GlassCard(
+      accent: visualStyle ? snapshot.color : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1149,6 +1151,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
     required this.onPreviousMonth,
     required this.onNextMonth,
     required this.canGoNext,
+    this.visualStyle = false,
     super.key,
   });
 
@@ -1156,6 +1159,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
   final bool canGoNext;
+  final bool visualStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -1165,6 +1169,7 @@ class MonthlyComparisonGauge extends StatelessWidget {
       activeLanguage,
     ).format(comparison.month).toUpperCase();
     return GlassCard(
+      accent: visualStyle ? color : null,
       child: Column(
         children: [
           Label(tr('Comparación de ingresos')),
