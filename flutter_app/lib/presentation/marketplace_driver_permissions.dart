@@ -115,8 +115,8 @@ class _MarketplaceDriverPermissionsScreenState
         final version = await _appUpdateNativeChannel
             .invokeMapMethod<String, dynamic>('getInstalledVersion')
             .timeout(const Duration(seconds: 5));
-        if (version?['name'] is String && version?['build'] is num) {
-          installedVersionLabel = '${version!['name']} · build ${version['build']}';
+        if (version != null && version['name'] is String && version['build'] is num) {
+          installedVersionLabel = '${version['name']} · build ${version['build']}';
         }
       } catch (_) {
         // Version unknown; never substitute the repository's version.
@@ -260,6 +260,8 @@ class _MarketplaceDriverPermissionsScreenState
         _locationPermission == LocationPermission.whileInUse;
     final notificationsOk = _notifications == AuthorizationStatus.authorized;
     final alerts = _androidAlerts;
+    final batterySaver = alerts?.batterySaver;
+    final batteryOptimizationIgnored = alerts?.batteryOptimizationIgnored;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -334,8 +336,8 @@ class _MarketplaceDriverPermissionsScreenState
             ),
             subtitle: Text(
               (_android
-                  ? 'Ahorro de batería: ${alerts?.batterySaver == null ? 'sin comprobar' : alerts!.batterySaver! ? 'activo' : 'desactivado'}. '
-                    'Optimización Android: ${alerts?.batteryOptimizationIgnored == null ? 'sin comprobar' : alerts!.batteryOptimizationIgnored! ? 'exenta' : 'aplicada'}.\n'
+                  ? 'Ahorro de batería: ${batterySaver == null ? 'sin comprobar' : batterySaver ? 'activo' : 'desactivado'}. '
+                    'Optimización Android: ${batteryOptimizationIgnored == null ? 'sin comprobar' : batteryOptimizationIgnored ? 'exenta' : 'aplicada'}.\n'
                   : '') +
               'Revisa las restricciones de batería desde los ajustes del teléfono si las notificaciones llegan tarde. '
               'Esta versión no solicita acceso permanente a la ubicación: no se muestra como permiso concedido.',
