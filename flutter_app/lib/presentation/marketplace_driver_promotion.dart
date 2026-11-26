@@ -643,7 +643,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
   final VoidCallback refresh;
   final bool loading;
 
-  String _cup(num value) => '${numFmt(value)} CUP';
+  String _cup(num value) => '${numFmt(value.toDouble())} CUP';
   String _label(Object? state) => switch(state) {
     'pending' => 'Por acreditar', 'funding_required' => 'Pendiente de financiación',
     'credited' => 'Acreditada', 'cancelled' => 'Cancelada',
@@ -711,7 +711,7 @@ class _MarketplaceImpulsaEarningsCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text('Total ganado por promoción', style: TextStyle(color: muted, fontSize: 12)),
           const SizedBox(height: 4),
-          _OverviewMetricValue(numFmt(d.credited), currency: 'CUP',
+          _OverviewMetricValue(numFmt(d.credited.toDouble()), currency: 'CUP',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
               color: theme.colorScheme.primary)),
           const Text('Acumulado histórico; tu saldo para retirar aparece en Billetera Impulsa.',
@@ -1103,7 +1103,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
     return value != null && value.isFinite && value >= 0 ? value : null;
   }
 
-  String _moneyCup(num value) => '${numFmt(value)} CUP';
+  String _moneyCup(num value) => '${numFmt(value.toDouble())} CUP';
 
   Future<void> _loadWithdrawalAccount() async {
     if (!mounted || !_sameUser) return;
@@ -1253,7 +1253,7 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
         if (_withdrawalLoading) const LinearProgressIndicator(),
         if (values != null && available != null && minimum != null) ...[
           const Text('Disponible para retirar', style: TextStyle(fontSize: 12)),
-          _OverviewMetricValue(numFmt(available), currency: 'CUP',
+          _OverviewMetricValue(numFmt(available.toDouble()), currency: 'CUP',
             style: const TextStyle(color: gold, fontSize: 30, fontWeight: FontWeight.w900)),
           const SizedBox(height: 7),
           Text('Mínimo para solicitar retiro: ${_moneyCup(minimum)}',
