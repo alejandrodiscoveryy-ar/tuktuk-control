@@ -6,7 +6,7 @@ const source = readFileSync(new URL('../../web/guided_camera.js', import.meta.ur
 const marker = '  window.tuktukGuidedCapturePhoto = async function (kind) {';
 assert.ok(source.includes(marker));
 const sandbox = {window:{}};
-vm.runInNewContext(source.replace(marker, '  window.__crop = guideCropRect; window.__guides = guides; window.__driverCamera = requestDriverCamera;\n' + marker), sandbox);
+vm.runInNewContext(source.replace(marker, '  window.__crop = guideCropRect; window.__guides = guides; window.__driverCamera = requestDriverCamera; window.__showSelfieDialog = showSelfieDialog;\n' + marker), sandbox);
 const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
 const crop=(w,h,a,b)=>sandbox.window.__crop({videoWidth:w,videoHeight:h,getBoundingClientRect:()=>a},{getBoundingClientRect:()=>b});
 const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<0.01, `${expected} != ${actual}`);
@@ -103,4 +103,14 @@ test('late camera stream is stopped after dialog closes', async () => {
   const media = {getUserMedia: async () => { open = false; return front; }};
   await assert.rejects(sandbox.window.__driverCamera(media, () => open));
   assert.equal(front.track.stopped, true);
+});
+
+test('selfie is placed in browser top layer', () => {
+  const dialog = {open: false, showModal() { this.open = true; }};
+  assert.equal(sandbox.window.__showSelfieDialog(dialog), true);
+  assert.equal(dialog.open, true);
+});
+test('selfie modal gracefully handles unsupported or rejected showModal', () => {
+  assert.equal(sandbox.window.__showSelfieDialog({}), false);
+  assert.equal(sandbox.window.__showSelfieDialog({showModal() { throw new Error('unsupported'); }}), false);
 });
