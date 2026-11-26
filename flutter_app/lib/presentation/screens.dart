@@ -2579,32 +2579,43 @@ class _StoreScreenState extends State<StoreScreen> {
   final search = TextEditingController();
 
   static const categories = <_StoreCategory>[
-    _StoreCategory('Baterías', 'batería 72V', Icons.battery_charging_full),
-    _StoreCategory('Cargadores', 'cargador 72V', Icons.electrical_services),
-    _StoreCategory('Neumáticos', 'neumático triciclo', Icons.tire_repair),
-    _StoreCategory('Motores', 'motor eléctrico', Icons.electric_bolt),
-    _StoreCategory('Controladores', 'controlador moto eléctrica', Icons.memory),
+    _StoreCategory('Baterías', 'batería 72V', Icons.battery_charging_full,
+      Color(0xFF55C9EF)),
+    _StoreCategory('Cargadores', 'cargador 72V', Icons.electrical_services,
+      Color(0xFF42D8BC)),
+    _StoreCategory('Neumáticos', 'neumático triciclo', Icons.tire_repair,
+      Color(0xFF83A9DA)),
+    _StoreCategory('Motores', 'motor eléctrico', Icons.electric_bolt,
+      Color(0xFF72A7FF)),
+    _StoreCategory('Controladores', 'controlador moto eléctrica', Icons.memory,
+      Color(0xFFB59AF5)),
     _StoreCategory(
       'Piezas eléctricas',
       'piezas eléctricas triciclo',
       Icons.cable,
+      Color(0xFF59D9DD),
     ),
-    _StoreCategory('Repuestos mecánicos', 'repuestos triciclo', Icons.settings),
+    _StoreCategory('Repuestos mecánicos', 'repuestos triciclo', Icons.settings,
+      Color(0xFFF2B86C)),
     _StoreCategory(
       'Luces y accesorios',
       'luces accesorios triciclo',
       Icons.lightbulb_outline,
+      Color(0xFFF4D677),
     ),
-    _StoreCategory('Herramientas', 'herramientas taller moto', Icons.handyman),
+    _StoreCategory('Herramientas', 'herramientas taller moto', Icons.handyman,
+      Color(0xFFF5A477)),
     _StoreCategory(
       'Triciclos eléctricos',
       'triciclo eléctrico',
       Icons.electric_rickshaw,
+      Color(0xFF56D2A1),
     ),
     _StoreCategory(
       'Talleres y reparación',
       'taller moto eléctrica',
       Icons.home_repair_service,
+      Color(0xFFE6B189),
     ),
   ];
 
@@ -2628,6 +2639,8 @@ class _StoreScreenState extends State<StoreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final shopAccent = dark ? const Color(0xFF70C8F3) : const Color(0xFF15689D);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -2641,7 +2654,18 @@ class _StoreScreenState extends State<StoreScreen> {
                 onSubmitted: openSearch,
                 decoration: InputDecoration(
                   hintText: tr('Buscar repuestos'),
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon: Icon(Icons.search_rounded, color: shopAccent, size: 28),
+                  filled: true,
+                  fillColor: Color.alphaBlend(shopAccent.withValues(alpha: .06),
+                    appSurfaceHighColor(context)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(17),
+                    borderSide: BorderSide(color: shopAccent.withValues(alpha: .32)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(17),
+                    borderSide: BorderSide(color: shopAccent, width: 1.5),
+                  ),
                 ),
               ),
             ),
@@ -2650,9 +2674,11 @@ class _StoreScreenState extends State<StoreScreen> {
               onPressed: () => openSearch(search.text),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(54, 54),
+                backgroundColor: const Color(0xFF287BC2),
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
-              child: const Icon(Icons.open_in_new_rounded),
+              child: const Icon(Icons.open_in_new_rounded, size: 27),
             ),
           ],
         ),
@@ -2662,6 +2688,10 @@ class _StoreScreenState extends State<StoreScreen> {
           builder: (context, constraints) {
             final columns = constraints.maxWidth >= 720 ? 3 : 2;
             final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+            final scale = MediaQuery.textScalerOf(context).scale(13) / 13;
+            final stacked = width < 150 || scale > 1.35;
+            final cardHeight = (stacked ? 118.0 : 82.0) +
+                (stacked ? 68 : 40) * (scale - 1).clamp(0.0, 3.0).toDouble();
             return Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -2671,6 +2701,8 @@ class _StoreScreenState extends State<StoreScreen> {
                     width: width,
                     child: _StoreCategoryCard(
                       category: category,
+                      height: cardHeight,
+                      stacked: stacked,
                       onTap: () => openSearch(category.query),
                     ),
                   ),
@@ -2716,47 +2748,82 @@ class _StoreScreenState extends State<StoreScreen> {
 }
 
 class _StoreCategory {
-  const _StoreCategory(this.label, this.query, this.icon);
+  const _StoreCategory(this.label, this.query, this.icon, this.accent);
 
   final String label;
   final String query;
   final IconData icon;
+  final Color accent;
 }
 
 class _StoreCategoryCard extends StatelessWidget {
-  const _StoreCategoryCard({required this.category, required this.onTap});
+  const _StoreCategoryCard({required this.category, required this.height,
+    required this.stacked, required this.onTap});
 
   final _StoreCategory category;
+  final double height;
+  final bool stacked;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = dark ? category.accent : Color.lerp(category.accent, const Color(0xFF172B40), .55)!;
+    final surface = dark ? const Color(0xFF142233) : const Color(0xFFF7FAFE);
+    final iconTile = Container(
+      width: 44,
+      height: 44,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: dark ? .15 : .12),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: accent.withValues(alpha: .30)),
+      ),
+      child: Icon(category.icon, color: accent, size: 31),
+    );
+    final label = Text(
+      tr(category.label),
+      textAlign: stacked ? TextAlign.center : TextAlign.start,
+      maxLines: 4,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, height: 1.18),
+    );
     return SizedBox(
-      height: 76 + 40 * (MediaQuery.textScalerOf(context).scale(12) / 12 - 1).clamp(0.0, 2.0).toDouble(),
-      child: GlassCard(
-        padding: EdgeInsets.zero,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(22),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                Icon(category.icon, color: appPrimaryColor(context), size: 23),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    tr(category.label),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                      height: 1.15,
-                    ),
-                  ),
-                ),
+      key: ValueKey('store-category-${category.label}'),
+      height: height,
+      child: Material(
+        color: surface,
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.alphaBlend(accent.withValues(alpha: dark ? .13 : .09), surface),
+                Color.alphaBlend(accent.withValues(alpha: dark ? .035 : .025), surface),
               ],
+            ),
+            border: Border.all(color: accent.withValues(alpha: dark ? .38 : .42)),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(22),
+            child: Padding(
+              padding: const EdgeInsets.all(9),
+              child: stacked
+                  ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      iconTile,
+                      const SizedBox(height: 7),
+                      Flexible(child: label),
+                    ])
+                  : Row(children: [
+                      iconTile,
+                      const SizedBox(width: 9),
+                      Expanded(child: label),
+                    ]),
             ),
           ),
         ),
