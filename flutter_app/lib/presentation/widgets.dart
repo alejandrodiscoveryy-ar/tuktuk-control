@@ -395,6 +395,13 @@ class DataHealthCard extends StatelessWidget {
 
 // Equal-width and equal-height cards across the dashboard. The header
 // allowance grows for narrow screens and accessibility text sizes.
+int _dashboardMetricHeaderLines(BuildContext context, double cardWidth) {
+  // Two lines at ordinary phone widths. Preserve extra room for narrow
+  // viewports and large accessibility fonts. Tooltip retains full label.
+  return cardWidth >= 140 && MediaQuery.textScalerOf(context).scale(12) <= 13.2
+      ? 2 : 3;
+}
+
 double _dashboardMetricHeaderHeight(BuildContext context, double cardWidth,
     Iterable<String> labels) {
   final labelWidth = max(1.0, cardWidth - 18 - 26 - 5);
@@ -405,7 +412,7 @@ double _dashboardMetricHeaderHeight(BuildContext context, double cardWidth,
         fontSize: 12, fontWeight: FontWeight.w700, height: 1.2)),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 3,
+      maxLines: _dashboardMetricHeaderLines(context, cardWidth),
       ellipsis: '…',
     )..layout(maxWidth: labelWidth);
     height = max(height, painter.height.ceilToDouble());
@@ -494,7 +501,8 @@ class MetricCard extends StatelessWidget {
                   Expanded(
                     child: Tooltip(
                       message: label,
-                      child: Text(label, maxLines: 3, overflow: TextOverflow.ellipsis,
+                      child: Text(label, maxLines: _dashboardMetricHeaderLines(context, constraints.maxWidth),
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: appMutedColor(context),
                           fontSize: 12, fontWeight: FontWeight.w700, height: 1.2)),
                     ),
