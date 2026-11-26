@@ -200,6 +200,13 @@ void main() {
       createdAt: source.createdAt,
       updatedAt: source.updatedAt,
     );
+    final legacy = <String, dynamic>{'id': 'vehicle-1', 'userId': 'user-1'};
+    final wire = syncCasWirePayload(vehicleOperation, legacy);
+    expect(wire['vehicleId'], 'vehicle-1');
+    expect(wire['id'], wire['vehicleId']);
+    expect(legacy.containsKey('vehicleId'), isFalse);
+    expect(() => syncCasWirePayload(vehicleOperation, {...legacy, 'userId': 'stranger'}),
+        throwsStateError);
     // VehicleProfile.toMap contiene id y userId, no vehicleId.
     expect(
       SyncPayloadOwnership.matches(vehicleOperation, {
