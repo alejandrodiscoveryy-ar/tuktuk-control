@@ -127,4 +127,55 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Home and statistics mirror only the right edge of each row',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const cards = [
+      MetricCard(label: 'Ingresos', value: '125.000', currency: 'CUP',
+        icon: Icons.payments_outlined),
+      MetricCard(label: 'Gastos', value: '25.000', currency: 'CUP',
+        icon: Icons.receipt_long_outlined, note: 'Este mes'),
+      MetricCard(label: 'Promedio', value: '10.000', currency: 'CUP',
+        icon: Icons.calendar_today_outlined, note: 'Por día'),
+    ];
+    for (final prefix in ['home-card', 'statistics-card']) {
+      for (final width in [320.0, 480.0, 720.0]) {
+        final columns = width >= 700 ? 3 : 2;
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        await tester.pumpWidget(MaterialApp(home: Scaffold(
+          body: SingleChildScrollView(child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: StatisticsMetricGrid(cards: cards, columns: columns,
+              keyPrefix: prefix),
+          )),
+        )));
+        Finder cardAt(int index) => find.byKey(ValueKey(
+          '$prefix-${cards[index].icon.codePoint}'));
+        for (var index = 0; index < cards.length; index++) {
+          final right = index == columns - 1;
+          final root = cardAt(index);
+          final icon = find.descendant(of: root,
+            matching: find.byIcon(cards[index].icon));
+          final rect = tester.getRect(root);
+          final iconRect = tester.getRect(icon);
+          expect(right ? rect.right - iconRect.right : iconRect.left - rect.left,
+            lessThan(30));
+          final label = tester.widget<Text>(find.descendant(of: root,
+            matching: find.text(cards[index].label)));
+          expect(label.textAlign, right ? TextAlign.right : TextAlign.left);
+          final value = tester.widget<FittedBox>(find.descendant(of: root,
+            matching: find.byType(FittedBox)));
+          expect(value.alignment,
+            right ? Alignment.centerRight : Alignment.centerLeft);
+          if (cards[index].note != null) {
+            final note = tester.widget<Text>(find.descendant(of: root,
+              matching: find.text(cards[index].note!)));
+            expect(note.textAlign, right ? TextAlign.right : TextAlign.left);
+          }
+        }
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
 }
