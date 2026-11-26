@@ -959,7 +959,7 @@ class _AppShellState extends State<AppShell> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.wifi_off_rounded, size: 15, color: kTertiary),
+                                    const Icon(Icons.wifi_off_rounded, size: 15, color: kTertiary),
                                     const SizedBox(width: 6),
                                     Expanded(child: Text(
                                       store.conductorAppAccessState == ConductorAppAccessState.checking
