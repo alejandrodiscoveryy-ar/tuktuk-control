@@ -1277,6 +1277,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         _updatingAvailability ||
         _loadRequest != null ||
         _availableRequest != null ||
+        _scopeRequests.isNotEmpty ||
         _busyJobId != null ||
         _acceptingJobId != null ||
         widget.store.user?.id == null) {
@@ -1298,7 +1299,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _lastOperationalRecoverySync = now;
       // Never retry mutations automatically. Reload the authoritative service
       // without history or changing the driver's availability.
-      unawaited(_load(refreshHistory: false));
+      unawaited(_reconcileOperationalState());
       return;
     }
     if (_active.isNotEmpty ||
@@ -1312,6 +1313,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         vehicle?.isAvailable == true &&
         vehicle?.acceptingJobs == true) {
       unawaited(_loadAvailable());
+    }
+  }
+
+  Future<void> _reconcileOperationalState() async {
+    final ownerId = widget.store.user?.id;
+    final before = _active.map((job) => job.id).toSet();
+    await _load(refreshHistory: false);
+    if (!mounted || widget.store.user?.id != ownerId ||
+        _scopeErrors.containsKey('active')) {
+      return;
+    }
+    if (before.difference(_active.map((job) => job.id).toSet()).isNotEmpty) {
+      await _load();
     }
   }
 
@@ -1337,7 +1351,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         if (kIsWeb) {
           notifyMarketplaceRecoveredWebJob(job.id);
         } else {
-          unawaited(notifyMarketplaceRecoveredAndroidJob(job.id));
+          unawaited(notifyMarketplaceRecoveredAndroidJob(job.id).then((shown) {
+            if (!shown && mounted && _recoveredOffersOwnerId == userId) {
+              _recoveredOfferIds.remove(job.id);
+            }
+          }));
         }
       }
     }
@@ -1394,8 +1412,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       return;
     }
 
+    final requestUserId = widget.store.user?.id;
     try {
-      final requestUserId = widget.store.user?.id;
       final jobs = await _service.available(vehicleId).timeout(const Duration(seconds: 15));
 
       if (!mounted ||
@@ -1412,7 +1430,10 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       _setMarketplaceAvailableJobCount(jobs.length);
       _alertRecoveredOffers(jobs, requestUserId);
     } catch (_) {
-      if (!mounted || vehicleId != _selectedVehicleId) return;
+      if (!mounted || vehicleId != _selectedVehicleId ||
+          widget.store.user?.id != requestUserId) {
+        return;
+      }
 
       setState(() {
         _available = const [];
@@ -1466,7 +1487,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
 
-      if (!mounted) return;
+      if (!mounted || widget.store.user?.id != requestUserId) return;
 
       setState(() {
         switch (scope) {
@@ -1513,7 +1534,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         }
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || widget.store.user?.id != requestUserId) return;
 
       setState(() {
         _loadingScopes.remove(scope);
