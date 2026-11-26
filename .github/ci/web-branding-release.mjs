@@ -12,8 +12,9 @@ const assets = [
   'icons/Icon-maskable-512.png',
   'icons/Icon-shortcut-192.png',
 ];
-const allowed = new Set([...assets, 'manifest.json'].map(path => join(web, path)));
+const allowed = new Set([...assets, 'manifest.json', 'index.html'].map(path => join(web, path)));
 const manifestPath = join(web, 'manifest.json');
+const indexPath = join(web, 'index.html');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const read = path => readFileSync(path);
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
@@ -52,6 +53,20 @@ if (mode === 'prepare') {
   const approved = JSON.parse(git('show', 'HEAD:' + manifestPath));
   const manifest = JSON.parse(read(manifestPath));
   validateManifest(manifest, approved);
+  // Do not permit arbitrary changes to executable HTML. The sole generated
+  // HTML change must be the versioned URL of the approved startup image.
+  const approvedIndex = git('show', 'HEAD:' + indexPath);
+  if (read(indexPath).toString('utf8') !== approvedIndex) {
+    throw new Error('Unexpected changes to startup HTML before branding preparation');
+  }
+  const startupMarker = '<img src="icons/Icon-192.png"';
+  if (approvedIndex.split(startupMarker).length !== 2) {
+    throw new Error('Expected exactly one approved startup icon');
+  }
+  const startupRevision = hash(read(join(web, 'icons/Icon-192.png'))).slice(0, 16);
+  const generatedIndex = approvedIndex.replace(startupMarker,
+    '<img src="icons/Icon-192.png?v=' + startupRevision + '"');
+  writeFileSync(indexPath, generatedIndex);
   for (const icon of manifest.icons) {
     const path = icon.src.split('?')[0];
     if (!assets.includes(path)) throw new Error('Unknown PWA icon: ' + path);
@@ -59,7 +74,7 @@ if (mode === 'prepare') {
   }
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   writeFileSync(statePath, JSON.stringify(snapshot()));
-  console.log('BRANDING_ASSETS_VERIFIED=7');
+  console.log('BRANDING_ASSETS_VERIFIED=8');
 } else {
   const expected = JSON.parse(read(statePath));
   if (JSON.stringify(snapshot()) !== JSON.stringify(expected)) {
