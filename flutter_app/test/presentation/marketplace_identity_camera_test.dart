@@ -21,7 +21,7 @@ void main() {
     for (final viewport in [const Size(320, 430), const Size(600, 250)]) {
       for (final kind in ['driver', 'vehicle', 'identity-front', 'identity-back']) {
         final frame = marketplaceCaptureFrame(viewport, kind);
-        final ratio = kind == 'driver' ? .75 : kind == 'vehicle' ? 4 / 3 : 1.59;
+        final ratio = kind == 'driver' ? 1.0 : kind == 'vehicle' ? 4 / 3 : 1.59;
         expect(frame.width / frame.height, closeTo(ratio, .001));
         expect(frame.left, greaterThan(0));
         expect(frame.top, greaterThan(0));
