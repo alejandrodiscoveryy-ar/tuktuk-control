@@ -482,7 +482,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         });
       }
     }
-    unawaited(_load(refreshHistory: false));
+    unawaited(_load());
   }
 
   @override
