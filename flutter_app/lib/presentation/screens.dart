@@ -1532,16 +1532,17 @@ class _LiquidGlassNavigation extends StatelessWidget {
 }
 
 class _UserNavigationAvatar extends StatelessWidget {
-  const _UserNavigationAvatar({required this.photoUrl, required this.selected});
+  const _UserNavigationAvatar({required this.photoUrl, required this.selected, this.size = 27});
 
   final String photoUrl;
   final bool selected;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 27,
-      height: 27,
+      width: size,
+      height: size,
       padding: EdgeInsets.all(selected ? 2 : 1),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -1555,7 +1556,7 @@ class _UserNavigationAvatar extends StatelessWidget {
           photoUrl,
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) =>
-              const Icon(Icons.account_circle_outlined, size: 22),
+              Icon(Icons.account_circle_outlined, size: size * .81),
         ),
       ),
     );
