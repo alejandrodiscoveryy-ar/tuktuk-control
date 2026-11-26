@@ -1782,6 +1782,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 10),
         ],
+        const SeasonalAccent(),
         MetricHero(
           label: tr('Ingreso de hoy'),
           value: numFmt(metrics.todayEarnings),
@@ -2475,6 +2476,7 @@ class StatsScreen extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 16, 16,
           100 + MediaQuery.paddingOf(context).bottom),
       children: [
+        const SeasonalAccent(),
         LayoutBuilder(
           builder: (context, constraints) {
             return StatisticsMetricGrid(
