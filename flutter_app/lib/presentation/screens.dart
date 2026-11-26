@@ -2670,23 +2670,22 @@ class _StoreCategoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(22),
           child: Padding(
             padding: const EdgeInsets.all(10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Icon(category.icon, color: appPrimaryColor(context), size: 25),
-                const SizedBox(height: 6),
-                Text(
-                  tr(category.label),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                    height: 1.15,
+                Icon(category.icon, color: appPrimaryColor(context), size: 23),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    tr(category.label),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      height: 1.15,
+                    ),
                   ),
                 ),
-
               ],
             ),
           ),
