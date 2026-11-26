@@ -39,13 +39,25 @@ void notifyMarketplaceRecoveredWebJob(String jobId) {
 // Android foreground fallback uses the initialized service, not another plugin.
 Future<void> Function(String)? _androidRecoveredOfferAlert;
 
-Future<void> notifyMarketplaceRecoveredAndroidJob(String jobId) async {
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+Future<bool> notifyMarketplaceRecoveredAndroidJob(String jobId) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+  final alert = _androidRecoveredOfferAlert;
+  if (alert == null) return false;
   try {
-    await _androidRecoveredOfferAlert?.call(jobId);
+    await alert(jobId);
+    return true;
   } catch (_) {
-    // The visible offer remains available even if notifications are denied.
+    return false;
   }
+}
+
+@visibleForTesting
+int marketplaceNativeOfferNotificationId(String jobId) {
+  var hash = 17;
+  for (final unit in jobId.toLowerCase().codeUnits) {
+    hash = (hash * 31 + unit) & 0x3fffffff;
+  }
+  return hash | 0x40000000;
 }
 
 const tuktukNotificationChannelId = 'tuktuk_general';
@@ -384,6 +396,17 @@ class PushNotificationService {
       final initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
         await _handleOpenedMessage(initialMessage, onMessageOpened);
+      } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android &&
+          onMessageOpened != null) {
+        try {
+          final launch = await _localNotifications.getNotificationAppLaunchDetails();
+          if (launch?.didNotificationLaunchApp == true) {
+            final data = decodePushMessageData(launch?.notificationResponse?.payload);
+            if (data.isNotEmpty) await onMessageOpened(data);
+          }
+        } catch (_) {
+          // Local launch details may be unavailable on some devices.
+        }
       }
       _initialized = true;
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -407,7 +430,8 @@ class PushNotificationService {
   }
 
   Future<void> _showRecoveredAndroidOffer(String jobId) async {
-    if (!_initialized || _recentAndroidOffers.containsKey(jobId)) return;
+    if (!_initialized) return;
+    if (_recentAndroidOffers.containsKey(jobId.toLowerCase())) return;
     await _showAndroidOffer(
       {'kind': 'marketplace_job_available', 'job_id': jobId},
       'Nueva solicitud disponible',
@@ -418,7 +442,7 @@ class PushNotificationService {
   Future<void> _showAndroidOffer(
     Map<String, dynamic> data, String? title, String? body,
   ) async {
-    final jobId = marketplaceJobIdFromPush(data);
+    final jobId = marketplaceJobIdFromPush(data)?.toLowerCase();
     if (jobId == null) return;
     final now = DateTime.now();
     _recentAndroidOffers.removeWhere(
@@ -428,7 +452,7 @@ class PushNotificationService {
     _recentAndroidOffers[jobId] = now;
     try {
       await _localNotifications.show(
-        id: jobId.hashCode & 0x7fffffff,
+        id: marketplaceNativeOfferNotificationId(jobId),
         title: title ?? 'Nueva solicitud disponible',
         body: body ?? 'Abre Trabajos para ver la solicitud.',
         notificationDetails: NotificationDetails(
@@ -474,7 +498,7 @@ class PushNotificationService {
       return;
     }
     await _localNotifications.show(
-      id: message.messageId?.hashCode ?? message.hashCode,
+      id: (message.messageId?.hashCode ?? message.hashCode) & 0x3fffffff,
       title: title,
       body: body,
       notificationDetails: NotificationDetails(
