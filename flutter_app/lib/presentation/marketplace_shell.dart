@@ -58,15 +58,15 @@ class _MoreSectionIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 50,
-      height: 50,
+      width: 42,
+      height: 42,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color.withValues(alpha: .14),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: .34)),
       ),
-      child: Icon(icon, size: 30, color: color),
+      child: Icon(icon, size: 24, color: color),
     );
   }
 }
@@ -110,13 +110,12 @@ class MarketplaceMoreScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          tr('Más'),
-          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 16),
         GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            minVerticalPadding: 6,
+            minTileHeight: 56,
             leading: const _MoreSectionIcon(
               icon: Icons.work_outline_rounded,
               color: Color(0xFF2DD4A3),
@@ -132,21 +131,25 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            minVerticalPadding: 6,
+            minTileHeight: 56,
             leading: profilePhoto == null
                 ? const _MoreSectionIcon(
                     icon: Icons.account_circle_outlined,
                     color: Color(0xFF55A7FF),
                   )
                 : Container(
-                    width: 50,
-                    height: 50,
+                    width: 42,
+                    height: 42,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: const Color(0xFF55A7FF).withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: const Color(0xFF55A7FF).withValues(alpha: .34),
                       ),
@@ -168,9 +171,13 @@ class MarketplaceMoreScreen extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            minVerticalPadding: 6,
+            minTileHeight: 56,
             leading: const _MoreSectionIcon(
               icon: Icons.campaign_outlined,
               color: Color(0xFFFB923C),
@@ -185,9 +192,13 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            minVerticalPadding: 6,
+            minTileHeight: 56,
             leading: const _MoreSectionIcon(
               icon: Icons.redeem_outlined,
               color: Color(0xFF9A7BFF),
@@ -218,9 +229,13 @@ class MarketplaceMoreScreen extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            minVerticalPadding: 6,
+            minTileHeight: 56,
             key: const ValueKey('more-direct-support'),
             leading: const _MoreSectionIcon(
               icon: Icons.support_agent_rounded,

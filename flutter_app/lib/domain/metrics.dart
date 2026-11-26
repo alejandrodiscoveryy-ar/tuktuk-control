@@ -62,6 +62,26 @@ class Metrics {
         .fold(0, (sum, r) => sum + r.earnings);
   }
 
+  // Group by calendar date, not by individual payment or journey.
+  Map<DateTime, double> get dailyEarnings {
+    final totals = <DateTime, double>{};
+    for (final record in records) {
+      if (record.isDeleted || record.earnings <= 0) continue;
+      final day = DateTime(record.date.year, record.date.month, record.date.day);
+      totals[day] = (totals[day] ?? 0) + record.earnings;
+    }
+    return totals;
+  }
+
+  MapEntry<DateTime, double>? get bestEarningDay {
+    final entries = dailyEarnings.entries.toList()
+      ..sort((a, b) {
+        final amount = b.value.compareTo(a.value);
+        return amount != 0 ? amount : b.key.compareTo(a.key);
+      });
+    return entries.isEmpty ? null : entries.first;
+  }
+
   CycleRange get currentCycle => CycleRange.forDate(today);
 
   List<DailyRecord> get currentCycleRecords =>

@@ -114,6 +114,9 @@ void main() {
           final cards = find.byType(MetricCard);
           expect(cards, findsNWidgets(6));
           final first = tester.getSize(cards.first);
+          if (width == 360 && scale == 1) {
+            expect(first.height, lessThanOrEqualTo(114));
+          }
           for (var i = 1; i < 6; i++) {
             expect(tester.getSize(cards.at(i)), first);
           }
