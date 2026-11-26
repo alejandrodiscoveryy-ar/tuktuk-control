@@ -1782,8 +1782,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 10),
         ],
-        const SeasonalAccent(),
         MetricHero(
+          seasonal: true,
           label: tr('Ingreso de hoy'),
           value: numFmt(metrics.todayEarnings),
                   currency: activeCurrency,
@@ -2476,7 +2476,6 @@ class StatsScreen extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 16, 16,
           100 + MediaQuery.paddingOf(context).bottom),
       children: [
-        const SeasonalAccent(),
         LayoutBuilder(
           builder: (context, constraints) {
             return StatisticsMetricGrid(
@@ -2489,6 +2488,8 @@ class StatsScreen extends StatelessWidget {
                   currency: activeCurrency,
                   color: const Color(0xFF56D2A1),
                   icon: Icons.account_balance_wallet_outlined,
+                  details: seasonalCampaignFor(DateTime.now()) == null
+                      ? null : const SeasonalAccent(compact: true),
                 ),
                 MetricCard(
                   tintedValue: true,
