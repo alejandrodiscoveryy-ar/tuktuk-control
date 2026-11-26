@@ -2575,7 +2575,7 @@ class StatsScreen extends StatelessWidget {
   }
 }
 
-/// Statistics-only visual grid. Keeps shared dashboard cards unchanged.
+/// Shared visual metrics for Home and Statistics, with independent row heights.
 class StatisticsMetricGrid extends StatelessWidget {
   const StatisticsMetricGrid({required this.cards, this.columns = 2,
     this.keyPrefix = 'statistics-card', super.key});
