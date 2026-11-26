@@ -115,10 +115,11 @@ SeasonalCampaign? seasonalCampaignFor(DateTime date, {
 
 /// A compact, decorative accent that disappears entirely out of season.
 class SeasonalAccent extends StatelessWidget {
-  const SeasonalAccent({this.date, this.language, super.key});
+  const SeasonalAccent({this.date, this.language, this.compact = false, super.key});
 
   final DateTime? date;
   final String? language;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +130,21 @@ class SeasonalAccent extends StatelessWidget {
     final message = campaign.messages[locale] ?? campaign.messages['es']!;
     final background = dark ? const Color(0xFF142C2C) : const Color(0xFFF1F8F2);
     final gold = dark ? campaign.highlight : const Color(0xFF765519);
+    if (compact) {
+      return Row(
+        key: ValueKey('seasonal-accent-${campaign.id}'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(campaign.icon, size: 15,
+            color: dark ? const Color(0xFF84D7AA) : campaign.accent),
+          const SizedBox(width: 4),
+          Flexible(child: Text(message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: gold, fontSize: 11,
+              fontWeight: FontWeight.w700, height: 1.2))),
+        ],
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DecoratedBox(
@@ -171,6 +187,8 @@ class MetricHero extends StatelessWidget {
     required this.sublabel,
     required this.icon,
     this.trailing,
+    this.seasonal = false,
+    this.seasonalDate,
     super.key,
   });
 
@@ -180,57 +198,78 @@ class MetricHero extends StatelessWidget {
   final String sublabel;
   final IconData icon;
   final Widget? trailing;
+  final bool seasonal;
+  final DateTime? seasonalDate;
 
   @override
   Widget build(BuildContext context) {
-    return GradientMetricCard(
-      child: Stack(
-        children: [
-          Positioned(
-            right: 2,
-            top: 2,
-            child: trailing ??
-                Icon(
-                  icon,
-                  size: 86,
-                  color: appTextColor(context).withValues(alpha: .08),
-                ),
+    final date = seasonalDate ?? DateTime.now();
+    final campaign = seasonal ? seasonalCampaignFor(date) : null;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final headline = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Label(label),
+        const SizedBox(height: 6),
+        _OverviewMetricValue(
+          value,
+          currency: currency,
+          style: TextStyle(
+            color: appPrimaryColor(context),
+            fontSize: 36,
+            fontWeight: FontWeight.w900,
           ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              width: 92,
-              height: 4,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                gradient: LinearGradient(
-                  colors: [
-                    appPrimaryColor(context),
-                    appSecondaryColor(context),
-                    kAccentPink,
+        ),
+      ],
+    );
+    final logo = trailing ?? Icon(
+      icon, size: 86,
+      color: appTextColor(context).withValues(alpha: .08),
+    );
+    return GradientMetricCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: headline),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 100,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: campaign == null ? 86 : 66,
+                      child: FittedBox(fit: BoxFit.contain, child: logo)),
+                    if (campaign != null) ...[
+                      const SizedBox(height: 3),
+                      SeasonalAccent(date: date, compact: true),
+                    ],
                   ],
                 ),
               ),
-            ),
+            ],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 8),
+          Divider(color: appOutlineColor(context)),
+          Row(
             children: [
-              Label(label),
-              const SizedBox(height: 6),
-              _OverviewMetricValue(
-                value,
-                currency: currency,
-                style: TextStyle(
-                  color: appPrimaryColor(context),
-                  fontSize: 36,
-                  fontWeight: FontWeight.w900,
+              Expanded(child: Text(sublabel,
+                style: TextStyle(color: appMutedColor(context)))),
+              const SizedBox(width: 8),
+              Container(
+                width: 60,
+                height: 4,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: LinearGradient(
+                    colors: campaign == null
+                        ? [appPrimaryColor(context), appSecondaryColor(context), kAccentPink]
+                        : [campaign.accent, dark ? campaign.highlight : const Color(0xFF765519)],
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
-              Divider(color: appOutlineColor(context)),
-              Text(sublabel, style: TextStyle(color: appMutedColor(context))),
             ],
           ),
         ],
