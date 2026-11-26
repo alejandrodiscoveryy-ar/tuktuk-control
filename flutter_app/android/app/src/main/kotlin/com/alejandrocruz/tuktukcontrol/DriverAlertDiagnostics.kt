@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -53,7 +54,10 @@ internal object DriverAlertDiagnostics {
         val maxVolume = audio.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION)
         val normalRinger = audio.ringerMode == AudioManager.RINGER_MODE_NORMAL
         val dndAllows = notifications.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALL
+        val power = activity.getSystemService(Context.POWER_SERVICE) as PowerManager
         return mapOf(
+            "batterySaver" to power.isPowerSaveMode,
+            "batteryOptimizationIgnored" to power.isIgnoringBatteryOptimizations(activity.packageName),
             "appNotifications" to appNotifications,
             "channelPresent" to channelPresent,
             "channelImportance" to channelImportance,
