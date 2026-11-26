@@ -73,7 +73,11 @@ Future<void> main(List<String> arguments) async {
       'No se pudo sincronizar la identidad ${_targetLabel(target)}: $error\n'
       '${validFallback ? 'Se conservaron recursos locales válidos.' : 'Los recursos locales no están completos o no son válidos.'}',
     );
-    if (!validFallback) exitCode = 1;
+    // A release requiring fresh branding must not silently publish stale icons.
+    if (!validFallback ||
+        Platform.environment['TUKTUK_REQUIRE_FRESH_BRANDING'] == '1') {
+      exitCode = 1;
+    }
   }
 }
 

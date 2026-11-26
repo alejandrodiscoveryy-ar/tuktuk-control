@@ -34,8 +34,16 @@ test('no se publica codigo superado y se comprueba el artefacto web', () => {
   assert.doesNotMatch(deploy, /flutter build (?:apk|appbundle)/);
 });
 
-test('Android no se inicia con cambios en main', () => {
-  assert.match(android, /^  workflow_dispatch:$/m);
-  assert.doesNotMatch(android, /^  push:$/m);
-  assert.doesNotMatch(android, /^  pull_request:$/m);
+test('Android solo se inicia manualmente o mediante solicitud expresa de version', () => {
+  const triggers = android.match(/^on:\r?\n([\s\S]*?)^permissions:/m)?.[1];
+  assert.ok(triggers, 'Sección de disparadores Android');
+  assert.match(triggers, /^  workflow_dispatch:$/m);
+  const push = triggers.match(/^  push:\r?\n((?:^ {4,}.*\r?\n)+)/m)?.[1];
+  assert.ok(push, 'Disparador de solicitud de versión');
+  assert.match(push, /^    branches: \[main\]\r?\n    paths:\r?\n      - 'flutter_app\/tool\/android_release_request\.txt'\r?\n$/);
+  assert.doesNotMatch(triggers, /^  pull_request:$/m);
+  assert.deepEqual([...triggers.matchAll(/^  (\w+):$/gm)].map(m => m[1]).sort(),
+    ['push', 'workflow_dispatch']);
+  assert.match(android, /EXPECTED_VERSION_CODE="\$\(head -n 1 tool\/android_release_request\.txt\)"/);
+  assert.match(android, /test "\$VERSION_CODE" = "\$EXPECTED_VERSION_CODE"/);
 });

@@ -63,6 +63,9 @@
       var logo = splash.querySelector('img');
       var fallbackIcon = logo.getAttribute('src');
       var cacheKey = 'tuktuk-conductor:startup-icon:v1:' + location.pathname;
+      // A published icon revision must never reuse an older startup snapshot.
+      var revision = fallbackIcon.split('?')[1];
+      if (revision) cacheKey += ':' + revision;
       var cached = null;
       var requested = null;
 

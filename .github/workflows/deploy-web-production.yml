@@ -89,18 +89,16 @@ jobs:
 
       - name: Sync official branding
         working-directory: flutter_app
+        env:
+          TUKTUK_REQUIRE_FRESH_BRANDING: "1"
         run: dart run tool/sync_project_branding.dart --web
 
-      - name: Verify branding generated no uncommitted source changes
+      - name: Verify and fingerprint generated branding only
         shell: bash
         run: |
           set -euo pipefail
           git restore --worktree -- flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java || true
-          if [ -n "$(git status --porcelain)" ]; then
-            git status --short
-            echo "Branding/build preparation changed tracked source. Commit those changes before production."
-            exit 1
-          fi
+          node .github/ci/web-branding-release.mjs prepare "$RUNNER_TEMP/web-branding.json"
 
       - name: Analyze
         working-directory: flutter_app
@@ -125,10 +123,7 @@ jobs:
         shell: bash
         run: |
           git restore --worktree -- flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java || true
-          if [ -n "$(git status --porcelain)" ]; then
-            git status --short
-            exit 1
-          fi
+          node .github/ci/web-branding-release.mjs verify "$RUNNER_TEMP/web-branding.json"
 
       - name: Build production web
         working-directory: flutter_app
@@ -147,14 +142,31 @@ jobs:
         run: |
           set -euo pipefail
           git restore --worktree -- flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java || true
-          if [ -n "$(git status --porcelain)" ]; then
-            git status --short
-            exit 1
-          fi
+          node .github/ci/web-branding-release.mjs verify "$RUNNER_TEMP/web-branding.json"
           STAGE="$RUNNER_TEMP/tuktuk-provider-stage"
           mkdir -p "$STAGE/tuktuk/app"
           cp -a "$RUNNER_TEMP/tuktuk-provider-build/." "$STAGE/tuktuk/app/"
           test -f "$STAGE/tuktuk/app/main.dart.js"
+          node - "$RUNNER_TEMP/web-branding.json" "$STAGE/tuktuk/app" <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const expected = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          for (const [path, hash] of Object.entries(expected)) {
+            const relative = path.replace(/^flutter_app\/web\//, '');
+            const built = fs.readFileSync(process.argv[3] + '/' + relative);
+            if (relative === 'index.html') {
+              // Flutter replaces its base href and other build placeholders.
+              const iconHash = expected['flutter_app/web/icons/Icon-192.png'].slice(0, 16);
+              if (!built.toString('utf8').includes('src="icons/Icon-192.png?v=' + iconHash + '"')) {
+                throw new Error('Build startup icon revision mismatch');
+              }
+              continue;
+            }
+            const actual = crypto.createHash('sha256').update(built).digest('hex');
+            if (actual !== hash) throw new Error('Build branding mismatch: ' + relative);
+          }
+          console.log('STAGED_BRANDING_INTEGRITY=OK');
+          NODE
           LOCAL_HASH="$(sha256sum "$STAGE/tuktuk/app/main.dart.js" | awk '{print toupper($1)}')"
           echo "STAGE=$STAGE" >> "$GITHUB_ENV"
           echo "LOCAL_HASH=$LOCAL_HASH" >> "$GITHUB_ENV"
@@ -253,8 +265,20 @@ jobs:
               echo "REMOTE_SHA256=$REMOTE_HASH"
 
               if [ "$REMOTE_HASH" = "$LOCAL_HASH" ]; then
-                echo "PRODUCTION_INTEGRITY=OK"
-                exit 0
+                branding_ok=true
+                for asset in index.html manifest.json favicon.png icons/Icon-192.png icons/Icon-512.png icons/Icon-maskable-192.png icons/Icon-maskable-512.png icons/Icon-shortcut-192.png; do
+                  if ! curl -fsSL -H "Cache-Control: no-cache" "${PUBLIC_URL}${asset}?release=${cache_buster}" -o "$RUNNER_TEMP/branding-remote" ||
+                    ! cmp -s "$STAGE/tuktuk/app/$asset" "$RUNNER_TEMP/branding-remote"; then
+                    echo "BRANDING_VERIFY_PENDING=$asset"
+                    branding_ok=false
+                    break
+                  fi
+                done
+                if [ "$branding_ok" = true ]; then
+                  echo "PRODUCTION_BRANDING_INTEGRITY=OK"
+                  echo "PRODUCTION_INTEGRITY=OK"
+                  exit 0
+                fi
               fi
             fi
 

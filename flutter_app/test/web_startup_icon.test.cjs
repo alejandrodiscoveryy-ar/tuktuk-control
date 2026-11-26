@@ -12,8 +12,8 @@ const png = 'data:image/png;base64,iVBORw0KGgo=';
 const a = 'https://example.com/icon-a.png';
 const b = 'https://example.com/icon-b.png';
 
-function boot(storage = new Map()) {
-  const logo = { src: original, getAttribute: () => original };
+function boot(storage = new Map(), bundledIcon = original) {
+  const logo = { src: bundledIcon, getAttribute: () => bundledIcon };
   const note = {};
   const images = [];
   const timers = [];
@@ -124,4 +124,12 @@ test('invalid URL never triggers a request', () => {
   app.window.tuktukApplyStartupIcon('http://example.com/insecure.png');
   assert.equal(app.images.length, 0);
   assert.equal(app.logo.src, original);
+});
+
+test('new bundled icon revision does not show the previous cached startup logo', () => {
+  const storage = new Map([[key, JSON.stringify({ url: a, snapshot: png })]]);
+  const newIcon = original + '?v=1234567890abcdef';
+  const app = boot(storage, newIcon);
+  assert.equal(app.logo.src, newIcon);
+  assert.equal(app.images.length, 0);
 });

@@ -203,7 +203,8 @@ void main() {
     final manifest = _readManifest();
     final icons = <String, Map<String, dynamic>>{
       for (final value in (manifest['icons'] as List<dynamic>))
-        if (value is Map<String, dynamic>) value['src'] as String: value,
+        if (value is Map<String, dynamic>)
+          Uri.parse(value['src'] as String).path: value,
     };
 
     expect(icons['icons/Icon-192.png']?['sizes'], '192x192');
