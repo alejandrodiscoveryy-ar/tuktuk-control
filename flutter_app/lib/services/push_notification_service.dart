@@ -36,6 +36,34 @@ void notifyMarketplaceRecoveredWebJob(String jobId) {
   );
 }
 
+// Foreground recovery reuses the native notification service; it never
+// claims a server dispatch was received/read when no FCM payload exists.
+Future<void> Function(String)? _nativeRecoveredOffer;
+
+bool notifyMarketplaceRecoveredAndroidJob(String jobId) {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android ||
+      marketplaceJobIdFromPush({
+        'kind': 'marketplace_job_available',
+        'job_id': jobId,
+      }) == null) {
+    return false;
+  }
+  final show = _nativeRecoveredOffer;
+  if (show == null) return false;
+  unawaited(show(jobId).catchError((_) {}));
+  return true;
+}
+
+@visibleForTesting
+int marketplaceNativeOfferNotificationId(String jobId) {
+  var hash = 17;
+  for (final unit in jobId.toLowerCase().codeUnits) {
+    hash = (hash * 31 + unit) & 0x3fffffff;
+  }
+  // Reserve a distinct positive range for ride notifications.
+  return hash | 0x40000000;
+}
+
 const tuktukNotificationChannelId = 'tuktuk_general';
 const tuktukNotificationChannelName = 'TukTuk Conductor';
 const tuktukJobNotificationChannelId = 'tuktuk_nuevas_carreras_v1';
@@ -291,6 +319,19 @@ class PushNotificationService {
     enableVibration: true,
   );
 
+  static const _nativeJobDetails = AndroidNotificationDetails(
+    tuktukJobNotificationChannelV2Id,
+    tuktukJobNotificationChannelV2Name,
+    channelDescription: 'Avisos audibles de nuevas carreras disponibles',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_stat_tuktuk',
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
+    enableVibration: true,
+    onlyAlertOnce: true,
+  );
+
   final FirebaseMessaging? _messagingOverride;
   final FlutterLocalNotificationsPlugin _localNotifications;
   final StreamController<String> _tokenRefreshController =
@@ -371,8 +412,23 @@ class PushNotificationService {
       final initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
         await _handleOpenedMessage(initialMessage, onMessageOpened);
+      } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android &&
+          onMessageOpened != null) {
+        // Local notifications (including recovered offers) can open a cold app.
+        try {
+          final launch = await _localNotifications.getNotificationAppLaunchDetails();
+          if (launch?.didNotificationLaunchApp == true) {
+            final data = decodePushMessageData(launch?.notificationResponse?.payload);
+            if (data.isNotEmpty) await onMessageOpened(data);
+          }
+        } catch (_) {
+          // An unavailable native launch detail must not block initialization.
+        }
       }
       _initialized = true;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        _nativeRecoveredOffer = _showRecoveredOffer;
+      }
     } catch (_) {
       // Firebase delivery is optional infrastructure; local app startup wins.
       _initialized = false;
@@ -387,6 +443,20 @@ class PushNotificationService {
         vapidKey: vapidKey,
         serviceWorkerScriptPath: serviceWorkerScriptPath,
       ),
+    );
+  }
+
+  Future<void> _showRecoveredOffer(String jobId) async {
+    if (!_initialized) return;
+    await _localNotifications.show(
+      id: marketplaceNativeOfferNotificationId(jobId),
+      title: 'Nueva solicitud disponible',
+      body: 'Abre Trabajos para ver una solicitud disponible.',
+      notificationDetails: const NotificationDetails(android: _nativeJobDetails),
+      payload: encodePushMessageData({
+        'kind': 'marketplace_job_available',
+        'job_id': jobId,
+      }),
     );
   }
 
@@ -406,26 +476,17 @@ class PushNotificationService {
       );
       return;
     }
+    final jobId = marketplaceJobIdFromPush(message.data);
     await _localNotifications.show(
-      id: message.messageId?.hashCode ?? message.hashCode,
+      id: jobId == null
+          ? (message.messageId?.hashCode ?? message.hashCode) & 0x3fffffff
+          : marketplaceNativeOfferNotificationId(jobId),
       title: title,
       body: body,
       notificationDetails: NotificationDetails(
         android: notificationChannelForPush(message.data) ==
                 tuktukJobNotificationChannelV2Id
-            ? const AndroidNotificationDetails(
-                tuktukJobNotificationChannelV2Id,
-                tuktukJobNotificationChannelV2Name,
-                channelDescription:
-                    'Avisos audibles de nuevas carreras disponibles',
-                importance: Importance.high,
-                priority: Priority.high,
-                icon: 'ic_stat_tuktuk',
-                playSound: true,
-                sound:
-                    RawResourceAndroidNotificationSound('tuktuk_nueva_carrera'),
-                enableVibration: true,
-              )
+            ? _nativeJobDetails
             : const AndroidNotificationDetails(
                 tuktukNotificationChannelId,
                 tuktukNotificationChannelName,
@@ -449,6 +510,9 @@ class PushNotificationService {
   }
 
   Future<void> dispose() async {
+    if (_nativeRecoveredOffer == _showRecoveredOffer) {
+      _nativeRecoveredOffer = null;
+    }
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
