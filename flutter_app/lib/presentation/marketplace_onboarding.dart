@@ -306,6 +306,7 @@ MarketplaceRegistrationOutcome marketplaceRegistrationOutcome({
   required MarketplaceVehicle? vehicle,
   required MarketplaceWorkAccess? access,
 }) {
+  if (profile?.driverSuspended == true) return MarketplaceRegistrationOutcome.incomplete;
   if (profile == null || access == null) {
     return MarketplaceRegistrationOutcome.unconfirmed;
   }
@@ -934,14 +935,16 @@ class _MarketplaceOnboardingScreenState
       // A successful save is not the same as approval. Read the definitive
       // server eligibility, not the existence of local image previews.
       if (widget.driverOnly) {
-        toast(context, 'Datos del conductor guardados.');
         return;
       }
       MarketplaceRegistrationOutcome outcome = MarketplaceRegistrationOutcome.unconfirmed;
       List<String> resultIssues = const [];
       try {
         final confirmed = await _service.onboarding();
-        final selected = confirmed.vehicles.where((v) => v.id == vehicleId).firstOrNull;
+        MarketplaceVehicle? selected;
+        for (final candidate in confirmed.vehicles) {
+          if (candidate.id == vehicleId) { selected = candidate; break; }
+        }
         final access = selected == null ? null : await _service.access(selected.id);
         if (!mounted || widget.store.user?.id != registrationUserId) return;
         outcome = marketplaceRegistrationOutcome(profile: confirmed, vehicle: selected, access: access);
@@ -1635,9 +1638,9 @@ class _MarketplaceOnboardingScreenState
           borderRadius: BorderRadius.circular(18),
           child: vehicle
               ? SizedBox(
-                  height: 255,
+                  height: 164,
                   width: double.infinity,
-                  child: Image.memory(bytes, fit: BoxFit.contain),
+                  child: _registrationPhoto(bytes, height: 164),
                 )
               : Image.memory(bytes, width: 120, height: 120, fit: BoxFit.cover),
         );
@@ -1827,6 +1830,28 @@ class _MarketplaceOnboardingScreenState
     }
   }
 
+  Widget _registrationPhoto(Uint8List bytes, {required double height}) =>
+      Semantics(
+        button: true,
+        label: 'Ampliar fotografía',
+        child: GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (dialogContext) => Dialog(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Align(alignment: Alignment.centerRight,
+                  child: IconButton(tooltip: 'Cerrar', icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(dialogContext).pop())),
+                Flexible(child: InteractiveViewer(
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                )),
+              ]),
+            ),
+          ),
+          child: Image.memory(bytes, height: height, width: double.infinity, fit: BoxFit.contain),
+        ),
+      );
+
   Widget _identityDocumentTile(String side, String title) {
     final pending = _identityPending[side];
     final saved = _identityDocs[side];
@@ -1839,8 +1864,7 @@ class _MarketplaceOnboardingScreenState
         path != null;
     Widget preview;
     if (pending != null) {
-      preview = Image.memory(pending,
-          height: 152, width: double.infinity, fit: BoxFit.contain);
+      preview = _registrationPhoto(pending, height: 112);
     } else if (stored) {
       final future = _savedPhotoFutures.putIfAbsent(
         'identity-$id',
@@ -1852,8 +1876,7 @@ class _MarketplaceOnboardingScreenState
         future: future,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            return Image.memory(snapshot.data!,
-                height: 152, width: double.infinity, fit: BoxFit.contain);
+            return _registrationPhoto(snapshot.data!, height: 112);
           }
           if (snapshot.hasError) {
             return const Text('No se pudo mostrar la fotografia privada.');
@@ -3698,6 +3721,7 @@ class _MarketplaceOnboardingScreenState
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
+                          widget.driverOnly ? 'Datos del conductor guardados.' :
                           _registrationOutcome == MarketplaceRegistrationOutcome.approved
                             ? 'Inscripción aprobada.'
                             : _registrationOutcome == MarketplaceRegistrationOutcome.incomplete
