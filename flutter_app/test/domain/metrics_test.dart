@@ -60,6 +60,19 @@ Future<void> main() async {
     expect(metrics.cycleSummaries.single.expenses, 1200);
   });
 
+  test('mejor día suma ingresos de varios registros y excluye eliminados', () {
+    final day = DateTime(2026, 11, 26);
+    final metrics = Metrics([
+      DailyRecord(id: 'a', date: day.add(const Duration(hours: 8)), earnings: 200000, odometer: 0),
+      DailyRecord(id: 'b', date: day.add(const Duration(hours: 9)), earnings: 10000, odometer: 0),
+      DailyRecord(id: 'c', date: DateTime(2026, 11, 25), earnings: 205000, odometer: 0),
+      DailyRecord(id: 'd', date: DateTime(2026, 11, 24), earnings: 500000, odometer: 0, deletedAt: day),
+    ]);
+    expect(metrics.bestEarningDay!.key, day);
+    expect(metrics.bestEarningDay!.value, 210000);
+    expect(Metrics(const []).bestEarningDay, isNull);
+  });
+
   test('Metrics tolera una lista vacía', () {
     final metrics = Metrics(const []);
 
