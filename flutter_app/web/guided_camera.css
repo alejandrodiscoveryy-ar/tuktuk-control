@@ -25,6 +25,7 @@
 .tuktuk-camera-stage {
   position: relative;
   isolation: isolate;
+  container-type: size;
   width: 100%;
   height: min(62dvh, 520px);
   min-height: 215px;
@@ -48,28 +49,40 @@
   z-index: 1;
   box-sizing: border-box;
   width: min(85%, 540px);
-  max-height: 82%;
+  width: min(86cqw, calc(76cqh * var(--guide-ratio)), 540px);
+  max-height: 76%;
   border: 3px solid #50edbe;
   border-radius: 14px;
   box-shadow: 0 0 0 100vmax rgb(0 0 0 / 26%), 0 0 24px rgb(80 237 190 / 36%);
   pointer-events: none;
 }
-.tuktuk-camera-frame::before,
-.tuktuk-camera-frame::after {
-  content: '';
+.tuktuk-camera-corner {
   position: absolute;
-  width: 24px;
-  height: 24px;
-  border: 4px solid white;
+  width: 22px;
+  height: 22px;
+  border: 3px solid white;
+  border-radius: 5px;
 }
-.tuktuk-camera-frame::before { top: -4px; left: -4px; border-right: 0; border-bottom: 0; border-radius: 8px 0 0 0; }
-.tuktuk-camera-frame::after { bottom: -4px; right: -4px; border-top: 0; border-left: 0; border-radius: 0 0 8px 0; }
+.tuktuk-camera-corner.tl { top: -3px; left: -3px; border-right: 0; border-bottom: 0; }
+.tuktuk-camera-corner.tr { top: -3px; right: -3px; border-left: 0; border-bottom: 0; }
+.tuktuk-camera-corner.bl { bottom: -3px; left: -3px; border-right: 0; border-top: 0; }
+.tuktuk-camera-corner.br { bottom: -3px; right: -3px; border-left: 0; border-top: 0; }
+.tuktuk-camera-face-guide {
+  position: absolute; left: 22%; top: 8%; width: 56%; height: 70%;
+  border: 2px dashed rgb(255 255 255 / 85%); border-radius: 50%;
+}
+.tuktuk-camera-inner-guide {
+  position: absolute; inset: 6%; border: 1px dashed rgb(255 255 255 / 55%);
+  border-radius: 6px;
+}
 .tuktuk-camera-frame-label {
   position: absolute;
   top: 100%;
   left: 50%;
-  transform: translate(-50%, 12px);
-  white-space: nowrap;
+  transform: translate(-50%, 6px);
+  text-align: center;
+  width: max-content;
+  white-space: normal;
   max-width: 100%;
   font-size: .74rem;
   text-shadow: 0 2px 4px #000;
