@@ -13,6 +13,20 @@ void main() {
     'dndAllows': true,
   };
 
+  test('Android: diagnostics distinguish unknown and real battery settings', () {
+    final unknown = AndroidDriverAlertStatus.fromMap(soundOk());
+    expect(unknown.batterySaver, isNull);
+    expect(unknown.batteryOptimizationIgnored, isNull);
+    final status = AndroidDriverAlertStatus.fromMap({
+      ...soundOk(),
+      'batterySaver': true,
+      'batteryOptimizationIgnored': false,
+    });
+    expect(status.batterySaver, isTrue);
+    expect(status.batteryOptimizationIgnored, isFalse);
+    expect(status.ready, isTrue);
+  });
+
   test('Android: permite continuar solo con todos los requisitos audibles', () {
     expect(AndroidDriverAlertStatus.fromMap(soundOk()).ready, isTrue);
   });

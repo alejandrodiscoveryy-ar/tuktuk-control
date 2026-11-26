@@ -29,7 +29,7 @@ void main() {
   test('Android recovered offers share notification identity with FCM', () {
     expect(jobs, contains('notifyMarketplaceRecoveredAndroidJob(job.id)'));
     expect(push, contains('_showAndroidOffer(message.data, title, body)'));
-    expect(push, contains('id: jobId.hashCode & 0x7fffffff'));
+    expect(push, contains('id: marketplaceNativeOfferNotificationId(jobId)'));
     expect(push, contains('onlyAlertOnce: alreadyShown'));
     expect(push, contains('payload: encodePushMessageData(data)'));
   });

@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   build-android:
-    name: Validate, test and build signed APK + AAB
+    name: Validate, test and build signed AAB
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -66,7 +66,7 @@ jobs:
           FLUTTER_ANDROID_DEFAULTS="$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt"
 
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            EXPECTED_VERSION_CODE="$(cat tool/android_release_request.txt)"
+            EXPECTED_VERSION_CODE="$(head -n 1 tool/android_release_request.txt)"
           fi
           [[ "$EXPECTED_VERSION_CODE" =~ ^[0-9]+$ ]]
           test "$VERSION_CODE" = "$EXPECTED_VERSION_CODE"
@@ -138,25 +138,17 @@ jobs:
           } > android/key.properties
           chmod 600 android/upload-keystore.jks android/key.properties
 
-      - name: Build signed release APK
-        run: >-
-          flutter build apk --release
-          --obfuscate
-          --split-debug-info=build/symbols/android
-
       - name: Build signed release AAB
         run: >-
           flutter build appbundle --release
           --obfuscate
           --split-debug-info=build/symbols/android
 
-      - name: Upload signed Android packages
+      - name: Upload signed Google Play bundle
         uses: actions/upload-artifact@v4
         with:
-          name: tuktuk-android-${{ steps.metadata.outputs.version_name }}-build-${{ steps.metadata.outputs.version_code }}
-          path: |
-            flutter_app/build/app/outputs/flutter-apk/app-release.apk
-            flutter_app/build/app/outputs/bundle/release/app-release.aab
+          name: tuktuk-play-aab-${{ steps.metadata.outputs.version_name }}-build-${{ steps.metadata.outputs.version_code }}
+          path: flutter_app/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
 

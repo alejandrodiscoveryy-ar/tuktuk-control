@@ -15,6 +15,8 @@ class AndroidDriverAlertStatus {
     required this.notificationMaxVolume,
     required this.normalRinger,
     required this.dndAllows,
+    this.batterySaver,
+    this.batteryOptimizationIgnored,
   });
 
   final bool appNotifications;
@@ -25,6 +27,8 @@ class AndroidDriverAlertStatus {
   final int notificationMaxVolume;
   final bool normalRinger;
   final bool dndAllows;
+  final bool? batterySaver;
+  final bool? batteryOptimizationIgnored;
 
   bool get channelAudible =>
       channelPresent && channelImportance >= 3 && channelHasSound;
@@ -66,6 +70,9 @@ class AndroidDriverAlertStatus {
       notificationMaxVolume: number('notificationMaxVolume'),
       normalRinger: flag('normalRinger'),
       dndAllows: flag('dndAllows'),
+      batterySaver: data['batterySaver'] is bool ? data['batterySaver'] as bool : null,
+      batteryOptimizationIgnored: data['batteryOptimizationIgnored'] is bool
+          ? data['batteryOptimizationIgnored'] as bool : null,
     );
   }
 }

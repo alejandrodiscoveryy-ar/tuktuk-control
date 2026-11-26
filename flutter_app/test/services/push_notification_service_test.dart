@@ -3,6 +3,18 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('recovered notification IDs are stable and case insensitive', () {
+    const jobId = '12345678-1234-4123-8123-123456789012';
+    final id = marketplaceNativeOfferNotificationId(jobId);
+    expect(id, inInclusiveRange(0x40000000, 0x7fffffff));
+    expect(marketplaceNativeOfferNotificationId(jobId.toUpperCase()), id);
+    expect(marketplaceNativeOfferNotificationId(
+      '12345678-1234-4123-8123-123456789013'), isNot(id));
+    expect(marketplaceOpenedOfferNotificationId({
+      'kind': 'marketplace_job_available', 'job_id': jobId,
+    }), isNull);
+  });
+
   test('marca abierto solo una alerta pulsada con id validado', () async {
     const data = {
       'kind': 'marketplace_job_available',
