@@ -4174,6 +4174,45 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     );
   }
 
+  Future<void> _contactAgencyForRide(MarketplaceJob job) async {
+    final action = widget.store.supportWhatsAppAction();
+    if (action == null) {
+      toast(context, 'El contacto de soporte no está disponible.');
+      return;
+    }
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Asistencia de la agencia'),
+        content: const Text(
+          'Abre WhatsApp para informar una incidencia de esta carrera. '
+          'Se incluirá su identificador. No es un servicio de emergencias; '
+          'si existe peligro inmediato, contacta a los servicios de emergencia.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Abrir WhatsApp'),
+          ),
+        ],
+      ),
+    );
+    if (send != true || !mounted) return;
+    final message = action.uri.queryParameters['text'] ?? '';
+    final uri = action.uri.replace(queryParameters: {
+      ...action.uri.queryParameters,
+      'text': '$message\nAsistencia durante el servicio. Carrera: ${job.id}',
+    });
+    await _launchWhatsApp(
+      context,
+      WhatsAppContactAction(buttonText: action.buttonText, uri: uri),
+    );
+  }
+
   Widget _buildWorkMapHome(BuildContext context) {
     final vehicle = _vehicleById(_selectedVehicleId);
     final valid = _vehicleReadyForWork(vehicle);
@@ -4490,6 +4529,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                                           ),
                                         ),
                                     ],
+                                  ),
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  key: const ValueKey('work-map-ride-assistance'),
+                                  onPressed: () => unawaited(_contactAgencyForRide(active)),
+                                  icon: const Icon(Icons.support_agent_rounded, size: 18),
+                                  label: const Text('Asistencia'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF98F7DE),
+                                    visualDensity: VisualDensity.compact,
                                   ),
                                 ),
                               ),
