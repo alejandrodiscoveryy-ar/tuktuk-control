@@ -524,6 +524,45 @@ void main() {
     expect(store.signInCalls, 0);
   });
 
+  testWidgets('recupera automáticamente las solicitudes tras fallar carreras activas',
+      (tester) async {
+    service.failActive = true;
+    await open(tester);
+    expect(service.availableCalls, 0);
+    final historyCalls = service.historyCalls;
+    service.failActive = false;
+    await tester.pump(const Duration(seconds: 31));
+    await pumpJobs(tester);
+    expect(service.availableCalls, greaterThan(0));
+    expect(service.historyCalls, historyCalls);
+    expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('recupera una carrera cancelada sin esperar una notificación',
+      (tester) async {
+    service.active = [
+      MarketplaceJob.fromMap({
+        'job_id': offer.id,
+        'status': 'en_route',
+        'final_price': 100,
+        'currency': 'CUP',
+        'origin_text': 'Origen de prueba',
+        'destination_text': 'Destino de prueba',
+      }),
+    ];
+    await open(tester);
+    expect(find.byKey(const ValueKey('work-map-glass-active-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('work-map-ride-support')), findsOneWidget);
+    final historyCalls = service.historyCalls;
+    service.active = [];
+    await tester.pump(const Duration(seconds: 31));
+    await pumpJobs(tester);
+    expect(find.byKey(const ValueKey('work-map-glass-active-card')), findsNothing);
+    expect(service.historyCalls, historyCalls);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('carrera sin saldo visible; aviso solo al tocar Aceptar', (tester) async {
     service.availableJobs = [
       const MarketplaceAvailableJob(
