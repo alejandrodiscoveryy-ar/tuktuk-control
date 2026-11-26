@@ -2556,13 +2556,14 @@ class StatsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         SectionTitle(title: tr('Ingresos y gastos por mes')),
-        MonthlyEarningsBars(cycles: cycles),
+        MonthlyEarningsBars(cycles: cycles, statisticsStyle: true),
         const SizedBox(height: 18),
         SectionTitle(title: tr('Tendencia de días trabajados')),
-        EarningsTrendCard(records: earningRecords.take(10).toList().reversed),
+        EarningsTrendCard(records: earningRecords.take(10).toList().reversed,
+            statisticsStyle: true),
         const SizedBox(height: 18),
         SectionTitle(title: tr('Información relevante')),
-        DataHealthCard(metrics: metrics),
+        DataHealthCard(metrics: metrics, statisticsStyle: true),
       ],
     );
   }
@@ -2583,13 +2584,15 @@ class StatisticsMetricGrid extends StatelessWidget {
           ? 1 : columns;
       const gap = 10.0;
       final width = (constraints.maxWidth - (count - 1) * gap) / count;
+      final horizontalHeader = width >= 175 && scale.scale(13) <= 18;
       final textWidth = max(1.0, width - 26);
-      double textHeight(String text, TextStyle style) {
+      final labelWidth = max(1.0, textWidth - (horizontalHeader ? 53 : 0));
+      double textHeight(String text, TextStyle style, double availableWidth) {
         final painter = TextPainter(
           text: TextSpan(text: text, style: style),
           textDirection: Directionality.of(context),
           textScaler: scale,
-        )..layout(maxWidth: textWidth);
+        )..layout(maxWidth: availableWidth);
         final height = painter.height.ceilToDouble();
         painter.dispose();
         return height;
@@ -2598,12 +2601,14 @@ class StatisticsMetricGrid extends StatelessWidget {
         fontSize: 13, fontWeight: FontWeight.w700, height: 1.2);
       const noteStyle = TextStyle(fontSize: 11, height: 1.2);
       final labelHeight = cards.fold<double>(0,
-        (height, card) => max(height, textHeight(card.label, labelStyle)));
+        (height, card) => max(height, textHeight(card.label, labelStyle, labelWidth)));
       final noteHeight = cards.fold<double>(0, (height, card) => max(height,
-        card.note == null ? 0.0 : textHeight(card.note!, noteStyle)));
-      final valueHeight = scale.scale(22) * 1.5;
-      final height = 26 + 44 + 9 + labelHeight + 6 + valueHeight
-          + (noteHeight > 0 ? 5 + noteHeight : 0) + 4;
+        card.note == null ? 0.0 : textHeight(card.note!, noteStyle, textWidth)));
+      final valueHeight = scale.scale(26) * 1.25;
+      final headerHeight = horizontalHeader ? max(44.0, labelHeight)
+          : 44 + 6 + labelHeight;
+      final height = 26 + headerHeight + 7 + valueHeight
+          + (noteHeight > 0 ? 3 + noteHeight : 0) + 3;
       return Wrap(
         spacing: gap,
         runSpacing: gap,
@@ -2616,6 +2621,7 @@ class StatisticsMetricGrid extends StatelessWidget {
               child: _StatisticsVisualCard(
                 card: card,
                 labelHeight: labelHeight,
+                horizontalHeader: horizontalHeader,
                 valueHeight: valueHeight,
                 labelStyle: labelStyle,
                 noteStyle: noteStyle,
@@ -2631,6 +2637,7 @@ class _StatisticsVisualCard extends StatelessWidget {
   const _StatisticsVisualCard({
     required this.card,
     required this.labelHeight,
+    required this.horizontalHeader,
     required this.valueHeight,
     required this.labelStyle,
     required this.noteStyle,
@@ -2638,6 +2645,7 @@ class _StatisticsVisualCard extends StatelessWidget {
 
   final MetricCard card;
   final double labelHeight;
+  final bool horizontalHeader;
   final double valueHeight;
   final TextStyle labelStyle;
   final TextStyle noteStyle;
@@ -2649,6 +2657,19 @@ class _StatisticsVisualCard extends StatelessWidget {
     final accent = dark ? rawAccent :
         Color.lerp(rawAccent, const Color(0xFF172B40), .55)!;
     final surface = dark ? const Color(0xFF142233) : const Color(0xFFF7FAFE);
+    final iconTile = Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: dark ? .15 : .12),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: accent.withValues(alpha: .30)),
+              ),
+              child: Icon(card.icon, size: 31, color: accent),
+            );
+    final label = Text(card.label, style: labelStyle.copyWith(
+      color: appMutedColor(context)));
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
@@ -2667,24 +2688,21 @@ class _StatisticsVisualCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: dark ? .15 : .12),
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: accent.withValues(alpha: .30)),
-              ),
-              child: Icon(card.icon, size: 31, color: accent),
-            ),
-            const SizedBox(height: 9),
-            SizedBox(
-              height: labelHeight,
-              child: Text(card.label, style: labelStyle.copyWith(
-                color: appMutedColor(context))),
-            ),
-            const SizedBox(height: 6),
+            if (horizontalHeader)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  iconTile,
+                  const SizedBox(width: 9),
+                  Expanded(child: label),
+                ],
+              )
+            else ...[
+              iconTile,
+              const SizedBox(height: 6),
+              SizedBox(height: labelHeight, child: label),
+            ],
+            const SizedBox(height: 7),
             SizedBox(
               height: valueHeight,
               child: Align(
@@ -2692,13 +2710,13 @@ class _StatisticsVisualCard extends StatelessWidget {
                 child: _OverviewMetricValue(
                   card.value,
                   currency: card.currency,
-                  style: TextStyle(color: accent, fontSize: 22,
+                  style: TextStyle(color: accent, fontSize: 26,
                     fontWeight: FontWeight.w900, height: 1.15),
                 ),
               ),
             ),
             if (card.note != null) ...[
-              const SizedBox(height: 5),
+              const SizedBox(height: 3),
               Text(card.note!, style: noteStyle.copyWith(
                 color: appMutedColor(context))),
             ],
