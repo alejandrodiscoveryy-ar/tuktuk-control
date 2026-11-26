@@ -74,6 +74,12 @@ void main() {
         final hero = find.byType(GradientMetricCard);
         final greeting = find.descendant(of: hero, matching: find.text('Felices fiestas'));
         expect(greeting, findsOneWidget);
+        final emblem = find.byKey(const ValueKey('seasonal-hero-christmas'));
+        expect(emblem, findsOneWidget);
+        expect(tester.widget<Text>(greeting).style!.fontSize, 13);
+        expect(tester.getSize(emblem).width, greaterThanOrEqualTo(96));
+        expect(tester.getSize(emblem).width, lessThanOrEqualTo(172));
+        expect(find.descendant(of: emblem, matching: find.byType(CustomPaint)), findsWidgets);
         final amount = tester.getRect(find.text('125.000'));
         final logo = tester.getRect(find.byIcon(Icons.directions_car));
         expect(amount.right, lessThanOrEqualTo(logo.left));
@@ -81,6 +87,7 @@ void main() {
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(screen(DateTime(2026, 12, 26)));
         expect(find.text('Felices fiestas'), findsNothing);
+        expect(emblem, findsNothing);
         expect(find.text('125.000'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
