@@ -11,7 +11,7 @@ Rect marketplaceIdentityFrame(Size viewport) => marketplaceCaptureFrame(viewport
 
 Rect marketplaceCaptureFrame(Size viewport, String kind) {
   final aspect = switch (kind) {
-    'driver' => 0.75,
+    'driver' => 1.0,
     'vehicle' => 4 / 3,
     _ => marketplaceIdentityAspectRatio,
   };
