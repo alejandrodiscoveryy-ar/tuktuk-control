@@ -3942,7 +3942,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     required bool valid,
     required bool onRide,
   }) {
-    final accent = onRide
+    final operationalUnconfirmed = (available || onRide) &&
+        (_error != null ||
+            _scopeErrors.containsKey('active') ||
+            _scopeErrors.containsKey('scheduled') ||
+            marketplaceGpsNeedsAttention(
+              locationExpected: true,
+              lastConfirmedAt: _lastOperationalSentAt,
+              nowUtc: DateTime.now().toUtc(),
+              hasFailure: _operationalGpsIssue != null,
+              activeService: onRide,
+            ));
+    final accent = operationalUnconfirmed
+        ? const Color(0xFFE6BD81)
+        : onRide
         ? const Color(0xFF8CB9FF)
         : !valid || !available
             ? const Color(0xFFE6BD81)
@@ -3956,6 +3969,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
                 : 'DESCANSANDO';
     final subtitle = _updatingAvailability
         ? 'Actualizando estado...'
+        : operationalUnconfirmed
+            ? 'Conexión o GPS sin confirmar'
         : onRide
             ? 'Servicio en curso'
             : !valid
@@ -4205,7 +4220,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         ],
       ),
     );
-    if (send != true || !mounted) return;
+    if (send != true || !mounted || !_active.any((ride) => ride.id == job.id)) return;
     final message = action.uri.queryParameters['text'] ?? '';
     final uri = action.uri.replace(queryParameters: {
       ...action.uri.queryParameters,
