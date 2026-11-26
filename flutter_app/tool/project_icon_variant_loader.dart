@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as image;
 
+import 'project_icon_renderer.dart';
+
 const maximumProjectIconDownloadBytes = 16 * 1024 * 1024;
 
 enum ProjectIconAlpha { transparent, opaque, monochrome }
@@ -39,6 +41,8 @@ Future<Uint8List> loadProjectIconVariant({
   ProjectIconBytesFetcher? fetch,
   int? maximumVisibleExtent,
   int visibleExtentTolerance = 0,
+  double? minimumVisibleRatio,
+  double? maximumVisibleRatio,
 }) async {
   final ownedClient = client == null;
   final httpClient =
@@ -56,6 +60,8 @@ Future<Uint8List> loadProjectIconVariant({
         alpha: alpha,
         maximumVisibleExtent: maximumVisibleExtent,
         visibleExtentTolerance: visibleExtentTolerance,
+        minimumVisibleRatio: minimumVisibleRatio,
+        maximumVisibleRatio: maximumVisibleRatio,
       );
       return bytes;
     } catch (_) {
@@ -67,6 +73,8 @@ Future<Uint8List> loadProjectIconVariant({
         alpha: alpha,
         maximumVisibleExtent: maximumVisibleExtent,
         visibleExtentTolerance: visibleExtentTolerance,
+        minimumVisibleRatio: minimumVisibleRatio,
+        maximumVisibleRatio: maximumVisibleRatio,
       );
       return bytes;
     }
@@ -107,6 +115,8 @@ void validateProjectIconVariant(
   required ProjectIconAlpha alpha,
   int? maximumVisibleExtent,
   int visibleExtentTolerance = 0,
+  double? minimumVisibleRatio,
+  double? maximumVisibleRatio,
 }) {
   if (maximumVisibleExtent != null && maximumVisibleExtent <= 0) {
     throw ArgumentError.value(maximumVisibleExtent, 'maximumVisibleExtent');
@@ -120,6 +130,16 @@ void validateProjectIconVariant(
   final decoded = image.decodePng(bytes);
   if (decoded == null || decoded.width != size || decoded.height != size) {
     throw FormatException('$label debe ser un PNG ${size}x$size válido.');
+  }
+  if (minimumVisibleRatio != null || maximumVisibleRatio != null) {
+    final bounds = visibleAlphaBounds(decoded);
+    final extent = bounds == null
+        ? 0.0
+        : (bounds.width > bounds.height ? bounds.width : bounds.height) / size;
+    if ((minimumVisibleRatio != null && extent < minimumVisibleRatio) ||
+        (maximumVisibleRatio != null && extent > maximumVisibleRatio)) {
+      throw FormatException('$label ocupa una proporción no válida: $extent.');
+    }
   }
   var visible = 0;
   var transparent = 0;
