@@ -196,6 +196,43 @@ class ConductorAppAccessGate extends StatelessWidget {
   }
 }
 
+class _AgencyAccessUnavailable extends StatelessWidget {
+  const _AgencyAccessUnavailable({required this.store});
+  final RecordStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final checking = store.conductorAppAccessState == ConductorAppAccessState.checking;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: GlassCard(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(checking ? Icons.shield_outlined : Icons.wifi_off_rounded,
+                color: kTertiary, size: 38),
+              const SizedBox(height: 12),
+              Text(checking ? 'Verificando acceso a la agencia' : 'Servicios de agencia sin conexión',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              const Text('Puedes seguir usando tus registros y estadísticas locales. Las carreras y operaciones de agencia requieren verificar tu acceso.',
+                textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: checking ? null : () => unawaited(store.refreshConductorAppAccess()),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Comprobar conexión'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({required this.store, super.key});
 
@@ -730,7 +767,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _stopFloatingOnLogout() {
-    if (store.user == null && _marketplaceDriverWorking.value) {
+    if (!store.conductorAgencyAccessAllowed && _marketplaceDriverWorking.value) {
       _marketplaceDriverWorking.value = false;
     }
   }
@@ -800,23 +837,41 @@ class _AppShellState extends State<AppShell> {
         }
         _lastAuthenticatedUserId = authenticatedUserId;
 
-        final isSynchronized = store.user != null &&
-            store.pendingSyncCount == 0 &&
-            store.lastSyncAt != null;
-        final syncColor = store.syncing
-            ? kTertiary
-            : isSynchronized
-                ? appPrimaryColor(context)
-                : kDanger;
+        final localOnly = store.conductorLocalOnly;
+        final syncState = store.syncIndicator;
+        final syncColor = switch (syncState) {
+          ConductorSyncIndicator.synchronized => const Color(0xFF2DD4A3),
+          ConductorSyncIndicator.pending => const Color(0xFFFFB547),
+          ConductorSyncIndicator.syncing || ConductorSyncIndicator.checking => const Color(0xFF55A7FF),
+          ConductorSyncIndicator.offline => kDanger,
+          ConductorSyncIndicator.signedOut => appMutedColor(context),
+        };
+        final syncIcon = switch (syncState) {
+          ConductorSyncIndicator.synchronized => Icons.cloud_done_outlined,
+          ConductorSyncIndicator.pending => Icons.cloud_upload_outlined,
+          ConductorSyncIndicator.offline => Icons.cloud_off_outlined,
+          _ => Icons.cloud_sync_outlined,
+        };
+        final syncTooltip = switch (syncState) {
+          ConductorSyncIndicator.synchronized => 'Datos sincronizados · Sincronizar',
+          ConductorSyncIndicator.pending => 'Cambios pendientes · Sincronizar',
+          ConductorSyncIndicator.offline => 'Sin conexión · Reintentar',
+          ConductorSyncIndicator.checking => 'Verificando conexión',
+          ConductorSyncIndicator.syncing => 'Sincronizando',
+          ConductorSyncIndicator.signedOut => 'Sin sesión de sincronización',
+        };
         final useDesktopNavigation = MediaQuery.sizeOf(context).width >= 1100;
         final screens = [
           DashboardScreen(store: store),
           MarketplaceRecordsScreen(store: store),
-          MarketplaceJobsScreen(
-            store: store,
-            key: ValueKey(authenticatedUserId),
-            isVisible: index == 2,
-          ),
+          if (localOnly)
+            _AgencyAccessUnavailable(store: store)
+          else
+            MarketplaceJobsScreen(
+              store: store,
+              key: ValueKey(authenticatedUserId),
+              isVisible: index == 2,
+            ),
           StatsScreen(store: store),
           const StoreScreen(),
           MarketplaceMoreScreen(store: store),
@@ -856,12 +911,13 @@ class _AppShellState extends State<AppShell> {
             title: _ExchangeRateHeader(store: store),
             actions: [
               IconButton(
-                tooltip: tr('Sincronizar'),
+                tooltip: syncTooltip,
                 color: syncColor,
                 disabledColor: syncColor,
                 onPressed:
                     store.user == null || store.syncing ? null : store.syncNow,
-                icon: store.syncing
+                icon: syncState == ConductorSyncIndicator.syncing ||
+                        syncState == ConductorSyncIndicator.checking
                     ? SizedBox(
                         width: 18,
                         height: 18,
@@ -870,7 +926,7 @@ class _AppShellState extends State<AppShell> {
                           color: syncColor,
                         ),
                       )
-                    : const Icon(Icons.cloud_sync_outlined),
+                    : Icon(syncIcon),
               ),
             ],
           ),
@@ -898,6 +954,22 @@ class _AppShellState extends State<AppShell> {
                           children: [
                             if (store.isReadOnly)
                               _ReadOnlyLicenseBanner(store: store),
+                            if (localOnly)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.wifi_off_rounded, size: 15, color: kTertiary),
+                                    const SizedBox(width: 6),
+                                    Expanded(child: Text(
+                                      store.conductorAppAccessState == ConductorAppAccessState.checking
+                                        ? 'Verificando conexión · Control local disponible'
+                                        : 'Modo sin conexión · ${store.pendingSyncCount} cambios pendientes',
+                                      style: TextStyle(fontSize: 11, color: appMutedColor(context)),
+                                    )),
+                                  ],
+                                ),
+                              ),
                             Expanded(
                               child: Stack(
                                 children: [
@@ -1503,13 +1575,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void didUpdateWidget(covariant DashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.store.user?.id != _walletUserId) {
+    if ((widget.store.conductorAgencyAccessAllowed ? widget.store.user?.id : null) != _walletUserId) {
       unawaited(_loadWallet());
     }
   }
 
   Future<void> _loadWallet() async {
-    final userId = widget.store.user?.id;
+    final userId = widget.store.conductorAgencyAccessAllowed ? widget.store.user?.id : null;
     _walletUserId = userId;
 
     if (userId == null) {
@@ -1531,16 +1603,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final wallet = await MarketplaceService(
         Supabase.instance.client,
-      ).wallet();
+      ).wallet().timeout(const Duration(seconds: 10));
 
-      if (!mounted || widget.store.user?.id != userId) return;
+      if (!mounted || !widget.store.conductorAgencyAccessAllowed || widget.store.user?.id != userId) return;
 
       setState(() {
         _wallet = wallet;
         _walletLoading = false;
       });
     } catch (_) {
-      if (!mounted || widget.store.user?.id != userId) return;
+      if (!mounted || !widget.store.conductorAgencyAccessAllowed || widget.store.user?.id != userId) return;
 
       setState(() {
         _wallet = null;
@@ -1550,7 +1622,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _dashboardWalletCard(BuildContext context) {
-    final wallet = _wallet;
+    final wallet = widget.store.conductorAgencyAccessAllowed ? _wallet : null;
 
     final reliableBreakdown = wallet != null &&
         wallet.realAvailableBalance != null &&
@@ -1566,7 +1638,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final mainValue = wallet == null
-        ? (_walletLoading ? 'Cargando...' : '—')
+        ? (widget.store.conductorLocalOnly ? 'Sin conexión' : _walletLoading ? 'Cargando...' : '—')
         : walletAmount(wallet.availableBalance, wallet.currency);
 
     String breakdownValue(double? value) {
@@ -1641,6 +1713,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 10),
           _OverviewMetricValue(
             mainValue,
+            currency: wallet?.currency,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
           detailRow('Recargado', breakdownValue(wallet?.realAvailableBalance)),
@@ -1669,13 +1742,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const _OverviewCurrencyHeader(),
-        const SizedBox(height: 10),
         MetricHero(
           label: tr('Ingreso de hoy'),
           value: numFmt(metrics.todayEarnings),
+                  currency: activeCurrency,
           sublabel:
-              '${tr('Mes actual')}: ${numFmt(metrics.currentCycleEarnings)}',
+              '${tr('Mes actual')}: ${numFmt(metrics.currentCycleEarnings)} $activeCurrency',
           icon: Icons.payments_outlined,
           trailing: AppLogoMark(
             identity: widget.store.projectIdentity,
@@ -1710,6 +1782,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: MetricCard(
                   label: tr('Ingresos históricos'),
                   value: numFmt(metrics.totalEarnings),
+                  currency: activeCurrency,
                   icon: Icons.account_balance_wallet_outlined,
                 ),
               ),
@@ -1734,6 +1807,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: MetricCard(
                   label: tr('Gastos del mes'),
                   value: numFmt(metrics.currentCycleExpenses),
+                  currency: activeCurrency,
                   icon: Icons.receipt_long_outlined,
                   color: kDanger,
                 ),
@@ -1743,6 +1817,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: MetricCard(
                   label: tr('Ganancia neta del mes'),
                   value: numFmt(metrics.currentCycleNet),
+                  currency: activeCurrency,
                   icon: Icons.account_balance_outlined,
                   color: metrics.currentCycleNet >= 0
                       ? appPrimaryColor(context)
@@ -2385,8 +2460,6 @@ class StatsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const _OverviewCurrencyHeader(),
-        const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth >= 700
@@ -2400,12 +2473,14 @@ class StatsScreen extends StatelessWidget {
                   width: width,
                   label: tr('Ingresos totales'),
                   value: numFmt(metrics.totalEarnings),
+                  currency: activeCurrency,
                   icon: Icons.account_balance_wallet_outlined,
                 ),
                 StatOverviewCard(
                   width: width,
                   label: tr('Gastos totales'),
                   value: numFmt(metrics.totalExpenses),
+                  currency: activeCurrency,
                   color: kDanger,
                   icon: Icons.receipt_long_outlined,
                 ),
@@ -2413,6 +2488,7 @@ class StatsScreen extends StatelessWidget {
                   width: width,
                   label: tr('Ganancia neta'),
                   value: numFmt(metrics.netEarnings),
+                  currency: activeCurrency,
                   color: metrics.netEarnings >= 0
                       ? appPrimaryColor(context)
                       : kDanger,
@@ -2422,6 +2498,7 @@ class StatsScreen extends StatelessWidget {
                   width: width,
                   label: tr('Promedio por día trabajado'),
                   value: numFmt(metrics.averageDailyEarnings),
+                  currency: activeCurrency,
                   icon: Icons.calendar_today_outlined,
                 ),
                 StatOverviewCard(
@@ -2438,6 +2515,7 @@ class StatsScreen extends StatelessWidget {
                   value: earningRecords.isEmpty
                       ? '-'
                       : numFmt(earningRecords.first.earnings),
+                  currency: earningRecords.isEmpty ? null : activeCurrency,
                   note: earningRecords.isEmpty
                       ? tr('Sin datos')
                       : DateFormat(
@@ -2450,6 +2528,7 @@ class StatsScreen extends StatelessWidget {
                   label: tr('Mejor mes'),
                   icon: Icons.calendar_month_outlined,
                   value: bestCycle == null ? '-' : numFmt(bestCycle.earnings),
+                  currency: bestCycle == null ? null : activeCurrency,
                   note: bestCycle?.label ?? tr('Sin datos mensuales'),
                 ),
                 StatOverviewCard(
