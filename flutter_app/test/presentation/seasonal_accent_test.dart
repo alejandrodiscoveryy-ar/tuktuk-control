@@ -35,12 +35,12 @@ void main() {
             theme: ThemeData(brightness: brightness),
             home: Scaffold(body: MediaQuery(
               data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-              child: SingleChildScrollView(child: Padding(
-                padding: const EdgeInsets.all(16),
+              child: const SingleChildScrollView(child: Padding(
+                padding: EdgeInsets.all(16),
                 child: MetricHero(label: 'Ingreso de hoy', value: '125.000',
                   currency: 'CUP', sublabel: 'Mes actual: 125.000 CUP',
                   icon: Icons.payments_outlined,
-                  trailing: const Icon(Icons.directions_car, size: 90)),
+                  trailing: Icon(Icons.directions_car, size: 90)),
               )),
             )),
           ));
