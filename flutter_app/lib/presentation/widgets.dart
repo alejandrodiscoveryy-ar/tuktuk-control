@@ -113,196 +113,49 @@ SeasonalCampaign? seasonalCampaignFor(DateTime date, {
   return null;
 }
 
-/// A compact, decorative accent that disappears entirely out of season.
-class SeasonalAccent extends StatelessWidget {
-  const SeasonalAccent({this.date, this.language, this.compact = false, super.key});
-
-  final DateTime? date;
-  final String? language;
-  final bool compact;
+/// The only seasonal decoration: a small Santa hat over the existing logo.
+class _SantaLogoHat extends StatelessWidget {
+  const _SantaLogoHat();
 
   @override
-  Widget build(BuildContext context) {
-    final campaign = seasonalCampaignFor(date ?? DateTime.now());
-    if (campaign == null) return const SizedBox.shrink();
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final locale = (language ?? activeLanguage).split(RegExp(r'[-_]')).first;
-    final message = campaign.messages[locale] ?? campaign.messages['es']!;
-    final background = dark ? const Color(0xFF142C2C) : const Color(0xFFF1F8F2);
-    final gold = dark ? campaign.highlight : const Color(0xFF765519);
-    if (compact) {
-      return Row(
-        key: ValueKey('seasonal-accent-${campaign.id}'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(campaign.icon, size: 15,
-            color: dark ? const Color(0xFF84D7AA) : campaign.accent),
-          const SizedBox(width: 4),
-          Flexible(child: Text(message,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: gold, fontSize: 11,
-              fontWeight: FontWeight.w700, height: 1.2))),
-        ],
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DecoratedBox(
-        key: ValueKey('seasonal-accent-${campaign.id}'),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: campaign.accent.withValues(alpha: .48)),
-          gradient: LinearGradient(
-            colors: [
-              background,
-              Color.alphaBlend(campaign.accent.withValues(alpha: .12), background),
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(children: [
-            Icon(campaign.icon, size: 22,
-              color: dark ? const Color(0xFF84D7AA) : campaign.accent),
-            const SizedBox(width: 9),
-            Expanded(child: Text(message,
-              style: TextStyle(color: gold, fontSize: 12,
-                fontWeight: FontWeight.w700, height: 1.2))),
-            const SizedBox(width: 8),
-            Icon(Icons.auto_awesome_rounded, size: 16, color: gold),
-            const SizedBox(width: 5),
-            const Icon(Icons.circle, size: 6, color: Color(0xFFCC646A)),
-          ]),
-        ),
+  Widget build(BuildContext context) => const ExcludeSemantics(
+    child: IgnorePointer(
+      child: CustomPaint(
+        key: ValueKey('seasonal-logo-hat'),
+        size: Size(39, 24),
+        painter: _SantaLogoHatPainter(),
       ),
-    );
-  }
+    ),
+  );
 }
 
-/// A lightweight, static campaign illustration confined to the hero's logo area.
-class _SeasonalHeroEmblem extends StatelessWidget {
-  const _SeasonalHeroEmblem({required this.campaign, required this.logo});
-
-  final SeasonalCampaign campaign;
-  final Widget logo;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final gold = dark ? campaign.highlight : const Color(0xFF765519);
-    final locale = activeLanguage.split(RegExp(r'[-_]')).first;
-    final message = campaign.messages[locale] ?? campaign.messages['es']!;
-    return Column(
-      key: ValueKey('seasonal-hero-${campaign.id}'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 88,
-          width: double.infinity,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _SeasonalHeroArt(
-                    christmas: campaign.id == 'christmas',
-                    gold: gold, accent: campaign.accent, dark: dark),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 19, vertical: 8),
-                child: FittedBox(fit: BoxFit.contain, child: logo),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: gold, fontSize: 13, fontWeight: FontWeight.w800,
-            letterSpacing: .15, height: 1.12,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SeasonalHeroArt extends CustomPainter {
-  const _SeasonalHeroArt({required this.christmas, required this.gold,
-    required this.accent, required this.dark});
-
-  final bool christmas;
-  final Color gold;
-  final Color accent;
-  final bool dark;
+class _SantaLogoHatPainter extends CustomPainter {
+  const _SantaLogoHatPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final glow = Paint()..shader = ui.Gradient.radial(
-      center, size.width * .48,
-      [accent.withValues(alpha: .24), accent.withValues(alpha: 0)]);
-    canvas.drawRect(Offset.zero & size, glow);
-    final scale = min(size.width / 110, size.height / 88);
     canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.scale(scale);
-    final ring = Rect.fromCenter(center: Offset.zero, width: 78, height: 74);
-    final stroke = Paint()
-      ..color = gold.withValues(alpha: .45)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = .9
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(ring, -pi * .87, pi * .70, false, stroke);
-    canvas.drawArc(ring, pi * .13, pi * .70, false, stroke);
-
-    void sparkle(double x, double y, double radius) {
-      final path = ui.Path()
-        ..moveTo(x, y - radius)
-        ..quadraticBezierTo(x + 1, y - 1, x + radius, y)
-        ..quadraticBezierTo(x + 1, y + 1, x, y + radius)
-        ..quadraticBezierTo(x - 1, y + 1, x - radius, y)
-        ..quadraticBezierTo(x - 1, y - 1, x, y - radius)
-        ..close();
-      canvas.drawPath(path, Paint()..color = gold.withValues(alpha: .90));
-    }
-
-    sparkle(-42, -24, 4);
-    sparkle(42, -16, 6);
-    sparkle(34, 29, 3);
-    if (christmas) {
-      final pine = Paint()
-        ..color = dark ? const Color(0xFF74C9A1) : accent
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..strokeCap = StrokeCap.round;
-      for (final side in [-1.0, 1.0]) {
-        canvas.save();
-        canvas.scale(side, 1);
-        final stem = ui.Path()..moveTo(19, 36)..quadraticBezierTo(38, 28, 46, 8);
-        canvas.drawPath(stem, pine);
-        for (var i = 0; i < 4; i++) {
-          final x = 23.0 + i * 6;
-          final y = 33.0 - i * 6;
-          canvas.drawLine(Offset(x, y), Offset(x - 3, y - 9), pine);
-          canvas.drawLine(Offset(x, y), Offset(x + 8, y - 2), pine);
-        }
-        final berry = Paint()..color = const Color(0xFFD9757D);
-        canvas.drawCircle(const Offset(39, 28), 2.5, berry);
-        canvas.drawCircle(const Offset(44, 24), 2, berry);
-        canvas.restore();
-      }
-    }
+    canvas.scale(size.width / 39, size.height / 24);
+    final body = ui.Path()
+      ..moveTo(8, 18)
+      ..cubicTo(10, 11, 11, 4, 21, 3)
+      ..cubicTo(28, 1, 32, 6, 35, 12)
+      ..cubicTo(29, 9, 26, 12, 27, 17)
+      ..lineTo(29, 19)
+      ..close();
+    canvas.drawPath(body, Paint()..shader = ui.Gradient.linear(
+      const Offset(13, 4), const Offset(28, 20),
+      const [Color(0xFFFF575E), Color(0xFFC51E35)]));
+    final fur = Paint()..color = const Color(0xFFF8F5EF);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(const Rect.fromLTWH(6, 16, 25, 6),
+        const Radius.circular(3)), fur);
+    canvas.drawCircle(const Offset(35, 12), 3.7, fur);
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _SeasonalHeroArt oldDelegate) =>
-      christmas != oldDelegate.christmas || gold != oldDelegate.gold ||
-      accent != oldDelegate.accent || dark != oldDelegate.dark;
+  bool shouldRepaint(covariant _SantaLogoHatPainter oldDelegate) => false;
 }
 
 class MetricHero extends StatelessWidget {
@@ -331,7 +184,6 @@ class MetricHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = seasonalDate ?? DateTime.now();
     final campaign = seasonal ? seasonalCampaignFor(date) : null;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final headline = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -356,24 +208,29 @@ class MetricHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          LayoutBuilder(builder: (context, constraints) {
-            final width = campaign == null ? 100.0
-                : (constraints.maxWidth * .39).clamp(96.0, 172.0).toDouble();
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(child: headline),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: width,
-                  child: campaign == null
-                      ? SizedBox(height: 86,
-                          child: FittedBox(fit: BoxFit.contain, child: logo))
-                      : _SeasonalHeroEmblem(campaign: campaign, logo: logo),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: headline),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 100,
+                height: 86,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned.fill(
+                      child: FittedBox(fit: BoxFit.contain, child: logo)),
+                    if (campaign?.id == 'christmas')
+                      const Positioned(
+                        top: 0, left: 28, width: 39, height: 24,
+                        child: _SantaLogoHat(),
+                      ),
+                  ],
                 ),
-              ],
-            );
-          }),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Divider(color: appOutlineColor(context)),
           Row(
@@ -387,9 +244,7 @@ class MetricHero extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
                   gradient: LinearGradient(
-                    colors: campaign == null
-                        ? [appPrimaryColor(context), appSecondaryColor(context), kAccentPink]
-                        : [campaign.accent, dark ? campaign.highlight : const Color(0xFF765519)],
+                    colors: [appPrimaryColor(context), appSecondaryColor(context), kAccentPink],
                   ),
                 ),
               ),
