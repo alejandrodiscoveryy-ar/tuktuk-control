@@ -2662,7 +2662,7 @@ class _StoreCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 76 + 20 * (MediaQuery.textScalerOf(context).scale(12) / 12 - 1).clamp(0.0, 2.0),
+      height: 76 + 40 * (MediaQuery.textScalerOf(context).scale(12) / 12 - 1).clamp(0.0, 2.0).toDouble(),
       child: GlassCard(
         padding: EdgeInsets.zero,
         child: InkWell(
