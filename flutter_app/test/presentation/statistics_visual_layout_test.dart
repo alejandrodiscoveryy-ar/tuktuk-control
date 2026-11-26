@@ -1,6 +1,7 @@
 import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() {
   testWidgets('Statistics cards have matching dimensions and colorful icons',
@@ -43,11 +44,40 @@ void main() {
           expect(income.size, 31);
           expect(income.color, isNot(expenses.color));
           expect(find.text('125.000'), findsOneWidget);
+          expect(tester.widget<Text>(find.text('125.000')).style!.fontSize, 26);
+          if (width == 720 && scale == 1) {
+            expect(tester.getSize(first).height, lessThan(145));
+          }
           expect(find.text('Próximo en 2.688 km'), findsOneWidget);
           expect(tester.takeException(), isNull);
         }
       }
     }
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('Monthly chart supports expense-only months and narrow phones',
+      (tester) async {
+    await initializeDateFormatting();
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final cycles = [
+      CycleSummary(start: DateTime(2026, 9), label: 'September',
+        earnings: 0, expenses: 1200, distance: 0),
+      CycleSummary(start: DateTime(2026, 10), label: 'October',
+        earnings: 600, expenses: 150, distance: 10),
+    ];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
+      body: SingleChildScrollView(
+        child: MonthlyEarningsBars(cycles: cycles, statisticsStyle: true),
+      ),
+    )));
+    final bars = find.byWidgetPredicate((widget) =>
+      widget is Container && widget.constraints?.maxWidth == 23);
+    expect(bars, findsNWidgets(4));
+    final heights = tester.widgetList<Container>(bars)
+      .map((bar) => bar.constraints!.maxHeight).toList();
+    expect(heights, [0.0, 150.0, 75.0, 18.75]);
+    expect(tester.takeException(), isNull);
   });
 }
