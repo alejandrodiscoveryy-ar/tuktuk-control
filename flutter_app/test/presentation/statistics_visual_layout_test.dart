@@ -75,28 +75,56 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('Monthly chart supports expense-only months and narrow phones',
+  testWidgets('Monthly chart restores one overlay bar per month and fits all eight',
       (tester) async {
     await initializeDateFormatting();
-    await tester.binding.setSurfaceSize(const Size(320, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final cycles = [
-      CycleSummary(start: DateTime(2026, 9), label: 'September',
-        earnings: 0, expenses: 1200, distance: 0),
-      CycleSummary(start: DateTime(2026, 10), label: 'October',
-        earnings: 600, expenses: 150, distance: 10),
+      for (var month = 1; month <= 10; month++)
+        CycleSummary(start: DateTime(2026, month), label: '$month',
+          earnings: month * 100.0, expenses: month * 25.0, distance: 10),
+    ];
+    Finder bar(CycleSummary cycle) => find.byKey(ValueKey(
+      'monthly-income-bar-${cycle.start.toIso8601String()}'));
+    for (final width in [320.0, 390.0, 720.0]) {
+      await tester.binding.setSurfaceSize(Size(width, 640));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(
+        body: SingleChildScrollView(
+          child: MonthlyEarningsBars(cycles: cycles, statisticsStyle: true),
+        ),
+      )));
+      expect(bar(cycles.first), findsNothing);
+      expect(bar(cycles[1]), findsNothing);
+      for (final cycle in cycles.skip(2)) {
+        final finder = bar(cycle);
+        expect(finder, findsOneWidget);
+        final rect = tester.getRect(finder);
+        expect(rect.left, greaterThanOrEqualTo(0));
+        expect(rect.right, lessThanOrEqualTo(width));
+        final expense = tester.widget<FractionallySizedBox>(find.descendant(
+          of: finder, matching: find.byType(FractionallySizedBox)));
+        expect(expense.heightFactor, .25);
+        expect(rect.height, closeTo(130 * cycle.earnings / 1000, .01));
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('Daily income returns to the original compact list and supplied order',
+      (tester) async {
+    await initializeDateFormatting();
+    final records = [
+      DailyRecord(id: 'a', date: DateTime(2026, 11, 3), earnings: 7000, odometer: 1),
+      DailyRecord(id: 'b', date: DateTime(2026, 6, 18), earnings: 7620, odometer: 2),
+      DailyRecord(id: 'c', date: DateTime(2026, 10, 28), earnings: 9580, odometer: 3),
     ];
     await tester.pumpWidget(MaterialApp(home: Scaffold(
-      body: SingleChildScrollView(
-        child: MonthlyEarningsBars(cycles: cycles, statisticsStyle: true),
-      ),
+      body: EarningsTrendCard(records: records, statisticsStyle: true),
     )));
-    final bars = find.byWidgetPredicate((widget) =>
-      widget is Container && widget.constraints?.maxWidth == 23);
-    expect(bars, findsNWidgets(4));
-    final heights = tester.widgetList<Container>(bars)
-      .map((bar) => bar.constraints!.maxHeight).toList();
-    expect(heights, [0.0, 150.0, 75.0, 18.75]);
+    final rows = tester.widgetList<InfoLine>(find.byType(InfoLine)).toList();
+    expect(rows.map((row) => row.value).toList(),
+      records.map((record) => money(record.earnings)).toList());
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
