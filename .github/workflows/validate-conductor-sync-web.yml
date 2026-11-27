@@ -22,6 +22,10 @@ on:
       - 'flutter_app/lib/presentation/marketplace_assigned_job_card.dart'
       - 'flutter_app/test/domain/marketplace_models_test.dart'
       - 'flutter_app/lib/presentation/marketplace_jobs.dart'
+      - 'flutter_app/lib/data/marketplace_map_service.dart'
+      - 'flutter_app/lib/presentation/marketplace_driver_map.dart'
+      - 'flutter_app/test/domain/marketplace_map_visual_style_test.dart'
+      - 'flutter_app/test/conductor_app_suspension_gate_contract_test.dart'
       - 'flutter_app/lib/presentation/screens.dart'
       - 'flutter_app/test/presentation/statistics_visual_layout_test.dart'
       - 'flutter_app/test/presentation/financial_overview_compact_test.dart'
@@ -82,6 +86,7 @@ jobs:
           flutter test test/presentation/marketplace_records_read_only_test.dart
           flutter test test/presentation/marketplace_more_layout_test.dart
           flutter test test/presentation/marketplace_jobs_refresh_test.dart
+          flutter test test/domain/marketplace_map_visual_style_test.dart
           flutter test test/presentation/marketplace_map_offer_price_pins_contract_test.dart
           flutter test test/services/push_notification_service_test.dart
           flutter test test/domain/web_oauth_redirect_test.dart
