@@ -253,9 +253,10 @@ class RecordStore extends ChangeNotifier {
         access: conductorAppAccessState,
         syncing: syncing,
         failed: _syncFailed,
-        pending: pendingSyncCount,
+        pending: pendingSyncCount + (financialHistoryMismatch ? 1 : 0),
         hasLastSync: lastSyncAt != null &&
-            _historyVerifiedUserId == user?.id && !_fullRecoveryRequested,
+            _historyVerifiedUserId == user?.id && !_fullRecoveryRequested &&
+            financialHistoryFresh && !financialHistoryMismatch,
       );
   Timer? _syncDebounceTimer;
   Timer? _retrySyncTimer;
@@ -263,6 +264,133 @@ class RecordStore extends ChangeNotifier {
   bool _syncRequestedWhileRunning = false;
   bool _fullRecoveryRequested = false;
   String? _historyVerifiedUserId;
+  FinancialHistorySnapshot? _financialSnapshot;
+  Future<void>? _financialRefresh;
+  String? _financialRefreshScope;
+  int _financialRefreshGeneration = 0;
+  bool _financialHistoryFresh = false;
+
+  FinancialHistorySnapshot? get _activeFinancialSnapshot {
+    final snapshot = _financialSnapshot;
+    return snapshot != null && snapshot.userId == user?.id &&
+        snapshot.vehicleId == activeVehicleIdOrNull ? snapshot : null;
+  }
+
+  bool get financialHistoryFresh =>
+      _financialHistoryFresh && _activeFinancialSnapshot != null;
+  bool get financialHistoryMismatch {
+    final snapshot = _activeFinancialSnapshot;
+    return financialHistoryFresh && snapshot != null &&
+        !snapshot.matchesLocal(records, maintenanceRecords);
+  }
+
+  Metrics get financialMetrics {
+    final snapshot = _activeFinancialSnapshot;
+    if (snapshot == null) return Metrics(records, maintenanceRecords);
+    final queue = Hive.box(_syncQueueBox);
+    bool pending(SyncEntityType type, String id, SyncStatus status) =>
+        status != SyncStatus.synced ||
+        queue.containsKey(HistoryRecoveryPolicy.key(type, id));
+    return snapshot.withPending(
+      _allDailyRecords.where((r) => r.userId == snapshot.userId &&
+          r.vehicleId == snapshot.vehicleId &&
+          pending(SyncEntityType.dailyRecord, r.id, r.syncStatus)),
+      _allMaintenanceRecords.where((r) => r.userId == snapshot.userId &&
+          r.vehicleId == snapshot.vehicleId &&
+          pending(SyncEntityType.maintenance, r.id, r.syncStatus)),
+    );
+  }
+
+  String? get financialHistoryNotice {
+    if (user == null) return null;
+    if (_activeFinancialSnapshot == null) {
+      return 'Datos locales · Historial pendiente de verificar';
+    }
+    if (!financialHistoryFresh) {
+      return 'Última consulta al servidor · Sin verificación actual';
+    }
+    if (pendingSyncCount > 0) return 'Datos del servidor y cambios locales pendientes';
+    if (financialHistoryMismatch) {
+      return 'Datos verificados del servidor · Historial local por conciliar';
+    }
+    return null;
+  }
+
+  /// Independent, read-only financial verification: no cursor rewrites,
+  /// no synthetic transactions and no replacement of unsent local edits.
+  Future<void> refreshFinancialHistory() async {
+    final owner = user?.id;
+    final vehicle = activeVehicleIdOrNull;
+    if (_disposed || owner == null || vehicle == null ||
+        !conductorAgencyAccessAllowed) return;
+    final scope = '$owner/$vehicle';
+    final running = _financialRefresh;
+    if (running != null && _financialRefreshScope == scope) {
+      await running;
+      return;
+    }
+    final generation = ++_financialRefreshGeneration;
+    _financialRefreshScope = scope;
+    _financialHistoryFresh = false;
+    notifyListeners();
+    bool current() => !_disposed && generation == _financialRefreshGeneration &&
+        user?.id == owner && activeVehicleIdOrNull == vehicle &&
+        conductorAgencyAccessAllowed;
+    Future<void> read() async {
+      try {
+        final changes = await _supabaseGateway.readFinancialHistory(
+          userId: owner, vehicleId: vehicle,
+        ).timeout(const Duration(seconds: 20));
+        if (!current()) return;
+        final validId = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        );
+        final automatic = <String, String>{};
+        for (final change in changes) {
+          if (change.entityType != SyncEntityType.dailyRecord ||
+              !change.entityId.startsWith('marketplace-job-')) continue;
+          final id = change.entityId.substring('marketplace-job-'.length);
+          if (validId.hasMatch(id)) automatic[id.toLowerCase()] = change.entityId;
+        }
+        final jobIds = automatic.keys.toList()..sort();
+        final verified = <String>{};
+        final service = MarketplaceService(_supabase);
+        for (var i = 0; i < jobIds.length; i += 50) {
+          final chunk = jobIds.skip(i).take(50).toList();
+          final rows = await service.incomeVerification(chunk)
+              .timeout(const Duration(seconds: 10));
+          if (!current()) return;
+          for (final row in rows) {
+            final id = '${row['job_id']}'.toLowerCase();
+            if (chunk.contains(id) && row['status'] == 'settled' &&
+                row['is_test'] == false && row['is_deleted'] == false) {
+              verified.add(automatic[id]!);
+            }
+          }
+        }
+        final snapshot = FinancialHistorySnapshot(
+          userId: owner, vehicleId: vehicle, changes: changes,
+          verifiedMarketplaceIds: verified,
+        );
+        if (!current()) return;
+        _financialSnapshot = snapshot;
+        _financialHistoryFresh = true;
+      } catch (_) {
+        if (current()) _financialHistoryFresh = false;
+      }
+    }
+    final future = read();
+    _financialRefresh = future;
+    try {
+      await future;
+    } finally {
+      if (generation == _financialRefreshGeneration) {
+        _financialRefresh = null;
+        _financialRefreshScope = null;
+        if (!_disposed) notifyListeners();
+      }
+    }
+  }
   String? _ensuredProfileFingerprint;
   DateTime? _lastBackgroundRefreshAt;
   DateTime? _lastLicenseRefreshAttemptAt;
@@ -1258,6 +1386,7 @@ class RecordStore extends ChangeNotifier {
     }
     await _meta.put('activeVehicleId:$activeUserId', vehicle.id);
     _load();
+    unawaited(refreshFinancialHistory());
   }
 
   Future<void> updateActiveVehicle({
@@ -2181,6 +2310,7 @@ class RecordStore extends ChangeNotifier {
     notifyListeners();
     try {
       await action();
+      await refreshFinancialHistory();
       _consecutiveSyncFailures = 0;
       _retrySyncTimer?.cancel();
       _retrySyncTimer = null;
@@ -2494,6 +2624,11 @@ class RecordStore extends ChangeNotifier {
     _syncRequestedWhileRunning = false;
     _fullRecoveryRequested = false;
     _historyVerifiedUserId = null;
+    ++_financialRefreshGeneration;
+    _financialSnapshot = null;
+    _financialRefresh = null;
+    _financialRefreshScope = null;
+    _financialHistoryFresh = false;
     _ensuredProfileFingerprint = null;
     _lastBackgroundRefreshAt = null;
     _lastLicenseRefreshAttemptAt = null;
