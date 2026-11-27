@@ -196,4 +196,50 @@ void main() {
       }
     }
   });
+
+  testWidgets('Metric units share the discreet efficiency style in both themes',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final brightness in Brightness.values) {
+      for (final width in [320.0, 390.0, 720.0]) {
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        await tester.pumpWidget(MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: Scaffold(body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: StatisticsMetricGrid(
+                columns: width >= 700 ? 3 : 2,
+                cards: const [
+                  MetricCard(label: 'Ingresos', value: '736.412',
+                    currency: 'CUP', icon: Icons.payments_outlined),
+                  MetricCard(label: 'Distancia', value: '958',
+                    currency: 'km', icon: Icons.route_outlined),
+                  MetricCard(label: 'Eficiencia', value: '85,39',
+                    note: 'CUP/km', icon: Icons.speed_outlined),
+                ],
+              ),
+            ),
+          )),
+        ));
+        // MaterialApp animates theme changes; inspect the settled theme.
+        await tester.pumpAndSettle();
+        expect(Theme.of(tester.element(find.text('CUP/km'))).brightness,
+          brightness);
+        final expected = brightness == Brightness.dark
+            ? const Color(0xFFA8BACD) : const Color(0xFF52677B);
+        for (final unit in ['CUP', 'km', 'CUP/km']) {
+          final style = tester.widget<Text>(find.text(unit)).style!;
+          expect(style.fontSize, 11);
+          expect(style.fontWeight, FontWeight.w500);
+          expect(style.color, expected);
+        }
+        for (final value in ['736.412', '958', '85,39']) {
+          expect(tester.widget<Text>(find.text(value)).style!.fontSize, 26);
+        }
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
 }

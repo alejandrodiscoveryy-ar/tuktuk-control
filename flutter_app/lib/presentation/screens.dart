@@ -1810,7 +1810,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _dashboardWalletCard(context),
             MetricCard(
               label: tr('Distancia del mes'),
-              value: '${numFmt(metrics.currentCycleDistance)} km',
+              value: numFmt(metrics.currentCycleDistance),
+              currency: 'km',
               icon: Icons.route_outlined,
               color: const Color(0xFF72A7FF),
             ),
@@ -2809,7 +2810,7 @@ class StatisticsMetricGrid extends StatelessWidget {
       const amountStyle = TextStyle(
         fontSize: 26, fontWeight: FontWeight.w900, height: 1.15);
       const currencyStyle = TextStyle(
-        fontSize: 15.08, fontWeight: FontWeight.w600, height: 1.1);
+        fontSize: 11, fontWeight: FontWeight.w500, height: 1.2);
       Size measure(String text, TextStyle style, [double availableWidth = double.infinity]) {
         final painter = TextPainter(
           text: TextSpan(text: text, style: DefaultTextStyle.of(context).style.merge(style)),
@@ -2931,6 +2932,8 @@ class _StatisticsVisualCard extends StatelessWidget {
               ),
               child: Icon(card.icon, size: 31, color: accent),
             );
+    final unitColor = dark ? const Color(0xFFA8BACD) : const Color(0xFF52677B);
+    final unitStyle = currencyStyle.copyWith(color: unitColor);
     final textAlign = alignRight ? TextAlign.right : TextAlign.left;
     final valueAlignment = alignRight ? Alignment.centerRight : Alignment.centerLeft;
     final label = Text(card.label, textAlign: textAlign,
@@ -2947,6 +2950,7 @@ class _StatisticsVisualCard extends StatelessWidget {
             child: _OverviewMetricValue(
               card.value,
               currency: stackCurrency ? null : card.currency,
+              currencyStyle: unitStyle,
               alignment: valueAlignment,
               style: amountStyle.copyWith(color: accent),
             ),
@@ -2955,12 +2959,13 @@ class _StatisticsVisualCard extends StatelessWidget {
         if (stackCurrency) ...[
           const SizedBox(height: 2),
           Text(card.currency!, textAlign: textAlign,
-            style: currencyStyle.copyWith(color: appMutedColor(context))),
+            style: unitStyle),
         ],
         if (card.note != null) ...[
           const SizedBox(height: 3),
           Text(card.note!, textAlign: textAlign,
-            style: noteStyle.copyWith(color: appMutedColor(context))),
+            style: card.note!.endsWith('/km') ? unitStyle :
+                noteStyle.copyWith(color: appMutedColor(context))),
         ],
       ],
     );
