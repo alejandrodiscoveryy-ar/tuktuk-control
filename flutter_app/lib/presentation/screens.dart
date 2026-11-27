@@ -2713,7 +2713,7 @@ class StatsScreen extends StatelessWidget {
                 ),
                 MetricCard(
                   tintedValue: true,
-                  label: tr('Promedio por día trabajado'),
+                  label: tr('Promedio por día'),
                   value: numFmt(metrics.averageDailyEarnings),
                   currency: activeCurrency,
                   color: const Color(0xFF72A7FF),
@@ -2822,8 +2822,9 @@ class StatisticsMetricGrid extends StatelessWidget {
         return size;
       }
       bool stackCurrency(MetricCard card) => card.currency != null &&
-          measure(card.value, amountStyle).width + 5 +
-          measure(card.currency!, currencyStyle).width > valueWidth;
+          (card.currency == 'km' ||
+              measure(card.value, amountStyle).width + 5 +
+              measure(card.currency!, currencyStyle).width > valueWidth);
       final valueHeight = (scale.scale(26) * 1.25).ceilToDouble();
       double dataHeight(MetricCard card) => valueHeight +
           (stackCurrency(card) ? 2 + measure(card.currency!, currencyStyle, valueWidth).height.ceilToDouble() : 0) +
