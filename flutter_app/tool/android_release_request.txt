@@ -1,2 +1,2 @@
 26
-# Rebuild signed AAB 1.1.1 (26) with verified synchronization and Android graphics compatibility, 2026-11-27
+# AAB-only consolidated release 1.1.1
