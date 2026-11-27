@@ -130,7 +130,7 @@ void main() {
   testWidgets('Home visual cards preserve wallet breakdown and align only within each row',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    for (final width in [320.0, 390.0, 720.0]) {
+    for (final width in [320.0, 390.0, 520.0, 720.0]) {
       for (final scale in [1.0, 1.5, 2.0]) {
         for (final offline in [false, true]) {
           await tester.binding.setSurfaceSize(Size(width, 900));
@@ -166,12 +166,12 @@ void main() {
                                 child: Text(detail.$2, maxLines: 1,
                                   style: const TextStyle(fontSize: 10, height: 1.2)))),
                             ]),
-                            if (detail.$1 == 'Recargado') const SizedBox(height: 3),
+                            if (detail.$1 == 'Recargado') const SizedBox(height: 1),
                           ],
                         ],
                       ),
                     ),
-                    const MetricCard(label: 'Distancia del mes', value: '0 km',
+                    const MetricCard(label: 'Distancia del mes', value: '958', currency: 'km',
                       icon: Icons.route_outlined),
                     const MetricCard(label: 'Ingresos históricos', value: '402.500',
                       currency: 'CUP', icon: Icons.payments_outlined),
@@ -197,9 +197,27 @@ void main() {
           expect(find.text('CUP/km'), findsOneWidget);
           // At standard mobile size, the wallet's two detail rows need
           // extra room; other rows must not inherit that height.
-          if (width == 390 && scale == 1) {
+          if ((width == 390 || width == 520) && scale == 1) {
             expect(tester.getSize(wallet).height,
               greaterThan(tester.getSize(expenses).height));
+            if (!offline) {
+              final icon = tester.getRect(find.descendant(of: wallet,
+                matching: find.byIcon(Icons.account_balance_wallet_outlined)));
+              final label = tester.getRect(find.text('Saldo disponible'));
+              final currency = tester.getRect(find.descendant(of: wallet,
+                matching: find.text('CUP')));
+              final value = tester.getRect(find.text('1.250'));
+              // The visible header ends at its lowest child. The icon has
+              // 3.5 logical pixels of inset inside its 38px tile.
+              final headerBottom = [icon.bottom + 3.5, currency.bottom, value.bottom]
+                .reduce((a, b) => a > b ? a : b);
+              expect(label.top - headerBottom, inInclusiveRange(0, 8));
+              final distanceLabel = tester.getRect(find.text('Distancia del mes'));
+              final detailsBottom = tester.getRect(find.text('Referido')).bottom;
+              final detailsHeight = detailsBottom - label.bottom;
+              expect(tester.getRect(distance).bottom - distanceLabel.bottom,
+                lessThanOrEqualTo(10 + detailsHeight + 3));
+            }
           }
           if (scale < 2) {
             expect(tester.getSize(wallet), tester.getSize(distance));
