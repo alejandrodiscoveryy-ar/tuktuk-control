@@ -516,9 +516,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(tabs.index, 0);
 
-      final saveIcon = find.byIcon(Icons.save_outlined);
+      final saveAction = find.byKey(const ValueKey('register-save'));
       await tester.scrollUntilVisible(
-        saveIcon,
+        saveAction,
         250,
         scrollable: find
             .descendant(
@@ -528,13 +528,8 @@ void main() {
             .first,
         maxScrolls: 20,
       );
-      expect(saveIcon, findsOneWidget);
-      final saveButton = tester.widget<FilledButton>(
-        find.ancestor(
-          of: saveIcon,
-          matching: find.byType(FilledButton),
-        ),
-      );
+      expect(saveAction, findsOneWidget);
+      final saveButton = tester.widget<FilledButton>(saveAction);
       expect(saveButton.onPressed, isNotNull);
     },
   );
@@ -605,6 +600,42 @@ void main() {
     expect(find.textContaining('km'), findsOneWidget);
     expect(find.text('Prueba'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('register input colors meet accessible contrast in dark and light themes',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 740));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    double contrast(Color a, Color b) {
+      final x = a.computeLuminance();
+      final y = b.computeLuminance();
+      return x >= y ? (x + .05) / (y + .05) : (y + .05) / (x + .05);
+    }
+    for (final theme in [ThemeData.dark(useMaterial3: true), ThemeData.light(useMaterial3: true)]) {
+      await tester.pumpWidget(MaterialApp(
+        theme: theme,
+        home: Scaffold(body: RegisterScreen(store: store)),
+      ));
+      await tester.pumpAndSettle();
+      for (final category in ['earnings', 'expense']) {
+        await tester.tap(find.byKey(ValueKey('record-type-$category')));
+        await tester.pumpAndSettle();
+        for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
+          final decoration = field.decoration!;
+          final background = decoration.fillColor!;
+          expect(contrast(field.style!.color!, background), greaterThanOrEqualTo(4.5));
+          expect(contrast(decoration.labelStyle!.color!, background), greaterThanOrEqualTo(4.5));
+          expect(contrast((decoration.enabledBorder! as OutlineInputBorder).borderSide.color,
+            background), greaterThanOrEqualTo(3));
+        }
+        final save = tester.widget<FilledButton>(
+          find.byKey(const ValueKey('register-save')));
+        final style = save.style!;
+        expect(contrast(style.foregroundColor!.resolve({})!,
+          style.backgroundColor!.resolve({})!), greaterThanOrEqualTo(4.5));
+        expect(tester.takeException(), isNull);
+      }
+    }
   });
 
 }
