@@ -98,6 +98,8 @@ class _JobsService extends MarketplaceService {
   String? lastAdvanceAction;
   List<MarketplaceAvailableJob> availableJobs = [offer];
   bool failOnboarding = false;
+  bool failWorkAccess = false;
+  Completer<List<MarketplaceJob>>? pendingHistory;
   int onboardingCalls = 0;
   bool failAvailable = false;
   bool failActive = false;
@@ -145,8 +147,9 @@ class _JobsService extends MarketplaceService {
   }
 
   @override
-  Future<MarketplaceWorkAccess> access(String vehicleId) async =>
-      MarketplaceWorkAccess.fromMap({
+  Future<MarketplaceWorkAccess> access(String vehicleId) async {
+    if (failWorkAccess) throw const SocketException('offline access');
+    return MarketplaceWorkAccess.fromMap({
         'onboarding_complete': true,
         'driver_active': true,
         'suite_active': true,
@@ -155,10 +158,14 @@ class _JobsService extends MarketplaceService {
         'trial_active': true,
         'next_billing_mode': 'trial_free',
       });
+  }
 
   @override
   Future<List<MarketplaceJob>> jobs(String scope) async {
-    if (scope == 'history') historyCalls++;
+    if (scope == 'history') {
+      historyCalls++;
+      if (pendingHistory != null) return pendingHistory!.future;
+    }
     if (scope == 'active' && failActive) {
       throw const SocketException('offline');
     }
@@ -509,6 +516,33 @@ void main() {
     await pumpJobs(tester);
     expect(find.text('Entrar con Google'), findsOneWidget);
     expect(service.onboardingCalls, 0);
+  });
+
+  testWidgets('slow history does not delay accepting current offers', (tester) async {
+    final history = Completer<List<MarketplaceJob>>();
+    service.pendingHistory = history;
+    await open(tester);
+    expect(service.historyCalls, 1);
+    expect(service.availableCalls, 1);
+    expect(find.text('Aceptar e ir a buscar'), findsOneWidget);
+    history.complete([]);
+    await pumpJobs(tester);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('failed work access is not mistaken for missing registration', (tester) async {
+    service.failWorkAccess = true;
+    await open(tester);
+    expect(find.text('SIN CONFIRMAR'), findsOneWidget);
+    expect(service.availableCalls, 0);
+    expect(find.text('Aceptar e ir a buscar'), findsNothing);
+    service.failWorkAccess = false;
+    await tester.tap(find.byKey(const ValueKey('work-map-availability-toggle')));
+    await pumpJobs(tester);
+    expect(find.text('TRABAJANDO'), findsOneWidget);
+    expect(service.availableCalls, 1);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('Trabajos con sesión conserva Reintentar ante un fallo de conexión', (tester) async {
