@@ -167,7 +167,12 @@ jobs:
           chmod 600 android/upload-keystore.jks android/key.properties
 
       - name: Verify merged Android manifest before full compilation
+        env:
+          RELEASE_VERSION_NAME: ${{ steps.metadata.outputs.version_name }}
+          RELEASE_VERSION_CODE: ${{ steps.metadata.outputs.version_code }}
         run: |
+          set -euo pipefail
+          printf 'sdk.dir=%s\nflutter.sdk=%s\nflutter.versionName=%s\nflutter.versionCode=%s\n' "$ANDROID_HOME" "$FLUTTER_ROOT" "$RELEASE_VERSION_NAME" "$RELEASE_VERSION_CODE" > android/local.properties
           cd android
           ./gradlew :app:verifyLegacyGraphicsManifest --no-daemon
 
