@@ -41,6 +41,45 @@ class FinancialHistorySnapshot {
     }
   }
 
+  /// A last confirmed snapshot is an offline display cache only. It never
+  /// acknowledges local edits or proves that the current connection is fresh.
+  factory FinancialHistorySnapshot.fromCache(
+    Map<dynamic, dynamic> cache, {
+    required String userId,
+    required String vehicleId,
+  }) {
+    if (cache['schema'] != 1 || cache['userId'] != userId ||
+        cache['vehicleId'] != vehicleId) {
+      throw StateError('Invalid cached financial history scope');
+    }
+    final daily = (cache['daily'] as List).map((raw) =>
+        Map<String, dynamic>.from(raw as Map)).toList();
+    final maintenance = (cache['maintenance'] as List).map((raw) =>
+        Map<String, dynamic>.from(raw as Map)).toList();
+    RemoteChange change(SyncEntityType type, Map<String, dynamic> row) =>
+        RemoteChange(entityType: type, entityId: row['id'].toString(),
+          userId: row['userId'].toString(), vehicleId: row['vehicleId'].toString(),
+          updatedAt: DateTime.parse(row['updatedAt'].toString()),
+          deletedAt: DateTime.tryParse(row['deletedAt'].toString()),
+          deviceId: row['deviceId'].toString(), payload: row);
+    return FinancialHistorySnapshot(
+      userId: userId, vehicleId: vehicleId,
+      verifiedMarketplaceIds: {for (final row in daily) row['id'].toString()},
+      changes: [
+        for (final row in daily) change(SyncEntityType.dailyRecord, row),
+        for (final row in maintenance) change(SyncEntityType.maintenance, row),
+      ],
+    );
+  }
+
+  Map<String, dynamic> toCache() => {
+    'schema': 1,
+    'userId': userId,
+    'vehicleId': vehicleId,
+    'daily': _records.values.map((r) => r.toMap()).toList(),
+    'maintenance': _maintenance.values.map((r) => r.toMap()).toList(),
+  };
+
   final String userId;
   final String vehicleId;
   final _records = <String, DailyRecord>{};

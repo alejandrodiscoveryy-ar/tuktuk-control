@@ -204,6 +204,20 @@ Future<void> main() async {
     expect(pending.totalEarnings, 76850);
     expect(pending.totalExpenses, 26000);
     expect(snapshot.confirmed.totalExpenses, 28000);
+
+    // Closing or reloading the WebApp must not replace verified values
+    // with an incomplete local history.
+    final cache = snapshot.toCache();
+    final reopened = FinancialHistorySnapshot.fromCache(cache,
+      userId: 'driver', vehicleId: 'car');
+    expect(reopened.confirmed.totalEarnings, 76350);
+    expect(reopened.confirmed.totalExpenses, 28000);
+    expect(reopened.confirmed.cycleSummaries.last.expenses, 13000);
+    expect(reopened.matchesLocal([income, garage, ordinary, verified], [maintenance]), isTrue);
+    expect(() => FinancialHistorySnapshot.fromCache(cache,
+      userId: 'other', vehicleId: 'car'), throwsStateError);
+    expect(() => FinancialHistorySnapshot.fromCache(cache,
+      userId: 'driver', vehicleId: 'other'), throwsStateError);
   });
 
 }

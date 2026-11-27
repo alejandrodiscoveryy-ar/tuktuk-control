@@ -270,14 +270,33 @@ class RecordStore extends ChangeNotifier {
   int _financialRefreshGeneration = 0;
   bool _financialHistoryFresh = false;
 
+  String _financialCacheKey(String owner, String vehicle) =>
+      'verifiedFinancialHistory:$owner:$vehicle';
+
   FinancialHistorySnapshot? get _activeFinancialSnapshot {
+    final owner = user?.id;
+    final vehicle = activeVehicleIdOrNull;
+    if (owner == null || vehicle == null) return null;
     final snapshot = _financialSnapshot;
-    return snapshot != null && snapshot.userId == user?.id &&
-        snapshot.vehicleId == activeVehicleIdOrNull ? snapshot : null;
+    if (snapshot != null && snapshot.userId == owner &&
+        snapshot.vehicleId == vehicle) {
+      return snapshot;
+    }
+    final raw = _meta.get(_financialCacheKey(owner, vehicle));
+    if (raw is! Map) return null;
+    try {
+      final cached = FinancialHistorySnapshot.fromCache(raw,
+        userId: owner, vehicleId: vehicle);
+      _financialSnapshot = cached;
+      _financialHistoryFresh = false;
+      return cached;
+    } catch (_) {
+      return null;
+    }
   }
 
   bool get financialHistoryFresh =>
-      _financialHistoryFresh && _activeFinancialSnapshot != null;
+      _activeFinancialSnapshot != null && _financialHistoryFresh;
   bool get financialHistoryMismatch {
     final snapshot = _activeFinancialSnapshot;
     return financialHistoryFresh && snapshot != null &&
@@ -304,7 +323,9 @@ class RecordStore extends ChangeNotifier {
   String? get financialHistoryNotice {
     if (user == null) return null;
     if (_activeFinancialSnapshot == null) {
-      return 'Datos locales · Historial pendiente de verificar';
+      return _financialRefreshScope != null
+          ? 'Consultando historial del servidor · Datos locales provisionales'
+          : 'Datos locales · Historial pendiente de verificar';
     }
     if (!financialHistoryFresh) {
       return 'Última consulta al servidor · Sin verificación actual';
@@ -380,6 +401,14 @@ class RecordStore extends ChangeNotifier {
         if (!current()) return;
         _financialSnapshot = snapshot;
         _financialHistoryFresh = true;
+        // Publish the complete, active history before any optional repair.
+        notifyListeners();
+        try {
+          await _meta.put(_financialCacheKey(owner, vehicle), snapshot.toCache());
+        } catch (_) {
+          // Persistence failure cannot hide the verified online result.
+        }
+        if (!current()) return;
         // The confirmed figures stay available even if an unresolved local
         // conflict prevents a safe cache repair.
         if (financialHistoryMismatch) {
@@ -394,8 +423,17 @@ class RecordStore extends ChangeNotifier {
             await _applyRemoteChanges(changes, repairHistory: true,
               vehicleRedirects: redirects, verifiedReadOnly: true);
             if (!current()) return;
+            // Deleted history cannot prevent active records from displaying
+            // or being recovered. Read it only after the active import.
+            final deletions = await _supabaseGateway.readFinancialDeletions(
+              userId: owner, vehicleId: vehicle,
+            ).timeout(const Duration(seconds: 10));
+            if (!current()) return;
+            await _applyRemoteChanges(deletions, repairHistory: true,
+              vehicleRedirects: redirects, verifiedReadOnly: true);
+            if (!current()) return;
             final suppression = _marketplaceSuppressedIncomeIds(owner);
-            for (final change in changes) {
+            for (final change in [...changes, ...deletions]) {
               if (change.entityType != SyncEntityType.dailyRecord ||
                   !change.entityId.startsWith('marketplace-job-')) {
                 continue;
@@ -415,7 +453,10 @@ class RecordStore extends ChangeNotifier {
           }
         }
       } catch (_) {
-        if (current()) _financialHistoryFresh = false;
+        if (current()) {
+          _financialHistoryFresh = false;
+          // Do not clear the most recent confirmed snapshot on a failed read.
+        }
       }
     }
     final future = read();
@@ -2367,6 +2408,8 @@ class RecordStore extends ChangeNotifier {
           ? 'Historial por verificar. Tus registros se conservan.'
           : 'No se completó la sincronización. Tus registros se conservan.';
       _scheduleSyncRetry();
+      // A failed local push/pull must not prevent independent statistics.
+      await refreshFinancialHistory();
       if (propagateFailure) rethrow;
     } finally {
       syncing = false;
