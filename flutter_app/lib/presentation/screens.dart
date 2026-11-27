@@ -744,6 +744,72 @@ class _AppShellState extends State<AppShell> {
   String? _lastAuthenticatedUserId;
   MarketplaceRegistrationReceipt? _registrationReceipt;
 
+  Future<void> _showSyncStatus(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: AnimatedBuilder(
+          animation: store,
+          builder: (context, _) {
+            final state = store.syncIndicator;
+            final lastSync = store.lastSyncAt;
+            final historyNotice = store.financialHistoryNotice;
+            final busy = store.syncing || store.conductorAccessChecking;
+            final status = switch (state) {
+              ConductorSyncIndicator.synchronized => 'Datos sincronizados',
+              ConductorSyncIndicator.pending => 'Verificación o cambios pendientes',
+              ConductorSyncIndicator.syncing => 'Sincronizando',
+              ConductorSyncIndicator.checking => 'Verificando conexión',
+              ConductorSyncIndicator.offline => 'Sin conexión confirmada',
+              ConductorSyncIndicator.signedOut => 'Sin sesión de sincronización',
+            };
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Estado de sincronización',
+                      style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 12),
+                  Text(status, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  if (historyNotice != null) ...[
+                    const SizedBox(height: 8),
+                    Text(historyNotice),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(lastSync == null
+                      ? 'Última sincronización: sin confirmar'
+                      : 'Última sincronización: ${DateFormat('d MMM, HH:mm', activeLanguage).format(lastSync.toLocal())}'),
+                  const SizedBox(height: 6),
+                  Text('Cambios locales pendientes: ${store.pendingSyncCount}'),
+                  if (store.pendingConflictCount > 0) ...[
+                    const SizedBox(height: 8),
+                    Text('${store.pendingConflictCount} registro(s) con versiones distintas. '
+                        'Se conservan hasta resolver el conflicto.',
+                        style: const TextStyle(color: kDanger)),
+                  ],
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: busy || store.user == null ? null : store.syncNow,
+                      icon: const Icon(Icons.sync_rounded),
+                      label: Text(store.conductorLocalOnly
+                          ? 'Comprobar conexión' : 'Sincronizar ahora'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void _registrationFinished(MarketplaceRegistrationReceipt receipt) {
     if (!mounted || store.user?.id != receipt.userId) return;
     _setMarketplaceJobsVisible(false);
@@ -862,11 +928,11 @@ class _AppShellState extends State<AppShell> {
           _ => Icons.cloud_sync_outlined,
         };
         final syncTooltip = switch (syncState) {
-          ConductorSyncIndicator.synchronized => 'Datos sincronizados · Sincronizar',
+          ConductorSyncIndicator.synchronized => 'Datos sincronizados · Ver estado',
           ConductorSyncIndicator.pending => store.financialHistoryMismatch
-              ? 'Historial local por conciliar · Sincronizar'
-              : 'Cambios pendientes · Sincronizar',
-          ConductorSyncIndicator.offline => 'Sin conexión · Reintentar',
+              ? 'Historial local por conciliar · Ver estado'
+              : 'Verificación o cambios pendientes · Ver estado',
+          ConductorSyncIndicator.offline => 'Sin conexión · Ver estado',
           ConductorSyncIndicator.checking => 'Verificando conexión',
           ConductorSyncIndicator.syncing => 'Sincronizando',
           ConductorSyncIndicator.signedOut => 'Sin sesión de sincronización',
@@ -930,8 +996,7 @@ class _AppShellState extends State<AppShell> {
                 tooltip: syncTooltip,
                 color: syncColor,
                 disabledColor: syncColor,
-                onPressed:
-                    store.user == null || store.syncing ? null : store.syncNow,
+                onPressed: () => _showSyncStatus(context),
                 icon: syncState == ConductorSyncIndicator.syncing ||
                         syncState == ConductorSyncIndicator.checking
                     ? SizedBox(
@@ -1780,8 +1845,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: EdgeInsets.fromLTRB(16, 16, 16,
           100 + MediaQuery.paddingOf(context).bottom),
       children: [
-        if (widget.store.financialHistoryNotice != null)
-          _FinancialHistoryNotice(message: widget.store.financialHistoryNotice!),
+        // Routine sync details live in the cloud status sheet. Keep actual
+        // financial discrepancies visible in the dashboard.
+        if (widget.store.financialHistoryMismatch)
+          const _FinancialHistoryNotice(message: 'Historial local por conciliar'),
         if (widget.registrationReceipt != null) ...[
           MarketplaceRegistrationStatusCard(
             receipt: widget.registrationReceipt!,
