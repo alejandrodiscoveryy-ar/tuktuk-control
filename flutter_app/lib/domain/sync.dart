@@ -261,6 +261,33 @@ Map<String, dynamic> syncCasWirePayload(
       : Map<String, dynamic>.from(payload);
 }
 
+/// Recovery may replace an acknowledged cache entry, never an unsent edit.
+abstract final class HistoryRecoveryPolicy {
+  static bool canRepair({
+    required bool fullRefresh,
+    required SyncStatus localStatus,
+    required bool queued,
+    required String localUserId,
+    required String localVehicleId,
+    required RemoteChange remote,
+  }) => fullRefresh &&
+      localStatus == SyncStatus.synced &&
+      !queued &&
+      localUserId == remote.userId &&
+      localVehicleId == remote.vehicleId;
+
+  static String key(SyncEntityType type, String id) => '${type.name}:$id';
+
+  /// A previously acknowledged live row absent from the full server scan
+  /// is an unresolved discrepancy, not permission to delete local data.
+  static bool missingAcknowledgedRow({
+    required bool deleted,
+    required SyncStatus status,
+    required bool queued,
+    required bool seenInCloud,
+  }) => !deleted && status == SyncStatus.synced && !queued && !seenInCloud;
+}
+
 abstract final class SyncReceiptPolicy {
   /// Un acuse antiguo no debe cambiar el estado de una edición nueva.
   static bool canMarkSynced({
