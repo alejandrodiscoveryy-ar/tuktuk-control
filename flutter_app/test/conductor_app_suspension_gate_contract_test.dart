@@ -82,7 +82,9 @@ void main() {
     expect(access, contains('return false;'));
     expect(store, contains('if (_conductorAppAccessRequestUserId == target.id) return previous;'));
     expect(store, contains('_supabase.auth.currentUser?.id == userId'));
-    expect(store, contains('const delays = [5, 15, 30, 45]'));
+    expect(store, contains('const delays = [5, 15, 30, 60, 120]'));
+    expect(store, contains('Random().nextInt(6)'));
+    expect(store, contains('_conductorAccessRetryTimer?.isActive != true'));
     expect(store, contains('_conductorAppAccessRequest = null;'));
     expect(store, contains('conductorAppAccessState == ConductorAppAccessState.allowed &&'));
     expect(store, contains('_resetConductorAccessRetry();'));
