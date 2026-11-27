@@ -40,7 +40,10 @@ void main() {
     expect(renderer, contains('widget.toDestination!'));
     expect(renderer, contains('marketplaceMapAttribution(_center)'));
     expect(manifest, contains('android:glEsVersion="0x00020000"'));
-    expect(manifest, contains('android:required="true" tools:node="replace"'));
+    expect(manifest, contains('android:required="true"'));
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    expect(gradle, contains('toTransform(SingleArtifact.MERGED_MANIFEST)'));
+    expect(gradle, contains('verifyLegacyGraphicsManifest'));
     expect(RegExp(r'android:glEsVersion=').allMatches(manifest), hasLength(1));
   });
 

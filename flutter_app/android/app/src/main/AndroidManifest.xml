@@ -1,9 +1,7 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <!-- Mapbox's GLES 3 renderer is conditional; the raster map runs on GLES 2.
-         Remove the library's stronger requirement from the merged manifest. -->
-    <uses-feature android:glEsVersion="0x00020000"
-        android:required="true" tools:node="replace" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The conditional native renderer requires GLES 3; the release manifest
+         transform normalizes the final merged requirement for the GLES 2 fallback. -->
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

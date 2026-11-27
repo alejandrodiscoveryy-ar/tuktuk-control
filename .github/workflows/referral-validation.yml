@@ -44,6 +44,17 @@ jobs:
             https://raw.githubusercontent.com/alejandrodiscoveryy-ar/vrixora-admin-canvas/28c4cfefc2ae38cfe84575c7aacc113c401d073f/supabase/functions/marketplace-customer-gateway/index.ts \
             -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
       - run: flutter test --no-pub
+      - name: Verify merged Android graphics manifest (no APK or AAB)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
+          printf 'sdk.dir=%s\nflutter.sdk=%s\nflutter.versionName=%s\nflutter.versionCode=%s\n' "$ANDROID_HOME" "$FLUTTER_ROOT" "${VERSION%%+*}" "${VERSION##*+}" > android/local.properties
+          # Use the existing disposable fixture, never production Firebase or signing secrets.
+          test ! -e android/app/google-services.json
+          cp test/fixtures/google-services.debug.json android/app/google-services.json
+          trap 'rm -f android/app/google-services.json' EXIT
+          (cd android && ./gradlew :app:verifyLegacyGraphicsManifest --no-daemon)
       - name: Download official TukTuk master icon for review
         if: github.event_name == 'pull_request'
         run: |
