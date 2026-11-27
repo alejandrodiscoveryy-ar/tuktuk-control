@@ -2117,7 +2117,9 @@ class RecordStore extends ChangeNotifier {
     if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
     if (!conductorAgencyAccessAllowed ||
         (activeVehicle == null && !_fullRecoveryRequested &&
-         _historyVerifiedUserId == user?.id)) return;
+         _historyVerifiedUserId == user?.id)) {
+      return;
+    }
     await _withSync(() async {
       if (!conductorAgencyAccessAllowed ||
           conductorAppAccessState != ConductorAppAccessState.allowed) {
@@ -2378,7 +2380,9 @@ class RecordStore extends ChangeNotifier {
       while (syncing) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         if (_disposed || !conductorAgencyAccessAllowed ||
-            user?.id != authenticatedUser.id) return;
+            user?.id != authenticatedUser.id) {
+          return;
+        }
       }
       await _withSync(() => _synchronizeWithSupabase(fullRefresh: true),
         propagateFailure: true);
