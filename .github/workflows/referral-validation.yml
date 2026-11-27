@@ -26,6 +26,8 @@ jobs:
         working-directory: flutter_app
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -45,10 +47,85 @@ jobs:
             -o ../../vrixora-marketplace/supabase/functions/marketplace-customer-gateway/index.ts
       - run: flutter test --no-pub
       - name: Verify merged Android graphics manifest (no APK or AAB)
-        if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'fix/android-merged-graphics-manifest'))
+        if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
-          printf 'sdk.dir=%s\nflutter.sdk=%s\nflutter.versionName=1.1.1\nflutter.versionCode=26\n' "$ANDROID_HOME" "$FLUTTER_ROOT" > android/local.properties
+          if ! git diff --name-only HEAD^1 HEAD | grep -E '^flutter_app/android/(app/(build\.gradle\.kts|src/main/AndroidManifest\.xml)|settings\.gradle\.kts|build\.gradle\.kts)          cd android
+          ./gradlew :app:verifyLegacyGraphicsManifest --no-daemon
+      - name: Download official TukTuk master icon for review
+        if: github.event_name == 'pull_request'
+        run: |
+          curl --fail --silent --show-error --location --retry 2 --max-time 45 \
+            'https://vvxvnywzgtqhlaqpxyqh.supabase.co/storage/v1/object/public/project-branding/dfb41cea-a812-46f2-b511-7a60bd3d78af/favicon-53e50af7-7082-40a2-b5b2-62c5bc57eb28.png' \
+            -o "$RUNNER_TEMP/impulsa-official-icon.png"
+      - name: Render ten Impulsa cards for visual review
+        if: github.event_name == 'pull_request'
+        env:
+          IMPULSA_OFFICIAL_ICON: ${{ runner.temp }}/impulsa-official-icon.png
+          IMPULSA_PREVIEW_DIR: ${{ runner.temp }}/impulsa-previews
+          IMPULSA_FONT_DIR: ${{ env.FLUTTER_ROOT }}/bin/cache/artifacts/material_fonts
+        run: flutter test --no-pub test/presentation/marketplace_impulsa_visual_preview_test.dart
+      - name: Upload visual review PNG and PDF
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: impulsa-visual-review
+          path: |
+            ${{ runner.temp }}/impulsa-previews/*.png
+            ${{ runner.temp }}/impulsa-previews/*.pdf
+          if-no-files-found: error
+          retention-days: 7
+      # Prohibido compilar APK automaticamente por cambios en un PR.
+      # Solo se habilita en workflow_dispatch con el permiso booleano explicito.
+      - name: Prepare fake Firebase configuration for compilation only
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_apk_debug == true }}
+        run: cp test/fixtures/google-services.debug.json android/app/google-services.json
+      - name: Compile debug only (no production signing or publication)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_apk_debug == true }}
+        run: flutter build apk --debug --no-pub
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: referral_validation_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: flutter_app/supabase/tests
+      - run: npm test
+        working-directory: flutter_app/supabase/tests
+      - run: node --test flutter_app/supabase/functions/referral-redirect/index.test.mjs
+      - run: python -m pip install 'psycopg[binary]==3.2.10'
+      - name: Existing destructive test against this job's disposable service only
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/referral_validation_disposable
+        run: python flutter_app/supabase/tests/claim_push_notification_batch_integration.py
+      - name: PR106 identity document SQL integration on isolated PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/referral_validation_disposable
+        run: python flutter_app/supabase/tests/marketplace_identity_document_type_integration.py
+; then
+            echo "No Android manifest or Gradle configuration changes."
+            exit 0
+          fi
+          VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
+          printf 'sdk.dir=%s\nflutter.sdk=%s\nflutter.versionName=%s\nflutter.versionCode=%s\n' "$ANDROID_HOME" "$FLUTTER_ROOT" "${VERSION%%+*}" "${VERSION##*+}" > android/local.properties
           cd android
           ./gradlew :app:verifyLegacyGraphicsManifest --no-daemon
       - name: Download official TukTuk master icon for review
