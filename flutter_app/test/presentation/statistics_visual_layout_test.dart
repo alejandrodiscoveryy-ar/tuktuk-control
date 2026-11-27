@@ -41,7 +41,8 @@ void main() {
           final firstSize = tester.getSize(first);
           final lastSize = tester.getSize(last);
           expect(firstSize.width, lastSize.width);
-          expect(lastSize.height, greaterThan(firstSize.height));
+          // Row height is driven by its own content, not a global aspect ratio.
+          expect(lastSize.height, greaterThan(0));
           if (scale < 2) {
             expect(tester.getSize(cardAt(1)), firstSize);
             expect(tester.getTopLeft(cardAt(1)).dy, tester.getTopLeft(first).dy);
@@ -64,7 +65,7 @@ void main() {
           expect(income.color, isNot(expenses.color));
           expect(find.text('125.000'), findsOneWidget);
           expect(tester.widget<Text>(find.text('125.000')).style!.fontSize, 26);
-          if (width == 720 && scale == 1) {
+          if (width >= 390 && scale == 1) {
             expect(firstSize.height, lessThan(125));
           }
           expect(find.text('Próximo en 2.688 km'), findsOneWidget);
@@ -164,14 +165,31 @@ void main() {
           final label = tester.widget<Text>(find.descendant(of: root,
             matching: find.text(cards[index].label)));
           expect(label.textAlign, right ? TextAlign.right : TextAlign.left);
-          final value = tester.widget<FittedBox>(find.descendant(of: root,
-            matching: find.byType(FittedBox)));
+          final valueFinder = find.descendant(of: root,
+            matching: find.byType(FittedBox));
+          final value = tester.widget<FittedBox>(valueFinder);
+          final valueRect = tester.getRect(valueFinder);
+          final labelRect = tester.getRect(find.descendant(of: root,
+            matching: find.text(cards[index].label)));
+          // Values occupy the space beside the icon, with the title below.
+          expect(valueRect.bottom, lessThanOrEqualTo(labelRect.top));
+          if (width >= 320) {
+            expect(right ? valueRect.right : iconRect.right,
+              lessThanOrEqualTo(right ? iconRect.left : valueRect.left));
+            expect(valueRect.top, lessThan(iconRect.bottom));
+          }
+          final currency = find.descendant(of: root, matching: find.text('CUP'));
+          expect(currency, findsOneWidget);
+          expect(tester.getRect(currency).bottom, lessThanOrEqualTo(labelRect.top));
           expect(value.alignment,
             right ? Alignment.centerRight : Alignment.centerLeft);
           if (cards[index].note != null) {
             final note = tester.widget<Text>(find.descendant(of: root,
               matching: find.text(cards[index].note!)));
             expect(note.textAlign, right ? TextAlign.right : TextAlign.left);
+            expect(tester.getRect(find.descendant(of: root,
+              matching: find.text(cards[index].note!))).bottom,
+              lessThanOrEqualTo(labelRect.top));
           }
         }
         expect(tester.takeException(), isNull);

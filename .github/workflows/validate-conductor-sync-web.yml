@@ -23,6 +23,8 @@ on:
       - 'flutter_app/test/domain/marketplace_models_test.dart'
       - 'flutter_app/lib/presentation/marketplace_jobs.dart'
       - 'flutter_app/lib/presentation/screens.dart'
+      - 'flutter_app/test/presentation/statistics_visual_layout_test.dart'
+      - 'flutter_app/test/presentation/financial_overview_compact_test.dart'
       - 'flutter_app/lib/presentation/marketplace_shell.dart'
       - 'flutter_app/test/presentation/marketplace_more_layout_test.dart'
       - 'flutter_app/lib/presentation/widgets.dart'
@@ -76,6 +78,7 @@ jobs:
           flutter test test/domain/marketplace_mixed_odometer_test.dart
           flutter test test/domain/sync_test.dart
           flutter test test/domain/metrics_test.dart
+          flutter test test/presentation/statistics_visual_layout_test.dart test/presentation/financial_overview_compact_test.dart
           flutter test test/presentation/marketplace_records_read_only_test.dart
           flutter test test/presentation/marketplace_more_layout_test.dart
           flutter test test/presentation/marketplace_jobs_refresh_test.dart
