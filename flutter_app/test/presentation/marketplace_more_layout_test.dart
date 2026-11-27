@@ -19,7 +19,14 @@ void main() {
       expect(tile.minTileHeight, 82);
       expect(tile.horizontalTitleGap, 18);
       expect(tile.onTap, isNotNull);
+      expect(tile.titleTextStyle?.fontSize, 16);
+      expect(tile.titleTextStyle?.fontWeight, FontWeight.w700);
     }
+    final cards = tester.widgetList<GlassCard>(find.byType(GlassCard)).toList();
+    expect(cards.map((card) => card.accent).toList(), const [
+      Color(0xFF2DD4A3), Color(0xFF55A7FF), Color(0xFFFB923C),
+      Color(0xFF9A7BFF), Color(0xFFFFB547),
+    ]);
     for (final icon in [
       Icons.work_outline_rounded,
       Icons.account_circle_outlined,
