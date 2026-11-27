@@ -2868,7 +2868,7 @@ class RecordStore extends ChangeNotifier {
             fullRefresh: repairHistory, localStatus: local.syncStatus,
             queued: queued != null, localUserId: local.userId,
             localVehicleId: local.vehicleId, remote: change);
-          if (repair && local != null &&
+          if (repair &&
               SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
                 entityType: change.entityType, previousPayload: null,
                 localPayload: local.toMap(), remotePayload: remote.toMap())) {
@@ -2922,7 +2922,7 @@ class RecordStore extends ChangeNotifier {
             fullRefresh: repairHistory, localStatus: local.syncStatus,
             queued: queued != null, localUserId: local.userId,
             localVehicleId: local.vehicleId, remote: change);
-          if (repair && local != null &&
+          if (repair &&
               SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
                 entityType: change.entityType, previousPayload: null,
                 localPayload: local.toMap(), remotePayload: remote.toMap())) {
