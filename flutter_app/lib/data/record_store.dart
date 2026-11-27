@@ -2465,6 +2465,7 @@ class RecordStore extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     });
     _conductorAppAccessRequest = request;
+    if (initialized && !_disposed) notifyListeners();
     return request;
   }
 
@@ -2524,7 +2525,8 @@ class RecordStore extends ChangeNotifier {
 
   Future<void> refreshConductorAppAccess() async {
     final account = _supabase.auth.currentUser;
-    if (account == null || conductorAccessChecking || _disposed) return;
+    if (account == null || conductorAccessChecking || _disposed || !initialized ||
+        _startupAccessFuture != null) return;
     final previous = conductorAppAccessState;
     final allowed = await _checkConductorAppAccess(account);
     if (allowed &&
