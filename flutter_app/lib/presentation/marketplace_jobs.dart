@@ -3438,7 +3438,11 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         Supabase.instance.client,
       ).runtimeVisualConfiguration();
       if (mounted && config != null && config.token.startsWith('pk.')) {
-        mbx.MapboxOptions.setAccessToken(config.token);
+        if (await marketplaceNativeMapAvailable()) {
+          if (!mounted) return;
+          mbx.MapboxOptions.setAccessToken(config.token);
+        }
+        if (!mounted) return;
         setState(() {
           _workMapVisual = config;
           _workMapFallback = false;
