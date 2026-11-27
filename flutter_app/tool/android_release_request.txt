@@ -1,2 +1,2 @@
-26
-# Release 1.1.1 (26) after preflight of AGP merged graphics manifest; main production gate unchanged.
+27
+# Release 1.1.2 (27): compact financial cards and safe mobile connectivity recovery; signed AAB after verified web production.
