@@ -322,7 +322,9 @@ class RecordStore extends ChangeNotifier {
     final owner = user?.id;
     final vehicle = activeVehicleIdOrNull;
     if (_disposed || owner == null || vehicle == null ||
-        !conductorAgencyAccessAllowed) return;
+        !conductorAgencyAccessAllowed) {
+      return;
+    }
     final scope = '$owner/$vehicle';
     final running = _financialRefresh;
     if (running != null && _financialRefreshScope == scope) {
@@ -348,7 +350,9 @@ class RecordStore extends ChangeNotifier {
         final automatic = <String, String>{};
         for (final change in changes) {
           if (change.entityType != SyncEntityType.dailyRecord ||
-              !change.entityId.startsWith('marketplace-job-')) continue;
+              !change.entityId.startsWith('marketplace-job-')) {
+            continue;
+          }
           final id = change.entityId.substring('marketplace-job-'.length);
           if (validId.hasMatch(id)) automatic[id.toLowerCase()] = change.entityId;
         }
