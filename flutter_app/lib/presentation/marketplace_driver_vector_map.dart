@@ -448,3 +448,140 @@ class _MarketplaceDriverVectorMapState
     );
   }
 }
+
+
+/// Lightweight raster renderer for Android GPUs that cannot create Mapbox's
+/// OpenGL ES 3 view. Uses the same protected route results and public style.
+class MarketplaceDriverRasterMap extends StatefulWidget {
+  const MarketplaceDriverRasterMap({
+    required this.pickup, required this.destination, required this.driver,
+    required this.toPickup, required this.toDestination,
+    required this.goingToPickup, required this.configuration,
+    required this.stylePath, required this.idleCenter, required this.idleZoom,
+    this.fullBleed = false, super.key,
+  });
+
+  final MarketplaceMapPoint? pickup, destination, driver;
+  final MarketplaceRoutePath? toPickup, toDestination;
+  final bool goingToPickup, fullBleed;
+  final MarketplaceMapVisualConfiguration configuration;
+  final String stylePath;
+  final LatLng idleCenter;
+  final double idleZoom;
+
+  @override
+  State<MarketplaceDriverRasterMap> createState() =>
+      _MarketplaceDriverRasterMapState();
+}
+
+class _MarketplaceDriverRasterMapState extends State<MarketplaceDriverRasterMap> {
+  final _controller = MapController();
+  bool _ready = false;
+
+  List<MarketplaceMapPoint> get _activeRoute =>
+      (widget.goingToPickup ? widget.toPickup : widget.toDestination)?.points ??
+      const [];
+
+  LatLng get _center => widget.pickup != null && widget.destination != null
+      ? marketplaceDriverMapCenter(pickup: widget.pickup!,
+          destination: widget.destination!, driver: widget.driver,
+          activeRoute: _activeRoute)
+      : widget.idleCenter;
+
+  double get _zoom => widget.pickup != null && widget.destination != null
+      ? marketplaceDriverMapZoom(pickup: widget.pickup!,
+          destination: widget.destination!, driver: widget.driver,
+          activeRoute: _activeRoute)
+      : widget.idleZoom;
+
+  @override
+  void didUpdateWidget(covariant MarketplaceDriverRasterMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pickup != widget.pickup ||
+        oldWidget.destination != widget.destination ||
+        oldWidget.driver != widget.driver ||
+        oldWidget.toPickup != widget.toPickup ||
+        oldWidget.toDestination != widget.toDestination ||
+        oldWidget.goingToPickup != widget.goingToPickup ||
+        oldWidget.idleCenter != widget.idleCenter ||
+        oldWidget.idleZoom != widget.idleZoom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _ready) {
+          _controller.move(_center, _zoom);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Polyline _line(MarketplaceRoutePath route, Color color, bool active) =>
+      Polyline(
+        points: route.points.map((point) => point.latLng).toList(growable: false),
+        color: color.withValues(alpha: active ? 1 : .45),
+        strokeWidth: active ? 6 : 3,
+        borderColor: const Color(0xFF07131A),
+        borderStrokeWidth: 2,
+      );
+
+  Marker _pin(MarketplaceMapPoint point, bool pickup) => Marker(
+    point: point.latLng,
+    width: 42, height: 50, alignment: Alignment.topCenter,
+    child: Image.asset(pickup ? 'assets/map_markers/pickup_green.png'
+        : 'assets/map_markers/destination_red.png', fit: BoxFit.contain),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    // Static Tiles API uses 256-pixel tiles at the equivalent FlutterMap zoom.
+    final style = marketplaceMapboxStylePath(widget.stylePath) ?? 'mapbox/dark-v11';
+    final configuration = MarketplaceMapVisualConfiguration(
+      token: widget.configuration.token, stylePath: style, tileSize: 256,
+    );
+    return FlutterMap(
+      mapController: _controller,
+      options: MapOptions(
+        initialCenter: _center, initialZoom: _zoom,
+        minZoom: 3, maxZoom: 20,
+        backgroundColor: const Color(0xFF13232C),
+        onMapReady: () => _ready = true,
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        ),
+      ),
+      children: [
+        TileLayer(
+          key: ValueKey(style),
+          urlTemplate: configuration.tileUrlTemplate,
+          userAgentPackageName: 'com.alejandrocruz.tuktukcontrol',
+          maxNativeZoom: 20,
+        ),
+        PolylineLayer(polylines: [
+          if (widget.toPickup != null && widget.toPickup!.points.length > 1)
+            _line(widget.toPickup!, const Color(0xFF28C7FF), widget.goingToPickup),
+          if (widget.toDestination != null && widget.toDestination!.points.length > 1)
+            _line(widget.toDestination!, const Color(0xFFFFC400), !widget.goingToPickup),
+        ]),
+        MarkerLayer(markers: [
+          if (widget.pickup != null) _pin(widget.pickup!, true),
+          if (widget.destination != null) _pin(widget.destination!, false),
+          if (widget.driver != null)
+            Marker(point: widget.driver!.latLng, width: 24, height: 24,
+              child: Container(decoration: BoxDecoration(
+                shape: BoxShape.circle, color: const Color(0xFF278BFF),
+                border: Border.all(color: Colors.white, width: 3),
+              ))),
+        ]),
+        Padding(
+          padding: EdgeInsets.only(bottom: widget.fullBleed
+              ? max(MediaQuery.paddingOf(context).bottom, 104.0) + 8 : 0),
+          child: marketplaceMapAttribution(_center),
+        ),
+      ],
+    );
+  }
+}
