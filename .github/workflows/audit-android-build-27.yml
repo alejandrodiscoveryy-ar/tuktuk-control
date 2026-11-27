@@ -1,0 +1,42 @@
+name: Security audit of signed Android build 27
+on:
+  push:
+    branches: [audit/android-build-27-download]
+    paths: ['.github/workflows/audit-android-build-27.yml']
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Retrieve original artifact and verify digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/android-audit"
+          cd "$RUNNER_TEMP/android-audit"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15225919449/zip" > build27.zip
+          echo '4c92b20b1f752fc4ec60a30972ca877368d3e5d6b6b4a2e0fbdf0eaeb368d48b  build27.zip' | sha256sum -c -
+          unzip -t build27.zip
+          unzip -q build27.zip
+          echo 'a4e1feb9d7f48fe23ebd2dd30d46f3f1a1f2bd8cd20a9e1759a1d12f0641ae8e  app-release.aab' | sha256sum -c -
+          jarsigner -verify app-release.aab
+          mkdir unpacked
+          unzip -q app-release.aab -d unpacked
+      - name: Install antivirus and refresh signatures
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y clamav clamav-freshclam
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam --stdout
+          clamscan --version
+      - name: Scan original archive, AAB and unpacked contents
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/android-audit"
+          clamscan --recursive --infected --max-filesize=250M --max-scansize=500M --max-recursion=30 --max-files=20000 build27.zip app-release.aab unpacked
