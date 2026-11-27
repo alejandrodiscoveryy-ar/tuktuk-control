@@ -17,10 +17,11 @@ class _OverviewMetricLabel extends StatelessWidget {
 }
 
 class _OverviewMetricValue extends StatelessWidget {
-  const _OverviewMetricValue(this.value, {required this.style, this.currency, this.alignment = Alignment.centerLeft});
+  const _OverviewMetricValue(this.value, {required this.style, this.currency, this.currencyStyle, this.alignment = Alignment.centerLeft});
   final String value;
   final TextStyle style;
   final String? currency;
+  final TextStyle? currencyStyle;
   final Alignment alignment;
 
   @override
@@ -37,7 +38,7 @@ class _OverviewMetricValue extends StatelessWidget {
           Text(value, style: style, maxLines: 1, softWrap: false),
           if (currency != null) ...[
             const SizedBox(width: 5),
-            Text(currency!, style: TextStyle(
+            Text(currency!, style: currencyStyle ?? TextStyle(
               color: appMutedColor(context),
               fontSize: (style.fontSize ?? 18) * .58,
               fontWeight: FontWeight.w600,
