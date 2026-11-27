@@ -222,6 +222,10 @@ void main() {
             ),
           )),
         ));
+        // MaterialApp animates theme changes; inspect the settled theme.
+        await tester.pumpAndSettle();
+        expect(Theme.of(tester.element(find.text('CUP/km'))).brightness,
+          brightness);
         final expected = brightness == Brightness.dark
             ? const Color(0xFFA8BACD) : const Color(0xFF52677B);
         for (final unit in ['CUP', 'km', 'CUP/km']) {
