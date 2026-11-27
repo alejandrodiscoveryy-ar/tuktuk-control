@@ -1,7 +1,11 @@
 part of '../main.dart';
 
 class Metrics {
-  Metrics(this.records, [this.maintenanceRecords = const []]);
+  Metrics(List<DailyRecord> records,
+      [List<MaintenanceRecord> maintenanceRecords = const []])
+      : records = records.where((record) => !record.isDeleted).toList(),
+        maintenanceRecords = maintenanceRecords
+            .where((record) => !record.isDeleted).toList();
 
   final List<DailyRecord> records;
   final List<MaintenanceRecord> maintenanceRecords;
@@ -150,6 +154,11 @@ class Metrics {
     for (final record in records) {
       final cycle = CycleRange.forDate(record.date);
       map.putIfAbsent(cycle.start, () => []).add(record);
+    }
+    // A month with only maintenance is still a month with expenses.
+    for (final record in maintenanceRecords) {
+      final cycle = CycleRange.forDate(record.dateTime);
+      map.putIfAbsent(cycle.start, () => []);
     }
     final summaries = map.entries.map((entry) {
       final cycle = CycleRange(
