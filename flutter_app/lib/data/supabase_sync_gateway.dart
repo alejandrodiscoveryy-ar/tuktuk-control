@@ -241,36 +241,92 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         .order('entity_id')
         .limit(safeLimit);
     final rows = List<Map<String, dynamic>>.from(response as List);
-    final changes = rows.map((row) {
-      final payload = Map<String, dynamic>.from(row['payload'] as Map);
-      payload['userId'] = row['user_id'];
-      payload['vehicleId'] = row['vehicle_id'];
-      payload['deviceId'] = row['device_id'];
-      payload['updatedAt'] = row['updated_at'];
-      payload['deletedAt'] = row['deleted_at'];
-      return RemoteChange(
-        entityType: SyncEntityType.values.firstWhere(
-          (value) => value.name == row['entity_type'],
-        ),
-        entityId: '${row['entity_id']}',
-        userId: '${row['user_id']}',
-        vehicleId: '${row['vehicle_id']}',
-        updatedAt: DateTime.parse('${row['updated_at']}'),
-        deletedAt: row['deleted_at'] == null
-            ? null
-            : DateTime.tryParse('${row['deleted_at']}'),
-        deviceId: '${row['device_id'] ?? ''}',
-        payload: payload,
-        serverVersion: (row['server_version'] as num?)?.toInt(),
-        serverSeq: (row['server_seq'] as num?)?.toInt(),
-      );
-    }).toList();
+    final changes = rows.map(_decodeRow).toList();
     return RemotePullResult(
       changes: changes,
       nextCursor: changes.isEmpty
           ? cursor
           : RemoteSyncCursor.fromChange(changes.last).encode(),
       hasMore: changes.length == safeLimit,
+    );
+  }
+
+  /// Read the confirmed history independently of the sync cursor and local
+  /// cache. Financial rows are paged by their stable identity, not the legacy
+  /// server sequence (many historical rows legitimately have sequence zero).
+  Future<List<RemoteChange>> readFinancialHistory({
+    required String userId,
+    required String vehicleId,
+  }) async {
+    const pageSize = 250;
+    final result = <RemoteChange>[];
+    for (final type in [SyncEntityType.dailyRecord, SyncEntityType.maintenance]) {
+      String? after;
+      var complete = false;
+      for (var page = 0; page < 100; page++) {
+        if (_client.auth.currentUser?.id != userId) {
+          throw const TemporarySyncException('financial history account changed');
+        }
+        var query = _client.from(tableName).select(
+          'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
+          'updated_at,deleted_at,server_version,server_seq',
+        ).eq('user_id', userId).eq('vehicle_id', vehicleId)
+          .eq('entity_type', type.name).isFilter('deleted_at', null);
+        if (after != null) query = query.gt('entity_id', after);
+        final rows = List<Map<String, dynamic>>.from(
+          await query.order('entity_id').limit(pageSize) as List,
+        );
+        for (final row in rows) {
+          final change = _decodeRow(row);
+          if (change.userId != userId || change.vehicleId != vehicleId ||
+              change.entityType != type || change.deletedAt != null ||
+              change.payload['id']?.toString() != change.entityId) {
+            throw const TemporarySyncException('financial history ownership mismatch');
+          }
+          result.add(change);
+        }
+        if (rows.length < pageSize) {
+          complete = true;
+          break;
+        }
+        final next = rows.last['entity_id'].toString();
+        if (next == after) {
+          throw const TemporarySyncException('financial history cursor did not advance');
+        }
+        after = next;
+      }
+      if (!complete) {
+        throw const TemporarySyncException('financial history incomplete');
+      }
+    }
+    if (_client.auth.currentUser?.id != userId) {
+      throw const TemporarySyncException('financial history account changed');
+    }
+    return result;
+  }
+
+  static RemoteChange _decodeRow(Map<String, dynamic> row) {
+    final payload = Map<String, dynamic>.from(row['payload'] as Map);
+    payload['userId'] = row['user_id'];
+    payload['vehicleId'] = row['vehicle_id'];
+    payload['deviceId'] = row['device_id'];
+    payload['updatedAt'] = row['updated_at'];
+    payload['deletedAt'] = row['deleted_at'];
+    return RemoteChange(
+      entityType: SyncEntityType.values.firstWhere(
+        (value) => value.name == row['entity_type'],
+      ),
+      entityId: '${row['entity_id']}',
+      userId: '${row['user_id']}',
+      vehicleId: '${row['vehicle_id']}',
+      updatedAt: DateTime.parse('${row['updated_at']}'),
+      deletedAt: row['deleted_at'] == null
+          ? null
+          : DateTime.tryParse('${row['deleted_at']}'),
+      deviceId: '${row['device_id'] ?? ''}',
+      payload: payload,
+      serverVersion: (row['server_version'] as num?)?.toInt(),
+      serverSeq: (row['server_seq'] as num?)?.toInt(),
     );
   }
 

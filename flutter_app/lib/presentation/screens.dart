@@ -862,7 +862,9 @@ class _AppShellState extends State<AppShell> {
         };
         final syncTooltip = switch (syncState) {
           ConductorSyncIndicator.synchronized => 'Datos sincronizados · Sincronizar',
-          ConductorSyncIndicator.pending => 'Cambios pendientes · Sincronizar',
+          ConductorSyncIndicator.pending => store.financialHistoryMismatch
+              ? 'Historial local por conciliar · Sincronizar'
+              : 'Cambios pendientes · Sincronizar',
           ConductorSyncIndicator.offline => 'Sin conexión · Reintentar',
           ConductorSyncIndicator.checking => 'Verificando conexión',
           ConductorSyncIndicator.syncing => 'Sincronizando',
@@ -954,6 +956,9 @@ class _AppShellState extends State<AppShell> {
                       onDestinationSelected: (value) {
                         _setMarketplaceJobsVisible(value == 2);
                         setState(() => index = value);
+                        if (value == 0 || value == 3) {
+                          unawaited(store.refreshFinancialHistory());
+                        }
                       },
                       profilePhotoUrl: _googleProfilePhotoUrl(store.user),
                     ),
@@ -1049,6 +1054,9 @@ class _AppShellState extends State<AppShell> {
                   onDestinationSelected: (value) {
                     _setMarketplaceJobsVisible(value == 2);
                     setState(() => index = value);
+                    if (value == 0 || value == 3) {
+                      unawaited(store.refreshFinancialHistory());
+                    }
                   },
                   profilePhotoUrl: _googleProfilePhotoUrl(store.user),
                 ),
@@ -1759,12 +1767,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final metrics = Metrics(
-      widget.store.records,
-      widget.store.maintenanceRecords,
-    );
+    final metrics = widget.store.financialMetrics;
     final maintenance = MaintenanceSnapshot.from(
-      records: widget.store.maintenanceRecords,
+      records: metrics.maintenanceRecords,
       intervalKm: widget.store.maintenanceIntervalKm,
       currentOdometer: metrics.latestOdometer,
     );
@@ -1774,6 +1779,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: EdgeInsets.fromLTRB(16, 16, 16,
           100 + MediaQuery.paddingOf(context).bottom),
       children: [
+        if (widget.store.financialHistoryNotice != null)
+          _FinancialHistoryNotice(message: widget.store.financialHistoryNotice!),
         if (widget.registrationReceipt != null) ...[
           MarketplaceRegistrationStatusCard(
             receipt: widget.registrationReceipt!,
@@ -2625,6 +2632,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
+class _FinancialHistoryNotice extends StatelessWidget {
+  const _FinancialHistoryNotice({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      children: [
+        const Icon(Icons.info_outline, size: 15),
+        const SizedBox(width: 6),
+        Expanded(child: Text(message, style: TextStyle(
+          fontSize: 11, color: appMutedColor(context),
+        ))),
+      ],
+    ),
+  );
+}
+
 class StatsScreen extends StatelessWidget {
   const StatsScreen({required this.store, super.key});
 
@@ -2632,8 +2658,8 @@ class StatsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final metrics = Metrics(store.records, store.maintenanceRecords);
-    final earningRecords = store.records
+    final metrics = store.financialMetrics;
+    final earningRecords = metrics.records
         .where((record) => record.earnings > 0)
         .toList()
       ..sort((a, b) => b.earnings.compareTo(a.earnings));
@@ -2643,7 +2669,7 @@ class StatsScreen extends StatelessWidget {
         ? null
         : cycles.reduce((a, b) => a.earnings >= b.earnings ? a : b);
     final maintenance = MaintenanceSnapshot.from(
-      records: store.maintenanceRecords,
+      records: metrics.maintenanceRecords,
       intervalKm: store.maintenanceIntervalKm,
       currentOdometer: metrics.latestOdometer,
     );
@@ -2651,6 +2677,8 @@ class StatsScreen extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 16, 16,
           100 + MediaQuery.paddingOf(context).bottom),
       children: [
+        if (store.financialHistoryNotice != null)
+          _FinancialHistoryNotice(message: store.financialHistoryNotice!),
         LayoutBuilder(
           builder: (context, constraints) {
             return StatisticsMetricGrid(
