@@ -667,6 +667,39 @@ void main() {
     }
   });
 
+  test('verified read imports missing records and tombstones without overwriting pending or newer data', () {
+    for (final type in [SyncEntityType.dailyRecord, SyncEntityType.maintenance]) {
+      for (final deleted in [false, true]) {
+        final remote = RemoteChange(
+          entityType: type, entityId: 'record', userId: 'owner',
+          vehicleId: 'canonical', updatedAt: DateTime.utc(2026, 11, 26),
+          deletedAt: deleted ? DateTime.utc(2026, 11, 26) : null,
+          deviceId: 'server', payload: const {}, serverVersion: 3,
+        );
+        bool allowed({SyncStatus? status = SyncStatus.synced,
+          String owner = 'owner', String vehicle = 'canonical',
+          bool queued = false, int? version = 2}) =>
+          HistoryRecoveryPolicy.canImportVerifiedRow(
+            remote: remote, queued: queued, localStatus: status,
+            localUserId: owner, localVehicleId: vehicle,
+            localServerVersion: version, vehicleRedirects: {'old': 'canonical'},
+          );
+        expect(allowed(), isTrue);
+        expect(allowed(status: null, version: null), isTrue);
+        expect(allowed(vehicle: 'old'), isTrue);
+        expect(allowed(vehicle: 'unrelated'), isFalse);
+        expect(allowed(owner: 'other'), isFalse);
+        expect(allowed(queued: true), isFalse);
+        expect(allowed(status: SyncStatus.pending), isFalse);
+        expect(allowed(status: SyncStatus.localOnly), isFalse);
+        expect(allowed(status: SyncStatus.conflict), isFalse);
+        expect(allowed(version: 4), isFalse);
+        expect(allowed(version: 3), isTrue);
+        expect(allowed(status: null, version: 4), isFalse);
+      }
+    }
+  });
+
   test('history recovery repairs acknowledged cache but never pending or foreign data', () {
     final remote = RemoteChange(
       entityType: SyncEntityType.dailyRecord, entityId: 'record-1',
