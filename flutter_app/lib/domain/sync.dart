@@ -270,11 +270,37 @@ abstract final class HistoryRecoveryPolicy {
     required String localUserId,
     required String localVehicleId,
     required RemoteChange remote,
+    Map<String, String> vehicleRedirects = const {},
   }) => fullRefresh &&
       localStatus == SyncStatus.synced &&
       !queued &&
       localUserId == remote.userId &&
-      localVehicleId == remote.vehicleId;
+      (localVehicleId == remote.vehicleId ||
+          vehicleRedirects[localVehicleId] == remote.vehicleId);
+
+  /// A retired vehicle row is an explicit redirect only when its server
+  /// vehicle_id points to a distinct, live vehicle of this same account.
+  /// Never infer a redirect from names, registrations, or a single live vehicle.
+  static Map<String, String> confirmedVehicleRedirects(
+    Iterable<RemoteChange> changes, String userId,
+  ) {
+    final vehicles = <String, RemoteChange>{};
+    for (final change in changes) {
+      if (change.userId == userId &&
+          change.entityType == SyncEntityType.vehicle) {
+        vehicles[change.entityId] = change;
+      }
+    }
+    return {
+      for (final old in vehicles.values)
+        if (old.deletedAt != null &&
+            old.entityId != old.vehicleId &&
+            vehicles[old.vehicleId]?.deletedAt == null &&
+            vehicles.containsKey(old.vehicleId) &&
+            vehicles[old.vehicleId]!.vehicleId == old.vehicleId)
+          old.entityId: old.vehicleId,
+    };
+  }
 
   static String key(SyncEntityType type, String id) => '${type.name}:$id';
 
