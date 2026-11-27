@@ -1758,7 +1758,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           detailRow('Recargado', breakdownValue(wallet?.realAvailableBalance)),
-          const SizedBox(height: 3),
+          const SizedBox(height: 1),
           detailRow('Referido', breakdownValue(wallet?.promotionalAvailableBalance)),
         ],
       ),
@@ -2834,8 +2834,12 @@ class StatisticsMetricGrid extends StatelessWidget {
           max(height, measure(card.label, labelStyle, textWidth).height.ceilToDouble()));
         final dataRowHeight = row.fold<double>(0, (height, card) =>
           max(height, dataHeight(card)));
-        final headerHeight = inlineHeader ? max(iconSize, dataRowHeight)
-            : iconSize + 4 + dataRowHeight;
+        double headerFor(MetricCard card) {
+          // Wallet details already add height. Do not reserve the adjacent
+          // distance card's stacked unit space above the wallet title.
+          final h = card.details != null ? dataHeight(card) : dataRowHeight;
+          return inlineHeader ? max(iconSize, h) : iconSize + 4 + h;
+        }
         return IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2848,7 +2852,7 @@ class StatisticsMetricGrid extends StatelessWidget {
                   child: _StatisticsVisualCard(
                     card: row[index],
                     labelHeight: labelHeight,
-                    headerHeight: headerHeight,
+                    headerHeight: headerFor(row[index]),
                     inlineHeader: inlineHeader,
                     stackCurrency: stackCurrency(row[index]),
                     alignRight: count > 1 && index == count - 1,
@@ -3011,7 +3015,7 @@ class _StatisticsVisualCard extends StatelessWidget {
               child: label,
             ),
             if (card.details != null) ...[
-              const SizedBox(height: 5),
+              const SizedBox(height: 2),
               card.details!,
             ],
           ],
