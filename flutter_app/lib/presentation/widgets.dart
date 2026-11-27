@@ -414,17 +414,12 @@ class DataHealthCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: statisticsStyle
-                  ? Text(tr('Salud de datos'), style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
-                      fontSize: 15, fontWeight: FontWeight.w800))
-                  : Label(tr('Salud de datos'))),
+              Expanded(child: Label(tr('Salud de datos'))),
               Icon(Icons.fact_check_outlined, color: statusColor),
             ],
           ),
           const SizedBox(height: 12),
           InfoLine(
-            statisticsStyle: statisticsStyle,
             label: tr('Registros con ingreso'),
             value: metrics.records
                 .where((record) => record.earnings > 0)
@@ -432,17 +427,14 @@ class DataHealthCard extends StatelessWidget {
                 .toString(),
           ),
           InfoLine(
-            statisticsStyle: statisticsStyle,
             label: tr('Cargas a 80 V'),
             value: metrics.chargeEvents.toString(),
           ),
           InfoLine(
-            statisticsStyle: statisticsStyle,
             label: tr('Ingresos sin odometro'),
             value: missing.toString(),
           ),
           InfoLine(
-            statisticsStyle: statisticsStyle,
             label: tr('Lecturas sospechosas'),
             value: drops.length.toString(),
           ),
@@ -450,9 +442,7 @@ class DataHealthCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               _healthMessage(missing, drops),
-              style: TextStyle(color: statisticsStyle
-                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: .85)
-                  : appMutedColor(context), height: 1.35),
+              style: TextStyle(color: appMutedColor(context)),
             ),
           ],
         ],
@@ -737,13 +727,11 @@ class MonthlyEarningsBars extends StatelessWidget {
             children: [
               _ChartLegendDot(color: appPrimaryColor(context)),
               const SizedBox(width: 5),
-              Text(tr('Ingreso'), style: TextStyle(fontSize: statisticsStyle ? 13 : 11,
-                  fontWeight: statisticsStyle ? FontWeight.w600 : FontWeight.normal)),
+              Text(tr('Ingreso'), style: const TextStyle(fontSize: 11)),
               const SizedBox(width: 18),
               const _ChartLegendDot(color: kDanger),
               const SizedBox(width: 5),
-              Text(tr('Gasto'), style: TextStyle(fontSize: statisticsStyle ? 13 : 11,
-                  fontWeight: statisticsStyle ? FontWeight.w600 : FontWeight.normal)),
+              Text(tr('Gasto'), style: const TextStyle(fontSize: 11)),
             ],
           ),
           const SizedBox(height: 12),
@@ -768,7 +756,7 @@ class MonthlyEarningsBars extends StatelessWidget {
                             ),
                             style: TextStyle(
                               color: statisticsStyle ? appPrimaryColor(context) : appMutedColor(context),
-                              fontSize: statisticsStyle ? 12 : 10,
+                              fontSize: 10,
                               fontWeight: statisticsStyle ? FontWeight.w700 : FontWeight.normal,
                             ),
                             ),
@@ -776,7 +764,6 @@ class MonthlyEarningsBars extends StatelessWidget {
                           const SizedBox(height: 5),
                           Tooltip(
                             key: ValueKey('monthly-income-bar-${cycle.start.toIso8601String()}'),
-                            triggerMode: statisticsStyle ? TooltipTriggerMode.tap : null,
                             message:
                                 '${tr('Ingreso')}: ${money(cycle.earnings)}\n${tr('Gasto')}: ${money(cycle.expenses)}',
                             child: _IncomeExpenseBar(
@@ -797,9 +784,8 @@ class MonthlyEarningsBars extends StatelessWidget {
                               activeLanguage,
                             ).format(cycle.start),
                             style: TextStyle(
-                              color: statisticsStyle ? Theme.of(context).colorScheme.onSurface.withValues(alpha: .85)
-                                  : appMutedColor(context),
-                              fontSize: statisticsStyle ? 12 : 10,
+                              color: appMutedColor(context),
+                              fontSize: 10,
                               fontWeight: statisticsStyle ? FontWeight.w700 : FontWeight.normal,
                             ),
                             ),
@@ -902,7 +888,6 @@ class EarningsTrendCard extends StatelessWidget {
         children: [
           for (final record in values)
             InfoLine(
-              statisticsStyle: statisticsStyle,
               label: DateFormat('d MMM', activeLanguage).format(record.date),
               value: money(record.earnings),
             ),
@@ -913,33 +898,13 @@ class EarningsTrendCard extends StatelessWidget {
 }
 
 class InfoLine extends StatelessWidget {
-  const InfoLine({required this.label, required this.value,
-    this.statisticsStyle = false, super.key});
+  const InfoLine({required this.label, required this.value, super.key});
 
   final String label;
   final String value;
-  final bool statisticsStyle;
 
   @override
   Widget build(BuildContext context) {
-    final foreground = Theme.of(context).colorScheme.onSurface;
-    if (statisticsStyle) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(
-          color: foreground.withValues(alpha: .08),
-        ))),
-        child: Row(children: [
-          Expanded(child: Text(label, style: TextStyle(
-            color: foreground.withValues(alpha: .85), fontSize: 14, height: 1.25,
-          ))),
-          const SizedBox(width: 10),
-          Flexible(child: Text(value, textAlign: TextAlign.right,
-            style: TextStyle(color: foreground, fontSize: 14,
-              fontWeight: FontWeight.w800, height: 1.25))),
-        ]),
-      );
-    }
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
