@@ -271,7 +271,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   void _scheduleWorkMapRetry() {
     if (!mounted || !widget.isVisible ||
         _operationalLifecycleState != AppLifecycleState.resumed ||
-        _workMapRetryTimer?.isActive == true) return;
+        _workMapRetryTimer?.isActive == true) {
+      return;
+    }
     const delays = [5, 15, 30, 60];
     final delay = delays[min(_workMapFailures, delays.length - 1)];
     _workMapFailures++;
@@ -1155,12 +1157,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       final access = await _service.access(vehicleId).timeout(const Duration(seconds: 15));
 
       if (!mounted || vehicleId != _selectedVehicleId ||
-          widget.store.user?.id != ownerId) return;
+          widget.store.user?.id != ownerId) {
+        return;
+      }
 
       setState(() => _workAccess = access);
     } catch (_) {
       if (!mounted || vehicleId != _selectedVehicleId ||
-          widget.store.user?.id != ownerId) return;
+          widget.store.user?.id != ownerId) {
+        return;
+      }
 
       setState(() => _workAccess = null);
     }
