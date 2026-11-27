@@ -12,7 +12,7 @@ void main() {
         icon: Icons.account_balance_wallet_outlined, color: Color(0xFF56D2A1)),
       MetricCard(label: 'Gastos totales', value: '25.000', currency: 'CUP',
         icon: Icons.receipt_long_outlined, color: Color(0xFFF87171)),
-      MetricCard(label: 'Promedio por día trabajado', value: '4.035,92',
+      MetricCard(label: 'Promedio por día', value: '4.035,92',
         currency: 'CUP', icon: Icons.calendar_today_outlined,
         color: Color(0xFF72A7FF)),
       MetricCard(label: 'Mantenimiento', value: 'Normal',
@@ -234,6 +234,12 @@ void main() {
           expect(style.fontWeight, FontWeight.w500);
           expect(style.color, expected);
         }
+        // Distance follows the same stacked unit layout even when km fits inline.
+        final distanceValue = tester.getRect(find.text('958'));
+        final distanceUnit = tester.getRect(find.text('km'));
+        final distanceLabel = tester.getRect(find.text('Distancia'));
+        expect(distanceUnit.top, greaterThanOrEqualTo(distanceValue.bottom));
+        expect(distanceUnit.bottom, lessThanOrEqualTo(distanceLabel.top));
         for (final value in ['736.412', '958', '85,39']) {
           expect(tester.widget<Text>(find.text(value)).style!.fontSize, 26);
         }
