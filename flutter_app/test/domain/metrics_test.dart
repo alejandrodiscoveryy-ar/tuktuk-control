@@ -159,4 +159,51 @@ Future<void> main() async {
     expect(metrics.cycleSummaries.last.expenses, 3000);
   });
 
+  test('verified financial snapshot uses complete server history and retains only pending local edits', () {
+    DailyRecord daily(String id, double income, double expense, {int month = 7, int day = 1, String owner = 'driver', String vehicle = 'car', DateTime? deleted}) => DailyRecord(
+      id: id, date: DateTime(2026, month, day), earnings: income, expense: expense,
+      odometer: 0, userId: owner, vehicleId: vehicle, deletedAt: deleted,
+    );
+    RemoteChange change(SyncEntityType type, String id, Map<String, dynamic> payload, {DateTime? deleted}) => RemoteChange(
+      entityType: type, entityId: id, userId: 'driver', vehicleId: 'car',
+      updatedAt: DateTime.utc(2026, 11, 26), deletedAt: deleted,
+      deviceId: 'server', payload: payload, serverVersion: 1, serverSeq: 0,
+    );
+    final income = daily('income', 73850, 0);
+    final garage = daily('garage', 0, 10000, month: 8, day: 6);
+    final ordinary = daily('expense', 0, 3000, month: 8);
+    final orphan = daily('marketplace-job-123', 2000, 0);
+    final verified = daily('marketplace-job-456', 2500, 0);
+    final removed = daily('removed', 99999, 99999, deleted: DateTime(2026, 7, 2));
+    final maintenance = MaintenanceRecord(
+      id: 'maintenance', dateTime: DateTime(2026, 7, 3), odometer: 0,
+      type: 'General', description: '', cost: 15000, userId: 'driver', vehicleId: 'car',
+    );
+    final snapshot = FinancialHistorySnapshot(
+      userId: 'driver', vehicleId: 'car',
+      verifiedMarketplaceIds: {verified.id},
+      changes: [
+        for (final record in [income, garage, ordinary, orphan, verified, removed])
+          change(SyncEntityType.dailyRecord, record.id, record.toMap(), deleted: record.deletedAt),
+        change(SyncEntityType.maintenance, maintenance.id, maintenance.toMap()),
+      ],
+    );
+    final confirmed = snapshot.confirmed;
+    expect(confirmed.totalEarnings, 76350);
+    expect(confirmed.totalExpenses, 28000);
+    expect(confirmed.cycleSummaries.last.expenses, 13000);
+    expect(snapshot.matchesLocal([income, garage, ordinary, verified], [maintenance]), isTrue);
+    expect(snapshot.matchesLocal([daily('income', 51000, 0), garage, ordinary, verified], [maintenance]), isFalse);
+    expect(snapshot.matchesLocal([income, garage, ordinary, verified], []), isFalse);
+    final pending = snapshot.withPending([
+      daily('garage', 0, 11000, month: 8, day: 6),
+      daily('new', 500, 0),
+      daily('ordinary-other', 99999, 99999, owner: 'other'),
+      daily('expense', 0, 3000, month: 8, deleted: DateTime(2026, 8, 2)),
+    ], []);
+    expect(pending.totalEarnings, 76850);
+    expect(pending.totalExpenses, 26000);
+    expect(snapshot.confirmed.totalExpenses, 28000);
+  });
+
 }
