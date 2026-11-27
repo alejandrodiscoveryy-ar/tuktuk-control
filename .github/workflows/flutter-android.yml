@@ -144,6 +144,31 @@ jobs:
           --obfuscate
           --split-debug-info=build/symbols/android
 
+      - name: Verify graphics compatibility in actual signed bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR="$RUNNER_TEMP/bundletool-1.18.2.jar"
+          curl -fLsS --retry 3 https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar -o "$JAR"
+          echo "378b5434cd1378bef6b2bc527b8c7f0ff2584b273830335bce54d6d0813c8584  $JAR" | sha256sum -c -
+          java -jar "$JAR" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --module=base > "$RUNNER_TEMP/tuktuk-final-manifest.xml"
+          python3 - "$RUNNER_TEMP/tuktuk-final-manifest.xml" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          ns = '{http://schemas.android.com/apk/res/android}'
+          root = ET.parse(sys.argv[1]).getroot()
+          versions = []
+          for feature in root.findall('uses-feature'):
+              version = feature.get(ns + 'glEsVersion')
+              if version:
+                  version = int(version, 0)
+                  required = feature.get(ns + 'required', 'true') != 'false'
+                  versions.append((version, required))
+          print('Final OpenGL requirements:', [(hex(v), r) for v, r in versions])
+          assert any(v == 0x20000 and r for v, r in versions), 'Missing GLES 2 base requirement'
+          assert not any(v > 0x20000 and r for v, r in versions), 'Bundle still excludes GLES 2 devices'
+          PY
+
       - name: Upload signed Google Play bundle
         uses: actions/upload-artifact@v4
         with:

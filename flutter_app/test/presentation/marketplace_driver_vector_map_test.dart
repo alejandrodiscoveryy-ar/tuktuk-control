@@ -1,9 +1,48 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:control_tuk_tuk/main.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel(
+    'com.alejandrocruz.tuktukcontrol/map_capability',
+  );
+  final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+  test('Android graphics capability uses raster when GLES3 is unsupported or unknown',
+      () async {
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    for (final supported in [true, false]) {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'supportsNativeMap');
+        return supported;
+      });
+      expect(await readAndroidNativeMapCapability(), supported);
+    }
+    messenger.setMockMethodCallHandler(channel, (_) async => null);
+    expect(await readAndroidNativeMapCapability(), isFalse);
+    messenger.setMockMethodCallHandler(channel, (_) async {
+      throw PlatformException(code: 'UNAVAILABLE');
+    });
+    expect(await readAndroidNativeMapCapability(), isFalse);
+  });
+
+  test('legacy Android uses raster before native view and preserves routes', () {
+    final map = File('lib/presentation/marketplace_driver_map.dart').readAsStringSync();
+    final renderer = File('lib/presentation/marketplace_driver_vector_map.dart').readAsStringSync();
+    final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    expect(map, contains('snapshot.data == true'));
+    expect(map, contains(': MarketplaceDriverRasterMap('));
+    expect(renderer, contains('widget.toPickup!'));
+    expect(renderer, contains('widget.toDestination!'));
+    expect(renderer, contains('marketplaceMapAttribution(_center)'));
+    expect(manifest, contains('android:glEsVersion="0x00030000" tools:node="remove"'));
+    expect(manifest, contains('android:glEsVersion="0x00020000" android:required="true"'));
+  });
+
   const pickup = MarketplaceMapPoint(
     label: 'Recogida',
     lat: 23.08,
