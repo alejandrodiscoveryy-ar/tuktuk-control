@@ -236,9 +236,10 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
       }
     }
     final response = await query
-        .order('server_seq')
-        .order('entity_type')
-        .order('entity_id')
+        // The cursor predicates use greater-than; every sort key must ascend.
+        .order('server_seq', ascending: true)
+        .order('entity_type', ascending: true)
+        .order('entity_id', ascending: true)
         .limit(safeLimit);
     final rows = List<Map<String, dynamic>>.from(response as List);
     final changes = rows.map(_decodeRow).toList();
@@ -297,7 +298,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
       if (deleted == true) query = query.not('deleted_at', 'is', null);
       if (after != null) query = query.gt('entity_id', after);
       final rows = List<Map<String, dynamic>>.from(
-        await query.order('entity_id').limit(pageSize) as List,
+        await query.order('entity_id', ascending: true).limit(pageSize) as List,
       );
       for (final row in rows) {
         final change = _decodeRow(row);
