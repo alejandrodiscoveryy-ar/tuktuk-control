@@ -380,6 +380,8 @@ class RecordStore extends ChangeNotifier {
         if (!current()) return;
         _financialSnapshot = snapshot;
         _financialHistoryFresh = true;
+        // Publish the complete, active history before any optional repair.
+        notifyListeners();
         // The confirmed figures stay available even if an unresolved local
         // conflict prevents a safe cache repair.
         if (financialHistoryMismatch) {
@@ -394,8 +396,17 @@ class RecordStore extends ChangeNotifier {
             await _applyRemoteChanges(changes, repairHistory: true,
               vehicleRedirects: redirects, verifiedReadOnly: true);
             if (!current()) return;
+            // Deleted history cannot prevent active records from displaying
+            // or being recovered. Read it only after the active import.
+            final deletions = await _supabaseGateway.readFinancialDeletions(
+              userId: owner, vehicleId: vehicle,
+            ).timeout(const Duration(seconds: 10));
+            if (!current()) return;
+            await _applyRemoteChanges(deletions, repairHistory: true,
+              vehicleRedirects: redirects, verifiedReadOnly: true);
+            if (!current()) return;
             final suppression = _marketplaceSuppressedIncomeIds(owner);
-            for (final change in changes) {
+            for (final change in [...changes, ...deletions]) {
               if (change.entityType != SyncEntityType.dailyRecord ||
                   !change.entityId.startsWith('marketplace-job-')) {
                 continue;
@@ -415,7 +426,10 @@ class RecordStore extends ChangeNotifier {
           }
         }
       } catch (_) {
-        if (current()) _financialHistoryFresh = false;
+        if (current()) {
+          _financialHistoryFresh = false;
+          // Do not clear the most recent confirmed snapshot on a failed read.
+        }
       }
     }
     final future = read();
