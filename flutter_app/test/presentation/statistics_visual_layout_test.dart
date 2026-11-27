@@ -98,6 +98,7 @@ void main() {
       for (final cycle in cycles.skip(2)) {
         final finder = bar(cycle);
         expect(finder, findsOneWidget);
+        expect(tester.widget<Tooltip>(finder).triggerMode, TooltipTriggerMode.tap);
         final rect = tester.getRect(finder);
         expect(rect.left, greaterThanOrEqualTo(0));
         expect(rect.right, lessThanOrEqualTo(width));
@@ -124,6 +125,7 @@ void main() {
     final rows = tester.widgetList<InfoLine>(find.byType(InfoLine)).toList();
     expect(rows.map((row) => row.value).toList(),
       records.map((record) => money(record.earnings)).toList());
+    expect(rows.every((row) => row.statisticsStyle), isTrue);
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.takeException(), isNull);
   });
