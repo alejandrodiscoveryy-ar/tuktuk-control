@@ -48,7 +48,9 @@ void main() {
         }
         return http.Response(jsonEncode(calls == 1
           ? rows.take(250).toList() : rows.skip(250).toList()), 200,
-          headers: {'content-type': 'application/json'});
+          request: request,
+          headers: {'content-type': 'application/json',
+            'content-range': calls == 1 ? '0-249/*' : '0-28/*'});
       }),
     );
     try {
