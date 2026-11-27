@@ -171,7 +171,7 @@ void main() {
                         ],
                       ),
                     ),
-                    const MetricCard(label: 'Distancia del mes', value: '0 km',
+                    const MetricCard(label: 'Distancia del mes', value: '958', currency: 'km',
                       icon: Icons.route_outlined),
                     const MetricCard(label: 'Ingresos históricos', value: '402.500',
                       currency: 'CUP', icon: Icons.payments_outlined),
@@ -200,6 +200,15 @@ void main() {
           if (width == 390 && scale == 1) {
             expect(tester.getSize(wallet).height,
               greaterThan(tester.getSize(expenses).height));
+            if (!offline) {
+              final icon = tester.getRect(find.descendant(of: wallet,
+                matching: find.byIcon(Icons.account_balance_wallet_outlined)));
+              final label = tester.getRect(find.text('Saldo disponible'));
+              expect(label.top - icon.bottom, lessThanOrEqualTo(6));
+              final distanceLabel = tester.getRect(find.text('Distancia del mes'));
+              expect(tester.getRect(distance).bottom - distanceLabel.bottom,
+                lessThanOrEqualTo(36));
+            }
           }
           if (scale < 2) {
             expect(tester.getSize(wallet), tester.getSize(distance));
