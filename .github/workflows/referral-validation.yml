@@ -50,8 +50,11 @@ jobs:
           set -euo pipefail
           VERSION="$(sed -n 's/^version: //p' pubspec.yaml)"
           printf 'sdk.dir=%s\nflutter.sdk=%s\nflutter.versionName=%s\nflutter.versionCode=%s\n' "$ANDROID_HOME" "$FLUTTER_ROOT" "${VERSION%%+*}" "${VERSION##*+}" > android/local.properties
-          cd android
-          ./gradlew :app:verifyLegacyGraphicsManifest --no-daemon
+          # Use the existing disposable fixture, never production Firebase or signing secrets.
+          test ! -e android/app/google-services.json
+          cp test/fixtures/google-services.debug.json android/app/google-services.json
+          trap 'rm -f android/app/google-services.json' EXIT
+          (cd android && ./gradlew :app:verifyLegacyGraphicsManifest --no-daemon)
       - name: Download official TukTuk master icon for review
         if: github.event_name == 'pull_request'
         run: |
