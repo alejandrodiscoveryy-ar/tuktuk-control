@@ -296,7 +296,7 @@ class RecordStore extends ChangeNotifier {
   }
 
   bool get financialHistoryFresh =>
-      _financialHistoryFresh && _activeFinancialSnapshot != null;
+      _activeFinancialSnapshot != null && _financialHistoryFresh;
   bool get financialHistoryMismatch {
     final snapshot = _activeFinancialSnapshot;
     return financialHistoryFresh && snapshot != null &&
