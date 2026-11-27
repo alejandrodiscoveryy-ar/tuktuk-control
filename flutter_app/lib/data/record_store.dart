@@ -254,12 +254,15 @@ class RecordStore extends ChangeNotifier {
         syncing: syncing,
         failed: _syncFailed,
         pending: pendingSyncCount,
-        hasLastSync: lastSyncAt != null,
+        hasLastSync: lastSyncAt != null &&
+            _historyVerifiedUserId == user?.id && !_fullRecoveryRequested,
       );
   Timer? _syncDebounceTimer;
   Timer? _retrySyncTimer;
   int _consecutiveSyncFailures = 0;
   bool _syncRequestedWhileRunning = false;
+  bool _fullRecoveryRequested = false;
+  String? _historyVerifiedUserId;
   String? _ensuredProfileFingerprint;
   DateTime? _lastBackgroundRefreshAt;
   DateTime? _lastLicenseRefreshAttemptAt;
@@ -2100,6 +2103,9 @@ class RecordStore extends ChangeNotifier {
   }
 
   Future<void> restoreThenSync() async {
+    _fullRecoveryRequested = true;
+    _historyVerifiedUserId = null;
+    notifyListeners();
     await syncNow();
   }
 
@@ -2109,18 +2115,27 @@ class RecordStore extends ChangeNotifier {
       return;
     }
     if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
-    if (!conductorAgencyAccessAllowed || activeVehicle == null) return;
+    if (!conductorAgencyAccessAllowed ||
+        (activeVehicle == null && !_fullRecoveryRequested)) return;
     await _withSync(() async {
       if (!conductorAgencyAccessAllowed ||
           conductorAppAccessState != ConductorAppAccessState.allowed) {
         return;
       }
       await _refreshLicenseIfNeeded();
-      if (activeVehicle == null) {
+      final recovery = _fullRecoveryRequested ||
+          _historyVerifiedUserId != user?.id;
+      if (activeVehicle == null && !recovery) {
         syncMessage = 'Configura tu primer vehiculo para comenzar';
         return;
       }
-      await _synchronizeWithSupabase();
+      _fullRecoveryRequested = false;
+      try {
+        await _synchronizeWithSupabase(fullRefresh: recovery);
+      } catch (_) {
+        if (recovery) _fullRecoveryRequested = true;
+        rethrow;
+      }
       final blocked = pendingConflictCount;
       syncMessage = blocked > 0
           ? '$blocked conflicto(s) entre dispositivos. '
@@ -2147,7 +2162,9 @@ class RecordStore extends ChangeNotifier {
     );
   }
 
-  Future<void> _withSync(Future<void> Function() action) async {
+  Future<void> _withSync(Future<void> Function() action, {
+    bool propagateFailure = false,
+  }) async {
     if (syncing) {
       _syncRequestedWhileRunning = true;
       return;
@@ -2175,6 +2192,7 @@ class RecordStore extends ChangeNotifier {
       _syncFailed = true;
       syncMessage = 'Sin conexion. Los cambios permanecen guardados';
       _scheduleSyncRetry();
+      if (propagateFailure) rethrow;
     } finally {
       syncing = false;
       notifyListeners();
@@ -2351,7 +2369,15 @@ class RecordStore extends ChangeNotifier {
       final previousActiveVehicleId = activeVehicleIdOrNull;
 
       // Siempre recuperar primero el estado completo de esta cuenta.
-      await _synchronizeWithSupabase(fullRefresh: true);
+      // The first full recovery and ordinary sync must not write Hive concurrently.
+      // Wait for the existing pass before taking the same synchronization lock.
+      while (syncing) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (_disposed || !conductorAgencyAccessAllowed ||
+            user?.id != authenticatedUser.id) return;
+      }
+      await _withSync(() => _synchronizeWithSupabase(fullRefresh: true),
+        propagateFailure: true);
       if (_disposed) return;
 
       if (previousActiveVehicleId != null &&
@@ -2458,6 +2484,8 @@ class RecordStore extends ChangeNotifier {
     _retrySyncTimer = null;
     _consecutiveSyncFailures = 0;
     _syncRequestedWhileRunning = false;
+    _fullRecoveryRequested = false;
+    _historyVerifiedUserId = null;
     _ensuredProfileFingerprint = null;
     _lastBackgroundRefreshAt = null;
     _lastLicenseRefreshAttemptAt = null;
@@ -2575,6 +2603,8 @@ class RecordStore extends ChangeNotifier {
     var cursor = fullRefresh ? null : _meta.get(cursorKey)?.toString();
     var pageCount = 0;
     var hasMore = true;
+    final historySeen = <String>{};
+    if (fullRefresh) _historyVerifiedUserId = null;
     while (hasMore && pageCount < 100) {
       if (!conductorAgencyAccessAllowed || user?.id != currentUser.id) return;
       final remote = await _supabaseGateway.pull(
@@ -2582,13 +2612,49 @@ class RecordStore extends ChangeNotifier {
         cursor: cursor,
       );
       if (!conductorAgencyAccessAllowed || user?.id != currentUser.id) return;
-      await _applyRemoteChanges(remote.changes);
+      await _applyRemoteChanges(remote.changes, repairHistory: fullRefresh);
+      if (fullRefresh) {
+        for (final change in remote.changes) {
+          if (change.userId == currentUser.id &&
+              (change.entityType == SyncEntityType.dailyRecord ||
+               change.entityType == SyncEntityType.maintenance)) {
+            historySeen.add(HistoryRecoveryPolicy.key(change.entityType, change.entityId));
+          }
+        }
+      }
+      if (remote.hasMore &&
+          (remote.changes.isEmpty || remote.nextCursor == null || remote.nextCursor == cursor)) {
+        throw const TemporarySyncException('history cursor did not advance');
+      }
       if (remote.nextCursor != null) {
         cursor = remote.nextCursor;
         await _meta.put(cursorKey, cursor);
       }
       hasMore = remote.hasMore && remote.changes.isNotEmpty;
       pageCount++;
+    }
+    if (hasMore) {
+      throw const TemporarySyncException('history recovery incomplete');
+    }
+
+    // Compare the full cloud scan with acknowledged local records. Missing
+    // cloud rows are preserved and surfaced, never silently deleted.
+    var historyMismatch = false;
+    if (fullRefresh) {
+      bool missing(SyncEntityType type, String id, SyncStatus status, bool deleted) {
+        final key = HistoryRecoveryPolicy.key(type, id);
+        return HistoryRecoveryPolicy.missingAcknowledgedRow(
+          deleted: deleted, status: status,
+          queued: Hive.box(_syncQueueBox).containsKey(key),
+          seenInCloud: historySeen.contains(key),
+        );
+      }
+      historyMismatch = _allDailyRecords.any((record) =>
+          record.userId == currentUser.id && missing(SyncEntityType.dailyRecord,
+            record.id, record.syncStatus, record.isDeleted)) ||
+          _allMaintenanceRecords.any((record) =>
+          record.userId == currentUser.id && missing(SyncEntityType.maintenance,
+            record.id, record.syncStatus, record.isDeleted));
     }
 
     // Tras importar lecturas remotas, recalcular antes del siguiente push.
@@ -2638,6 +2704,12 @@ class RecordStore extends ChangeNotifier {
     }
     if (report.sendablePendingRemaining) {
       _syncRequestedWhileRunning = true;
+    }
+    if (historyMismatch) {
+      throw const TemporarySyncException('history discrepancy preserved locally');
+    }
+    if (fullRefresh && conductorAgencyAccessAllowed && user?.id == currentUser.id) {
+      _historyVerifiedUserId = currentUser.id;
     }
   }
 
@@ -2705,10 +2777,12 @@ class RecordStore extends ChangeNotifier {
   Future<void> _applyRemoteChanges(
     List<RemoteChange> changes, {
     Set<String> forceRemoteOperationIds = const {},
+    bool repairHistory = false,
   }) async {
     final currentUser = user;
     if (currentUser == null) return;
     for (final change in changes) {
+      if (_disposed || user?.id != currentUser.id || !conductorAgencyAccessAllowed) return;
       if (change.userId != currentUser.id) continue;
       final operationId = '${change.entityType.name}:${change.entityId}';
       final forced = forceRemoteOperationIds.contains(operationId);
@@ -2718,6 +2792,9 @@ class RecordStore extends ChangeNotifier {
       // Sólo el acuse de un push exitoso puede retirarla de la cola.
       final queuedRaw = Hive.box(_syncQueueBox).get(operationId);
       final queued = queuedRaw is Map ? SyncOperation.fromMap(queuedRaw) : null;
+      if (queued != null && queued.userId != currentUser.id) {
+        throw const TemporarySyncException('history local ownership collision');
+      }
       if (queued != null && queued.userId == currentUser.id) {
         Map<String, dynamic>? localPayload;
         switch (change.entityType) {
@@ -2777,7 +2854,33 @@ class RecordStore extends ChangeNotifier {
           final remote = DailyRecord.fromMap(change.payload);
           final raw = _box.get(change.entityId);
           final local = raw is Map ? DailyRecord.fromMap(raw) : null;
-          if (_remoteWins(
+          if (remote.id != change.entityId ||
+              (local != null && (local.userId != change.userId ||
+                  local.vehicleId != change.vehicleId))) {
+            throw const TemporarySyncException('history ownership mismatch');
+          }
+          final repair = local != null && HistoryRecoveryPolicy.canRepair(
+            fullRefresh: repairHistory, localStatus: local.syncStatus,
+            queued: queued != null, localUserId: local.userId,
+            localVehicleId: local.vehicleId, remote: change);
+          if (repair && local != null &&
+              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+                entityType: change.entityType, previousPayload: null,
+                localPayload: local.toMap(), remotePayload: remote.toMap())) {
+            // Preserve the local acknowledged copy before reconciling it.
+            await _meta.put('historyRecovery:${change.userId}:$operationId', {
+              'localPayload': local.toMap(),
+              'remotePayload': remote.toMap(),
+              'savedAt': DateTime.now().toUtc().toIso8601String(),
+            });
+          }
+          // A local change may have been saved during the backup write.
+          if (Hive.box(_syncQueueBox).containsKey(operationId) ||
+              !identical(_box.get(change.entityId), raw) && repair) {
+            _syncRequestedWhileRunning = true;
+            continue;
+          }
+          if (repair || _remoteWins(
             local?.updatedAt,
             local?.deviceId,
             local?.deletedAt,
@@ -2804,7 +2907,33 @@ class RecordStore extends ChangeNotifier {
           final remote = MaintenanceRecord.fromMap(change.payload);
           final raw = _maintenanceBox.get(change.entityId);
           final local = raw is Map ? MaintenanceRecord.fromMap(raw) : null;
-          if (_remoteWins(
+          if (remote.id != change.entityId ||
+              (local != null && (local.userId != change.userId ||
+                  local.vehicleId != change.vehicleId))) {
+            throw const TemporarySyncException('history ownership mismatch');
+          }
+          final repair = local != null && HistoryRecoveryPolicy.canRepair(
+            fullRefresh: repairHistory, localStatus: local.syncStatus,
+            queued: queued != null, localUserId: local.userId,
+            localVehicleId: local.vehicleId, remote: change);
+          if (repair && local != null &&
+              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+                entityType: change.entityType, previousPayload: null,
+                localPayload: local.toMap(), remotePayload: remote.toMap())) {
+            // Preserve the local acknowledged copy before reconciling it.
+            await _meta.put('historyRecovery:${change.userId}:$operationId', {
+              'localPayload': local.toMap(),
+              'remotePayload': remote.toMap(),
+              'savedAt': DateTime.now().toUtc().toIso8601String(),
+            });
+          }
+          // A local change may have been saved during the backup write.
+          if (Hive.box(_syncQueueBox).containsKey(operationId) ||
+              !identical(_maintenanceBox.get(change.entityId), raw) && repair) {
+            _syncRequestedWhileRunning = true;
+            continue;
+          }
+          if (repair || _remoteWins(
             local?.updatedAt,
             local?.deviceId,
             local?.deletedAt,
