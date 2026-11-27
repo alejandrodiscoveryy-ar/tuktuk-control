@@ -2612,6 +2612,7 @@ class RecordStore extends ChangeNotifier {
     var pageCount = 0;
     var hasMore = true;
     final historySeen = <String>{};
+    final historyChanges = <String, RemoteChange>{};
     if (fullRefresh) _historyVerifiedUserId = null;
     while (hasMore && pageCount < 100) {
       if (!conductorAgencyAccessAllowed || user?.id != currentUser.id) return;
@@ -2620,9 +2621,13 @@ class RecordStore extends ChangeNotifier {
         cursor: cursor,
       );
       if (!conductorAgencyAccessAllowed || user?.id != currentUser.id) return;
-      await _applyRemoteChanges(remote.changes, repairHistory: fullRefresh);
-      if (fullRefresh) {
+      if (!fullRefresh) {
+        await _applyRemoteChanges(remote.changes);
+      } else {
         for (final change in remote.changes) {
+          if (change.userId == currentUser.id) {
+            historyChanges[HistoryRecoveryPolicy.key(change.entityType, change.entityId)] = change;
+          }
           if (change.userId == currentUser.id &&
               (change.entityType == SyncEntityType.dailyRecord ||
                change.entityType == SyncEntityType.maintenance)) {
@@ -2636,13 +2641,31 @@ class RecordStore extends ChangeNotifier {
       }
       if (remote.nextCursor != null) {
         cursor = remote.nextCursor;
-        await _meta.put(cursorKey, cursor);
+        if (!fullRefresh) await _meta.put(cursorKey, cursor);
       }
       hasMore = remote.hasMore && remote.changes.isNotEmpty;
       pageCount++;
     }
     if (hasMore) {
       throw const TemporarySyncException('history recovery incomplete');
+    }
+
+    if (fullRefresh) {
+      final redirects = HistoryRecoveryPolicy.confirmedVehicleRedirects(
+        historyChanges.values, currentUser.id,
+      );
+      // Resolve the vehicle topology before importing historical rows: a
+      // retired vehicle can appear after its daily records in another page.
+      await _applyRemoteChanges(historyChanges.values.toList(),
+          repairHistory: true, vehicleRedirects: redirects);
+      if (_disposed || user?.id != currentUser.id || !conductorAgencyAccessAllowed) return;
+      final selected = activeVehicleIdOrNull;
+      final canonical = redirects[selected];
+      if (canonical != null && vehicles.any((v) => v.id == canonical)) {
+        await _meta.put('activeVehicleId:${currentUser.id}', canonical);
+      }
+      _load();
+      if (cursor != null) await _meta.put(cursorKey, cursor);
     }
 
     // Compare the full cloud scan with acknowledged local records. Missing
@@ -2787,6 +2810,7 @@ class RecordStore extends ChangeNotifier {
     List<RemoteChange> changes, {
     Set<String> forceRemoteOperationIds = const {},
     bool repairHistory = false,
+    Map<String, String> vehicleRedirects = const {},
   }) async {
     final currentUser = user;
     if (currentUser == null) return;
@@ -2863,19 +2887,21 @@ class RecordStore extends ChangeNotifier {
           final remote = DailyRecord.fromMap(change.payload);
           final raw = _box.get(change.entityId);
           final local = raw is Map ? DailyRecord.fromMap(raw) : null;
-          if (remote.id != change.entityId ||
-              (local != null && (local.userId != change.userId ||
-                  local.vehicleId != change.vehicleId))) {
-            throw const TemporarySyncException('history ownership mismatch');
-          }
           final repair = local != null && HistoryRecoveryPolicy.canRepair(
             fullRefresh: repairHistory, localStatus: local.syncStatus,
             queued: queued != null, localUserId: local.userId,
-            localVehicleId: local.vehicleId, remote: change);
+            localVehicleId: local.vehicleId, remote: change,
+            vehicleRedirects: vehicleRedirects);
+          if (remote.id != change.entityId ||
+              (local != null && (local.userId != change.userId ||
+                  (local.vehicleId != change.vehicleId && !repair)))) {
+            throw const TemporarySyncException('history ownership mismatch');
+          }
           if (repair &&
-              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+              (local.vehicleId != change.vehicleId ||
+               SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
                 entityType: change.entityType, previousPayload: null,
-                localPayload: local.toMap(), remotePayload: remote.toMap())) {
+                localPayload: local.toMap(), remotePayload: remote.toMap()))) {
             // Preserve the local acknowledged copy before reconciling it.
             await _meta.put('historyRecovery:${change.userId}:$operationId', {
               'localPayload': local.toMap(),
@@ -2917,19 +2943,21 @@ class RecordStore extends ChangeNotifier {
           final remote = MaintenanceRecord.fromMap(change.payload);
           final raw = _maintenanceBox.get(change.entityId);
           final local = raw is Map ? MaintenanceRecord.fromMap(raw) : null;
-          if (remote.id != change.entityId ||
-              (local != null && (local.userId != change.userId ||
-                  local.vehicleId != change.vehicleId))) {
-            throw const TemporarySyncException('history ownership mismatch');
-          }
           final repair = local != null && HistoryRecoveryPolicy.canRepair(
             fullRefresh: repairHistory, localStatus: local.syncStatus,
             queued: queued != null, localUserId: local.userId,
-            localVehicleId: local.vehicleId, remote: change);
+            localVehicleId: local.vehicleId, remote: change,
+            vehicleRedirects: vehicleRedirects);
+          if (remote.id != change.entityId ||
+              (local != null && (local.userId != change.userId ||
+                  (local.vehicleId != change.vehicleId && !repair)))) {
+            throw const TemporarySyncException('history ownership mismatch');
+          }
           if (repair &&
-              SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+              (local.vehicleId != change.vehicleId ||
+               SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
                 entityType: change.entityType, previousPayload: null,
-                localPayload: local.toMap(), remotePayload: remote.toMap())) {
+                localPayload: local.toMap(), remotePayload: remote.toMap()))) {
             // Preserve the local acknowledged copy before reconciling it.
             await _meta.put('historyRecovery:${change.userId}:$operationId', {
               'localPayload': local.toMap(),
@@ -2971,7 +2999,28 @@ class RecordStore extends ChangeNotifier {
           final remote = VehicleProfile.fromMap(change.payload);
           final raw = _meta.get('vehicle:${change.entityId}');
           final local = raw is Map ? VehicleProfile.fromMap(raw) : null;
-          if (_remoteWins(
+          final confirmedRetirement = repairHistory &&
+              vehicleRedirects[change.entityId] == change.vehicleId &&
+              local != null && local.userId == currentUser.id &&
+              local.syncStatus == SyncStatus.synced;
+          if (remote.id != change.entityId ||
+              (local != null && local.userId != currentUser.id)) {
+            throw const TemporarySyncException('history vehicle ownership mismatch');
+          }
+          if (confirmedRetirement) {
+            await _meta.put('historyRecovery:${change.userId}:$operationId', {
+              'localPayload': local.toMap(),
+              'remotePayload': remote.toMap(),
+              'savedAt': DateTime.now().toUtc().toIso8601String(),
+            });
+            if (Hive.box(_syncQueueBox).containsKey(operationId) ||
+                jsonEncode(_meta.get('vehicle:${change.entityId}')) != jsonEncode(raw)) {
+              _syncRequestedWhileRunning = true;
+              _fullRecoveryRequested = true;
+              continue;
+            }
+          }
+          if (confirmedRetirement || _remoteWins(
             local?.updatedAt,
             local?.deviceId,
             local?.deletedAt,
@@ -2990,11 +3039,14 @@ class RecordStore extends ChangeNotifier {
                   )
                   .toMap(),
             );
-            await _meta.put(
-              'activeVehicleId:${change.userId}',
-              change.vehicleId,
-            );
-            await _syncQueue.complete([operationId]);
+            if (!repairHistory || activeVehicleIdOrNull == null ||
+                activeVehicleIdOrNull == change.entityId) {
+              await _meta.put(
+                'activeVehicleId:${change.userId}',
+                change.vehicleId,
+              );
+            }
+            // Pull does not acknowledge newly queued vehicle edits.
           }
           break;
         case SyncEntityType.settings:

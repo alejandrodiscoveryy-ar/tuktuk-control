@@ -633,6 +633,40 @@ void main() {
 
     expect(rejected, isTrue);
   });
+  test('explicit retired vehicle redirect permits only acknowledged same-account history recovery', () {
+    RemoteChange vehicle(String id, String target, {String owner = 'u', bool deleted = false}) =>
+        RemoteChange(entityType: SyncEntityType.vehicle, entityId: id,
+          userId: owner, vehicleId: target, updatedAt: DateTime.utc(2026, 9, 18),
+          deletedAt: deleted ? DateTime.utc(2026, 9, 18) : null,
+          deviceId: 'server', payload: const {});
+    final redirects = HistoryRecoveryPolicy.confirmedVehicleRedirects([
+      vehicle('old', 'canonical', deleted: true),
+      vehicle('ordinary-delete', 'ordinary-delete', deleted: true),
+      vehicle('foreign', 'canonical', owner: 'other', deleted: true),
+      vehicle('no-destination', 'missing', deleted: true),
+      vehicle('not-retired', 'canonical'),
+      vehicle('canonical', 'canonical'),
+    ], 'u');
+    expect(redirects, {'old': 'canonical'});
+    for (final type in [SyncEntityType.dailyRecord, SyncEntityType.maintenance]) {
+      final remote = RemoteChange(entityType: type, entityId: 'row',
+        userId: 'u', vehicleId: 'canonical', updatedAt: DateTime.utc(2026, 9, 18),
+        deviceId: 'server', payload: const {});
+      bool repair({String owner = 'u', String vehicleId = 'old',
+        SyncStatus status = SyncStatus.synced, bool queued = false, bool full = true}) =>
+          HistoryRecoveryPolicy.canRepair(fullRefresh: full, localStatus: status,
+            queued: queued, localUserId: owner, localVehicleId: vehicleId,
+            remote: remote, vehicleRedirects: redirects);
+      expect(repair(), isTrue);
+      expect(repair(owner: 'other'), isFalse);
+      expect(repair(vehicleId: 'ordinary-delete'), isFalse);
+      expect(repair(vehicleId: 'no-destination'), isFalse);
+      expect(repair(status: SyncStatus.pending), isFalse);
+      expect(repair(queued: true), isFalse);
+      expect(repair(full: false), isFalse);
+    }
+  });
+
   test('history recovery repairs acknowledged cache but never pending or foreign data', () {
     final remote = RemoteChange(
       entityType: SyncEntityType.dailyRecord, entityId: 'record-1',
