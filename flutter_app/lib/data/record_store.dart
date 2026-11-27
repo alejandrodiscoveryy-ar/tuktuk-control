@@ -2116,7 +2116,8 @@ class RecordStore extends ChangeNotifier {
     }
     if (conductorAppAccessState != ConductorAppAccessState.allowed) return;
     if (!conductorAgencyAccessAllowed ||
-        (activeVehicle == null && !_fullRecoveryRequested)) return;
+        (activeVehicle == null && !_fullRecoveryRequested &&
+         _historyVerifiedUserId == user?.id)) return;
     await _withSync(() async {
       if (!conductorAgencyAccessAllowed ||
           conductorAppAccessState != ConductorAppAccessState.allowed) {
@@ -2188,9 +2189,12 @@ class RecordStore extends ChangeNotifier {
           DateTime.now().toIso8601String(),
         );
       }
-    } catch (_) {
+    } catch (error) {
       _syncFailed = true;
-      syncMessage = 'Sin conexion. Los cambios permanecen guardados';
+      syncMessage = error is TemporarySyncException &&
+          error.cause == 'history discrepancy preserved locally'
+          ? 'Historial por verificar. Tus registros se conservan.'
+          : 'No se completó la sincronización. Tus registros se conservan.';
       _scheduleSyncRetry();
       if (propagateFailure) rethrow;
     } finally {
@@ -2708,7 +2712,8 @@ class RecordStore extends ChangeNotifier {
     if (historyMismatch) {
       throw const TemporarySyncException('history discrepancy preserved locally');
     }
-    if (fullRefresh && conductorAgencyAccessAllowed && user?.id == currentUser.id) {
+    if (fullRefresh && !_fullRecoveryRequested && conductorAgencyAccessAllowed &&
+        user?.id == currentUser.id) {
       _historyVerifiedUserId = currentUser.id;
     }
   }
@@ -2876,8 +2881,9 @@ class RecordStore extends ChangeNotifier {
           }
           // A local change may have been saved during the backup write.
           if (Hive.box(_syncQueueBox).containsKey(operationId) ||
-              !identical(_box.get(change.entityId), raw) && repair) {
+              (repair && jsonEncode(_box.get(change.entityId)) != jsonEncode(raw))) {
             _syncRequestedWhileRunning = true;
+            if (repairHistory) _fullRecoveryRequested = true;
             continue;
           }
           if (repair || _remoteWins(
@@ -2900,7 +2906,7 @@ class RecordStore extends ChangeNotifier {
                   )
                   .toMap(),
             );
-            await _syncQueue.complete([operationId]);
+            // Pull must never remove an edit queued while the local write awaited.
           }
           break;
         case SyncEntityType.maintenance:
@@ -2929,8 +2935,9 @@ class RecordStore extends ChangeNotifier {
           }
           // A local change may have been saved during the backup write.
           if (Hive.box(_syncQueueBox).containsKey(operationId) ||
-              !identical(_maintenanceBox.get(change.entityId), raw) && repair) {
+              (repair && jsonEncode(_maintenanceBox.get(change.entityId)) != jsonEncode(raw))) {
             _syncRequestedWhileRunning = true;
+            if (repairHistory) _fullRecoveryRequested = true;
             continue;
           }
           if (repair || _remoteWins(
@@ -2953,7 +2960,7 @@ class RecordStore extends ChangeNotifier {
                   )
                   .toMap(),
             );
-            await _syncQueue.complete([operationId]);
+            // Pull must never remove an edit queued while the local write awaited.
           }
           break;
         case SyncEntityType.vehicle:
