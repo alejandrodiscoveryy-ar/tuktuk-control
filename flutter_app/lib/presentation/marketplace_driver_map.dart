@@ -7,10 +7,11 @@ Future<bool> marketplaceNativeMapAvailable() {
   if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
     return Future.value(true);
   }
-  return _androidNativeMapCapability ??= _readAndroidNativeMapCapability();
+  return _androidNativeMapCapability ??= readAndroidNativeMapCapability();
 }
 
-Future<bool> _readAndroidNativeMapCapability() async {
+@visibleForTesting
+Future<bool> readAndroidNativeMapCapability() async {
   try {
     return await const MethodChannel(
       'com.alejandrocruz.tuktukcontrol/map_capability',
@@ -146,7 +147,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
       }
       if (await marketplaceNativeMapAvailable()) {
         if (!mounted || generation != _loadGeneration) return;
-      mbx.MapboxOptions.setAccessToken(configuration.token);
+        mbx.MapboxOptions.setAccessToken(configuration.token);
       }
       if (!mounted || generation != _loadGeneration) return;
 
@@ -266,57 +267,50 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
     final goingToPickup =
         ride == null || marketplaceDriverGoingToPickup(ride.status);
 
+    Widget nativeMap() => MarketplaceDriverVectorMap(
+      fullBleed: widget.fullBleed,
+      pickup: pickup,
+      destination: destination,
+      driver: driver,
+      toPickup: toPickup,
+      toDestination: toDestination,
+      goingToPickup: goingToPickup,
+      stylePath: widget.stylePath ?? configuration.stylePath,
+      idleCenter: widget.idleCenter,
+      idleZoom: widget.idleZoom,
+    );
+
     return ClipRRect(
       borderRadius:
           widget.fullBleed ? BorderRadius.zero : BorderRadius.circular(18),
       child: Stack(
         children: [
           if (kIsWeb || defaultTargetPlatform != TargetPlatform.android)
-            MarketplaceDriverVectorMap(
-            fullBleed: widget.fullBleed,
-            pickup: pickup,
-            destination: destination,
-            driver: driver,
-            toPickup: toPickup,
-            toDestination: toDestination,
-            goingToPickup: goingToPickup,
-            stylePath: widget.stylePath ?? configuration.stylePath,
-            idleCenter: widget.idleCenter,
-            idleZoom: widget.idleZoom,
-          )
+            nativeMap()
           else
             FutureBuilder<bool>(
               future: _nativeMapCapability,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                  return const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  );
                 }
                 return snapshot.data == true
-                  ? MarketplaceDriverVectorMap(
-            fullBleed: widget.fullBleed,
-            pickup: pickup,
-            destination: destination,
-            driver: driver,
-            toPickup: toPickup,
-            toDestination: toDestination,
-            goingToPickup: goingToPickup,
-            stylePath: widget.stylePath ?? configuration.stylePath,
-            idleCenter: widget.idleCenter,
-            idleZoom: widget.idleZoom,
-          )
-                  : MarketplaceDriverRasterMap(
-              fullBleed: widget.fullBleed,
-              pickup: pickup,
-              destination: destination,
-              driver: driver,
-              toPickup: toPickup,
-              toDestination: toDestination,
-              goingToPickup: goingToPickup,
-              configuration: configuration,
-              stylePath: widget.stylePath ?? configuration.stylePath,
-              idleCenter: widget.idleCenter,
-              idleZoom: widget.idleZoom,
-            );
+                    ? nativeMap()
+                    : MarketplaceDriverRasterMap(
+                        fullBleed: widget.fullBleed,
+                        pickup: pickup,
+                        destination: destination,
+                        driver: driver,
+                        toPickup: toPickup,
+                        toDestination: toDestination,
+                        goingToPickup: goingToPickup,
+                        configuration: configuration,
+                        stylePath: widget.stylePath ?? configuration.stylePath,
+                        idleCenter: widget.idleCenter,
+                        idleZoom: widget.idleZoom,
+                      );
               },
             ),
           if (widget.showIdleLocation && ride == null)
