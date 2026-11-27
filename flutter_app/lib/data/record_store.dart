@@ -239,7 +239,9 @@ class RecordStore extends ChangeNotifier {
   void _scheduleConductorAccessRetry(String userId) {
     if (_disposed || _supabase.auth.currentUser?.id != userId ||
         conductorAppAccessState == ConductorAppAccessState.suspended ||
-        _conductorAccessRetryTimer?.isActive == true) return;
+        _conductorAccessRetryTimer?.isActive == true) {
+      return;
+    }
     const delays = [5, 15, 30, 45];
     final seconds = delays[min(_conductorAccessFailures, delays.length - 1)];
     _conductorAccessFailures++;
@@ -2526,7 +2528,9 @@ class RecordStore extends ChangeNotifier {
   Future<void> refreshConductorAppAccess() async {
     final account = _supabase.auth.currentUser;
     if (account == null || conductorAccessChecking || _disposed || !initialized ||
-        _startupAccessFuture != null) return;
+        _startupAccessFuture != null) {
+      return;
+    }
     final previous = conductorAppAccessState;
     final allowed = await _checkConductorAppAccess(account);
     if (allowed &&
