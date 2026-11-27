@@ -103,11 +103,11 @@ class MarketplaceMapVisualConfiguration {
     final savedAt = DateTime.tryParse(raw['saved_at']?.toString() ?? '');
     final size = raw['tile_size'];
     if (!token.startsWith('pk.') || style == null || savedAt == null ||
-        (size != 256 && size != 512)) return null;
+        size is! int || (size != 256 && size != 512)) return null;
     final age = now.toUtc().difference(savedAt.toUtc());
     if (age.isNegative || age > const Duration(hours: 24)) return null;
     return MarketplaceMapVisualConfiguration(
-      token: token, stylePath: style, tileSize: size as int,
+      token: token, stylePath: style, tileSize: size,
     );
   }
 
