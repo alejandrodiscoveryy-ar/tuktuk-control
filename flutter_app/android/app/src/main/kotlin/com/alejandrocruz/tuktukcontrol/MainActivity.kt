@@ -30,6 +30,23 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         DriverAlertDiagnostics.register(this, flutterEngine)
         DriverFloatingShortcut.register(this, flutterEngine)
+        // Do not instantiate Mapbox's native renderer on unsupported GPUs.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.alejandrocruz.tuktukcontrol/map_capability",
+        ).setMethodCallHandler { call, result ->
+            if (call.method == "supportsNativeMap") {
+                val supported = try {
+                    val manager = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+                    manager.deviceConfigurationInfo.reqGlEsVersion >= 0x00030000
+                } catch (_: Exception) {
+                    false
+                }
+                result.success(supported)
+            } else {
+                result.notImplemented()
+            }
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             UPDATE_CHANNEL,
