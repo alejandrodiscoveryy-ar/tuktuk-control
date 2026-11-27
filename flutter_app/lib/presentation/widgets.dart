@@ -716,7 +716,7 @@ class MonthlyEarningsBars extends StatelessWidget {
       return EmptyState(tr('Todavía no hay ingresos para graficar.'));
     }
     final visible = cycles.reversed.take(8).toList().reversed.toList();
-    final maximum = visible.map((cycle) => cycle.earnings).reduce(max);
+    final maximum = visible.map((cycle) => max(cycle.earnings, cycle.expenses)).reduce(max);
     final scale = MediaQuery.textScalerOf(context);
     return GlassCard(
       accent: statisticsStyle ? appPrimaryColor(context) : null,
@@ -767,12 +767,12 @@ class MonthlyEarningsBars extends StatelessWidget {
                             message:
                                 '${tr('Ingreso')}: ${money(cycle.earnings)}\n${tr('Gasto')}: ${money(cycle.expenses)}',
                             child: _IncomeExpenseBar(
-                              height: maximum == 0
+                              height: maximum <= 0
                                   ? 2
-                                  : 130 * cycle.earnings / maximum,
-                              expenseRatio: cycle.earnings <= 0
+                                  : max(2.0, 130 * max(cycle.earnings, cycle.expenses) / maximum),
+                              expenseRatio: max(cycle.earnings, cycle.expenses) <= 0
                                   ? 0
-                                  : cycle.expenses / cycle.earnings,
+                                  : cycle.expenses / max(cycle.earnings, cycle.expenses),
                             ),
                           ),
                           const SizedBox(height: 7),
