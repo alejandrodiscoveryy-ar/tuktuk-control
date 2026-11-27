@@ -202,7 +202,8 @@ class _AgencyAccessUnavailable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final checking = store.conductorAppAccessState == ConductorAppAccessState.checking;
+    final checking = store.conductorAppAccessState == ConductorAppAccessState.checking ||
+        store.conductorAccessChecking;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -213,11 +214,11 @@ class _AgencyAccessUnavailable extends StatelessWidget {
               Icon(checking ? Icons.shield_outlined : Icons.wifi_off_rounded,
                 color: kTertiary, size: 38),
               const SizedBox(height: 12),
-              Text(checking ? 'Verificando acceso a la agencia' : 'Servicios de agencia sin conexión',
+              Text(checking ? 'Verificando acceso a la agencia' : 'Conexión con la agencia sin confirmar',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              const Text('Puedes seguir usando tus registros y estadísticas locales. Las carreras y operaciones de agencia requieren verificar tu acceso.',
+              const Text('Tus registros y estadísticas locales siguen disponibles. Reintentaremos la conexión automáticamente. Por seguridad, las operaciones de agencia requieren acceso confirmado.',
                 textAlign: TextAlign.center),
               const SizedBox(height: 12),
               OutlinedButton.icon(

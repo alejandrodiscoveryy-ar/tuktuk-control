@@ -88,6 +88,31 @@ class MarketplaceMapVisualConfiguration {
   String get tileUrlTemplate =>
       'https://api.mapbox.com/styles/v1/$stylePath/tiles/$tileSize/{z}/{x}/{y}?access_token=$token';
 
+  // Only the public visual configuration can be cached; never routes or jobs.
+  Map<String, Object> toCache(DateTime now) => {
+    'token': token,
+    'style': stylePath,
+    'tile_size': tileSize,
+    'saved_at': now.toUtc().toIso8601String(),
+  };
+
+  static MarketplaceMapVisualConfiguration? fromCache(Object? raw, DateTime now) {
+    if (raw is! Map) return null;
+    final token = raw['token']?.toString() ?? '';
+    final style = marketplaceMapboxStylePath(raw['style']);
+    final savedAt = DateTime.tryParse(raw['saved_at']?.toString() ?? '');
+    final size = raw['tile_size'];
+    if (!token.startsWith('pk.') || style == null || savedAt == null ||
+        size is! int || (size != 256 && size != 512)) {
+      return null;
+    }
+    final age = now.toUtc().difference(savedAt.toUtc());
+    if (age.isNegative || age > const Duration(hours: 24)) return null;
+    return MarketplaceMapVisualConfiguration(
+      token: token, stylePath: style, tileSize: size,
+    );
+  }
+
   static MarketplaceMapVisualConfiguration? fromCapabilities(Object? raw) {
     if (raw is! Map || raw['capabilities'] is! List) return null;
     for (final item in raw['capabilities'] as List) {
@@ -96,7 +121,7 @@ class MarketplaceMapVisualConfiguration {
         continue;
       }
       final token = item['public_token']?.toString().trim() ?? '';
-      if (token.isEmpty) return null;
+      if (!token.startsWith('pk.')) return null;
       final config = item['config'];
       final fallback = item['public_config'];
       final primaryStyle = config is Map ? config['style'] : null;
@@ -127,14 +152,54 @@ class MarketplaceMapService {
 
   static const publicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
 
+  static const _visualCacheKey = 'marketplace-map-visual:tuktuk-control:v1';
+
+  MarketplaceMapVisualConfiguration? _cachedVisualConfiguration() {
+    try {
+      if (!Hive.isBoxOpen(_metaBox)) return null;
+      return MarketplaceMapVisualConfiguration.fromCache(
+        Hive.box(_metaBox).get(_visualCacheKey), DateTime.now(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveVisualConfiguration(MarketplaceMapVisualConfiguration? config) async {
+    try {
+      if (!Hive.isBoxOpen(_metaBox)) return;
+      final box = Hive.box(_metaBox);
+      if (config == null) {
+        await box.delete(_visualCacheKey);
+      } else {
+        await box.put(_visualCacheKey, config.toCache(DateTime.now()));
+      }
+    } catch (_) {
+      // Cache failures must not prevent a valid remote map from loading.
+    }
+  }
+
   Future<MarketplaceMapVisualConfiguration?> runtimeVisualConfiguration() async {
-    final value = await _client.rpc(
-      'get_public_marketplace_map_capabilities_by_slug',
-      params: const {
-        'target_project_slug': 'tuktuk-control',
-      },
-    );
-    return MarketplaceMapVisualConfiguration.fromCapabilities(value);
+    try {
+      final value = await _client.rpc(
+        'get_public_marketplace_map_capabilities_by_slug',
+        params: const {
+          'target_project_slug': 'tuktuk-control',
+        },
+      ).timeout(const Duration(seconds: 12));
+      if (value is! Map || value['capabilities'] is! List) {
+        throw StateError('MAP_CAPABILITIES_INVALID');
+      }
+      final config = MarketplaceMapVisualConfiguration.fromCapabilities(value);
+      // A definitive response disabling the map invalidates the cache.
+      unawaited(_saveVisualConfiguration(config));
+      return config;
+    } catch (_) {
+      // Only a failed remote request may use the last valid public settings.
+      final cached = _cachedVisualConfiguration();
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
   Future<dynamic> _invoke(

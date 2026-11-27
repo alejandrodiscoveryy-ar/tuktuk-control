@@ -71,4 +71,21 @@ void main() {
     expect(nativeSplash, contains('android:windowSplashScreenBackground'));
     expect(nativeSplash, contains('@color/brand_background'));
   });
+
+  test('temporary access failures retry without authorizing or signing out', () {
+    final store = File('lib/data/record_store.dart').readAsStringSync();
+    final start = store.indexOf('Future<bool> _fetchConductorAppAccess(');
+    final end = store.indexOf('Future<void> refreshConductorAppAccess()', start);
+    final access = store.substring(start, end);
+    expect(access, contains('_scheduleConductorAccessRetry(target.id)'));
+    expect(access, contains('ConductorAppAccessState.unavailable'));
+    expect(access, contains('return false;'));
+    expect(store, contains('if (_conductorAppAccessRequestUserId == target.id) return previous;'));
+    expect(store, contains('_supabase.auth.currentUser?.id == userId'));
+    expect(store, contains('const delays = [5, 15, 30, 45]'));
+    expect(store, contains('_conductorAppAccessRequest = null;'));
+    expect(store, contains('conductorAppAccessState == ConductorAppAccessState.allowed &&'));
+    expect(store, contains('_resetConductorAccessRetry();'));
+  });
+
 }

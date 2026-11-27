@@ -157,7 +157,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
         destinationRoute = await maps.driverRouteForJob(
           jobId: job.id,
           stage: 'destination',
-        );
+        ).timeout(const Duration(seconds: 12));
       } catch (_) {
         destinationRoute = null;
       }
@@ -178,7 +178,9 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
           throw StateError('LOCATION_DENIED');
         }
 
-        final position = await Geolocator.getCurrentPosition();
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(timeLimit: Duration(seconds: 12)),
+        ).timeout(const Duration(seconds: 15));
 
         current = MarketplaceMapPoint(
           label: 'Tu ubicación',
@@ -191,7 +193,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             jobId: job.id,
             stage: 'pickup',
             origin: current,
-          );
+          ).timeout(const Duration(seconds: 12));
         } catch (_) {
           pickupRoute = null;
           routeMessage = 'No pudimos cargar el tramo hasta la recogida.';
@@ -261,7 +263,27 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
     }
     final configuration = widget.configuration ?? mapConfiguration;
     if (configuration == null || configuration.token.isEmpty) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (loading)
+                const CircularProgressIndicator(strokeWidth: 2),
+              const SizedBox(height: 8),
+              Text(loading ? 'Conectando con el mapa…' :
+                  'Mapa no disponible en este momento.', textAlign: TextAlign.center),
+              if (!loading && widget.job != null)
+                TextButton.icon(
+                  onPressed: () => unawaited(_load()),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reintentar mapa'),
+                ),
+            ],
+          ),
+        ),
+      );
     }
     final ride = widget.job;
     final goingToPickup =
