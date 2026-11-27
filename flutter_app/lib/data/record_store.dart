@@ -224,7 +224,33 @@ class RecordStore extends ChangeNotifier {
   RealtimeChannel? _realtimeChannel;
   Timer? _automaticSyncTimer;
   Timer? _conductorAppAccessTimer;
-  bool _conductorAppAccessChecking = false;
+  Future<bool>? _conductorAppAccessRequest;
+  String? _conductorAppAccessRequestUserId;
+  Timer? _conductorAccessRetryTimer;
+  int _conductorAccessFailures = 0;
+  bool get conductorAccessChecking => _conductorAppAccessRequest != null;
+
+  void _resetConductorAccessRetry() {
+    _conductorAccessRetryTimer?.cancel();
+    _conductorAccessRetryTimer = null;
+    _conductorAccessFailures = 0;
+  }
+
+  void _scheduleConductorAccessRetry(String userId) {
+    if (_disposed || _supabase.auth.currentUser?.id != userId ||
+        conductorAppAccessState == ConductorAppAccessState.suspended ||
+        _conductorAccessRetryTimer?.isActive == true) return;
+    const delays = [5, 15, 30, 45];
+    final seconds = delays[min(_conductorAccessFailures, delays.length - 1)];
+    _conductorAccessFailures++;
+    _conductorAccessRetryTimer = Timer(Duration(seconds: seconds), () {
+      _conductorAccessRetryTimer = null;
+      if (!_disposed && _supabase.auth.currentUser?.id == userId &&
+          conductorAppAccessState == ConductorAppAccessState.unavailable) {
+        unawaited(refreshConductorAppAccess());
+      }
+    });
+  }
   Future<bool>? _startupAccessFuture;
   String? _startupAccessUserId;
   static const _conductorAppBlockedUserKey = 'conductorAppBlockedUser';
@@ -2423,9 +2449,26 @@ class RecordStore extends ChangeNotifier {
 
   /// Comprobación por cuenta y proyecto (no suspende la identidad Google global).
   /// Sin verificación remota no se habilitan las operaciones de agencia.
-  Future<bool> _checkConductorAppAccess(User target) async {
-    if (_conductorAppAccessChecking || _disposed) return false;
-    _conductorAppAccessChecking = true;
+  Future<bool> _checkConductorAppAccess(User target) {
+    if (_disposed || _supabase.auth.currentUser?.id != target.id) {
+      return Future.value(false);
+    }
+    final previous = _conductorAppAccessRequest;
+    if (previous != null) {
+      if (_conductorAppAccessRequestUserId == target.id) return previous;
+      return previous.then((_) => _checkConductorAppAccess(target));
+    }
+    _conductorAppAccessRequestUserId = target.id;
+    final request = _fetchConductorAppAccess(target).whenComplete(() {
+      _conductorAppAccessRequest = null;
+      _conductorAppAccessRequestUserId = null;
+      if (!_disposed) notifyListeners();
+    });
+    _conductorAppAccessRequest = request;
+    return request;
+  }
+
+  Future<bool> _fetchConductorAppAccess(User target) async {
     try {
       // Evitar esperas indefinidas en redes móviles inestables.
       // Un timeout no autoriza operaciones de agencia ni bloquea el control local.
@@ -2438,6 +2481,7 @@ class RecordStore extends ChangeNotifier {
       if (_disposed || _supabase.auth.currentUser?.id != target.id) return false;
 
       final suspended = response['suspended'] == true;
+      _resetConductorAccessRetry();
       if (suspended) {
         _blockedConductorUserId = target.id;
         conductorAppSuspensionReason =
@@ -2472,16 +2516,15 @@ class RecordStore extends ChangeNotifier {
           : ConductorAppAccessState.unavailable;
       _syncFailed = true;
       _stopAutomaticSync();
+      _scheduleConductorAccessRetry(target.id);
       notifyListeners();
       return false;
-    } finally {
-      _conductorAppAccessChecking = false;
     }
   }
 
   Future<void> refreshConductorAppAccess() async {
     final account = _supabase.auth.currentUser;
-    if (account == null || _conductorAppAccessChecking || _disposed) return;
+    if (account == null || conductorAccessChecking || _disposed) return;
     final previous = conductorAppAccessState;
     final allowed = await _checkConductorAppAccess(account);
     if (allowed &&
@@ -2498,6 +2541,7 @@ class RecordStore extends ChangeNotifier {
   }) async {
     if (_disposed) return;
     if (authenticatedUser == null) {
+      _resetConductorAccessRetry();
       _syncFailed = false;
       user = null;
       conductorAppAccessState = _blockedConductorUserId == null
@@ -2520,6 +2564,7 @@ class RecordStore extends ChangeNotifier {
     }
     _stopAutomaticSync();
     if (user?.id != authenticatedUser.id) {
+      _resetConductorAccessRetry();
       // Restore the correct account's local scope immediately; never show the previous account.
       conductorAppAccessState = ConductorAppAccessState.checking;
       user = authenticatedUser;
@@ -2552,6 +2597,9 @@ class RecordStore extends ChangeNotifier {
     if (!allowed ||
         _disposed ||
         _supabase.auth.currentUser?.id != authenticatedUser.id) {
+      if (!_disposed && conductorAppAccessState == ConductorAppAccessState.unavailable) {
+        _scheduleConductorAccessRetry(authenticatedUser.id);
+      }
       return;
     }
     unawaited(refreshProjectIdentity());
@@ -3813,6 +3861,7 @@ class RecordStore extends ChangeNotifier {
     _installReferrerRetryTimer?.cancel();
     _stopAutomaticSync();
     _conductorAppAccessTimer?.cancel();
+    _resetConductorAccessRetry();
     unawaited(_authSubscription?.cancel());
     unawaited(_pushTokenCoordinator?.dispose());
     unawaited(_referralLinkListener?.dispose());
