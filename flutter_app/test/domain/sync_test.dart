@@ -1,7 +1,81 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:control_tuk_tuk/main.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('279 remote rows cross a legacy-sequence page boundary exactly once',
+      () async {
+    final directory = await Directory.systemTemp.createTemp('sync-pagination-');
+    Hive.init(directory.path);
+    await Hive.openBox('meta');
+    final rows = List.generate(279, (index) => <String, dynamic>{
+      'user_id': 'owner',
+      'vehicle_id': 'car',
+      'entity_type': 'dailyRecord',
+      'entity_id': 'record-${index.toString().padLeft(3, '0')}',
+      'device_id': 'server',
+      'payload': {'id': 'record-${index.toString().padLeft(3, '0')}'},
+      'updated_at': '2026-11-26T12:00:00Z',
+      'deleted_at': null,
+      'server_version': 1,
+      'server_seq': index < 260 ? 0 : index - 259,
+    });
+    var calls = 0;
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'test-key',
+      httpClient: MockClient((request) async {
+        calls++;
+        final query = request.url.queryParameters;
+        expect(request.url.path, '/rest/v1/sync_entities');
+        expect(query['user_id'], 'eq.owner');
+        expect(query['limit'], '250');
+        expect(query['order'], 'server_seq.asc.nullslast,'
+          'entity_type.asc.nullslast,entity_id.asc.nullslast');
+        if (calls == 1) {
+          expect(query['or'], isNull);
+        } else {
+          expect(query['or'], '(server_seq.gt.0,'
+            'and(server_seq.eq.0,entity_type.gt."dailyRecord"),'
+            'and(server_seq.eq.0,entity_type.eq."dailyRecord",'
+            'entity_id.gt."record-249"))');
+        }
+        return http.Response(jsonEncode(calls == 1
+          ? rows.take(250).toList() : rows.skip(250).toList()), 200,
+          headers: {'content-type': 'application/json'});
+      }),
+    );
+    try {
+      final gateway = SupabaseSyncGateway(client: client, payloadFor: (_) => null);
+      final first = await gateway.pull(userId: 'owner');
+      expect(first.changes, hasLength(250));
+      expect(first.hasMore, isTrue);
+      final second = await gateway.pull(userId: 'owner', cursor: first.nextCursor);
+      expect(second.changes, hasLength(29));
+      expect(second.hasMore, isFalse);
+      final received = [...first.changes, ...second.changes];
+      expect(received.map((row) => row.entityId).toSet(), hasLength(279));
+      expect(RemoteSyncCursor.tryParse(second.nextCursor)?.serverSeq, 19);
+      expect(calls, 2);
+    } finally {
+      await client.dispose();
+      await Hive.close();
+      await directory.delete(recursive: true);
+    }
+  });
+
+  test('financial pagination orders identities in the direction of its cursor', () {
+    final source = File('lib/data/supabase_sync_gateway.dart').readAsStringSync();
+    expect(source, contains("query = query.gt('entity_id', after)"));
+    expect(source, contains("query.order('entity_id', ascending: true)"));
+  });
+
   SyncOperation operation({
     SyncAction action = SyncAction.upsert,
     DateTime? createdAt,
