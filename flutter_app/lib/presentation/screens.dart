@@ -2796,62 +2796,74 @@ class StatisticsMetricGrid extends StatelessWidget {
           ? 1 : columns;
       const gap = 10.0;
       final width = (constraints.maxWidth - (count - 1) * gap) / count;
-      final horizontalHeader = width >= 175 && scale.scale(13) <= 18;
-      final textWidth = max(1.0, width - 26);
-      final labelWidth = max(1.0, textWidth - (horizontalHeader ? 53 : 0));
-      double textHeight(String text, TextStyle style, double availableWidth) {
-        final painter = TextPainter(
-          text: TextSpan(text: text, style: style),
-          textDirection: Directionality.of(context),
-          textScaler: scale,
-        )..layout(maxWidth: availableWidth);
-        final height = painter.height.ceilToDouble();
-        painter.dispose();
-        return height;
-      }
+      const padding = 10.0;
+      const iconSize = 38.0;
+      const iconGap = 6.0;
+      // At large accessibility scales, give the amount the full card width.
+      final inlineHeader = width >= 130 && (scale.scale(13) <= 18 || width >= 220);
+      final textWidth = max(1.0, width - padding * 2);
+      final valueWidth = max(1.0, textWidth - (inlineHeader ? iconSize + iconGap : 0));
       const labelStyle = TextStyle(
         fontSize: 13, fontWeight: FontWeight.w700, height: 1.2);
       const noteStyle = TextStyle(fontSize: 11, height: 1.2);
-      final valueHeight = scale.scale(26) * 1.25;
+      const amountStyle = TextStyle(
+        fontSize: 26, fontWeight: FontWeight.w900, height: 1.15);
+      const currencyStyle = TextStyle(
+        fontSize: 15.08, fontWeight: FontWeight.w600, height: 1.1);
+      Size measure(String text, TextStyle style, [double availableWidth = double.infinity]) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: DefaultTextStyle.of(context).style.merge(style)),
+          textDirection: Directionality.of(context),
+          textScaler: scale,
+        )..layout(maxWidth: availableWidth);
+        final size = painter.size;
+        painter.dispose();
+        return size;
+      }
+      bool stackCurrency(MetricCard card) => card.currency != null &&
+          measure(card.value, amountStyle).width + 5 +
+          measure(card.currency!, currencyStyle).width > valueWidth;
+      final valueHeight = (scale.scale(26) * 1.25).ceilToDouble();
+      double dataHeight(MetricCard card) => valueHeight +
+          (stackCurrency(card) ? 2 + measure(card.currency!, currencyStyle, valueWidth).height.ceilToDouble() : 0) +
+          (card.note != null ? 3 + measure(card.note!, noteStyle, valueWidth).height.ceilToDouble() : 0);
       Widget buildRow(List<MetricCard> row) {
         final labelHeight = row.fold<double>(0, (height, card) =>
-          max(height, textHeight(card.label, labelStyle, labelWidth)));
-        final noteHeight = row.fold<double>(0, (height, card) => max(height,
-          card.note == null ? 0.0 : textHeight(card.note!, noteStyle, textWidth)));
-        final headerHeight = horizontalHeader ? max(44.0, labelHeight)
-            : 44 + 4 + labelHeight;
-        final height = 26 + headerHeight + 5 + valueHeight
-            + (noteHeight > 0 ? 3 + noteHeight : 0) + 3;
-        final hasDetails = row.any((card) => card.details != null);
-        final rowWidget = Row(
-          crossAxisAlignment: hasDetails ? CrossAxisAlignment.stretch
-              : CrossAxisAlignment.start,
-          children: [
-            for (var index = 0; index < row.length; index++) ...[
-              if (index > 0) const SizedBox(width: gap),
-              SizedBox(
-                key: ValueKey('$keyPrefix-${row[index].icon.codePoint}'),
-                width: width,
-                height: hasDetails ? null : height,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: height),
+          max(height, measure(card.label, labelStyle, textWidth).height.ceilToDouble()));
+        final dataRowHeight = row.fold<double>(0, (height, card) =>
+          max(height, dataHeight(card)));
+        final headerHeight = inlineHeader ? max(iconSize, dataRowHeight)
+            : iconSize + 4 + dataRowHeight;
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < row.length; index++) ...[
+                if (index > 0) const SizedBox(width: gap),
+                SizedBox(
+                  key: ValueKey('$keyPrefix-${row[index].icon.codePoint}'),
+                  width: width,
                   child: _StatisticsVisualCard(
-                  card: row[index],
-                  labelHeight: labelHeight,
-                  headerHeight: headerHeight,
-                  horizontalHeader: horizontalHeader,
-                  alignRight: count > 1 && index == count - 1,
-                  valueHeight: valueHeight,
-                  labelStyle: labelStyle,
-                  noteStyle: noteStyle,
+                    card: row[index],
+                    labelHeight: labelHeight,
+                    headerHeight: headerHeight,
+                    inlineHeader: inlineHeader,
+                    stackCurrency: stackCurrency(row[index]),
+                    alignRight: count > 1 && index == count - 1,
+                    valueHeight: valueHeight,
+                    labelStyle: labelStyle,
+                    noteStyle: noteStyle,
+                    currencyStyle: currencyStyle,
+                    amountStyle: amountStyle,
+                    padding: padding,
+                    iconSize: iconSize,
+                    iconGap: iconGap,
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         );
-        // Only the row containing extra detail widgets needs intrinsic sizing.
-        return hasDetails ? IntrinsicHeight(child: rowWidget) : rowWidget;
       }
 
       return Column(
@@ -2873,21 +2885,33 @@ class _StatisticsVisualCard extends StatelessWidget {
     required this.card,
     required this.labelHeight,
     required this.headerHeight,
-    required this.horizontalHeader,
+    required this.inlineHeader,
+    required this.stackCurrency,
     required this.alignRight,
     required this.valueHeight,
     required this.labelStyle,
     required this.noteStyle,
+    required this.currencyStyle,
+    required this.amountStyle,
+    required this.padding,
+    required this.iconSize,
+    required this.iconGap,
   });
 
   final MetricCard card;
   final double labelHeight;
   final double headerHeight;
-  final bool horizontalHeader;
+  final bool inlineHeader;
+  final bool stackCurrency;
   final bool alignRight;
   final double valueHeight;
   final TextStyle labelStyle;
   final TextStyle noteStyle;
+  final TextStyle currencyStyle;
+  final TextStyle amountStyle;
+  final double padding;
+  final double iconSize;
+  final double iconGap;
 
   @override
   Widget build(BuildContext context) {
@@ -2897,8 +2921,8 @@ class _StatisticsVisualCard extends StatelessWidget {
         Color.lerp(rawAccent, const Color(0xFF172B40), .55)!;
     final surface = dark ? const Color(0xFF142233) : const Color(0xFFF7FAFE);
     final iconTile = Container(
-              width: 44,
-              height: 44,
+              width: iconSize,
+              height: iconSize,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: dark ? .15 : .12),
@@ -2911,6 +2935,35 @@ class _StatisticsVisualCard extends StatelessWidget {
     final valueAlignment = alignRight ? Alignment.centerRight : Alignment.centerLeft;
     final label = Text(card.label, textAlign: textAlign,
       style: labelStyle.copyWith(color: appMutedColor(context)));
+    final crossAlignment = alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final data = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: crossAlignment,
+      children: [
+        SizedBox(
+          height: valueHeight,
+          child: Align(
+            alignment: valueAlignment,
+            child: _OverviewMetricValue(
+              card.value,
+              currency: stackCurrency ? null : card.currency,
+              alignment: valueAlignment,
+              style: amountStyle.copyWith(color: accent),
+            ),
+          ),
+        ),
+        if (stackCurrency) ...[
+          const SizedBox(height: 2),
+          Text(card.currency!, textAlign: textAlign,
+            style: currencyStyle.copyWith(color: appMutedColor(context))),
+        ],
+        if (card.note != null) ...[
+          const SizedBox(height: 3),
+          Text(card.note!, textAlign: textAlign,
+            style: noteStyle.copyWith(color: appMutedColor(context))),
+        ],
+      ],
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
@@ -2925,52 +2978,32 @@ class _StatisticsVisualCard extends StatelessWidget {
         border: Border.all(color: accent.withValues(alpha: dark ? .38 : .42)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(13),
+        padding: EdgeInsets.all(padding),
         child: Column(
-          crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: crossAlignment,
           children: [
-            if (horizontalHeader)
-              SizedBox(
-                height: headerHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    if (!alignRight) ...[
-                      iconTile,
-                      const SizedBox(width: 9),
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: headerHeight),
+              child: inlineHeader
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!alignRight) ...[iconTile, SizedBox(width: iconGap)],
+                      Expanded(child: data),
+                      if (alignRight) ...[SizedBox(width: iconGap), iconTile],
                     ],
-                    Expanded(child: label),
-                    if (alignRight) ...[
-                      const SizedBox(width: 9),
-                      iconTile,
-                    ],
-                  ],
-                ),
-              )
-            else ...[
-              iconTile,
-              const SizedBox(height: 4),
-              SizedBox(height: labelHeight, child: label),
-            ],
-            const SizedBox(height: 5),
-            SizedBox(
-              height: valueHeight,
-              child: Align(
-                alignment: valueAlignment,
-                child: _OverviewMetricValue(
-                  card.value,
-                  currency: card.currency,
-                  alignment: valueAlignment,
-                  style: TextStyle(color: accent, fontSize: 26,
-                    fontWeight: FontWeight.w900, height: 1.15),
-                ),
-              ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: crossAlignment,
+                    children: [iconTile, const SizedBox(height: 4), data],
+                  ),
             ),
-            if (card.note != null) ...[
-              const SizedBox(height: 3),
-              Text(card.note!, textAlign: textAlign, style: noteStyle.copyWith(
-                color: appMutedColor(context))),
-            ],
+            const SizedBox(height: 5),
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: labelHeight),
+              child: label,
+            ),
             if (card.details != null) ...[
               const SizedBox(height: 5),
               card.details!,
