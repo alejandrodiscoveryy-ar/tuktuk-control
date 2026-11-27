@@ -1,2 +1,2 @@
 26
-# Signed AAB 1.1.1 (26): single GLES declaration; build only after exact main production succeeds.
+# Release 1.1.1 (26) after preflight of AGP merged graphics manifest; main production gate unchanged.
