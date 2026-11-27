@@ -278,6 +278,29 @@ abstract final class HistoryRecoveryPolicy {
       (localVehicleId == remote.vehicleId ||
           vehicleRedirects[localVehicleId] == remote.vehicleId);
 
+  /// Independent cloud read may repair only an acknowledged local copy or
+  /// import a missing one. A newer acknowledged server version or a local
+  /// operation always takes precedence over this possibly stale read.
+  static bool canImportVerifiedRow({
+    required RemoteChange remote,
+    required bool queued,
+    required SyncStatus? localStatus,
+    required String? localUserId,
+    required String? localVehicleId,
+    required int? localServerVersion,
+    Map<String, String> vehicleRedirects = const {},
+  }) {
+    if (queued || (localServerVersion != null &&
+        (remote.serverVersion == null || localServerVersion > remote.serverVersion!))) {
+      return false;
+    }
+    if (localStatus == null) return true;
+    return canRepair(fullRefresh: true, localStatus: localStatus,
+      queued: queued, localUserId: localUserId ?? '',
+      localVehicleId: localVehicleId ?? '', remote: remote,
+      vehicleRedirects: vehicleRedirects);
+  }
+
   /// A retired vehicle row is an explicit redirect only when its server
   /// vehicle_id points to a distinct, live vehicle of this same account.
   /// Never infer a redirect from names, registrations, or a single live vehicle.

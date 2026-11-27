@@ -257,52 +257,56 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
   Future<List<RemoteChange>> readFinancialHistory({
     required String userId,
     required String vehicleId,
-  }) async {
+  }) async => [
+    ...await _readHistoryByIdentity(userId, SyncEntityType.dailyRecord, vehicleId: vehicleId),
+    ...await _readHistoryByIdentity(userId, SyncEntityType.maintenance, vehicleId: vehicleId),
+  ];
+
+  Future<List<RemoteChange>> readFinancialVehicleTopology(String userId) =>
+      _readHistoryByIdentity(userId, SyncEntityType.vehicle);
+
+  // Include server tombstones: their IDs are necessary to reconcile offline
+  // copies. An absent row alone is never proof that it was deleted.
+  Future<List<RemoteChange>> _readHistoryByIdentity(
+    String userId, SyncEntityType type, {String? vehicleId}
+  ) async {
     const pageSize = 250;
     final result = <RemoteChange>[];
-    for (final type in [SyncEntityType.dailyRecord, SyncEntityType.maintenance]) {
-      String? after;
-      var complete = false;
-      for (var page = 0; page < 100; page++) {
-        if (_client.auth.currentUser?.id != userId) {
-          throw const TemporarySyncException('financial history account changed');
-        }
-        var query = _client.from(tableName).select(
-          'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
-          'updated_at,deleted_at,server_version,server_seq',
-        ).eq('user_id', userId).eq('vehicle_id', vehicleId)
-          .eq('entity_type', type.name).isFilter('deleted_at', null);
-        if (after != null) query = query.gt('entity_id', after);
-        final rows = List<Map<String, dynamic>>.from(
-          await query.order('entity_id').limit(pageSize) as List,
-        );
-        for (final row in rows) {
-          final change = _decodeRow(row);
-          if (change.userId != userId || change.vehicleId != vehicleId ||
-              change.entityType != type || change.deletedAt != null ||
-              change.payload['id']?.toString() != change.entityId) {
-            throw const TemporarySyncException('financial history ownership mismatch');
-          }
-          result.add(change);
-        }
-        if (rows.length < pageSize) {
-          complete = true;
-          break;
-        }
-        final next = rows.last['entity_id'].toString();
-        if (next == after) {
-          throw const TemporarySyncException('financial history cursor did not advance');
-        }
-        after = next;
+    String? after;
+    for (var page = 0; page < 100; page++) {
+      if (_client.auth.currentUser?.id != userId) {
+        throw const TemporarySyncException('financial history account changed');
       }
-      if (!complete) {
-        throw const TemporarySyncException('financial history incomplete');
+      var query = _client.from(tableName).select(
+        'user_id,vehicle_id,entity_type,entity_id,device_id,payload,'
+        'updated_at,deleted_at,server_version,server_seq',
+      ).eq('user_id', userId).eq('entity_type', type.name);
+      if (vehicleId != null) query = query.eq('vehicle_id', vehicleId);
+      if (after != null) query = query.gt('entity_id', after);
+      final rows = List<Map<String, dynamic>>.from(
+        await query.order('entity_id').limit(pageSize) as List,
+      );
+      for (final row in rows) {
+        final change = _decodeRow(row);
+        if (change.userId != userId ||
+            (vehicleId != null && change.vehicleId != vehicleId) ||
+            change.entityType != type ||
+            change.payload['id']?.toString() != change.entityId) {
+          throw const TemporarySyncException('financial history ownership mismatch');
+        }
+        result.add(change);
       }
+      if (_client.auth.currentUser?.id != userId) {
+        throw const TemporarySyncException('financial history account changed');
+      }
+      if (rows.length < pageSize) return result;
+      final next = rows.last['entity_id'].toString();
+      if (next == after) {
+        throw const TemporarySyncException('financial history cursor did not advance');
+      }
+      after = next;
     }
-    if (_client.auth.currentUser?.id != userId) {
-      throw const TemporarySyncException('financial history account changed');
-    }
-    return result;
+    throw const TemporarySyncException('financial history incomplete');
   }
 
   static RemoteChange _decodeRow(Map<String, dynamic> row) {

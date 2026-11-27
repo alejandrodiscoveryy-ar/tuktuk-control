@@ -350,6 +350,7 @@ class RecordStore extends ChangeNotifier {
         final automatic = <String, String>{};
         for (final change in changes) {
           if (change.entityType != SyncEntityType.dailyRecord ||
+              change.deletedAt != null ||
               !change.entityId.startsWith('marketplace-job-')) {
             continue;
           }
@@ -379,6 +380,40 @@ class RecordStore extends ChangeNotifier {
         if (!current()) return;
         _financialSnapshot = snapshot;
         _financialHistoryFresh = true;
+        // The confirmed figures stay available even if an unresolved local
+        // conflict prevents a safe cache repair.
+        if (financialHistoryMismatch) {
+          try {
+            final topology = await _supabaseGateway
+                .readFinancialVehicleTopology(owner)
+                .timeout(const Duration(seconds: 10));
+            if (!current()) return;
+            final redirects = HistoryRecoveryPolicy.confirmedVehicleRedirects(
+              topology, owner,
+            );
+            await _applyRemoteChanges(changes, repairHistory: true,
+              vehicleRedirects: redirects, verifiedReadOnly: true);
+            if (!current()) return;
+            final suppression = _marketplaceSuppressedIncomeIds(owner);
+            for (final change in changes) {
+              if (change.entityType != SyncEntityType.dailyRecord ||
+                  !change.entityId.startsWith('marketplace-job-')) {
+                continue;
+              }
+              if (change.deletedAt == null && !verified.contains(change.entityId)) {
+                suppression.add(change.entityId);
+              } else {
+                suppression.remove(change.entityId);
+              }
+            }
+            await _meta.put('marketplaceIncomeSuppressed:$owner',
+              suppression.toList(growable: false));
+            if (!current()) return;
+            _load();
+          } catch (_) {
+            // Keep confirmed figures; the mismatch indicator stays visible.
+          }
+        }
       } catch (_) {
         if (current()) _financialHistoryFresh = false;
       }
@@ -2950,6 +2985,7 @@ class RecordStore extends ChangeNotifier {
     Set<String> forceRemoteOperationIds = const {},
     bool repairHistory = false,
     Map<String, String> vehicleRedirects = const {},
+    bool verifiedReadOnly = false,
   }) async {
     final currentUser = user;
     if (currentUser == null) return;
@@ -2964,6 +3000,12 @@ class RecordStore extends ChangeNotifier {
       // Sólo el acuse de un push exitoso puede retirarla de la cola.
       final queuedRaw = Hive.box(_syncQueueBox).get(operationId);
       final queued = queuedRaw is Map ? SyncOperation.fromMap(queuedRaw) : null;
+      if (verifiedReadOnly && (queuedRaw != null ||
+          change.vehicleId != activeVehicleIdOrNull ||
+          (change.entityType != SyncEntityType.dailyRecord &&
+           change.entityType != SyncEntityType.maintenance))) {
+        continue;
+      }
       if (queued != null && queued.userId != currentUser.id) {
         throw const TemporarySyncException('history local ownership collision');
       }
@@ -3026,6 +3068,26 @@ class RecordStore extends ChangeNotifier {
           final remote = DailyRecord.fromMap(change.payload);
           final raw = _box.get(change.entityId);
           final local = raw is Map ? DailyRecord.fromMap(raw) : null;
+          final versionKey = 'syncVersion:${change.userId}:$operationId';
+          final knownVersion = _meta.get(versionKey);
+          if (verifiedReadOnly) {
+            if (!HistoryRecoveryPolicy.canImportVerifiedRow(
+              remote: change, queued: queuedRaw != null,
+              localStatus: local?.syncStatus, localUserId: local?.userId,
+              localVehicleId: local?.vehicleId,
+              localServerVersion: knownVersion is int ? knownVersion : null,
+              vehicleRedirects: vehicleRedirects,
+            )) {
+              continue;
+            }
+            if (local != null && local.vehicleId == change.vehicleId &&
+                knownVersion == change.serverVersion &&
+                !SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+                  entityType: change.entityType, previousPayload: null,
+                  localPayload: local.toMap(), remotePayload: remote.toMap())) {
+              continue;
+            }
+          }
           final repair = local != null && HistoryRecoveryPolicy.canRepair(
             fullRefresh: repairHistory, localStatus: local.syncStatus,
             queued: queued != null, localUserId: local.userId,
@@ -3049,7 +3111,12 @@ class RecordStore extends ChangeNotifier {
             });
           }
           // A local change may have been saved during the backup write.
+          if (_disposed || user?.id != currentUser.id || !conductorAgencyAccessAllowed) {
+            return;
+          }
           if (Hive.box(_syncQueueBox).containsKey(operationId) ||
+              (verifiedReadOnly && (activeVehicleIdOrNull != change.vehicleId ||
+               _meta.get(versionKey) != knownVersion)) ||
               (repair && jsonEncode(_box.get(change.entityId)) != jsonEncode(raw))) {
             _syncRequestedWhileRunning = true;
             if (repairHistory) _fullRecoveryRequested = true;
@@ -3082,6 +3149,26 @@ class RecordStore extends ChangeNotifier {
           final remote = MaintenanceRecord.fromMap(change.payload);
           final raw = _maintenanceBox.get(change.entityId);
           final local = raw is Map ? MaintenanceRecord.fromMap(raw) : null;
+          final versionKey = 'syncVersion:${change.userId}:$operationId';
+          final knownVersion = _meta.get(versionKey);
+          if (verifiedReadOnly) {
+            if (!HistoryRecoveryPolicy.canImportVerifiedRow(
+              remote: change, queued: queuedRaw != null,
+              localStatus: local?.syncStatus, localUserId: local?.userId,
+              localVehicleId: local?.vehicleId,
+              localServerVersion: knownVersion is int ? knownVersion : null,
+              vehicleRedirects: vehicleRedirects,
+            )) {
+              continue;
+            }
+            if (local != null && local.vehicleId == change.vehicleId &&
+                knownVersion == change.serverVersion &&
+                !SyncMultiDeviceConflictPolicy.remoteDivergedFromBase(
+                  entityType: change.entityType, previousPayload: null,
+                  localPayload: local.toMap(), remotePayload: remote.toMap())) {
+              continue;
+            }
+          }
           final repair = local != null && HistoryRecoveryPolicy.canRepair(
             fullRefresh: repairHistory, localStatus: local.syncStatus,
             queued: queued != null, localUserId: local.userId,
@@ -3105,7 +3192,12 @@ class RecordStore extends ChangeNotifier {
             });
           }
           // A local change may have been saved during the backup write.
+          if (_disposed || user?.id != currentUser.id || !conductorAgencyAccessAllowed) {
+            return;
+          }
           if (Hive.box(_syncQueueBox).containsKey(operationId) ||
+              (verifiedReadOnly && (activeVehicleIdOrNull != change.vehicleId ||
+               _meta.get(versionKey) != knownVersion)) ||
               (repair && jsonEncode(_maintenanceBox.get(change.entityId)) != jsonEncode(raw))) {
             _syncRequestedWhileRunning = true;
             if (repairHistory) _fullRecoveryRequested = true;
