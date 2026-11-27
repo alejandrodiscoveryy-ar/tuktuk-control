@@ -264,6 +264,25 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   LatLng? _workMapPosition;
   double _workMapZoom = 13.5;
   bool _workMapFallback = false;
+  bool _workMapLoading = false;
+  int _workMapFailures = 0;
+  Timer? _workMapRetryTimer;
+
+  void _scheduleWorkMapRetry() {
+    if (!mounted || !widget.isVisible ||
+        _operationalLifecycleState != AppLifecycleState.resumed ||
+        _workMapRetryTimer?.isActive == true) return;
+    const delays = [5, 15, 30, 60];
+    final delay = delays[min(_workMapFailures, delays.length - 1)];
+    _workMapFailures++;
+    _workMapRetryTimer = Timer(Duration(seconds: delay), () {
+      _workMapRetryTimer = null;
+      if (mounted && widget.isVisible &&
+          _operationalLifecycleState == AppLifecycleState.resumed) {
+        unawaited(_prepareWorkMap());
+      }
+    });
+  }
 
   MarketplaceOnboarding? _onboarding;
   String? _workOnboardingUserId;
@@ -345,7 +364,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         capturedAt: payload.capturedAt,
       ),
     );
-    unawaited(_prepareWorkMap());
+    if (widget.isVisible) unawaited(_prepareWorkMap());
     // Supervisor suave: solo en primer plano y con intervalo amplio.
     _operationalGpsRecoveryWatchdog = Timer.periodic(
       const Duration(seconds: 45),
@@ -375,6 +394,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     super.didUpdateWidget(oldWidget);
 
     if (!oldWidget.isVisible && widget.isVisible) {
+      if (_workMapVisual == null) unawaited(_prepareWorkMap());
       unawaited(_load(refreshHistory: false));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_showDebtNoticeOnEntry());
@@ -393,6 +413,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     _operationalGpsRecoveryWatchdog?.cancel();
     _presenceHeartbeatTimer?.cancel();
     _availableRecoveryTimer?.cancel();
+    _workMapRetryTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     marketplaceJobRefreshRequests.removeListener(_refreshAvailability);
     _tabController.removeListener(_onMarketplaceTabChanged);
@@ -499,6 +520,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     }
 
     if (state == AppLifecycleState.resumed) {
+      if (widget.isVisible && _workMapVisual == null) unawaited(_prepareWorkMap());
       _refreshAvailability();
       unawaited(_sendPresenceHeartbeat());
       _recoverStalledOperationalGpsForeground();
@@ -1121,6 +1143,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   Future<void> _loadWorkAccess(String? vehicleId) async {
+    final ownerId = widget.store.user?.id;
     if (vehicleId == null) {
       if (!mounted) return;
 
@@ -1131,11 +1154,13 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     try {
       final access = await _service.access(vehicleId).timeout(const Duration(seconds: 15));
 
-      if (!mounted || vehicleId != _selectedVehicleId) return;
+      if (!mounted || vehicleId != _selectedVehicleId ||
+          widget.store.user?.id != ownerId) return;
 
       setState(() => _workAccess = access);
     } catch (_) {
-      if (!mounted || vehicleId != _selectedVehicleId) return;
+      if (!mounted || vehicleId != _selectedVehicleId ||
+          widget.store.user?.id != ownerId) return;
 
       setState(() => _workAccess = null);
     }
@@ -1214,6 +1239,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       setState(() {
         _onboarding = onboarding;
         _workOnboardingUserId = userId;
+        if (_selectedVehicleId != vehicleId) _workAccess = null;
         _selectedVehicleId = vehicleId;
         _available = const [];
       });
@@ -1226,6 +1252,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         return;
       }
       await _loadWorkAccess(vehicleId);
+      if (!mounted || widget.store.user?.id != userId) return;
 
       final workingVehicle = _vehicleById(vehicleId);
       _marketplaceDriverWorking.value = _vehicleReadyForWork(workingVehicle) &&
@@ -1235,16 +1262,19 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       await Future.wait([
         _loadScope('active'),
         _loadScope('scheduled'),
-        if (refreshHistory) _loadScope('history'),
       ]);
+      // The historical list must never delay loading operational services.
 
-      if (!mounted) return;
+      if (!mounted || widget.store.user?.id != userId) return;
 
-      if (_scopeErrors.containsKey('active') ||
+      if (_workAccess == null || _scopeErrors.containsKey('active') ||
           _scopeErrors.containsKey('scheduled')) {
         throw StateError('Job availability could not be verified');
       }
       await _loadAvailable();
+      if (refreshHistory && mounted && widget.store.user?.id == userId) {
+        unawaited(_loadScope('history'));
+      }
       unawaited(_refreshIncome());
 
       if (mounted) {
@@ -1480,7 +1510,7 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           try {
             cancellationDetails = await _service.cancellationDetails(
               cancelledIds,
-            );
+            ).timeout(const Duration(seconds: 10));
           } catch (_) {
             cancellationDetails = const [];
           }
@@ -3433,11 +3463,16 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   }
 
   Future<void> _prepareWorkMap() async {
+    if (!mounted || _workMapLoading || !widget.isVisible) return;
+    _workMapRetryTimer?.cancel();
+    _workMapRetryTimer = null;
+    setState(() => _workMapLoading = true);
     try {
       final config = await MarketplaceMapService(
         Supabase.instance.client,
       ).runtimeVisualConfiguration();
-      if (mounted && config != null && config.token.startsWith('pk.')) {
+      if (!mounted) return;
+      if (config != null && config.token.startsWith('pk.')) {
         if (await marketplaceNativeMapAvailable()) {
           if (!mounted) return;
           mbx.MapboxOptions.setAccessToken(config.token);
@@ -3447,9 +3482,18 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           _workMapVisual = config;
           _workMapFallback = false;
         });
+        _workMapFailures = 0;
+      } else {
+        // A definitive unavailable/disabled response is not a valid map.
+        setState(() => _workMapVisual = null);
       }
     } catch (_) {
-      // La falta del mapa nunca debe bloquear la operación ni los servicios.
+      // A transient failure cannot discard an already loaded map.
+    } finally {
+      if (mounted) {
+        setState(() => _workMapLoading = false);
+        if (_workMapVisual == null) _scheduleWorkMapRetry();
+      }
     }
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return;
@@ -3458,7 +3502,8 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
           permission != LocationPermission.whileInUse) {
         return;
       }
-      final position = await Geolocator.getLastKnownPosition();
+      final position = await Geolocator.getLastKnownPosition()
+          .timeout(const Duration(seconds: 3));
       if (!mounted || position == null) return;
       setState(
         () => _workMapPosition = LatLng(position.latitude, position.longitude),
@@ -3815,19 +3860,29 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     final config = _workMapVisual;
     if (config == null) {
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'No pudimos configurar el mapa. Puedes seguir recibiendo solicitudes.',
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: () => unawaited(_prepareWorkMap()),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Reintentar mapa'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_workMapLoading)
+                const CircularProgressIndicator(strokeWidth: 2)
+              else
+                const Icon(Icons.map_outlined, size: 32),
+              const SizedBox(height: 12),
+              Text(
+                _workMapLoading ? 'Conectando con el mapa…' :
+                    'Mapa temporalmente no disponible. Reintentaremos automáticamente.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _workMapLoading ? null : () => unawaited(_prepareWorkMap()),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Reintentar mapa'),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -3971,8 +4026,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     required bool valid,
     required bool onRide,
   }) {
+    final accessUnknown = _workAccess == null;
     final operationalUnconfirmed = (available || onRide) &&
-        (_error != null ||
+        (accessUnknown || _error != null ||
             _scopeErrors.containsKey('active') ||
             _scopeErrors.containsKey('scheduled') ||
             marketplaceGpsNeedsAttention(
@@ -3991,13 +4047,17 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             : const Color(0xFF43E4BB);
     final label = onRide
         ? 'EN CARRERA'
-        : !valid
+        : accessUnknown
+            ? 'SIN CONFIRMAR'
+            : !valid
             ? 'ACTIVAR'
             : available
                 ? 'TRABAJANDO'
                 : 'DESCANSANDO';
     final subtitle = _updatingAvailability
         ? 'Actualizando estado...'
+        : accessUnknown && !onRide
+            ? 'Toca para comprobar'
         : operationalUnconfirmed
             ? 'Conexión o GPS sin confirmar'
         : onRide
@@ -4014,7 +4074,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
       enabled: interactive,
       label: onRide
           ? 'En carrera. Estado bloqueado durante el servicio'
-          : !valid
+          : accessUnknown
+              ? 'Acceso sin confirmar. Reintentar conexión'
+              : !valid
               ? 'Completar activación para trabajar'
               : available
                   ? 'Trabajando. Toca para descansar'
@@ -4044,7 +4106,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
             excludeFromSemantics: true,
             onTap: !interactive
                 ? null
-                : valid
+                : accessUnknown
+                    ? () => unawaited(_load(refreshHistory: false))
+                    : valid
                     ? () => unawaited(_setAcceptingJobs(!available))
                     : _openActivation,
             child: SizedBox(
@@ -4794,7 +4858,22 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
     // La pestaña Trabajo mantiene su estado y su muestreo previo de GPS.
     if (!widget.isVisible) return const SizedBox.shrink();
     if (_loading && _onboarding == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(strokeWidth: 2),
+              SizedBox(height: 14),
+              Text('Conectando con Trabajos…', textAlign: TextAlign.center),
+              SizedBox(height: 6),
+              Text('Comprobando tu perfil. Puedes seguir usando tus registros.',
+                textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
     }
     final onboarding = _onboarding;
     if (onboarding == null) {
