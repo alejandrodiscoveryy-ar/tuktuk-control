@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: signed-android-${{ github.ref }}
@@ -21,6 +22,7 @@ concurrency:
 
 jobs:
   build-android:
+    if: ${{ github.ref == 'refs/heads/main' }}
     name: Validate, test and build signed AAB
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -29,6 +31,30 @@ jobs:
         working-directory: flutter_app
 
     steps:
+      - name: Require successful web production deployment of exact main commit
+        shell: bash
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            CURRENT_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')"
+            test "$CURRENT_MAIN" = "$GITHUB_SHA"
+            STATUS="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-web-production.yml/runs" -f head_sha="$GITHUB_SHA" -f branch=main --jq '.workflow_runs | sort_by(.created_at) | last | if . == null then "pending" elif .status == "completed" then .conclusion else "pending" end')"
+            if [ "$STATUS" = success ]; then
+              echo "PRODUCTION_VERIFIED_FOR=$GITHUB_SHA"
+              exit 0
+            fi
+            if [ "$STATUS" != pending ]; then
+              echo "Production deployment did not succeed: $STATUS"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "No successful production deployment for this commit within verification window."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -157,6 +183,8 @@ jobs:
           import xml.etree.ElementTree as ET
           ns = '{http://schemas.android.com/apk/res/android}'
           root = ET.parse(sys.argv[1]).getroot()
+          assert root.tag == 'manifest', 'Invalid bundle manifest'
+          assert root.get('package') == 'com.alejandrocruz.tuktukcontrol', 'Wrong application package'
           versions = []
           for feature in root.findall('uses-feature'):
               version = feature.get(ns + 'glEsVersion')
@@ -165,6 +193,7 @@ jobs:
                   required = feature.get(ns + 'required', 'true') != 'false'
                   versions.append((version, required))
           print('Final OpenGL requirements:', [(hex(v), r) for v, r in versions])
+          print('Final uses-feature declarations:', [ET.tostring(f, encoding='unicode').strip() for f in root.findall('uses-feature')])
           assert any(v == 0x20000 and r for v, r in versions), 'Missing GLES 2 base requirement'
           assert not any(v > 0x20000 and r for v, r in versions), 'Bundle still excludes GLES 2 devices'
           PY

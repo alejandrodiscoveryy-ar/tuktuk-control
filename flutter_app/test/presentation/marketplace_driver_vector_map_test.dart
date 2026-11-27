@@ -39,8 +39,9 @@ void main() {
     expect(renderer, contains('widget.toPickup!'));
     expect(renderer, contains('widget.toDestination!'));
     expect(renderer, contains('marketplaceMapAttribution(_center)'));
-    expect(manifest, contains('android:glEsVersion="0x00030000" tools:node="remove"'));
-    expect(manifest, contains('android:glEsVersion="0x00020000" android:required="true"'));
+    expect(manifest, contains('android:glEsVersion="0x00020000"'));
+    expect(manifest, contains('android:required="true" tools:node="replace"'));
+    expect(RegExp(r'android:glEsVersion=').allMatches(manifest), hasLength(1));
   });
 
   const pickup = MarketplaceMapPoint(
