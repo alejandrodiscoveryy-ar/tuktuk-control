@@ -163,7 +163,8 @@ class RecordStore extends ChangeNotifier {
           : ConductorAppAccessState.suspended;
     }
     _conductorAppAccessTimer = Timer.periodic(const Duration(seconds: 45), (_) {
-      if (initialized && _supabase.auth.currentUser != null) {
+      if (initialized && _supabase.auth.currentUser != null &&
+          _conductorAccessRetryTimer?.isActive != true) {
         unawaited(refreshConductorAppAccess());
       }
     });
@@ -242,8 +243,10 @@ class RecordStore extends ChangeNotifier {
         _conductorAccessRetryTimer?.isActive == true) {
       return;
     }
-    const delays = [5, 15, 30, 45];
-    final seconds = delays[min(_conductorAccessFailures, delays.length - 1)];
+    // Stagger automatic recovery across devices; manual retry remains available.
+    const delays = [5, 15, 30, 60, 120];
+    final seconds = delays[min(_conductorAccessFailures, delays.length - 1)] +
+        Random().nextInt(6);
     _conductorAccessFailures++;
     _conductorAccessRetryTimer = Timer(Duration(seconds: seconds), () {
       _conductorAccessRetryTimer = null;
