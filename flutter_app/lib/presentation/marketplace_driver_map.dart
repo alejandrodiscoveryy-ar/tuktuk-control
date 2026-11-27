@@ -1,5 +1,27 @@
 part of '../main.dart';
 
+// Web and existing non-Android renderers remain unchanged. On Android,
+// fail closed to raster if the GPU capability cannot be verified.
+Future<bool>? _androidNativeMapCapability;
+Future<bool> marketplaceNativeMapAvailable() {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    return Future.value(true);
+  }
+  return _androidNativeMapCapability ??= _readAndroidNativeMapCapability();
+}
+
+Future<bool> _readAndroidNativeMapCapability() async {
+  try {
+    return await const MethodChannel(
+      'com.alejandrocruz.tuktukcontrol/map_capability',
+    ).invokeMethod<bool>('supportsNativeMap').timeout(
+      const Duration(seconds: 2),
+    ) == true;
+  } catch (_) {
+    return false;
+  }
+}
+
 class MarketplaceDriverMap extends StatefulWidget {
   const MarketplaceDriverMap({
     this.job,
@@ -36,6 +58,7 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
 
   bool loading = true;
   int _loadGeneration = 0;
+  late final Future<bool> _nativeMapCapability = marketplaceNativeMapAvailable();
 
   @override
   void initState() {
@@ -121,7 +144,11 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
       if (!configuration.token.startsWith('pk.')) {
         throw StateError('MAPBOX_PUBLIC_TOKEN_INVALID');
       }
+      if (await marketplaceNativeMapAvailable()) {
+        if (!mounted || generation != _loadGeneration) return;
       mbx.MapboxOptions.setAccessToken(configuration.token);
+      }
+      if (!mounted || generation != _loadGeneration) return;
 
       MarketplaceRoutePath? destinationRoute;
 
@@ -244,7 +271,8 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
           widget.fullBleed ? BorderRadius.zero : BorderRadius.circular(18),
       child: Stack(
         children: [
-          MarketplaceDriverVectorMap(
+          if (kIsWeb || defaultTargetPlatform != TargetPlatform.android)
+            MarketplaceDriverVectorMap(
             fullBleed: widget.fullBleed,
             pickup: pickup,
             destination: destination,
@@ -255,7 +283,42 @@ class _MarketplaceDriverMapState extends State<MarketplaceDriverMap> {
             stylePath: widget.stylePath ?? configuration.stylePath,
             idleCenter: widget.idleCenter,
             idleZoom: widget.idleZoom,
-          ),
+          )
+          else
+            FutureBuilder<bool>(
+              future: _nativeMapCapability,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                }
+                return snapshot.data == true
+                  ? MarketplaceDriverVectorMap(
+            fullBleed: widget.fullBleed,
+            pickup: pickup,
+            destination: destination,
+            driver: driver,
+            toPickup: toPickup,
+            toDestination: toDestination,
+            goingToPickup: goingToPickup,
+            stylePath: widget.stylePath ?? configuration.stylePath,
+            idleCenter: widget.idleCenter,
+            idleZoom: widget.idleZoom,
+          )
+                  : MarketplaceDriverRasterMap(
+              fullBleed: widget.fullBleed,
+              pickup: pickup,
+              destination: destination,
+              driver: driver,
+              toPickup: toPickup,
+              toDestination: toDestination,
+              goingToPickup: goingToPickup,
+              configuration: configuration,
+              stylePath: widget.stylePath ?? configuration.stylePath,
+              idleCenter: widget.idleCenter,
+              idleZoom: widget.idleZoom,
+            );
+              },
+            ),
           if (widget.showIdleLocation && ride == null)
             const Center(
               child: IgnorePointer(
