@@ -1,5 +1,100 @@
 part of '../main.dart';
 
+/// A read-only, account- and vehicle-scoped financial snapshot. The same
+/// Metrics calculator is used for confirmed cloud history and offline data.
+class FinancialHistorySnapshot {
+  FinancialHistorySnapshot({
+    required this.userId,
+    required this.vehicleId,
+    required Iterable<RemoteChange> changes,
+    required Set<String> verifiedMarketplaceIds,
+  }) {
+    final seen = <String>{};
+    for (final change in changes) {
+      if (change.userId != userId || change.vehicleId != vehicleId ||
+          change.payload['id']?.toString() != change.entityId ||
+          !seen.add(HistoryRecoveryPolicy.key(change.entityType, change.entityId))) {
+        throw StateError('Invalid financial history identity');
+      }
+      if (change.deletedAt != null) continue;
+      switch (change.entityType) {
+        case SyncEntityType.dailyRecord:
+          final record = DailyRecord.fromMap(change.payload);
+          if (record.userId != userId || record.vehicleId != vehicleId) {
+            throw StateError('Invalid financial record ownership');
+          }
+          if (!record.isDeleted && (!record.isMarketplaceJobIncome ||
+              verifiedMarketplaceIds.contains(record.id))) {
+            _records[record.id] = record;
+          }
+          break;
+        case SyncEntityType.maintenance:
+          final record = MaintenanceRecord.fromMap(change.payload);
+          if (record.userId != userId || record.vehicleId != vehicleId) {
+            throw StateError('Invalid maintenance ownership');
+          }
+          if (!record.isDeleted) _maintenance[record.id] = record;
+          break;
+        default:
+          throw StateError('Invalid financial history entity');
+      }
+    }
+  }
+
+  final String userId;
+  final String vehicleId;
+  final _records = <String, DailyRecord>{};
+  final _maintenance = <String, MaintenanceRecord>{};
+
+  Metrics get confirmed => Metrics(_records.values.toList(), _maintenance.values.toList());
+
+  /// Only actual unsent edits are overlaid. Never let an acknowledged but
+  /// stale local copy replace a confirmed cloud record in the graph.
+  Metrics withPending(Iterable<DailyRecord> daily, Iterable<MaintenanceRecord> maintenance) {
+    final records = Map<String, DailyRecord>.of(_records);
+    final costs = Map<String, MaintenanceRecord>.of(_maintenance);
+    for (final record in daily) {
+      if (record.userId != userId || record.vehicleId != vehicleId) continue;
+      if (record.isDeleted) {
+        records.remove(record.id);
+      } else if (!record.isMarketplaceJobIncome || _records.containsKey(record.id)) {
+        records[record.id] = record;
+      }
+    }
+    for (final record in maintenance) {
+      if (record.userId != userId || record.vehicleId != vehicleId) continue;
+      if (record.isDeleted) {
+        costs.remove(record.id);
+      } else {
+        costs[record.id] = record;
+      }
+    }
+    return Metrics(records.values.toList(), costs.values.toList());
+  }
+
+  /// Compare identities and values, not just presence or aggregate totals.
+  bool matchesLocal(List<DailyRecord> daily, List<MaintenanceRecord> maintenance) {
+    final local = Metrics(daily, maintenance);
+    final remote = confirmed;
+    String day(DateTime d) => '${d.year}-${d.month}-${d.day}';
+    Map<String, List<Object?>> dailyValues(Metrics m) => {
+      for (final r in m.records)
+        r.id: [r.userId, r.vehicleId, day(r.date), r.earnings, r.expense,
+          r.odometer, r.batteryVoltage, r.marketplaceDistanceKm],
+    };
+    Map<String, List<Object?>> maintenanceValues(Metrics m) => {
+      for (final r in m.maintenanceRecords)
+        r.id: [r.userId, r.vehicleId, day(r.dateTime), r.cost, r.odometer],
+    };
+    bool same(Map<String, List<Object?>> a, Map<String, List<Object?>> b) =>
+        a.length == b.length && a.entries.every(
+          (e) => b.containsKey(e.key) && jsonEncode(e.value) == jsonEncode(b[e.key]),
+        );
+    return same(dailyValues(local), dailyValues(remote)) &&
+        same(maintenanceValues(local), maintenanceValues(remote));
+  }
+}
+
 class Metrics {
   Metrics(List<DailyRecord> records,
       [List<MaintenanceRecord> maintenanceRecords = const []])
