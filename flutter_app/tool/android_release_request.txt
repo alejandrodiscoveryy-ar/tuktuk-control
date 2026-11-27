@@ -1,2 +1,2 @@
 26
-# AAB-only consolidated release 1.1.1
+# Signed AAB 1.1.1 (26), production verified at ff0acc174bff1e097c87a906ee12d89df77f325d; graphics compatibility and sync corrections.
