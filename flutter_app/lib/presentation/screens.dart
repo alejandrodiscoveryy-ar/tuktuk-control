@@ -2679,11 +2679,6 @@ class StatsScreen extends StatelessWidget {
       children: [
         if (store.financialHistoryNotice != null)
           _FinancialHistoryNotice(message: store.financialHistoryNotice!),
-        _StatisticsSectionHeading(
-          title: tr('Resumen financiero'),
-          icon: Icons.account_balance_wallet_outlined,
-          accent: appPrimaryColor(context),
-        ),
         LayoutBuilder(
           builder: (context, constraints) {
             return StatisticsMetricGrid(
@@ -2770,58 +2765,16 @@ class StatsScreen extends StatelessWidget {
           },
         ),
         const SizedBox(height: 18),
-        _StatisticsSectionHeading(title: tr('Ingresos y gastos por mes'),
-          icon: Icons.bar_chart_rounded, accent: appPrimaryColor(context)),
+        SectionTitle(title: tr('Ingresos y gastos por mes')),
         MonthlyEarningsBars(cycles: cycles, statisticsStyle: true),
-        const SizedBox(height: 20),
-        _StatisticsSectionHeading(title: tr('Tendencia de días trabajados'),
-          icon: Icons.show_chart_rounded, accent: const Color(0xFF56D2A1)),
+        const SizedBox(height: 18),
+        SectionTitle(title: tr('Tendencia de días trabajados')),
         EarningsTrendCard(records: earningRecords.take(10).toList().reversed,
             statisticsStyle: true),
-        const SizedBox(height: 20),
-        _StatisticsSectionHeading(title: tr('Información relevante'),
-          icon: Icons.fact_check_outlined, accent: const Color(0xFFB59AF5)),
+        const SizedBox(height: 18),
+        SectionTitle(title: tr('Información relevante')),
         DataHealthCard(metrics: metrics, statisticsStyle: true),
       ],
-    );
-  }
-}
-
-/// Compact section marker used only by Statistics.
-class _StatisticsSectionHeading extends StatelessWidget {
-  const _StatisticsSectionHeading({
-    required this.title, required this.icon, required this.accent,
-  });
-
-  final String title;
-  final IconData icon;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final color = dark ? accent :
-        Color.lerp(accent, const Color(0xFF172B40), .55)!;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(color: color.withValues(alpha: .25)),
-            ),
-            child: Icon(icon, size: 21, color: color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(title, style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 18, fontWeight: FontWeight.w800, height: 1.2,
-          ))),
-        ],
-      ),
     );
   }
 }
@@ -2891,7 +2844,6 @@ class StatisticsMetricGrid extends StatelessWidget {
                   valueHeight: valueHeight,
                   labelStyle: labelStyle,
                   noteStyle: noteStyle,
-                  statisticsStyle: keyPrefix == 'statistics-card',
                   ),
                 ),
               ),
@@ -2926,7 +2878,6 @@ class _StatisticsVisualCard extends StatelessWidget {
     required this.valueHeight,
     required this.labelStyle,
     required this.noteStyle,
-    required this.statisticsStyle,
   });
 
   final MetricCard card;
@@ -2937,7 +2888,6 @@ class _StatisticsVisualCard extends StatelessWidget {
   final double valueHeight;
   final TextStyle labelStyle;
   final TextStyle noteStyle;
-  final bool statisticsStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -2959,10 +2909,8 @@ class _StatisticsVisualCard extends StatelessWidget {
             );
     final textAlign = alignRight ? TextAlign.right : TextAlign.left;
     final valueAlignment = alignRight ? Alignment.centerRight : Alignment.centerLeft;
-    final foreground = Theme.of(context).colorScheme.onSurface;
     final label = Text(card.label, textAlign: textAlign,
-      style: labelStyle.copyWith(color: statisticsStyle
-          ? foreground.withValues(alpha: .9) : appMutedColor(context)));
+      style: labelStyle.copyWith(color: appMutedColor(context)));
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
@@ -3021,8 +2969,7 @@ class _StatisticsVisualCard extends StatelessWidget {
             if (card.note != null) ...[
               const SizedBox(height: 3),
               Text(card.note!, textAlign: textAlign, style: noteStyle.copyWith(
-                color: statisticsStyle ? foreground.withValues(alpha: .78)
-                    : appMutedColor(context))),
+                color: appMutedColor(context))),
             ],
             if (card.details != null) ...[
               const SizedBox(height: 5),

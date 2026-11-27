@@ -181,8 +181,13 @@ class MarketplaceMoreScreen extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 20, 16, 110 + MediaQuery.paddingOf(context).bottom),
       children: [
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          accent: const Color(0xFF2DD4A3),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: ListTile(
+            titleTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 16, fontWeight: FontWeight.w700, height: 1.25,
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 9),
             horizontalTitleGap: 18,
             minVerticalPadding: 8,
@@ -193,14 +198,20 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
             title: const Text('Conviértete en conductor'),
 
-            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
+            trailing: Icon(Icons.chevron_right_rounded, size: 28,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .8)),
             onTap: () => _openMarketplaceRegistration(context, store, onRegistrationFinished),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          accent: const Color(0xFF55A7FF),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: ListTile(
+            titleTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 16, fontWeight: FontWeight.w700, height: 1.25,
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 9),
             horizontalTitleGap: 18,
             minVerticalPadding: 8,
@@ -229,7 +240,8 @@ class MarketplaceMoreScreen extends StatelessWidget {
                   ),
             title: Text(tr('Cuenta y sincronización')),
 
-            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
+            trailing: Icon(Icons.chevron_right_rounded, size: 28,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .8)),
             onTap: () {
               _openPage(
                 context,
@@ -239,10 +251,15 @@ class MarketplaceMoreScreen extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          accent: const Color(0xFFFB923C),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: ListTile(
+            titleTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 16, fontWeight: FontWeight.w700, height: 1.25,
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 9),
             horizontalTitleGap: 18,
             minVerticalPadding: 8,
@@ -252,7 +269,8 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFFFB923C),
             ),
             title: const Text('Impulsa'),
-            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
+            trailing: Icon(Icons.chevron_right_rounded, size: 28,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .8)),
             onTap: () => _openPage(
               context,
               title: 'Impulsa',
@@ -261,10 +279,15 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          accent: const Color(0xFF9A7BFF),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: ListTile(
+            titleTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 16, fontWeight: FontWeight.w700, height: 1.25,
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 9),
             horizontalTitleGap: 18,
             minVerticalPadding: 8,
@@ -275,7 +298,8 @@ class MarketplaceMoreScreen extends StatelessWidget {
             ),
             title: Text(tr('Referidos')),
 
-            trailing: const Icon(Icons.chevron_right_rounded, size: 28),
+            trailing: Icon(Icons.chevron_right_rounded, size: 28,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .8)),
             onTap: () {
               if (store.conductorAgencyAccessAllowed) {
                 unawaited(store.loadReferrals());
@@ -299,10 +323,15 @@ class MarketplaceMoreScreen extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GlassCard(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          accent: const Color(0xFFFFB547),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: ListTile(
+            titleTextStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontSize: 16, fontWeight: FontWeight.w700, height: 1.25,
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 9),
             horizontalTitleGap: 18,
             minVerticalPadding: 8,
@@ -313,7 +342,8 @@ class MarketplaceMoreScreen extends StatelessWidget {
               color: Color(0xFFFFB547),
             ),
             title: Text(tr('Soporte')),
-            trailing: const Icon(Icons.open_in_new_rounded, size: 26),
+            trailing: Icon(Icons.open_in_new_rounded, size: 26,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .8)),
             onTap: () {
               final action = store.supportWhatsAppAction();
               if (action == null) {
