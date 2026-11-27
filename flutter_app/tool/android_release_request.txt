@@ -1,2 +1,2 @@
-27
-# Release 1.1.2 (27): compact financial cards and safe mobile connectivity recovery; signed AAB after verified web production.
+28
+# Release 1.1.3 (28): progressive recovery during temporary server outages; signed AAB only after verified web production.
