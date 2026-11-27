@@ -795,4 +795,30 @@ class _TemporaryFailureGateway implements RemoteSyncGateway {
   Future<RemotePushResult> push(List<SyncOperation> operations) {
     throw const TemporarySyncException('offline');
   }
+  test('history recovery repairs acknowledged cache but never pending or foreign data', () {
+    final remote = RemoteChange(
+      entityType: SyncEntityType.dailyRecord, entityId: 'record-1',
+      userId: 'user-1', vehicleId: 'vehicle-1', updatedAt: DateTime.utc(2026, 7, 1),
+      deviceId: 'remote', payload: const {},
+    );
+    bool canRepair({bool full = true, bool queued = false,
+      SyncStatus status = SyncStatus.synced, String owner = 'user-1',
+      String vehicle = 'vehicle-1'}) => HistoryRecoveryPolicy.canRepair(
+        fullRefresh: full, localStatus: status, queued: queued,
+        localUserId: owner, localVehicleId: vehicle, remote: remote);
+    expect(canRepair(), isTrue);
+    expect(canRepair(full: false), isFalse);
+    expect(canRepair(queued: true), isFalse);
+    expect(canRepair(status: SyncStatus.pending), isFalse);
+    expect(canRepair(status: SyncStatus.localOnly), isFalse);
+    expect(canRepair(owner: 'another'), isFalse);
+    expect(canRepair(vehicle: 'another'), isFalse);
+    expect(HistoryRecoveryPolicy.missingAcknowledgedRow(
+      deleted: false, status: SyncStatus.synced, queued: false, seenInCloud: false), isTrue);
+    expect(HistoryRecoveryPolicy.missingAcknowledgedRow(
+      deleted: true, status: SyncStatus.synced, queued: false, seenInCloud: false), isFalse);
+    expect(HistoryRecoveryPolicy.missingAcknowledgedRow(
+      deleted: false, status: SyncStatus.pending, queued: true, seenInCloud: false), isFalse);
+  });
+
 }
