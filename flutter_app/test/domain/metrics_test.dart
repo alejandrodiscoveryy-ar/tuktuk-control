@@ -136,4 +136,27 @@ Future<void> main() async {
     expect(monthlyGaugeColor(101).toARGB32(), 0xFFB832FF);
     expect(monthlyGaugeColor(133).toARGB32(), 0xFFB832FF);
   });
+  test('maintenance-only months count as expenses and deleted rows never contribute', () {
+    final metrics = Metrics([
+      DailyRecord(id: 'income', date: DateTime(2026, 7, 1), earnings: 73850, odometer: 100),
+      DailyRecord(id: 'expense', date: DateTime(2026, 7, 5), earnings: 0, odometer: 0, expense: 12500),
+      DailyRecord(id: 'deleted', date: DateTime(2026, 7, 5), earnings: 99999, odometer: 0,
+        expense: 99999, deletedAt: DateTime(2026, 7, 6)),
+    ], [
+      MaintenanceRecord(id: 'maint-jul', dateTime: DateTime(2026, 7, 10), odometer: 100,
+        type: 'General', description: '', cost: 10000),
+      MaintenanceRecord(id: 'maint-aug', dateTime: DateTime(2026, 8, 10), odometer: 100,
+        type: 'General', description: '', cost: 3000),
+      MaintenanceRecord(id: 'maint-deleted', dateTime: DateTime(2026, 8, 10), odometer: 100,
+        type: 'General', description: '', cost: 99999, deletedAt: DateTime(2026, 8, 11)),
+    ]);
+    expect(metrics.totalEarnings, 73850);
+    expect(metrics.totalExpenses, 25500);
+    expect(metrics.netEarnings, 48350);
+    expect(metrics.cycleSummaries, hasLength(2));
+    expect(metrics.cycleSummaries.first.expenses, 22500);
+    expect(metrics.cycleSummaries.last.earnings, 0);
+    expect(metrics.cycleSummaries.last.expenses, 3000);
+  });
+
 }
