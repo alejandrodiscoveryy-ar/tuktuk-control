@@ -258,17 +258,28 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
     required String userId,
     required String vehicleId,
   }) async => [
-    ...await _readHistoryByIdentity(userId, SyncEntityType.dailyRecord, vehicleId: vehicleId),
-    ...await _readHistoryByIdentity(userId, SyncEntityType.maintenance, vehicleId: vehicleId),
+    ...await _readHistoryByIdentity(userId, SyncEntityType.dailyRecord,
+        vehicleId: vehicleId, deleted: false),
+    ...await _readHistoryByIdentity(userId, SyncEntityType.maintenance,
+        vehicleId: vehicleId, deleted: false),
+  ];
+
+  Future<List<RemoteChange>> readFinancialDeletions({
+    required String userId,
+    required String vehicleId,
+  }) async => [
+    ...await _readHistoryByIdentity(userId, SyncEntityType.dailyRecord,
+        vehicleId: vehicleId, deleted: true),
+    ...await _readHistoryByIdentity(userId, SyncEntityType.maintenance,
+        vehicleId: vehicleId, deleted: true),
   ];
 
   Future<List<RemoteChange>> readFinancialVehicleTopology(String userId) =>
       _readHistoryByIdentity(userId, SyncEntityType.vehicle);
 
-  // Include server tombstones: their IDs are necessary to reconcile offline
-  // copies. An absent row alone is never proof that it was deleted.
+  // The verified statistics do not depend on reading deleted records.
   Future<List<RemoteChange>> _readHistoryByIdentity(
-    String userId, SyncEntityType type, {String? vehicleId}
+    String userId, SyncEntityType type, {String? vehicleId, bool? deleted}
   ) async {
     const pageSize = 250;
     final result = <RemoteChange>[];
@@ -282,6 +293,8 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         'updated_at,deleted_at,server_version,server_seq',
       ).eq('user_id', userId).eq('entity_type', type.name);
       if (vehicleId != null) query = query.eq('vehicle_id', vehicleId);
+      if (deleted == false) query = query.isFilter('deleted_at', null);
+      if (deleted == true) query = query.not('deleted_at', 'is', null);
       if (after != null) query = query.gt('entity_id', after);
       final rows = List<Map<String, dynamic>>.from(
         await query.order('entity_id').limit(pageSize) as List,
@@ -290,6 +303,7 @@ class SupabaseSyncGateway implements RemoteSyncGateway {
         final change = _decodeRow(row);
         if (change.userId != userId ||
             (vehicleId != null && change.vehicleId != vehicleId) ||
+            (deleted != null && (change.deletedAt != null) != deleted) ||
             change.entityType != type ||
             change.payload['id']?.toString() != change.entityId) {
           throw const TemporarySyncException('financial history ownership mismatch');
