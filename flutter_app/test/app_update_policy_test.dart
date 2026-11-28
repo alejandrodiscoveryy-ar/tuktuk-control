@@ -1,7 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:control_tuk_tuk/main.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  test('install telemetry does not run on token refresh or user update', () {
+    expect(shouldReportAndroidInstallOnAuthEvent(AuthChangeEvent.initialSession), isTrue);
+    expect(shouldReportAndroidInstallOnAuthEvent(AuthChangeEvent.signedIn), isTrue);
+    expect(shouldReportAndroidInstallOnAuthEvent(AuthChangeEvent.tokenRefreshed), isFalse);
+    expect(shouldReportAndroidInstallOnAuthEvent(AuthChangeEvent.userUpdated), isFalse);
+    expect(shouldReportAndroidInstallOnAuthEvent(AuthChangeEvent.signedOut), isFalse);
+  });
+
+  test('install attempts are rate limited per account and build', () {
+    expect(shouldAttemptAndroidInstallReport(sameUserAndBuild: false, elapsed: Duration.zero), isTrue);
+    expect(shouldAttemptAndroidInstallReport(sameUserAndBuild: true, elapsed: null), isTrue);
+    expect(shouldAttemptAndroidInstallReport(sameUserAndBuild: true, elapsed: const Duration(minutes: 14)), isFalse);
+    expect(shouldAttemptAndroidInstallReport(sameUserAndBuild: true, elapsed: const Duration(minutes: 15)), isTrue);
+  });
+
   test('no aviso para la compilación actual', () {
     expect(evaluateAppUpdate(
       installedBuild: 22, latestBuild: 22,
