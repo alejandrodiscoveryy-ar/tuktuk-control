@@ -35,6 +35,10 @@ on:
       - 'flutter_app/test/presentation/marketplace_records_read_only_test.dart'
       - 'flutter_app/lib/services/push_notification_service.dart'
       - 'flutter_app/test/presentation/marketplace_jobs_refresh_test.dart'
+      - 'flutter_app/test/presentation/marketplace_presence_heartbeat_test.dart'
+      - 'flutter_app/test/services/marketplace_operational_gps_io_test.dart'
+      - 'flutter_app/lib/services/marketplace_operational_gps_io.dart'
+      - 'flutter_app/lib/services/marketplace_operational_gps_policy.dart'
       - 'flutter_app/test/presentation/marketplace_map_offer_price_pins_contract_test.dart'
       - 'flutter_app/test/services/push_notification_service_test.dart'
       - 'flutter_app/test/domain/marketplace_mixed_odometer_test.dart'
@@ -86,6 +90,7 @@ jobs:
           flutter test test/presentation/marketplace_records_read_only_test.dart
           flutter test test/presentation/marketplace_more_layout_test.dart
           flutter test test/presentation/marketplace_jobs_refresh_test.dart
+          flutter test test/presentation/marketplace_presence_heartbeat_test.dart test/services/marketplace_operational_gps_io_test.dart
           flutter test test/domain/marketplace_map_visual_style_test.dart
           flutter test test/presentation/marketplace_map_offer_price_pins_contract_test.dart
           flutter test test/services/push_notification_service_test.dart
