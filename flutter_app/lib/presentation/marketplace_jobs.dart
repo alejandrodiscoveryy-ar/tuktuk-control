@@ -325,6 +325,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
   String? _recoveredOffersOwnerId;
   final Set<String> _recoveredOfferIds = <String>{};
   bool _presenceHeartbeatInFlight = false;
+  DateTime? _lastPresenceHeartbeatAt;
+  String? _lastPresenceHeartbeatUserId;
+  String? _lastPresenceHeartbeatVehicleId;
   DateTime? _lastOperationalRecoverySync;
   StreamSubscription<Position>? _activeOperationalLocationSubscription;
   bool? _operationalLocationStreamActiveService;
@@ -477,10 +480,24 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         !_vehicleReadyForWork(vehicle) || vehicle?.acceptingJobs != true) {
       return;
     }
+    final lastHeartbeat = _lastPresenceHeartbeatAt;
+    if (_lastPresenceHeartbeatUserId == userId &&
+        _lastPresenceHeartbeatVehicleId == vehicleId &&
+        lastHeartbeat != null) {
+      final age = DateTime.now().toUtc().difference(lastHeartbeat);
+      // Coalesce repeated refreshes, not the independent two-minute heartbeat.
+      if (!age.isNegative && age < const Duration(seconds: 30)) return;
+    }
     _presenceHeartbeatInFlight = true;
     try {
       final working = await _service.sendDriverPresenceHeartbeat(vehicleId: vehicleId)
           .timeout(const Duration(seconds: 12));
+      if (working && mounted && widget.store.user?.id == userId &&
+          _selectedVehicleId == vehicleId) {
+        _lastPresenceHeartbeatAt = DateTime.now().toUtc();
+        _lastPresenceHeartbeatUserId = userId;
+        _lastPresenceHeartbeatVehicleId = vehicleId;
+      }
       if (!working && mounted && widget.store.user?.id == userId &&
           _selectedVehicleId == vehicleId && !_updatingAvailability) {
         // Reload authoritative state rather than writing accepting_jobs=true.
@@ -1229,6 +1246,9 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
 
     try {
       final userId = widget.store.user?.id;
+      final previousVehicleId = _selectedVehicleId;
+      final previousOwnerId = _workOnboardingUserId;
+      final wasActiveService = _operationalActiveJob() != null;
       final onboarding = await _service.onboarding().timeout(const Duration(seconds: 15));
       if (!mounted || widget.store.user?.id != userId) return;
       _updateMarketplaceDriverProfileNeedsSetup(onboarding);
@@ -1288,8 +1308,20 @@ class _MarketplaceJobsScreenState extends State<MarketplaceJobsScreen>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_showDebtNoticeOnEntry());
         });
+        // A routine refresh must not restart an already scheduled healthy
+        // idle-web GPS sample. Keep immediate recovery on identity, service,
+        // permission or freshness changes, and keep Android streams intact.
+        final gpsAge = _lastOperationalSentAt == null ? null :
+            DateTime.now().toUtc().difference(_lastOperationalSentAt!);
+        final keepIdleWebSample = kIsWeb && !refreshHistory &&
+            previousOwnerId == userId && previousVehicleId == vehicleId &&
+            !wasActiveService && _operationalActiveJob() == null &&
+            _operationalGpsIssue == null &&
+            _operationalLocationTimer?.isActive == true && gpsAge != null &&
+            !gpsAge.isNegative &&
+            gpsAge < MarketplaceOperationalLocationPolicy.availableHeartbeatInterval;
         _syncOperationalLocationSampling(
-          immediate: true,
+          immediate: !keepIdleWebSample,
           requestPermission: widget.isVisible,
         );
       }
