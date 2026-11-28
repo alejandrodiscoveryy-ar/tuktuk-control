@@ -25,6 +25,8 @@ void main() {
     expect(source, contains('if (widget.store.financialHistoryMismatch)'));
     expect(source, contains('Historial local por conciliar'));
     expect(source, contains('Modo sin conexión'));
-    expect(source, contains('if (store.financialHistoryNotice != null)'));
+    expect(source, isNot(contains('if (store.financialHistoryNotice != null)')));
+    expect(source, contains('if (store.financialHistoryMismatch)'));
+    expect(RegExp(r'store\.financialHistoryNotice').allMatches(source).length, 1);
   });
 }

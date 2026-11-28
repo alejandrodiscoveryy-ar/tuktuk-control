@@ -2746,8 +2746,8 @@ class StatsScreen extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 16, 16,
           100 + MediaQuery.paddingOf(context).bottom),
       children: [
-        if (store.financialHistoryNotice != null)
-          _FinancialHistoryNotice(message: store.financialHistoryNotice!),
+        if (store.financialHistoryMismatch)
+          const _FinancialHistoryNotice(message: 'Historial local por conciliar'),
         LayoutBuilder(
           builder: (context, constraints) {
             return StatisticsMetricGrid(
