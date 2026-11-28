@@ -13,6 +13,14 @@ void main() {
     expect(heartbeat, contains('vehicle?.acceptingJobs != true'));
     expect(heartbeat, contains('AppLifecycleState.resumed'));
     expect(heartbeat, contains('_presenceHeartbeatInFlight'));
+    expect(heartbeat, contains('_lastPresenceHeartbeatUserId == userId'));
+    expect(heartbeat, contains('_lastPresenceHeartbeatVehicleId == vehicleId'));
+    expect(heartbeat, contains('age < const Duration(seconds: 30)'));
+    expect(heartbeat, contains('if (working && mounted'));
+    expect(screen, contains('final keepIdleWebSample = kIsWeb && !refreshHistory'));
+    expect(screen, contains('_operationalLocationTimer?.isActive == true && gpsAge != null'));
+    expect(screen, contains('!wasActiveService && _operationalActiveJob() == null'));
+    expect(screen, contains('immediate: !keepIdleWebSample'));
     expect(heartbeat, contains('await _load();'));
     expect(heartbeat, isNot(contains('setAcceptingJobs(')));
     expect(heartbeat, isNot(contains('Geolocator')));
