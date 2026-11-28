@@ -173,6 +173,10 @@ class MarketplaceOperationalGpsIo {
     required bool activeService,
   }) {
     if (!validCoordinates(position)) return false;
+    // The RPC rejects older fixes; avoid sending them after a sensor/cache race.
+    // Equal timestamps remain eligible for the established heartbeat contract.
+    if (lastPosition != null &&
+        position.timestamp.isBefore(lastPosition.timestamp)) return false;
     final distanceMeters = lastPosition == null
         ? double.infinity
         : _device.distanceBetween(lastPosition, position);
