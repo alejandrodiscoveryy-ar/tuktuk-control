@@ -866,6 +866,9 @@ class _MarketplaceDriverPromotionScreenState extends State<MarketplaceDriverProm
           _error = 'Inicia sesión nuevamente para abrir Impulsa.';
         });
       }
+    }, onError: (Object error, StackTrace stackTrace) {
+      // A transient refresh failure does not change the authenticated actor.
+      // RecordStore owns connectivity recovery; keep the existing view intact.
     });
     unawaited(_load());
     unawaited(_loadApplication());
