@@ -6,6 +6,17 @@ const _appUpdateCacheKey = 'tuktuk_android_update_release_v1';
 const _appUpdateDismissedKey = 'tuktuk_android_update_dismissed_v1';
 
 @visibleForTesting
+bool shouldReportAndroidInstallOnAuthEvent(AuthChangeEvent event) =>
+    event == AuthChangeEvent.initialSession || event == AuthChangeEvent.signedIn;
+
+@visibleForTesting
+bool shouldAttemptAndroidInstallReport({
+  required bool sameUserAndBuild,
+  required Duration? elapsed,
+}) => !sameUserAndBuild || elapsed == null ||
+    elapsed >= const Duration(minutes: 15);
+
+@visibleForTesting
 enum AppUpdateDecision { none, optional, mandatory }
 
 @visibleForTesting
@@ -120,8 +131,7 @@ class _AppUpdateGateState extends State<AppUpdateGate>
     WidgetsBinding.instance.addObserver(this);
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       if (event.session?.user != null && mounted &&
-          (event.event == AuthChangeEvent.initialSession ||
-              event.event == AuthChangeEvent.signedIn)) {
+          shouldReportAndroidInstallOnAuthEvent(event.event)) {
         unawaited(_reportInstalledVersion());
       }
     }, onError: (Object error, StackTrace stackTrace) {
@@ -356,9 +366,10 @@ class _AppUpdateGateState extends State<AppUpdateGate>
 ).hasMatch(installed.name)) {
         return;
       }
-      if (_reportedUserId == userId && _reportedBuild == installed.build &&
-          (_reportCooldown?.elapsed ?? const Duration(days: 1)) <
-              const Duration(minutes: 15)) {
+      if (!shouldAttemptAndroidInstallReport(
+        sameUserAndBuild: _reportedUserId == userId && _reportedBuild == installed.build,
+        elapsed: _reportCooldown?.elapsed,
+      )) {
         return;
       }
       // Throttle attempts, not only successes; use elapsed time rather than
