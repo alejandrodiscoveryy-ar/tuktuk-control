@@ -106,6 +106,10 @@ class _AppUpdateGateState extends State<AppUpdateGate>
   bool _checking = false;
   DateTime? _lastCheck;
   StreamSubscription<AuthState>? _authSubscription;
+  bool _reporting = false;
+  String? _reportedUserId;
+  int? _reportedBuild;
+  Stopwatch? _reportCooldown;
 
   bool get _android => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
@@ -115,9 +119,14 @@ class _AppUpdateGateState extends State<AppUpdateGate>
     if (!_android) return;
     WidgetsBinding.instance.addObserver(this);
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-      if (event.session?.user != null && mounted) {
+      if (event.session?.user != null && mounted &&
+          (event.event == AuthChangeEvent.initialSession ||
+              event.event == AuthChangeEvent.signedIn)) {
         unawaited(_reportInstalledVersion());
       }
+    }, onError: (Object error, StackTrace stackTrace) {
+      // Auth refresh errors are handled by RecordStore; telemetry must not
+      // propagate them as unhandled asynchronous exceptions.
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_checkForUpdates()));
   }
@@ -165,10 +174,198 @@ class _AppUpdateGateState extends State<AppUpdateGate>
   // Telemetría de la APK instalada, independiente de FCM y del aviso de actualización.
   // Solo registra conductores autenticados; nunca bloquea la aplicación si falla.
   Future<void> _reportInstalledVersion([_InstalledAppVersion? detected]) async {
-    if (!_android || !mounted || Supabase.instance.client.auth.currentUser == null) return;
-    final installed = detected ?? await _installedVersion();
-    if (installed == null || !RegExp(r'^\d+(?:\.\d+){1,3}$').hasMatch(installed.name)) return;
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (!_android || !mounted || userId == null || _reporting) return;
+    _reporting = true;
     try {
+      final installed = detected ?? await _installedVersion();
+      if (!mounted || client.auth.currentUser?.id != userId ||
+          installed == null || !RegExp(r'^\d+(?:\.\d+){1,3}
+      await client.rpc(
+        'driver_report_android_install',
+        params: {
+          'target_project_id': _projectId,
+          'target_version': installed.name,
+          'target_build': installed.build,
+        },
+      ).timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Red lenta, usuario no conductor o backend anterior: no afectar el trabajo.
+    } finally {
+      _reporting = false;
+    }
+  }
+
+  void _applyRelease(_AppUpdateRelease? release, _InstalledAppVersion installed,
+      {required bool fresh}) {
+    if (!mounted) return;
+    if (release == null) {
+      setState(() { _release = null; _decision = AppUpdateDecision.none; });
+      return;
+    }
+    final decision = evaluateAppUpdate(
+      installedBuild: installed.build,
+      latestBuild: release.latestBuild,
+      installedVersion: installed.name,
+      latestVersion: release.latestVersion,
+      minimumVersion: release.minimumVersion,
+      forceUpdate: fresh && release.forceUpdate,
+      hasValidDownloadUrl: true,
+    );
+    setState(() {
+      _release = release;
+      _decision = decision == AppUpdateDecision.optional &&
+              _dismissedRecently(release.latestBuild)
+          ? AppUpdateDecision.none : decision;
+    });
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (!_android || !mounted || _checking) return;
+    final now = DateTime.now();
+    if (_lastCheck != null && now.difference(_lastCheck!) < const Duration(minutes: 15)) return;
+    _checking = true;
+    _lastCheck = now;
+    try {
+      final installed = await _installedVersion();
+      if (installed == null || !mounted) return;
+      unawaited(_reportInstalledVersion(installed));
+      try {
+        final remote = await Supabase.instance.client.rpc(
+          'get_public_app_release',
+          params: {'target_project_id': _projectId, 'target_platform': 'android'},
+        ).timeout(const Duration(seconds: 7));
+        final release = _AppUpdateRelease.parse(remote);
+        if (release == null) {
+          await Hive.box(_metaBox).delete(_appUpdateCacheKey);
+        } else {
+          await Hive.box(_metaBox).put(_appUpdateCacheKey, jsonEncode({
+            'saved_at': DateTime.now().toUtc().toIso8601String(),
+            'release': remote,
+          }));
+        }
+        _applyRelease(release, installed, fresh: true);
+      } catch (_) {
+        // Offline or API not yet migrated: cached information is optional only.
+        final saved = Hive.box(_metaBox).get(_appUpdateCacheKey);
+        if (saved is String) {
+          try {
+            final map = jsonDecode(saved) as Map<String, dynamic>;
+            final when = DateTime.tryParse('${map['saved_at'] ?? ''}');
+            if (when != null && DateTime.now().difference(when) < const Duration(hours: 24)) {
+              _applyRelease(_AppUpdateRelease.parse(map['release']), installed,
+                  fresh: false);
+              return;
+            }
+          } catch (_) { /* Ignore malformed legacy cache. */ }
+        }
+        _applyRelease(null, installed, fresh: false);
+      }
+    } finally {
+      _checking = false;
+    }
+  }
+
+  Future<void> _openUpdate() async {
+    final release = _release;
+    if (release == null) return;
+    try {
+      await launchUrl(release.url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Android will handle unavailable browser/store without crashing the app.
+    }
+  }
+
+  Future<void> _postpone() async {
+    if (_decision != AppUpdateDecision.optional || _release == null) return;
+    await Hive.box(_metaBox).put(_appUpdateDismissedKey, {
+      'build': _release!.latestBuild,
+      'until': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
+    });
+    if (mounted) setState(() => _decision = AppUpdateDecision.none);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRequired = _decision == AppUpdateDecision.mandatory;
+    final visible = _decision != AppUpdateDecision.none && _release != null;
+    return PopScope(
+      canPop: !isRequired,
+      child: Stack(children: [
+        widget.child,
+        if (visible) ...[
+          const Positioned.fill(child: ModalBarrier(dismissible: false, color: Color(0xD9080D14))),
+          Positioned.fill(child: SafeArea(child: Center(child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Material(
+              color: const Color(0xFF111923),
+              elevation: 20,
+              borderRadius: BorderRadius.circular(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 410),
+                child: Padding(padding: const EdgeInsets.all(22), child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(Icons.system_update_alt_rounded, color: kPrimary, size: 46),
+                    const SizedBox(height: 12),
+                    Text(isRequired ? 'Actualización necesaria' : 'Nueva versión disponible',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: kText, fontSize: 21, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    Text('TukTuk Conductor ${_release!.latestVersion}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: kPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 16),
+                    if (_release!.notes.isNotEmpty)
+                      Flexible(child: SingleChildScrollView(child: Text(_release!.notes,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: kMuted, fontSize: 14, height: 1.45)))),
+                    if (_release!.notes.isEmpty)
+                      const Text('Mejoras de estabilidad y experiencia de uso.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: kMuted, fontSize: 14)),
+                    if (isRequired) ...[
+                      const SizedBox(height: 12),
+                      const Text('Para continuar necesitas instalar la versión más reciente.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: kTertiary, fontSize: 12)),
+                    ],
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: _openUpdate,
+                      icon: const Icon(Icons.download_rounded),
+                      label: const Text('Actualizar ahora'),
+                    ),
+                    if (!isRequired) ...[
+                      const SizedBox(height: 8),
+                      TextButton(onPressed: _postpone,
+                        child: const Text('Más tarde')),
+                    ],
+                  ],
+                )),
+              ),
+            ),
+          )))),
+        ],
+      ]),
+    );
+  }
+}
+).hasMatch(installed.name)) {
+        return;
+      }
+      if (_reportedUserId == userId && _reportedBuild == installed.build &&
+          (_reportCooldown?.elapsed ?? const Duration(days: 1)) <
+              const Duration(minutes: 15)) {
+        return;
+      }
+      // Throttle attempts, not only successes; use elapsed time rather than
+      // the device wall clock. Never write telemetry for a changed account.
+      _reportedUserId = userId;
+      _reportedBuild = installed.build;
+      _reportCooldown = Stopwatch()..start();
       await Supabase.instance.client.rpc(
         'driver_report_android_install',
         params: {
