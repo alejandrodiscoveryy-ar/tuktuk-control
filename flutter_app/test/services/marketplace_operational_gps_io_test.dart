@@ -215,6 +215,21 @@ void main() {
     );
   });
 
+  test('no envía una lectura GPS anterior a la última confirmada', () {
+    final now = DateTime.now().toUtc();
+    final last = fix(capturedAt: now);
+    final older = fix(capturedAt: now.subtract(const Duration(seconds: 1)));
+    device.simulatedDistance = 100;
+    for (final activeService in [false, true]) {
+      expect(io.shouldPublish(position: older, lastPosition: last,
+        lastSentAt: now.subtract(const Duration(minutes: 3)), nowUtc: now,
+        activeService: activeService), isFalse);
+      expect(io.shouldPublish(position: fix(capturedAt: now.add(const Duration(seconds: 1))),
+        lastPosition: last, lastSentAt: now, nowUtc: now,
+        activeService: activeService), isTrue);
+    }
+  });
+
   test('latido permite repetir una posición estacionaria cada 120 s', () {
     final now = DateTime.now().toUtc();
     final current = fix();
